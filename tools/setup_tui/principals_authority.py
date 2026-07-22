@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:09:27Z
-#   last-change: 2026-07-21T22:59:01Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T03:37:03Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/principals_authority.py -- the "Principals & authority" screen's own driver
@@ -66,7 +66,7 @@ from tools.setup_tui.content.principals_authority_data import (
     RELATION_CHOICES,
     SCAFFOLD_BASE_PRINCIPALS,
 )
-from tools.setup_tui.runner import parse_row_id
+from tools.setup_tui.runner import legacy_led_path, parse_row_id
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
@@ -291,7 +291,10 @@ def lineage_chain_note(dest: str) -> str:
 # ---------------------------------------------------------------------------------------------
 
 def _legacy_led(dest: str) -> str:
-    return os.path.join(dest, "legacy", "led")
+    """Thin pass-through to `runner.legacy_led_path` (ADR-0012 P1, the ONE home for this path
+    string) -- kept as a private wrapper so every call site in this module already named
+    `_legacy_led(dest)` needs no further edit."""
+    return legacy_led_path(dest)
 
 
 def _extract_row_id(output: str) -> str:

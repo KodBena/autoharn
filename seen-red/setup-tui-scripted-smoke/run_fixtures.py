@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T02:44:09Z
-#   last-change: 2026-07-21T21:55:15Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T03:40:48Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """Both-polarity-adjacent smoke fixture for tools/setup_tui (ledger row 1700's commission):
@@ -88,6 +88,20 @@ without being clobbered back to the bare default -- lives in
 seen-red/setup-tui-dry-run-parity (WDR1 already performs a real birth through boundary; this
 build's own addition there is witness (a)'s live half).
 
+Case 14 (DEFECT FIX WITNESS, autoharn1 succession commission row 1942, 2026-07-22): a
+`--from-config` birth with `boundary.configure = false` used to halt hydration outright at its
+first ledger write, because `screen_hydration` always resolved the served `./led` shim (which
+refuses without `deployment.json`'s `boundary_url`/`boundary_deployment` keys) even though the
+scaffold always ALSO writes a working `legacy/led` right there. Reproduces the exact halt shape --
+a dest whose `deployment.json` carries no boundary keys at all, a served-shim `led` that would
+refuse if invoked, and a working `legacy/led` -- and asserts the decision-phase led resolution
+(`tools/setup_tui/runner.py`'s new `resolve_led`, wired through `screen_hydration`) picks
+legacy/led, entirely at the decision phase (the checklist's own new "led present" WITNESSED row);
+case 8's own REFUSED-message assertion is updated to match (the old text was itself a symptom of
+the served-only bug this fix closes). A full live scratch-world commit through this same halt
+shape is UNEXERCISED here (needs a real Postgres host) -- see this build's own commit message /
+report for that blocker, named honestly rather than silently skipped.
+
 Zero residue: every scratch destination lives under a fixture-owned tempdir, removed in a
 `finally` regardless of outcome. Real subprocess invocations of the actual CLI entry point (no
 mocks) -- Rule 1's own bar ("drive the same code paths") applied to this fixture's own proof of
@@ -103,6 +117,13 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, REPO)
+
+# Fixture-local, module-top import (lazy imports are banned, CLAUDE.md 2026-07-02) -- case 14
+# below needs the LIVE count of durable-decision/ADR-adoption prompts `screen_hydration` will
+# ask, so its scripted answers file stays correct as that catalog grows, rather than a hand-typed
+# count silently going stale.
+from tools.setup_tui import durable_decisions  # noqa: E402 -- needs sys.path insert above first
 
 
 def run_scripted(answers: str, start_at: str, cwd: str,
@@ -252,9 +273,81 @@ def main() -> int:
         cp = run_scripted(f"y\n{no_led_dest}\nn\n", "hydration", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 8: expected exit 0, got {cp.returncode}: {out[-800:]}"
-        assert "REFUSED: no ./led at" in out, out[-800:]
-        print("case 8 ok: hydration refuses cleanly against a destination with no ./led shim "
-              "(WD5's own bar, re-proven here)")
+        # MESSAGE-TEXT UPDATE (autoharn1 succession commission row 1942's DEFECT fix, this
+        # build): the refusal text now names BOTH led/legacy-led (tools/setup_tui/runner.py's
+        # new `resolve_led`, which checks legacy/led FIRST, served ./led second), not only
+        # "./led" -- the old text was itself a symptom of the served-only bug this fix closes.
+        assert "REFUSED: no led/legacy-led found under" in out, out[-800:]
+        print("case 8 ok: hydration refuses cleanly against a destination with no led or "
+              "legacy/led shim (WD5's own bar, re-proven here)")
+
+        # --- case 14 (DEFECT FIX WITNESS, autoharn1 succession commission row 1942, 2026-07-22):
+        # a `--from-config` birth with `boundary.configure = false` (no boundary keys ever written
+        # into deployment.json) used to halt hydration outright at its first ledger write, because
+        # screen_hydration ALWAYS resolved the served `./led` shim, which refuses without
+        # deployment.json's boundary_url/boundary_deployment keys, even though the scaffold always
+        # ALSO writes a working `legacy/led` right there (and the served shim's own refusal text
+        # points at it) -- the commit executor never tried it. This case reproduces the exact halt
+        # shape (a dest whose deployment.json lacks boundary keys, a served-shim `led` that would
+        # refuse if invoked, and a working `legacy/led`) and asserts the DECISION-PHASE led
+        # resolution (tools/setup_tui/runner.py's `resolve_led`, wired through
+        # screens.screen_hydration) picks legacy/led, not the served shim -- entirely at the
+        # decision phase (the checklist's own "led present" WITNESSED row this fix also added),
+        # no live commit/db needed. ---
+        led_dest = os.path.join(scratch, "led_resolution_dest")
+        os.makedirs(os.path.join(led_dest, "legacy"))
+        legacy_led_path = os.path.join(led_dest, "legacy", "led")
+        with open(legacy_led_path, "w") as f:
+            f.write("#!/bin/sh\necho 'row: 1 written.'\n")
+        os.chmod(legacy_led_path, 0o755)
+        served_led_path = os.path.join(led_dest, "led")
+        with open(served_led_path, "w") as f:
+            # A faithful stand-in for the REAL served shim's refusal (bootstrap/templates/
+            # led.tmpl / serving/boundary_cli_client.py load_served_config) -- never actually
+            # invoked by this case (decision-phase only), but shaped like the real halt so the
+            # fixture's own claim ("a served-shim led that refuses") is honestly reproduced, not
+            # merely asserted.
+            f.write("#!/bin/sh\necho 'deployment record ... missing required-for-the-served-"
+                    "shim field(s): boundary_url, boundary_deployment ... or run the "
+                    "./legacy/led original instead' >&2\nexit 1\n")
+        os.chmod(served_led_path, 0o755)
+        with open(os.path.join(led_dest, "deployment.json"), "w") as f:
+            # boundary.configure = false shape: no boundary_url/boundary_deployment keys at all.
+            json.dump({"schema": "ledresworld", "kern": "ledresworld_kernel",
+                       "role": "ledresworld_rw", "name": "ledresworld"}, f)
+
+        n_catalog = len(durable_decisions.CATALOG)
+        n_adrs = len(durable_decisions.list_adrs())
+        answers = (
+            "y\n" + led_dest + "\n"       # run hydration now? / destination
+            "n\n"                          # fork provenance? decline
+            "n\n"                          # role charters to register? decline
+            + "n\n" * n_catalog             # each durable decision, decline
+            + "n\n" * n_adrs                # each ADR adoption, decline
+            + "n\n"                         # commit this plan now? decline (0 entries queued)
+            + "n\n"                         # save this checklist? decline
+        )
+        cp14 = run_scripted(answers, "hydration", scratch)
+        out14 = cp14.stdout + cp14.stderr
+        assert cp14.returncode == 0, f"case 14: expected exit 0, got {cp14.returncode}: {out14[-2000:]}"
+        assert "Traceback" not in out14, out14[-2000:]
+        assert "REFUSED" not in out14, (
+            f"case 14: hydration must NOT refuse -- legacy/led is present and working: "
+            + out14[-2000:])
+        led_row = next(
+            (ln for ln in out14.splitlines() if "led present" in ln and "hydration" in ln), None)
+        assert led_row is not None, f"case 14: no 'led present' checklist row rendered: {out14[-2000:]}"
+        assert legacy_led_path in led_row, (
+            f"case 14: the 'led present' row must name legacy/led (the DEFECT fix's own "
+            f"resolution): {led_row!r}")
+        assert served_led_path not in led_row, (
+            f"case 14: the 'led present' row must NOT name the served ./led shim -- hydration "
+            f"writes need no boundary service wired at all (runner.resolve_led's own docstring): "
+            f"{led_row!r}")
+        print("case 14 ok (DEFECT FIX WITNESS, row 1942): hydration's led resolution picks "
+              "legacy/led over a present-but-would-refuse served ./led shim, on a world whose "
+              "deployment.json carries no boundary keys at all -- the exact halt shape witnessed "
+              "live against autoharn1, now resolved instead of halted")
 
         # --- case 9 (WDR3): the SAME hostile-world scenario as case 5, under --dry-run --
         # design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 amendment, WDR3: "a dry run that reaches a

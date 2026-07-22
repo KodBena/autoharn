@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T01:39:25Z
-#   last-change: 2026-07-21T23:45:17Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T03:37:10Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/signed_genesis.py -- the "Signed genesis" ceremony driver
@@ -54,7 +54,7 @@ import time
 
 from tools.setup_tui import probes
 from tools.setup_tui.plan import Arg, CallableAct, CommandAct, Hole, WriteAct
-from tools.setup_tui.runner import parse_row_id
+from tools.setup_tui.runner import legacy_led_path, parse_row_id
 
 # A throwaway, clearly-marked-test-only passphrase used ONLY under `--scripted` witnessing
 # (spec §1 item 1: "a scratch GNUPGHOME with a fixture passphrase is used") -- never the
@@ -170,7 +170,7 @@ def write_commission_act(dest: str, statement: str) -> tuple[CommandAct, str]:
     the flow), as a plan act. The row id `led` prints on success resolves (at commit) through
     `COMMISSION_PRODUCES`; a later step needing it (the ceremony's own asc-path/verify-id) holds
     a `Hole(of=COMMISSION_PRODUCES, ..., extract=parse_row_id)`, never a value read here."""
-    argv = (os.path.join(dest, "legacy", "led"), "commission", statement)
+    argv = (legacy_led_path(dest), "commission", statement)
     return CommandAct(argv=argv, extra_env=(("LED_ACTOR", "commissioner"),)), COMMISSION_PRODUCES
 
 
