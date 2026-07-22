@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-22T02:38:13Z
-#   last-change: 2026-07-22T02:38:13Z
-#   contributors: 1fa3ab69/main
+#   last-change: 2026-07-22T03:13:36Z
+#   contributors: 1fa3ab69/main, 431cddfa/main
 # <<< PROVENANCE-STAMP <<<
 
 """run_fixtures — both-polarity live proof for extract-context (bootstrap/extract_context.py +
@@ -42,6 +42,18 @@ CASES (both polarities, all live subprocess runs of the real tool -- never a moc
                         excluded from CONTENT but never excluded from the MANIFEST'S OWN INVENTORY
                         (the distinction the module docstring's "PAYLOAD-FREE CLASSES" section
                         draws, checked here as a live property rather than asserted).
+
+  PRE-S36-FALLBACK    -- row 1950's own live finding (this repo's autoharn1 world predates s36):
+                        with the source world's `standing_decisions` VIEW dropped (simulating a
+                        pre-s36 kernel without birthing a whole second lineage chain), a fresh
+                        extract still carries every unsuperseded kind=decision row from
+                        `ledger_current` (s31 semantics) as a 1.2_standing_decisions carry-verbatim
+                        item, grade honestly `None` (no grade concept exists pre-s36 -- never
+                        invented), plus exactly one class-summary line naming the widening (this
+                        fallback carries ALL decision rows, not only the s36 path's graded
+                        subset). Run AFTER the other cases above (which need the real
+                        standing_decisions view) and last, since dropping the view is irreversible
+                        for the remainder of this source world's lifetime in this run.
 
 Scratch-only: two throwaway schema/kern/role triples in the TOY db (192.168.122.1), both dropped
 after, UNLESS a case FAILS (left standing as evidence).
@@ -244,6 +256,41 @@ def main() -> int:
                         f"(the --actor passed): {written}")
     print(f"GREEN-INGEST-ATTRIBUTED: {len(written)} carried row(s) written, every one attributed "
           f"to actor='author' -- {'PASS' if all_attributed else 'FAIL'}")
+
+    # -------------------------------------------------------------- PRE-S36-FALLBACK (vi)
+    # Simulate a pre-s36 kernel by dropping the standing_decisions VIEW ONLY (the s36 delta's
+    # decision_grade column and the kind=decision rows underneath stay untouched) -- this fixture's
+    # job is to exercise extract_context's own _relation_exists(standing_decisions) branch, the
+    # SAME probe production code runs against a genuinely pre-s36 world like this repo's own
+    # autoharn1 (row 1950's live commission); it is not this fixture's job to birth a whole second
+    # kernel lineage chain when dropping the one view already produces the exact input shape the
+    # code branches on.
+    src_schema = json.loads(src_dep.read_text())["schema"]
+    _psql("-v", "ON_ERROR_STOP=1", "-c", f"DROP VIEW {src_schema}.standing_decisions;")
+    fallback_manifest = tmpdir / "m_fallback.jsonl"
+    r = _extract(src_dep, fallback_manifest)
+    fb_items = [json.loads(l) for l in fallback_manifest.read_text(encoding="utf-8").splitlines()] \
+        if r.returncode == 0 else []
+    fb_decisions = [it for it in fb_items if it.get("record") == "item"
+                    and it.get("class") == "1.2_standing_decisions"]
+    fb_summary = [it for it in fb_items if it.get("record") == "class-summary"
+                  and it.get("class") == "1.2_standing_decisions"]
+    fallback_ok = (
+        r.returncode == 0
+        and len(fb_decisions) >= 2  # the "Standing rule ALPHA" + "ordinary undurable" rows seeded above
+        and all(it.get("disposition") == "carry-verbatim" and it.get("grade") is None
+                and it.get("dust_row_ids") for it in fb_decisions)
+        and len(fb_summary) == 1
+        and "s36" in (fb_summary[0].get("reason") or "")
+        and fb_summary[0].get("count") == len(fb_decisions)
+    )
+    if not fallback_ok:
+        failures.append(f"PRE-S36-FALLBACK: fallback extraction did not produce the expected "
+                        f"carry-verbatim/no-grade items + class-summary (exit={r.returncode})\n"
+                        f"decisions={fb_decisions}\nsummary={fb_summary}\nstderr={r.stderr}")
+    print(f"PRE-S36-FALLBACK: standing_decisions absent -> {len(fb_decisions)} kind=decision "
+          f"row(s) from ledger_current carried verbatim with grade=None, 1 class-summary naming "
+          f"the widening -- {'PASS' if fallback_ok else 'FAIL'}")
 
     if failures:
         print(f"\nextract-context fixture: {len(failures)} FAILURE(S) -- scratch substrate left "
