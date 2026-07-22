@@ -412,11 +412,22 @@ def export_work(name: str) -> EdbExport:
         exp.counts["work_dep_type"] = n
 
     if has_review:
+        # kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md §7
+        # amendment: widened to verdict IN ('attest','attest_with_reservations'), identically to
+        # the DDL's own single home (kernel.discharging_attest, s32 widened by s56) and to this
+        # module's SQL-floor twin (engine/ledger_floor.py::work_review_floor_atoms) -- a
+        # reservation-carrying countersign discharges w_discharged/1 exactly as a clean attest
+        # does. w_discharged/1 is, and remains, a boolean NAF fact (work_review.lp's own
+        # `not w_discharged(R)`) -- no verdict distinction existed on it before this widening, so
+        # none is invented here; the reservation's own tracked residue is the s56 SQL view
+        # (`reservations_outstanding`), a display surface this engine layer does not model (s56's
+        # own ENGINE -- NONE disclosure).
         n = 0
         for (rid,) in t.rows(
                 f"SELECT c.id FROM {rel} c WHERE c.kind='work_closed' AND EXISTS ("
                 f"  SELECT 1 FROM {rel} r JOIN {t.rel('review_detail')} rd ON rd.ledger_id = r.id"
-                f"  WHERE r.kind='review' AND r.regards = c.id AND rd.verdict='attest' "
+                f"  WHERE r.kind='review' AND r.regards = c.id "
+                f"    AND rd.verdict IN ('attest', 'attest_with_reservations') "
                 f"    AND r.actor <> c.actor"
                 f"    AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = r.id)) "
                 f"ORDER BY c.id;"):

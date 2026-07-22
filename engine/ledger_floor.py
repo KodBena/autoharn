@@ -540,9 +540,9 @@ def work_review_floor_atoms(name: str) -> set[str]:
     s31 (kernel/lineage/s31-supersession-uniform-retraction.sql): opens/succ/closes read
     `<schema>.ledger_current` (in-force events only), byte-for-byte the semantics of the DDL
     twin's own s31 re-issue (work_item_strict_blockers()'s edges/closes CTEs). The `discharged`
-    leg is UNCHANGED -- the discharge-review side was already in-force-filtered at its source on
-    both producers (the ratified spec's own sec-2 finding), so it keeps its raw read + row-scoped
-    anti-join exactly as the DDL does.
+    leg's IN-FORCE FILTERING is UNCHANGED -- the discharge-review side was already
+    in-force-filtered at its source on both producers (the ratified spec's own sec-2 finding), so
+    it keeps its raw read + row-scoped anti-join exactly as the DDL does.
 
     s33 (kernel/lineage/s33-composite-discharge.sql): `not_closed` gains the SAME composite-with-
     children exemption `work_item_strict_blockers()`'s own s33 re-issue adds -- a composite tree
@@ -550,7 +550,19 @@ def work_review_floor_atoms(name: str) -> set[str]:
     child in THIS SAME `succ` walk is resolved through its own children, never requiring its own
     close row (never vacuously discharged when it has zero children). Column-gated (the SAME
     convention `orphan_children_arm` above uses for `work_parent`) so a pre-s33 target degrades to
-    the byte-identical pre-s33 reading -- no `work_discharge` column, no exemption possible."""
+    the byte-identical pre-s33 reading -- no `work_discharge` column, no exemption possible.
+
+    s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md §7
+    amendment): the `discharged` leg's VERDICT FILTER widens to `verdict IN ('attest',
+    'attest_with_reservations')`, identically to the DDL's own single home
+    (kernel.discharging_attest, s32 widened by s56) -- a reservation-carrying countersign
+    discharges the obligation exactly as a clean attest does. The reservation itself is NOT
+    separately modeled here (no `w_discharged_with_reservation`-shaped atom is minted): `w_discharged`
+    has only ever been a boolean NAF fact (work_review.lp's own `not w_discharged(R)`), so there is
+    no EXISTING verdict distinction on this predicate to preserve, and inventing one with no
+    consumer would be speculative generality (ADR-0004) -- the reservation's own tracked residue
+    lives entirely in the s56 SQL view (`reservations_outstanding`), a display surface this engine
+    layer does not model (s56's own ENGINE -- NONE disclosure)."""
     t = resolve(name)
     rel = t.rel()
     rel_cur = t.rel("ledger_current")
@@ -586,7 +598,8 @@ def work_review_floor_atoms(name: str) -> set[str]:
         SELECT c.rid FROM closes c
         WHERE EXISTS (
           SELECT 1 FROM {rel} r JOIN {t.rel("review_detail")} rd ON rd.ledger_id = r.id
-          WHERE r.kind = 'review' AND r.regards = c.rid AND rd.verdict = 'attest' AND r.actor <> c.closer
+          WHERE r.kind = 'review' AND r.regards = c.rid
+            AND rd.verdict IN ('attest', 'attest_with_reservations') AND r.actor <> c.closer
             AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = r.id)
         )
       ),

@@ -242,6 +242,69 @@ def verdict_row(world: str, review_id: int) -> tuple[str, bool] | None:
     return parts[0], parts[1] == "t"
 
 
+def old_floor_says_unresolved(world: str, slug: str) -> bool:
+    """A hand-reconstruction of the PRE-§7 `work_review_floor_atoms`' `own_unresolved` leg
+    (engine/ledger_floor.py, before this same commission's amendment) restricted to `slug`'s own
+    close row: `discharged` gated on `verdict = 'attest'` ONLY, exactly the predicate this
+    fixture's own s56-resv item's countersign (attest_with_reservations) can never satisfy. This
+    is the RED-FIRST reconstruction (spec §7's "the exact case the two layers would have
+    disagreed on") -- not a live revert of the real module (nothing on disk is mutated), a direct
+    query of the same SQL shape the pre-amendment floor ran, byte-for-byte the same WHERE clause
+    a `git show` of the pre-amendment `engine/ledger_floor.py` would print."""
+    out = sql1(f"""
+      SELECT NOT EXISTS (
+        SELECT 1 FROM {world}.ledger c
+        WHERE c.kind = 'work_closed' AND c.work_slug = '{slug}' AND c.work_review_disposition = 'deferred'
+          AND EXISTS (
+            SELECT 1 FROM {world}.ledger r JOIN {world}.review_detail rd ON rd.ledger_id = r.id
+            WHERE r.kind = 'review' AND r.regards = c.id AND rd.verdict = 'attest' AND r.actor <> c.actor
+              AND NOT EXISTS (SELECT 1 FROM {world}.ledger s2 WHERE s2.supersedes = r.id)
+          )
+      );""")
+    return out == "t"
+
+
+def engine_coherence_case(world: str, slug: str, failures: list[str]) -> None:
+    """spec §7 amendment witness: the SQL/ASP `./judge --layer work` differential must AGREE on a
+    reservation-discharged item -- 's56-resv' (case iii above), still cleanly discharged by its
+    attest_with_reservations countersign, never disposed/superseded. RED-FIRST reconstruction
+    first (the pre-amendment floor's own predicate, hand-run -- see old_floor_says_unresolved's
+    own docstring for why this is a reconstruction, not a live revert), THEN the real, current
+    (both files fixed) differential."""
+    old_unresolved = old_floor_says_unresolved(world, slug)
+    # in-process call (unlike judge_agree's subprocess) -- resolve() needs these set (the same
+    # target-resolution env judge_agree sets for its own subprocess, engine/targets.py's home).
+    os.environ["HARNESS_PGHOST"] = PGHOST
+    os.environ["EPISTEMIC_PGHOST"] = PGHOST
+    os.environ["LEDGER_DB"] = PGDB
+    os.environ["LEDGER_SCHEMA"] = world
+    os.environ["LEDGER_KERN"] = f"{world}_kernel"
+    res = ledger_differential.run_layer_differential(world, layer="work")
+    # atoms carry the clingo-quoted term (ledger_edb._atom/ledger_floor._wi_quote both quote a
+    # hyphenated slug like this one) -- match that shape exactly, not a bare identifier.
+    asp_atom_own = f'w_own_leaf_unresolved("{slug}")'
+    asp_atom_tree = f'w_tree_unresolved("{slug}")'
+    asp_says_resolved = (asp_atom_own not in res.asp.atoms) and (asp_atom_tree not in res.asp.atoms)
+    check("engine-red-first-pre-amendment-floor-disagreed",
+          old_unresolved and asp_says_resolved,
+          f"pre-amendment floor reconstruction: own_unresolved({slug})={old_unresolved} "
+          f"(expected True -- the stale, attest-only predicate this amendment fixes); "
+          f"CURRENT (fixed) ASP output already resolves it: {asp_atom_own} in atoms="
+          f"{asp_atom_own in res.asp.atoms}, {asp_atom_tree} in atoms="
+          f"{asp_atom_tree in res.asp.atoms} (both expected False) -- the two would have "
+          f"DISAGREED on this exact atom before engine/ledger_floor.py's own §7 fix landed "
+          f"beside engine/ledger_edb.py's.", failures)
+    check("engine-green-judge-work-layer-agree-on-reservation-item",
+          res.verdict() == "AGREE"
+          and asp_atom_own not in res.sql.atoms and asp_atom_tree not in res.sql.atoms,
+          f"./judge --layer work verdict={res.verdict()} (expected AGREE); "
+          f"{asp_atom_own} in SQL atoms={asp_atom_own in res.sql.atoms}, "
+          f"{asp_atom_tree} in SQL atoms={asp_atom_tree in res.sql.atoms} (both expected False -- "
+          f"the FIXED SQL floor, engine/ledger_floor.py::work_review_floor_atoms, now agrees "
+          f"with the FIXED ASP-feeding EDB, engine/ledger_edb.py::export_work, on the SAME "
+          f"reservation-discharged item)", failures)
+
+
 def judge_agree(world: str, failures: list[str], label: str) -> None:
     env = dict(os.environ)
     env["HARNESS_PGHOST"] = PGHOST
@@ -391,6 +454,14 @@ def main() -> int:
               f"-- superseded flag correct)", failures)
 
         judge_agree(world_s56, failures, "vii-judge-work-layer-agree")
+
+        # =====================================================================================
+        # design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment: engine/ledger_floor.py's SQL
+        # floor + engine/ledger_edb.py's ASP-feeding EDB extractor both carry the SAME widened
+        # discharge predicate the kernel view does. Reuses close_b/s56-resv (case iii) -- still
+        # cleanly discharged by its reservation countersign, never disposed or superseded.
+        # =====================================================================================
+        engine_coherence_case(world_s56, "s56-resv", failures)
 
     finally:
         teardown(world_pre)

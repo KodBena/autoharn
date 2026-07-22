@@ -184,7 +184,13 @@ BASELINE: dict[str, int] = {
     "tools/experiments/compound_nominal_scan2.py":      869,
     "hooks/demurral_detect.py":                         837,
     "gates/doc_attestation_presence.py":                837,
-    "engine/ledger_floor.py":                           813,
+    # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
+    # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
+    # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
+    # semantics, not padding (the s56 kernel-view widening's engine-side twin, needed for
+    # ./judge's SQL/ASP differential to AGREE on a reservation-discharged item). Written plain,
+    # no golfing.
+    "engine/ledger_floor.py":                           820,
     "engine/preamble_floor.py":                         801,
     # Reconciled +31 to 705 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build), then +82 to 787
     # (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, the Textual leg -- maintainer-witnessed live
@@ -213,7 +219,12 @@ BASELINE: dict[str, int] = {
     # not decorative writing. Written plain, no golfing (ADR-0007's no-go clause); witnessed
     # growth both legs.
     "tools/setup_tui/ui_textual.py":                    787,
-    "engine/ledger_edb.py":                             729,
+    # Reconciled +5 to 734 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
+    # kernel/lineage/s56-reservation-residue.sql): export_work's w_discharged/1 extraction widens
+    # to verdict IN ('attest','attest_with_reservations') -- the EDB-side twin of the same
+    # discharge-semantics widening, feeding the ASP program that ./judge's differential compares
+    # against the (also-widened) SQL floor. Written plain, no golfing.
+    "engine/ledger_edb.py":                             734,
     "tools/workflow_compile.py":                        672,
     # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved

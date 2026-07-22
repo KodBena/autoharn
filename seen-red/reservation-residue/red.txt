@@ -30,4 +30,10 @@
 === vii-judge-work-layer-agree ===
   [ok] judge output (s56fx_s56): ['AGREE']
 
+=== engine-red-first-pre-amendment-floor-disagreed ===
+  [ok] pre-amendment floor reconstruction: own_unresolved(s56-resv)=True (expected True -- the stale, attest-only predicate this amendment fixes); CURRENT (fixed) ASP output already resolves it: w_own_leaf_unresolved("s56-resv") in atoms=False, w_tree_unresolved("s56-resv") in atoms=False (both expected False) -- the two would have DISAGREED on this exact atom before engine/ledger_floor.py's own §7 fix landed beside engine/ledger_edb.py's.
+
+=== engine-green-judge-work-layer-agree-on-reservation-item ===
+  [ok] ./judge --layer work verdict=AGREE (expected AGREE); w_own_leaf_unresolved("s56-resv") in SQL atoms=False, w_tree_unresolved("s56-resv") in SQL atoms=False (both expected False -- the FIXED SQL floor, engine/ledger_floor.py::work_review_floor_atoms, now agrees with the FIXED ASP-feeding EDB, engine/ledger_edb.py::export_work, on the SAME reservation-discharged item)
+
 ALL CASES PASSED
