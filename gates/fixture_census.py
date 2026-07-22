@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-09T13:36:11Z
-#   last-change: 2026-07-21T23:53:22Z
+#   last-change: 2026-07-22T00:17:58Z
 #   contributors: be693afb/main, e4410ef6/main, 3c50e030/main, 3c942a60/main, a857c93d/main, ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
@@ -210,6 +210,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-destination-foreign-refusal": "seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py",
     "setup-tui-daemon-selection":       "seen-red/setup-tui-daemon-selection/run_fixtures.py",
     "setup-tui-genesis-gate-hard-stop": "seen-red/setup-tui-genesis-gate-hard-stop/run_fixtures.py",
+    "setup-tui-navigation":             "seen-red/setup-tui-navigation/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-18T21:34:30Z
-#   last-change: 2026-07-21T23:46:56Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T00:14:31Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/app.py -- entry point for the guided setup wizard
@@ -69,11 +69,13 @@ not be here" instead of assuming it.
 from __future__ import annotations
 
 import argparse
+import copy
 import signal
 import subprocess
 import sys
 
 from tools.setup_tui.checklist import Checklist
+from tools.setup_tui.flow_position import FlowPosition, run_screen
 from tools.setup_tui.screens import SCREENS
 from tools.setup_tui.ui import ScriptExhausted, Ui, build_ui
 
@@ -147,6 +149,12 @@ def _intro(ui: Ui, args: argparse.Namespace) -> None:
     ui.say("Driver of existing verbs only: every action below shows the exact command it runs "
            "and streams that command's real output. If this process dies mid-flow, you can "
            "finish by hand from what was printed.")
+    # NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, observation (e)): named once here,
+    # not repeated at every prompt (spec §3). Stops at the final review screen's own commit
+    # confirm -- see `_drive_screens`'s own docstring for why.
+    ui.say("Type '<' at any prompt (scripted answers file: '<BACK>') to go back to the previous "
+           "screen -- your answers there are offered again. Available until the closing "
+           "checklist screen's own commit confirm.")
     # The guarantee envelope (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.6, commission ledger
     # rows 1823 point 2 / 1825): stated here in the SAME capability terms the spec itself uses --
     # a structural property of the pure-core restructure, not an aspiration. Restated (not
@@ -185,13 +193,31 @@ def _drive_screens(ui: Ui, cl: Checklist, state: dict, state_holder: list[dict],
     through exactly the same "ordinary uncaught exception" path and is caught one level up, by
     the Textual worker body, never here). `completed_normally` keeps the `finally` block from
     ALSO firing on the success path, where a boundary service `screen_boundary` started is the
-    operator's live service and is meant to keep running after the wizard exits cleanly."""
+    operator's live service and is meant to keep running after the wizard exits cleanly.
+
+    BACKWARD NAVIGATION (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md, observation (e)): a
+    `FlowPosition` tracks every screen completed so far; `tools.setup_tui.flow_position.
+    run_screen` (called below) does the per-screen work of wrapping `ui` in a `NavigableUi`,
+    catching `NavigateBack`, and popping/restoring the cursor -- see its own docstring for the
+    exact contract and for why the final screen (the commit boundary) is never wrapped."""
     completed_normally = False
+    flow = FlowPosition(base_state=copy.deepcopy(state))
+    idx = 0
     try:
         try:
-            for _, fn in screens:
-                state = fn(ui, cl, state)
+            while idx < len(screens):
+                name, fn = screens[idx]
+                state, advance, went_back = run_screen(
+                    fn, ui, cl, state, name, idx == len(screens) - 1, flow)
                 state_holder[0] = state
+                if went_back:
+                    idx -= 1
+                    continue
+                if not advance:
+                    print(f"\nsetup_tui: already at the first screen ('{name}') -- nothing to "
+                          f"go back to; re-asking this screen.", file=sys.stderr)
+                    continue
+                idx += 1
             completed_normally = True
         except ScriptExhausted as exc:
             print(f"\nsetup_tui: {exc}", file=sys.stderr)
