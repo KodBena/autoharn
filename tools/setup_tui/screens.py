@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # >>> PROVENANCE-STAMP >>> (auto; tools/hooks/stamp_provenance.py — do not hand-edit)
 #   first-seen : 2026-07-19T20:05:03Z
-#   last-change: 2026-07-21T23:46:24Z
-#   contributors: ab5d5bab/main, 43f77bff/main
+#   last-change: 2026-07-22T00:46:51Z
+#   contributors: ab5d5bab/main, 43f77bff/main, 1fa3ab69/main
 # <<< PROVENANCE-STAMP <<<
 
 """tools/setup_tui/screens.py -- the eleven screens, PHASE 2 (design/FABLE-SETUP-TUI-PURE-CORE-
@@ -924,8 +924,8 @@ def screen_signed_genesis(ui, cl, state):
         cl.add("signed-genesis", "genesis commission designated", ck.WITNESSED,
                f"<row-id of the just-queued write> (symbolic until commit)")
 
-    # --- keygen: ONE fixed shape, no quiz (spec step 1) -------------------------------------
-    is_scripted = isinstance(ui, ScriptedUi)
+    # --- keygen, ONE fixed shape (HAZARD FIX 2026-07-22 runbook Step 4: unwrap NavigableUi) --
+    is_scripted = isinstance(getattr(ui, "_inner", ui), ScriptedUi)
     scratch_setup_produces = None
     if is_scripted:
         ui.say("  --scripted witnessing: a scratch GNUPGHOME + fixture passphrase is used "
