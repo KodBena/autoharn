@@ -27,6 +27,12 @@
 -- delta gives each of those facts ONE home as an append-only attributed event, current truth as
 -- a derived view, retraction by supersession.
 --
+-- HISTORY: safe -- every ledger-touching statement is ADD COLUMN IF NOT EXISTS (no
+-- DEFAULT) plus kind-shape CHECKs of the form ((kind IN (<new kinds>)) = (col IS NOT
+-- NULL)), vacuously true on every pre-existing row since no prior row carries a new
+-- kind; the file's own D-8 sub-header already states the per-mechanism grounds for its
+-- one internal design point and remains untouched.
+--
 -- D-1: FOUR NEW KINDS (kind CHECK re-issued wider): principal_relation_asserted,
 -- principal_role_bound, principal_key_bound, principal_competence_granted (the fourth BUILT by
 -- maintainer ruling, row 1411, overruling the consultation's named-not-built suggestion).

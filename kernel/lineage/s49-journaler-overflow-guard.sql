@@ -67,7 +67,7 @@
 -- this delta's ONE change is scoped to the attempted-identity resolution's one partial cast,
 -- nothing downstream of it.
 --
--- HISTORY: NOT additive-safe by s43's own per-mechanism grounds (CREATE OR REPLACE on an
+-- CLASS-RATIFICATION: NOT additive-safe by s43's own per-mechanism grounds (CREATE OR REPLACE on an
 -- existing function body -- named plainly in the FAIL-SAFE CLASSIFICATION section below,
 -- exactly per this codebase's own honesty convention for a non-2(a) delta), but BEHAVIOR-SAFE
 -- on every pre-existing path: for every payload actor value the pre-s49 function already
@@ -80,6 +80,11 @@
 -- refusals get recorded, in the strict subset/superset sense s43's own header already uses for
 -- its "REVOKEs are pure narrowing" argument, applied here to "journaled outcomes are pure
 -- widening" instead.
+--
+-- HISTORY: safe -- this file is a single CREATE OR REPLACE FUNCTION; it validates
+-- nothing about existing rows (the accommodations spec's history-validation sense).
+-- Its class-ratification standing is a separate question, stated on the
+-- CLASS-RATIFICATION line below.
 --
 -- CLOSURE STATEMENT (ADR-0000 Rule 2(a), 2026-07-02 amendment; spec's own Delta 2 section):
 --

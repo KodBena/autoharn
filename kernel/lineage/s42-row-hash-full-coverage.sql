@@ -1,3 +1,7 @@
+-- HISTORY: safe -- function/view re-issues and brand-new objects only; no
+-- history-validating statement (no ALTER of existing constraints, no CHECK over
+-- pre-existing rows, no SET NOT NULL, no DROP COLUMN) exists in this file.
+--
 -- s42 ROW-HASH FULL COVERAGE (design/FABLE-REFUSAL-RECORDING-AND-HASH-COVERAGE-SPEC.md, the
 -- RATIFIED build basis -- R1-R6 ratified ledger row 1460, 2026-07-18; §3 is this delta's own
 -- section). Fable-built per the builder ruling (ledger row 1462: this family is built by Fable;
