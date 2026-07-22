@@ -87,3 +87,12 @@ model layer (flat-keyspace aliasing) and the presentation layer (mirrored fields
 one build, one day: they are one class — two views bound to what should be one slot,
 or one slot masquerading as two facts — and the class is closed at construction, at
 both layers, not policed by eyes.
+
+## 2026-07-22 — Provisional appendix attached (twenty proscriptions, blind-consult edition)
+
+*(Dated append per ADR-0005 Rule 8.)* A codebase-blind consult's twenty UI proscriptions
+are installed as [a PROVISIONAL appendix](0019-appendix-provisional-ui-proscriptions.md)
+— binding defaults for new UI work, not ratified law; the appendix's own header carries
+the maintainer's verbatim terms, the surface-conflicts-never-silent rule, and the
+never-enforced-entries-get-culled condition. Ratification, amendment, or striking is a
+future maintainer act informed by the phase-2 consolidation consult.
