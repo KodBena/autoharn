@@ -1,23 +1,55 @@
 # tools/setup_tui/data/feature_facts.toml -- feature-facts registry (ADR-0012 P10 data file).
 # Loaded by tools/setup_tui/feature_facts.py; validated at import time.
+#
+# SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13, law/adr/0019 appendix:
+# "content is typed semantic elements; no layout carried inside a string"). Each entry:
+#   key         -- identifier (unchanged)
+#   label       -- human label (unchanged)
+#   aspiration  -- ONE short prose sentence: the standards-conformance AIM, citation-free, or the
+#                  honest "none named" statement (kept explicit -- an absence stated plainly is
+#                  itself informative, ADR-0002 rule 2's own carve-out).
+#   standards   -- OPTIONAL list of named external standards/frameworks the aspiration cites
+#                  (e.g. "NIST SP 800-63"); empty/omitted when none are named.
+#   mechanism   -- OPTIONAL list of file-path/ledger-row citations that GROUND the aspiration or
+#                  external claim (design docs, kernel lineage files, gates, ledger rows) -- each
+#                  renders as its OWN line (paths are data, never comma-joined prose).
+#   external    -- ONE short prose sentence: the external cost/dependency, citation-free, or
+#                  "none" stated explicitly.
+# Previously, `aspiration`/`external` bundled BOTH the prose claim AND its own citations in one
+# string (e.g. signed_genesis's own aspiration ran four independent clauses -- a standards claim,
+# two file citations, a ledger-row citation -- joined by connectives); the renderer then joined
+# `aspiration`/`external` themselves with a homemade ' | ' separator for the one-line `.line()`
+# checklist format, which a ROUND-5 rendering mistake (using `.line()` as elucidation PROSE
+# instead of a tabular info-line) exposed as a literal pipe visible mid-wrapped-paragraph. Both
+# axes are fixed here: citations move to `standards`/`mechanism` (never re-flattened into prose),
+# and `.line()` (unchanged, still the tabular/log-line renderer) is no longer used as elucidation
+# anywhere -- `feature_facts.FeatureFact.elements()` is the new, typed accessor for that.
+#
+# Stale citations found and fixed in the same sweep (mother's-house rule -- a hazard within
+# reach): several `mechanism` paths named `tools/setup_tui/screens.py screen_X` and
+# `tools/setup_tui/ui_textual.py`/`--plain`/`--scripted` -- all deleted in the 2026-07-22
+# wholesale rebuild. Updated to the current module names (`steps_*.py`, `tools/configtree/`).
 
 [[fact]]
 key = "preflight_idris2"
 label = "idris2 toolchain"
-aspiration = "none named; house discipline only -- backs the categorical-kernel-model freshness cross-check (gates/idris_model_freshness.py), not a named external standards-conformance aim."
-external = "external binary: idris2 (github.com/idris-lang/Idris2#installation); not on PATH reads RED with an install pointer (tools/setup_tui/screens.py screen_preflight)."
+aspiration = "none named; house discipline only."
+mechanism = ["gates/idris_model_freshness.py", "tools/setup_tui/steps_preflight.py"]
+external = "external binary: idris2 (github.com/idris-lang/Idris2#installation); not on PATH reads RED with an install pointer."
 
 [[fact]]
 key = "preflight_clingo"
 label = "clingo (ASP solver)"
-aspiration = "none named; house discipline only -- the deductive engine (clingo/ASP over engine/lp/*, driving ./judge's differential) is this project's own raison d'etre, not a named external standard."
-external = "external binary: clingo -- the engine differential proofs and ./judge need it; NON-FATAL if absent, matching bootstrap/bootstrap.sh's own posture ('not fatal to bootstrap')."
+aspiration = "none named; house discipline only -- the deductive engine is this project's own raison d'etre, not a named external standard."
+mechanism = ["engine/lp/*", "./judge", "bootstrap/bootstrap.sh"]
+external = "external binary: clingo -- the engine differential proofs and ./judge need it; NON-FATAL if absent ('not fatal to bootstrap')."
 
 [[fact]]
 key = "preflight_psql"
 label = "psql client"
 aspiration = "none named; house discipline only."
-external = "external binary: the postgresql-client package's psql; not on PATH reads RED (tools/setup_tui/screens.py screen_preflight)."
+mechanism = ["tools/setup_tui/steps_preflight.py"]
+external = "external binary: the postgresql-client package's psql; not on PATH reads RED."
 
 [[fact]]
 key = "preflight_python3"
@@ -29,61 +61,74 @@ external = "none beyond the baseline interpreter this tool and every driven verb
 key = "ui_backend_textual"
 label = "textual (optional TUI backend)"
 aspiration = "none named."
-external = "optional external Python package beyond stdlib -- IN USE as of design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md (commission ledger row 1818): a real Textual application (tools/setup_tui/ui_textual.py's TextualUi/SetupWizardApp) is the interactive face when this library is importable; version 8.2.8 witnessed against this build (a scratch venv, since the build interpreter itself did not have it installed -- see the FAQ getting-started entry). Absent, the numbered-menu fallback is used automatically (one teaching line naming the exact venv/pip command) -- --plain forces that fallback explicitly, --scripted never touches textual at all."
+mechanism = ["tools/configtree/app.py", "ledger row 1818"]
+external = "optional external Python package beyond stdlib -- IN USE: the hierarchical configuration editor is the interactive face when this library is importable; version 8.2.8 witnessed against this build. Absent, the wizard REFUSES with the install command -- there is no fallback UI (the numbered-menu/--plain/--scripted fallbacks an earlier revision of this fact described were deleted in the 2026-07-22 wholesale rebuild)."
 
 [[fact]]
 key = "ui_backend_urwid"
 label = "urwid (optional TUI backend)"
 aspiration = "none named."
-external = "optional external Python package beyond stdlib -- this build found it NOT installed at build time (tools/setup_tui/__init__.py); same posture as textual above."
+external = "optional external Python package beyond stdlib -- probed for presence/informational purposes only; no code path in the current (post-rebuild) wizard uses it as a backend."
 
 [[fact]]
 key = "substrate_existing"
 label = "existing-db substrate path"
 aspiration = "none named."
-external = "none -- zero manual steps, reuses an already-reachable database (design/FABLE-SETUP-TUI-SPEC.md screen 2, 'the omega-lab shape')."
+mechanism = ["design/FABLE-SETUP-TUI-SPEC.md"]
+external = "none -- zero manual steps, reuses an already-reachable database (the omega-lab shape)."
 
 [[fact]]
 key = "substrate_dedicated"
 label = "dedicated-db substrate path"
 aspiration = "none named; house config-fragment discipline only (memory: config-fragments-need-the-real-file -- pg_hba lines are never authored without reading the live target file first)."
-external = "cluster-host operator acts: pg_hba install + reload + createdb (tools/setup_tui/pghba.py, tools/setup_tui/screens.py screen_substrate's PREPARED blocks); requires a live, network-reachable Postgres cluster the operator administers."
+mechanism = ["tools/setup_tui/pghba.py", "tools/setup_tui/steps_substrate.py"]
+external = "cluster-host operator acts: pg_hba install + reload + createdb; requires a live, network-reachable Postgres cluster the operator administers."
 
 [[fact]]
 key = "fork_target_governed_files"
 label = "governed-files pattern exposure"
-aspiration = "F33 (governance keyed to WHAT THE THING IS, not an enumerated file list) -- house discipline, not an external standard (hooks/pretooluse_change_gate.py's own _load_governed_patterns)."
-external = "none -- writes one JSON file inside the target directory (<dest>/.claude/governed_files.json), no new binary or package. Commission row 1730: the autoharn-panel deployment started .py-only and needed .ts/.vue/.html added by hand after the fact."
+aspiration = "F33 (governance keyed to WHAT THE THING IS, not an enumerated file list) -- house discipline, not an external standard."
+mechanism = ["hooks/pretooluse_change_gate.py", "ledger row 1730"]
+external = "none -- writes one JSON file inside the target directory (<dest>/.claude/governed_files.json), no new binary or package. The witnessed specimen this exists to prevent: a deployment that started .py-only needed .ts/.vue/.html added by hand after the fact."
 
 [[fact]]
 key = "principals_authority"
 label = "Principals & authority screen"
-aspiration = "NIST SP 800-63's identity/lifecycle/binding decomposition, via the s40/s41 family (kernel/lineage/s40-principal-identity-events.sql, kernel/lineage/s41-principal-bindings-and-relations.sql), cited to design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md."
+aspiration = "identity/lifecycle/binding decomposition, via the s40/s41 family."
+standards = ["NIST SP 800-63"]
+mechanism = ["kernel/lineage/s40-principal-identity-events.sql", "kernel/lineage/s41-principal-bindings-and-relations.sql", "design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md"]
 external = "none -- drives this world's own <dest>/legacy/led and tools/role_charter.py, no new binary or package."
 
 [[fact]]
 key = "signed_genesis"
 label = "Signed genesis ceremony"
-aspiration = "the SIGNED commission mode, design/MAINT-GPG-TRUST-LAYER.md §3 -- the NIST-lineage authenticity aspiration that spec names for a GPG signature (non-repudiation, forgery resistance against the apparatus itself, outside-verifiability, §1); design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md is this screen's own build basis (commission ledger rows 1724/1725)."
-external = "external binary: gpg (GnuPG), must be on PATH; a real, ONGOING key-custody burden for the operator (the private key and its revocation certificate, user-guide/USER-GPG-TRUST-LAYER-FAQ.md §1-§2) -- stated plainly, this is the one screen in this flow with a genuine standing operator responsibility attached, though the SIGNING act itself is one-time (spec §1 item 5: no ongoing signing burden, no signature gates added anywhere)."
+aspiration = "the SIGNED commission mode -- a GPG signature over the founding commission, for non-repudiation, forgery resistance against the apparatus itself, and outside-verifiability."
+standards = ["NIST-lineage authenticity (non-repudiation, forgery resistance, outside-verifiability)"]
+mechanism = ["design/MAINT-GPG-TRUST-LAYER.md §3", "design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md", "ledger rows 1724/1725", "user-guide/USER-GPG-TRUST-LAYER-FAQ.md §1-§2"]
+external = "external binary: gpg (GnuPG), must be on PATH; a real, ONGOING key-custody burden for the operator (the private key and its revocation certificate) -- this is the one section in this flow with a genuine standing operator responsibility attached, though the signing act itself is one-time."
 
 [[fact]]
 key = "boundary_service"
 label = "boundary service"
-aspiration = "none named directly; law/adr/0016-the-service-contract-is-an-enforcement-surface.md governs its shape as house discipline, not an external standard -- its request stream is the same OTel channel the sentry's NIST AU-family aspiration below reads (design/FABLE-OTEL-SENTRY-SPEC.md §0)."
-external = "Python packages beyond stdlib: fastapi + uvicorn (serving/boundary_service.py own top-of-file imports); a network port (tools/setup_tui/probes.py free_port); optionally a recurring operator process to keep alive (tools/setup_tui/screens.py screen_boundary's systemd-unit PREPARED block, taken when this process does not start the service itself)."
+aspiration = "none named directly; governed as house discipline, not an external standard -- its request stream is the same OTel channel the sentry's own NIST AU-family aspiration below reads."
+mechanism = ["law/adr/0016-the-service-contract-is-an-enforcement-surface.md", "design/FABLE-OTEL-SENTRY-SPEC.md §0", "serving/boundary_service.py", "tools/setup_tui/probes.py", "tools/setup_tui/steps_boundary.py"]
+external = "Python packages beyond stdlib: fastapi + uvicorn; a network port; optionally a recurring operator process to keep alive (a systemd-unit PREPARED block, taken when this process does not start the service itself)."
 
 [[fact]]
 key = "observability_otelcol"
 label = "OTel collector (otelcol)"
-aspiration = "NIST AU-family audit-supporting evidence at diagnostics tier (design/FABLE-OTEL-SENTRY-SPEC.md §0: 'Watchdog alerts and attestations alike are AU-family audit-supporting evidence, never IA-2 authentication')."
-external = "external binary: otelcol-contrib; a recurring operator process to keep alive (tools/setup_tui/screens.py screen_observability's PREPARED start line)."
+aspiration = "audit-supporting evidence at diagnostics tier ('never IA-2 authentication')."
+standards = ["NIST AU-family"]
+mechanism = ["design/FABLE-OTEL-SENTRY-SPEC.md §0", "tools/setup_tui/steps_observability.py"]
+external = "external binary: otelcol-contrib; a recurring operator process to keep alive (a PREPARED start line)."
 
 [[fact]]
 key = "observability_watchdog"
 label = "OTel model-provenance watchdog (otel-watch)"
-aspiration = "NIST AU-family audit-supporting evidence at diagnostics tier, same citation as otelcol above (design/FABLE-OTEL-SENTRY-SPEC.md §0, §3's v0 watchdog: 'no principal, no ledger write, no kernel anything')."
-external = "depends on the otelcol collector's JSONL export already running (design/FABLE-OTEL-SENTRY-SPEC.md §3); a recurring operator daemon process (the repo-root `./otel-watch --daemon` verb)."
+aspiration = "audit-supporting evidence at diagnostics tier, same aim as otelcol above ('no principal, no ledger write, no kernel anything')."
+standards = ["NIST AU-family"]
+mechanism = ["design/FABLE-OTEL-SENTRY-SPEC.md §0/§3", "./otel-watch"]
+external = "depends on the otelcol collector's JSONL export already running; a recurring operator daemon process."
 
 [[fact]]
 key = "hydration_fork_provenance"
@@ -94,61 +139,71 @@ external = "none."
 [[fact]]
 key = "hydration_role_charters"
 label = "role charters"
-aspiration = "adjacent to the principal-surface's NIST SP 800-63 aspiration (design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md header) but NOT that delta itself -- tools/role_charter.py predates s40/s41 and registers a charter, not an event-sourced identity."
+aspiration = "adjacent to the principal-surface's own aspiration but NOT that delta itself -- registers a charter, not an event-sourced identity (predates s40/s41)."
+standards = ["NIST SP 800-63 (adjacent, not itself)"]
+mechanism = ["design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md", "tools/role_charter.py"]
 external = "none beyond this repo's own tools/role_charter.py (no new binary/package)."
 
 [[fact]]
 key = "hydration_makespan_scheduling_by_mandate"
 label = "makespan-scheduling-by-mandate (durable decision)"
-aspiration = "none named as an external standard; operating-rhythm house mandate (user-guide/USER-RECIPES-FAQ.md 'Workflow patterns', maintainer directive 2026-07-14)."
-external = "external Python package: ortools>=9.0 (tools/makespan-scheduler/pyproject.toml), vendored as a git submodule."
+aspiration = "none named as an external standard; operating-rhythm house mandate."
+mechanism = ["user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'", "maintainer directive 2026-07-14", "tools/makespan-scheduler/pyproject.toml"]
+external = "external Python package: ortools>=9.0, vendored as a git submodule."
 
 [[fact]]
 key = "hydration_drift_backstops"
 label = "drift-backstops (durable decision)"
-aspiration = "the project-wide NRC-grade-product posture (house discipline; memory: quality-bar-nrc-grade-best-effort), not a named external standard."
+aspiration = "the project-wide NRC-grade-product posture (house discipline), not a named external standard."
 external = "none."
 
 [[fact]]
 key = "hydration_adr_adoption"
 label = "ADR adoption (submenu)"
 aspiration = "the ADRs under law/adr/ ARE this project's own standards-conformance law; adopting one is adopting a named house standard, not an external one."
+mechanism = ["law/adr/"]
 external = "none."
 
 [[fact]]
 key = "hydration_single_branch_authoring"
 label = "single-branch-authoring (durable decision)"
-aspiration = "house version-control discipline (ledger row 1033), not a named external standard."
+aspiration = "house version-control discipline, not a named external standard."
+mechanism = ["ledger row 1033"]
 external = "none."
 
 [[fact]]
 key = "hydration_tags_are_serious_business"
 label = "tags-are-serious-business (durable decision)"
-aspiration = "house release-discipline (ledger row 1027), not a named external standard."
+aspiration = "house release-discipline, not a named external standard."
+mechanism = ["ledger row 1027"]
 external = "none."
 
 [[fact]]
 key = "hydration_obligate_amplification_caution"
 label = "obligate-amplification-caution (durable decision)"
-aspiration = "house kernel-write discipline (ledger row 1640), not a named external standard."
+aspiration = "house kernel-write discipline, not a named external standard."
+mechanism = ["ledger row 1640"]
 external = "none."
 
 [[fact]]
 key = "hydration_doc_currency_at_the_seam"
 label = "doc-currency-at-the-seam (durable decision)"
-aspiration = "the project-wide NRC-grade-product posture (ledger row 1699), not a named external standard."
+aspiration = "the project-wide NRC-grade-product posture, not a named external standard."
+mechanism = ["ledger row 1699"]
 external = "none."
 
 [[fact]]
 key = "hydration_concurrent_builders_need_isolation"
 label = "concurrent-builders-need-isolation (durable decision)"
-aspiration = "house concurrency discipline (ledger row 1502), not a named external standard."
+aspiration = "house concurrency discipline, not a named external standard."
+mechanism = ["ledger row 1502"]
 external = "none."
 
 [[fact]]
 key = "hydration_runs_are_strictly_linear"
 label = "runs-are-strictly-linear (durable decision)"
-aspiration = "house world-lifecycle discipline (maintainer ruling 2026-07-11), not a named external standard."
+aspiration = "house world-lifecycle discipline, not a named external standard."
+mechanism = ["maintainer ruling 2026-07-11"]
 external = "none."
 
 [[fact]]
@@ -160,23 +215,27 @@ external = "none."
 [[fact]]
 key = "hydration_claims_carry_witnesses"
 label = "claims-carry-witnesses (durable decision)"
-aspiration = "an evidentiary-discipline house standard (this repo's own CLAUDE.md ORCHESTRATION section), not a named external standard."
+aspiration = "an evidentiary-discipline house standard, not a named external standard."
+mechanism = ["CLAUDE.md ORCHESTRATION section"]
 external = "none."
 
 [[fact]]
 key = "hydration_unanchored_review_briefs"
 label = "unanchored-review-briefs (durable decision)"
-aspiration = "house anti-anchoring-bias review discipline (ledger row 1278), not a named external standard."
+aspiration = "house anti-anchoring-bias review discipline, not a named external standard."
+mechanism = ["ledger row 1278"]
 external = "none."
 
 [[fact]]
 key = "hydration_fresh_context_review_for_delegated_work"
 label = "fresh-context-review-for-delegated-work (durable decision)"
-aspiration = "house independent-review discipline (ledger row 1492), not a named external standard."
+aspiration = "house independent-review discipline, not a named external standard."
+mechanism = ["ledger row 1492"]
 external = "none."
 
 [[fact]]
 key = "hydration_polychotomy_option_space_justification"
 label = "polychotomy-option-space-justification (durable decision, SHOULD-grade)"
-aspiration = "house anti-false-polychotomy discipline (ledger row 1915), not a named external standard -- universal suggestion, not a mandatory rule."
+aspiration = "house anti-false-polychotomy discipline, not a named external standard -- universal suggestion, not a mandatory rule."
+mechanism = ["ledger row 1915"]
 external = "none."

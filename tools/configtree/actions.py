@@ -21,7 +21,8 @@ from tools.configtree.fields import (ChoiceField, ListField, MultiChoiceField, g
                                       set_field_value, validate_value)
 from tools.configtree.spec import ActionSpec
 from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       build_field_widget, field_widget_id, read_field_value)
+                                       build_field_widget, elucidation_widgets, field_widget_id,
+                                       read_field_value)
 
 
 class ActionPane(Vertical):
@@ -36,8 +37,7 @@ class ActionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static(f"{self.spec.title}", classes="ct-section-title")
-        if self.spec.description:
-            yield Static(self.spec.description, classes="ct-section-description", markup=False)
+        yield from elucidation_widgets(self.spec.description, "ct-section-description")
         self._errors = {}
         with VerticalScroll(id=f"{self.id}-body", classes="ct-section-body"):
             self._field_specs = tuple(self.spec.fields(self.state))
@@ -54,14 +54,11 @@ class ActionPane(Vertical):
                                                   on_change=self._make_multi_change(f))
                 else:
                     yield build_field_widget(f, answers[name])
-                    if getattr(f, "help", None):
-                        yield Static(f.help, classes="ct-field-help", markup=False)
+                    yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
                     if isinstance(f, ChoiceField) and f.option_help:
                         for value, _ in f.options:
-                            help_text = f.option_help.get(value)
-                            if help_text:
-                                yield Static(f"{value}: {help_text}", classes="ct-choice-help",
-                                             markup=False)
+                            yield from elucidation_widgets(f.option_help.get(value),
+                                                             "ct-choice-help", prefix=value)
                 err = FieldError()
                 self._errors[name] = err
                 yield err

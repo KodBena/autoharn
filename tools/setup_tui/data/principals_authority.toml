@@ -1,5 +1,11 @@
 # tools/setup_tui/data/principals_authority.toml -- Principals & authority screen data
 # (ADR-0012 P10). Loaded by tools/setup_tui/principals_authority.py.
+#
+# [lessons.*] SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13): each lesson
+# used to bundle CONSTITUTES/DOES NOT as one string with a hand-rolled colon-prefixed-label
+# split ("CONSTITUTES: ... DOES NOT: ...") -- the SAME class as feature_facts.toml's own pipe
+# delimiter, just a different homemade separator. Split into two named keys per lesson
+# (`constitutes`/`does_not`), each its own typed element when rendered.
 
 [[class_choice]]
 value = "human"
@@ -49,8 +55,20 @@ agent_class = "human"
 purpose = "registered automatically through the s40 FULL ceremony at birth; the maintainer's own FULL-mode signing act uses this principal"
 
 [lessons]
-register = "CONSTITUTES: a new identity anchor row plus its principal_registered event -- append-only, attributed, dated, with a stated purpose (kernel/lineage/s40-principal-identity-events.sql Element 3: a bare anchor cannot commit without this event, atomically). DOES NOT: grant the principal any capability, role, or standing to write under -- registration is EXISTENCE, not authority. A registered principal cannot write under its own name until a standing declaration binds a db role to it (led principal declare-standing), and this screen's charter/competence/relation acts are separate ceremonies again."
-competence = "CONSTITUTES: a recorded BELIEF that this principal is competent for a named activity, at a stated band, on a stated basis -- attributed, dated, retractable only by a superseding withdrawal (kernel/lineage/s41-principal-bindings-and-relations.sql D-5/G13). DOES NOT: constitute a permission bit or gate anything -- RECORDABLE, NOT YET GATING in v1 (no review path consults competence before accepting an act; enforcement is a named follow-on amendment, s41 D-5). Band/basis are free text in v1, a RATIFIED PLACEHOLDER (s41 §9(g)), not a settled judgment that no closed vocabulary is ever warranted."
-relation = "CONSTITUTES: a typed, attributed, dated declaration of a relationship between two registered principals, in the kernel's own closed vocabulary (acts-for | dispatched-by | same-natural-person | succeeds -- kernel/lineage/s41-principal-bindings-and-relations.sql D-2), retractable only by a superseding retraction restating the same triple. DOES NOT: enforce anything -- a relation is REPRESENTABLE delegation/supervision/succession, not an enforced permission; 'acts-for' in particular records a declared fact, it does not make the object's writes flow through the subject at the kernel level."
-charter = "CONSTITUTES: binding a role's governing charter TEXT (hash-verified against the file on disk at registration time) to an ALREADY-REGISTERED principal, via an ordinary kind=decision ledger row in a fixed, parseable statement shape (design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md; tools/role_charter.py). DOES NOT: itself register the principal -- charter and identity are two separate ceremonies (this is exactly the trap spec WP3 closes: chartering an unregistered role used to dead-end at a refusal; this screen offers the missing registration in-flow instead)."
 workflow_pointer = "Roles defined here become the principals your workflow units and briefs bind to -- see roles/README.md and design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (charters and briefs) and tools/workflow_compile.py (the workflow-unit compiler) in the world you just born. No workflow authoring happens in this screen (spec §1 item 4: pointer, not machinery)."
+
+[lessons.register]
+constitutes = "a new identity anchor row plus its principal_registered event -- append-only, attributed, dated, with a stated purpose (kernel/lineage/s40-principal-identity-events.sql Element 3: a bare anchor cannot commit without this event, atomically)."
+does_not = "grant the principal any capability, role, or standing to write under -- registration is EXISTENCE, not authority. A registered principal cannot write under its own name until a standing declaration binds a db role to it (led principal declare-standing), and this screen's charter/competence/relation acts are separate ceremonies again."
+
+[lessons.competence]
+constitutes = "a recorded BELIEF that this principal is competent for a named activity, at a stated band, on a stated basis -- attributed, dated, retractable only by a superseding withdrawal (kernel/lineage/s41-principal-bindings-and-relations.sql D-5/G13)."
+does_not = "constitute a permission bit or gate anything -- RECORDABLE, NOT YET GATING in v1 (no review path consults competence before accepting an act; enforcement is a named follow-on amendment, s41 D-5). Band/basis are free text in v1, a RATIFIED PLACEHOLDER (s41 §9(g)), not a settled judgment that no closed vocabulary is ever warranted."
+
+[lessons.relation]
+constitutes = "a typed, attributed, dated declaration of a relationship between two registered principals, in the kernel's own closed vocabulary (acts-for / dispatched-by / same-natural-person / succeeds -- kernel/lineage/s41-principal-bindings-and-relations.sql D-2), retractable only by a superseding retraction restating the same triple."
+does_not = "enforce anything -- a relation is REPRESENTABLE delegation/supervision/succession, not an enforced permission; 'acts-for' in particular records a declared fact, it does not make the object's writes flow through the subject at the kernel level."
+
+[lessons.charter]
+constitutes = "binding a role's governing charter TEXT (hash-verified against the file on disk at registration time) to an ALREADY-REGISTERED principal, via an ordinary kind=decision ledger row in a fixed, parseable statement shape (design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md; tools/role_charter.py)."
+does_not = "itself register the principal -- charter and identity are two separate ceremonies (this is exactly the trap spec WP3 closes: chartering an unregistered role used to dead-end at a refusal; this screen offers the missing registration in-flow instead)."

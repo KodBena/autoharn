@@ -53,31 +53,65 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tools.configtree import DescriptionElement
 from tools.setup_tui import content, durable_decisions
 
 
 @dataclass(frozen=True)
 class FeatureFact:
+    """SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13): `aspiration`/
+    `external` are each ONE short, citation-free prose sentence (or the honest "none named"
+    statement); `standards` names any external standard/framework the aspiration cites;
+    `mechanism` lists the file-path/ledger-row citations that GROUND the claim, each its own
+    entry (never comma-joined prose). `line()` stays the tabular/log-line renderer
+    (`facts_block`'s own checklist/info-line use, an EXEMPT class this codebase already
+    established -- `.ct-info-line`/`.ct-precheck-line` are deliberately never capped/wrapped);
+    `elements()` is the NEW typed accessor for the interactive elucidation area -- the two are
+    deliberately different shapes for deliberately different rendering contexts, never one
+    reused where the other belongs (the round-5 mistake this round answers)."""
     key: str
     label: str
     aspiration: str
     external: str
+    standards: tuple[str, ...] = ()
+    mechanism: tuple[str, ...] = ()
 
     def line(self) -> str:
         return f"  facts [{self.label}] -- aspiration: {self.aspiration} | external: {self.external}"
+
+    def elements(self, *, prefix: "str | None" = None) -> "tuple[DescriptionElement, ...]":
+        """The section-description/elucidation rendering of this fact: one `DescriptionElement`
+        per component, blank components simply absent (round-6 coordinator instruction) -- a
+        `mechanism` path gets its OWN element (never joined with the others), so a file path is
+        never wrapped mid-directory by the widget layer. `prefix`, if given (a section combining
+        MORE THAN ONE fact under one description, e.g. substrate's existing/dedicated paths),
+        is prepended to every element's own label so the operator can tell which fact a line
+        belongs to."""
+        def _label(name: str) -> str:
+            return f"{prefix} {name}" if prefix else name
+
+        out: list[DescriptionElement] = [DescriptionElement(_label("Aspiration"), self.aspiration)]
+        for std in self.standards:
+            out.append(DescriptionElement(_label("Standards"), std))
+        for path in self.mechanism:
+            out.append(DescriptionElement(_label("Mechanism"), path))
+        out.append(DescriptionElement(_label("External"), self.external))
+        return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
 # Registry -- every selectable act the flow offers (§2's enumeration): the substrate paths, the
 # boundary service, observability (otelcol + watchdog), each hydration item, and the
 # preflight-probed toolchains (idris2, clingo/ASP, python3, psql, textual/urwid if present).
-# Built from feature_facts_data.RAW_ENTRIES (P10's data artifact, see module docstring's
-# "CONTENT SPLIT" note) -- one line of construction, never a parse, never a runtime file read.
+# Built straight from feature_facts.toml (content.py's own validated FEATURE_FACTS) -- one line
+# of construction, never a parse, never a runtime file read.
 # ---------------------------------------------------------------------------------------------
 
 REGISTRY: dict[str, FeatureFact] = {
     row["key"]: FeatureFact(key=row["key"], label=row["label"], aspiration=row["aspiration"],
-                             external=row["external"])
+                             external=row["external"],
+                             standards=tuple(row.get("standards", ())),
+                             mechanism=tuple(row.get("mechanism", ())))
     for row in content.FEATURE_FACTS
 }
 

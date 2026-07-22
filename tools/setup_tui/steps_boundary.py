@@ -166,4 +166,4 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 
 STEP = SectionSpec(slug="boundary", title="Boundary", group="Runtime", fields=fields,
                     submit=submit, blocked=_blocked_needs_dest,
-                    description=feature_facts.fact("boundary_service").line())
+                    description=feature_facts.fact("boundary_service").elements())

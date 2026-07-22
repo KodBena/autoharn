@@ -178,4 +178,4 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 
 STEP = SectionSpec(slug="signed-genesis", title="Signed genesis", group="Authority & trust",
                     fields=fields, submit=submit, blocked=_blocked_needs_dest,
-                    description=feature_facts.fact("signed_genesis").line())
+                    description=feature_facts.fact("signed_genesis").elements())

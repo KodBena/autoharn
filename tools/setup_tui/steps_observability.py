@@ -22,10 +22,10 @@ def fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label="Configure observability now?", default=True),
         ConfirmField(name="otelcol", label="Select the OTel collector (otelcol-contrib) to start "
-                     "with this world?", help=feature_facts.fact("observability_otelcol").line()),
+                     "with this world?", help=feature_facts.fact("observability_otelcol").elements()),
         ConfirmField(name="otel_watch", label="Select the OTel model-provenance watchdog "
                      "(otel-watch) to start with this world?",
-                     help=feature_facts.fact("observability_watchdog").line()),
+                     help=feature_facts.fact("observability_watchdog").elements()),
     )
 
 

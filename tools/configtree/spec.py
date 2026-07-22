@@ -14,7 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from tools.configtree.fields import Field, get_field_value, validate_value
+from tools.configtree.fields import (ElucidationValue, Field, _check_no_bare_pipe,
+                                      get_field_value, validate_value)
 from tools.configtree.ids import Label, NodeId
 
 # The closed vocabulary of a tree node's rendered status (spec §3 v2: "each node marked complete
@@ -63,12 +64,14 @@ class SectionSpec:
     submit: Callable[[dict, dict], SectionResult]
     precheck: "Callable[[dict], tuple[str, ...]] | None" = None
     blocked: "Callable[[dict], 'str | None'] | None" = None
-    description: "str | None" = None
+    description: "ElucidationValue | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "slug", self.slug if isinstance(self.slug, NodeId) else NodeId(self.slug))
         object.__setattr__(self, "title", self.title if isinstance(self.title, Label) else Label(self.title))
         object.__setattr__(self, "group", self.group if isinstance(self.group, Label) else Label(self.group))
+        if isinstance(self.description, str):
+            _check_no_bare_pipe(self.description, owner=f"SectionSpec {self.slug} description")
 
 
 @dataclass(frozen=True)
@@ -116,12 +119,14 @@ class ActionSpec:
     fields: Callable[[dict], "tuple[Field, ...]"]
     apply: Callable[[dict, dict], SectionResult]
     apply_label: str = "Apply"
-    description: "str | None" = None
+    description: "ElucidationValue | None" = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "slug", self.slug if isinstance(self.slug, NodeId) else NodeId(self.slug))
         object.__setattr__(self, "title", self.title if isinstance(self.title, Label) else Label(self.title))
         object.__setattr__(self, "group", self.group if isinstance(self.group, Label) else Label(self.group))
+        if isinstance(self.description, str):
+            _check_no_bare_pipe(self.description, owner=f"ActionSpec {self.slug} description")
 
 
 def section_answers(spec: SectionSpec, state: dict) -> dict:

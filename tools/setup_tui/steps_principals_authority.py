@@ -38,7 +38,7 @@ def _register_field() -> ListField:
                                  option_help=class_help),
                      TextField(name="purpose", label="Stated purpose")),
         summarize=lambda r: f"{r['name']} ({r['agent_class']}): {r['purpose']}",
-        help=content.PA_LESSONS["register"],
+        help=pa.lesson_elements("register"),
         # `refresh_siblings`: the competence/relation/charter ChoiceFields below derive their own
         # principal-name options from THIS list's current rows -- a name typed in THIS visit must
         # show up as a pickable option in a sibling list without leaving the pane.
@@ -88,19 +88,19 @@ def fields(state: dict) -> tuple:
                                TextField(name="band", label="Band"),
                                TextField(name="basis", label="Basis")),
                   summarize=lambda r: f"{r['name']}: {r['activity']} ({r['band']}/{r['basis']})",
-                  help=content.PA_LESSONS["competence"]),
+                  help=pa.lesson_elements("competence")),
         ListField(name="relations", label="Relation",
                   item_fields=(ChoiceField(name="subject", label="Subject principal", options=name_opts),
                                ChoiceField(name="relation", label="Relation", options=rel_opts,
                                            option_help=rel_help),
                                ChoiceField(name="object", label="Object principal", options=name_opts)),
                   summarize=lambda r: f"{r['subject']} {r['relation']} {r['object']}",
-                  help=content.PA_LESSONS["relation"]),
+                  help=pa.lesson_elements("relation")),
         ListField(name="charters", label="Role charter",
                   item_fields=(ChoiceField(name="role", label="Role (registered principal)", options=name_opts),
                                TextField(name="path", label="Charter file path")),
                   summarize=lambda r: f"{r['role']} <- {r['path']}",
-                  help=content.PA_LESSONS["charter"]),
+                  help=pa.lesson_elements("charter")),
     )
 
 
@@ -181,4 +181,4 @@ def _blocked_needs_dest(state: dict) -> "str | None":
 STEP = SectionSpec(
     slug="principals-authority", title="Principals & authority", group="Authority & trust",
     fields=fields, submit=submit, blocked=_blocked_needs_dest,
-    description=feature_facts.fact("principals_authority").line())
+    description=feature_facts.fact("principals_authority").elements())

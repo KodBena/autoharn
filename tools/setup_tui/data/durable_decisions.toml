@@ -1,93 +1,116 @@
 # tools/setup_tui/data/durable_decisions.toml -- the durable-decisions catalog (ADR-0012 P10).
 # Loaded by tools/setup_tui/durable_decisions.py; validated at import time.
+#
+# SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13, law/adr/0019 appendix):
+# `why` used to bundle a short rationale AND every citation backing it (ledger rows, file
+# pointers, quotes) in ONE semicolon-joined string -- the same class as feature_facts.toml's own
+# pipe-flattened aspiration, just a different homemade delimiter. Split: `why` is now ONE short,
+# citation-free sentence; `citations` is a list, each entry its own line when rendered (never
+# comma/semicolon-joined prose). `rule`/`hydrates`/`claude_md` are UNCHANGED -- they are literal
+# artifact TEXT (a ledger-decision statement, a CLAUDE.md fragment), not interactive elucidation
+# a Textual widget wraps; restructuring them would change what gets WRITTEN, which is out of this
+# round's scope.
 
 [[decision]]
 slug = "makespan-scheduling-by-mandate"
 rule = "For any commission spanning 3+ work items with dependencies, precedence constraints, or resource conflicts, sequence them with a constraint-based scheduler rather than ad hoc ordering. Require a high-stakes task's decomposition and close to be cosigned by a principal distinct from the one who did the work -- treat an undischarged cosign as a hard block on further edits, never backloggable debt."
-why = "maintainer directive 2026-07-14 (user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'); ledger row 1714 (this catalog's own commission) and row 1716 (the maintainer's correction: 'it's mandate is a robust specification (well, softly so) in autoharn-panel, in that it requires cosigned decomposition of the task'); the panel's actual mandate text, read live and read-only from /home/bork/w/vdc/1/experience/autoharn-panel/CLAUDE.md points 2-3 ('A mandated-tier task carries a review obligation by convention: its work item's close is countersigned by a distinct principal ... hooks/pretooluse_change_gate.py's decomposition_review mechanism makes this a BLOCKER, not backloggable debt') and its RESOURCES table row for makespan-scheduler (ledger row id=1178 there, tier text: 'mandated: driving execution of three or more claimed/claimable work items under dependency, precedence, resource-conflict, or quota constraints'); rule text rewritten per row 1722's genericity critique, entry #1."
+why = "maintainer directive 2026-07-14, softly mandating cosigned decomposition for multi-item commissions."
+citations = ["user-guide/USER-RECIPES-FAQ.md 'Workflow patterns'", "ledger row 1714 (this catalog's own commission)", "ledger row 1716 (maintainer's correction on the panel's own mandate)", "autoharn-panel CLAUDE.md points 2-3 (RESOURCES table row id=1178)", "ledger row 1722 (genericity critique, entry #1)"]
 hydrates = "Durable decision adopted at world birth (makespan-scheduling-by-mandate, catalog tools/setup_tui/durable_decisions.py, why: ledger rows 1714/1716/1722 + autoharn-panel/CLAUDE.md points 2-3 and its RESOURCES table row id=1178): for any commission spanning 3+ work items with dependencies, precedence constraints, or resource conflicts, sequence them with a constraint-based scheduler rather than ad hoc ordering; require a high-stakes task's decomposition and close to be cosigned by a principal distinct from the one who did the work, treating an undischarged cosign as a hard block on further edits, never backloggable debt."
 claude_md = "- **Constraint-scheduled, cosigned decomposition** -- for any commission spanning 3+ work items with dependencies, precedence constraints, or resource conflicts, sequence them with a constraint-based scheduler (this harness ships one: `tools/makespan-scheduler/`, CP-SAT via OR-Tools) rather than ad hoc ordering. Require a high-stakes task's decomposition and close to be cosigned by a principal distinct from the one who did the work -- treat an undischarged cosign as a hard block on further edits, never backloggable debt. Full treatment: user-guide/USER-RECIPES-FAQ.md 'Workflow patterns', design/ORCH-MAKESPAN-SCHEDULING-GUARANTEE.md."
 
 [[decision]]
 slug = "drift-backstops"
 rule = "The orchestrator is softly obligated to follow the FAQ's drift-backstop method (user-guide/USER-RECIPES-FAQ.md, 'Drift backstops') for anything that goes quietly stale: name the authority/dependent pair, derive both sides mechanically, compare with a comparator that quantifies over the class, refuse loud (refresh or declare), backstop the backstop with a seen-red proof and a fixture-census registration."
-why = "the FAQ section's own fourteen-instance evidence base (user-guide/USER-RECIPES-FAQ.md 'Drift backstops', citing ADR-0011's Context: 'a design document that quietly goes stale while the code it describes moves on, a duplicated fact whose two copies drift apart one edit at a time')."
+why = "the FAQ section's own fourteen-instance evidence base for anything that goes quietly stale."
+citations = ["user-guide/USER-RECIPES-FAQ.md 'Drift backstops'", "ADR-0011 Context ('a design document that quietly goes stale while the code it describes moves on')"]
 hydrates = "Durable decision adopted at world birth (drift-backstops, catalog tools/setup_tui/durable_decisions.py, why: user-guide/USER-RECIPES-FAQ.md 'Drift backstops', fourteen-instance evidence base): the orchestrator is softly obligated to follow the FAQ's five-move drift-backstop method for anything that goes quietly stale."
 claude_md = "- **Drift backstops (soft obligation)** -- for anything that goes quietly stale (docs from code, a hash function from a table's columns, a config from the mechanisms it configures), follow the five-move method in user-guide/USER-RECIPES-FAQ.md 'Drift backstops': name the pair, derive both sides mechanically, compare with a comparator quantifying over the class, refuse loud (refresh or declare), backstop the backstop."
 
 [[decision]]
 slug = "single-branch-authoring"
 rule = "Content is authored on the single working branch ONLY; a cut/release branch is a pure derivation (projection), never a place an edit originates. An edit made inside a cut is the defect to make unrepresentable, not a convenience."
-why = "ledger row 1033 (this repo, maintainer ruling 2026-07-15): 'ONE branch, full stop. Worktrees fine; branches are the transaction-paradigm violation witnessed today (v1.1 cut-only README/USER-CONFIGURATION edits authored in the cut worktree, never backported to next, silently re-deleted by the v1.1.2 cut from next).'"
+why = "maintainer ruling 2026-07-15: ONE branch, full stop -- branches are the transaction-paradigm violation witnessed."
+citations = ["ledger row 1033"]
 hydrates = "Durable decision adopted at world birth (single-branch-authoring, catalog tools/setup_tui/durable_decisions.py, why: ledger row 1033): content is authored on the single working branch ONLY; a cut/release branch is a pure derivation, never a place an edit originates -- witnessed specimen: v1.1 cut-only edits authored in a cut worktree were silently re-deleted by the next cut."
 claude_md = "- **Single-branch authoring** -- content is authored on the single working branch ONLY; a cut/release branch is a pure derivation (projection), never a place an edit originates (ledger row 1033: cut-only edits were silently re-deleted by the next cut)."
 
 [[decision]]
 slug = "tags-are-serious-business"
 rule = "Public main stays continuously up to date via routinely pushed, UNTAGGED cuts. Tagging is serious business -- a deliberate release act, never done between feature sets."
-why = "ledger row 1027 (this repo, maintainer ruling 2026-07-15): 'public origin/main stays continuously up-to-date -- cut commits pushed routinely, UNTAGGED. Tagging is serious business, a deliberate release act, never done between feature sets.'"
+why = "maintainer ruling 2026-07-15: public main stays continuously up to date via untagged cuts; tagging is a deliberate release act."
+citations = ["ledger row 1027"]
 hydrates = "Durable decision adopted at world birth (tags-are-serious-business, catalog tools/setup_tui/durable_decisions.py, why: ledger row 1027): public main stays continuously up to date via routinely pushed, UNTAGGED cuts; tagging is a deliberate release act, never done between feature sets."
 claude_md = "- **Tags are serious business** -- push public main often, UNTAGGED; a tag is a deliberate release act, never done between feature sets (ledger row 1027)."
 
 [[decision]]
 slug = "obligate-amplification-caution"
 rule = "Before writing any obligation row into the ledger, know that over-catch review triggers are retroactive with no time bound, and that an obliged actor's own later actions can count as new debt against themselves. Always discharge review obligations under a different principal than the one who is obliged."
-why = "ledger row 1640 (this repo, 2026-07-18, autoharn-panel world/older lineage): the obligate footgun's third witnessed occurrence -- 1225 pre-existing rows flagged as debt, then 1225->1228 amplification when the obliged actor's own dispositions counted as new debt; rule text rewritten per row 1722's genericity critique, entry #5."
+why = "the obligate footgun's third witnessed occurrence -- pre-existing rows flagged as debt, then amplified when the obliged actor's own dispositions counted as new debt."
+citations = ["ledger row 1640", "ledger row 1722 (genericity critique, entry #5)"]
 hydrates = "Durable decision adopted at world birth (obligate-amplification-caution, catalog tools/setup_tui/durable_decisions.py, why: ledger rows 1640/1722): before writing any obligation row into the ledger, know that over-catch review triggers are retroactive with no time bound, and that an obliged actor's own later actions can count as new debt against themselves -- always discharge review obligations under a different principal than the one who is obliged."
 claude_md = "- **Obligation-trigger caution** -- before writing any obligation row into the ledger, know that over-catch review triggers are retroactive with no time bound, and that an obliged actor's own later actions can count as new debt against themselves. Always discharge review obligations under a different principal than the one who is obliged (ledger row 1640)."
 
 [[decision]]
 slug = "doc-currency-at-the-seam"
 rule = "Every merge that changes user-facing behavior includes its documentation update (or a named, tracked deferral with a reason) in the same unit of work. A merge silent on docs for a behavior change is itself a defect."
-why = "ledger row 1699 (this repo, maintainer-directed 2026-07-19): 'we need durable decisions so to reduce the vigilance burden of remembering after new features have been added' -- precedent: the 2026-07-18 Block D merge landed undocumented and needed a dedicated catch-up pass (rows 1652-1661 vs 1667); rule text rewritten per row 1722's genericity critique, entry #7."
+why = "maintainer-directed 2026-07-19: reduce the vigilance burden of remembering docs after new features land."
+citations = ["ledger row 1699", "the 2026-07-18 Block D merge (landed undocumented, needed a dedicated catch-up pass)", "ledger row 1722 (genericity critique, entry #7)"]
 hydrates = "Durable decision adopted at world birth (doc-currency-at-the-seam, catalog tools/setup_tui/durable_decisions.py, why: ledger rows 1699/1722): every merge that changes user-facing behavior includes its documentation update, or a named, tracked deferral with a reason, in the same unit of work; a merge silent on docs for a behavior change is itself a defect."
 claude_md = "- **Doc currency at the seam** -- every merge that changes user-facing behavior includes its documentation update (or a named, tracked deferral with a reason) in the same unit of work. A merge silent on docs for a behavior change is itself a defect (ledger row 1699)."
 
 [[decision]]
 slug = "concurrent-builders-need-isolation"
 rule = "Overlapping-surface commissions get worktree isolation or serial dispatch, never a shared checkout -- a concurrent sibling's uncommitted hunk in a shared working tree can be swept into another builder's commit by an ordinary `git add` of a declared path."
-why = "ledger row 1502 (this repo, s45 adversarial review adjudication): commit 94f5b7a bundled a fixture_census registry row for defeat-pipeline before those files existed, making the census gate RED on a clean checkout -- cause: 'shared-checkout concurrency, not builder invention: the pipeline builder's uncommitted hunk in the SHARED gates/fixture_census.py was swept by s45's git add of its own declared path.'"
+why = "s45 adversarial review adjudication: a concurrent builder's uncommitted hunk in a shared file was swept into another builder's commit."
+citations = ["ledger row 1502", "commit 94f5b7a (a fixture_census row bundled before those files existed)"]
 hydrates = "Durable decision adopted at world birth (concurrent-builders-need-isolation, catalog tools/setup_tui/durable_decisions.py, why: ledger row 1502): overlapping-surface commissions get worktree isolation or serial dispatch, never a shared checkout -- witnessed scope-bleed: a concurrent builder's uncommitted hunk in a shared file was swept into another builder's commit."
 claude_md = "- **Concurrent builders need isolation** -- overlapping-surface commissions get worktree isolation or serial dispatch, never a shared checkout (ledger row 1502: a concurrent builder's uncommitted hunk in a shared file was swept into another builder's commit, making a census gate falsely RED)."
 
 [[decision]]
 slug = "runs-are-strictly-linear"
 rule = "Once a deployment's evidence is recorded, treat it as immutable history -- never patch, refresh, or apply deltas to it after the fact. A needed change is realized only in the next deployment you create."
-why = "maintainer ruling 2026-07-11 (this repo's own CLAUDE.md, ORCHESTRATION section): the apply-to-existing-world clause and bootstrap/apply-delta.sh's typed-confirmation ceremony were retired after being witnessed producing cargo-cult sysadmin work; the run-2 world was itself broken at birth by an unscripted scaffold-to-/tmp + hand-mv gap; rule text rewritten per row 1722's genericity critique, entry #9."
+why = "maintainer ruling 2026-07-11: the apply-to-existing-world ceremony was retired after producing cargo-cult sysadmin work; a run-2 world was itself broken at birth by an unscripted gap."
+citations = ["this repo's own CLAUDE.md ORCHESTRATION section", "ledger row 1722 (genericity critique, entry #9)"]
 hydrates = "Durable decision adopted at world birth (runs-are-strictly-linear, catalog tools/setup_tui/durable_decisions.py, why: maintainer ruling 2026-07-11 + ledger row 1722): once a deployment's evidence is recorded, treat it as immutable history -- never patch, refresh, or apply deltas to it after the fact; a needed change is realized only in the next deployment you create."
 claude_md = "- **Deployments are immutable history once recorded** -- once a deployment's evidence is recorded, treat it as immutable history: never patch, refresh, or apply deltas to it after the fact. A needed change is realized only in the next deployment you create (maintainer ruling 2026-07-11)."
 
 [[decision]]
 slug = "decomposition-to-unit-of-independent-resumption"
 rule = "Decompose a commission into ledgered work items to the UNIT OF INDEPENDENT RESUMPTION -- not below it and not above it, and no numeric rule (a fixed item- or file-count target is cargo-cultable and wrong as often as right). Judge granularity by one question: could a fresh session pick up this slug alone and know what to build and how to tell it's done?"
-why = "autoharn-panel CLAUDE.md point 1, read live and read-only from /home/bork/w/vdc/1/experience/autoharn-panel/CLAUDE.md: 'An increment left out of the ledger does not exist: resumption cannot see it ... (run-8 finding, 2026-07-11).' Too fine 'adds ledger ceremony with no resumability gain (run10: three items that collapsed to one file and one commit)'; too coarse 'hides a seam a successor could have picked up separately (design/ORCH-RETROSPECTIVE-RUN10.md, Finding 2)' -- both directions independently witnessed against the SAME project."
+why = "an increment left out of the ledger does not exist; too-fine and too-coarse decomposition were both independently witnessed against the same project."
+citations = ["autoharn-panel CLAUDE.md point 1 (run-8 finding, 2026-07-11)", "design/ORCH-RETROSPECTIVE-RUN10.md Finding 2"]
 hydrates = "Durable decision adopted at world birth (decomposition-to-unit-of-independent-resumption, catalog tools/setup_tui/durable_decisions.py, why: autoharn-panel CLAUDE.md point 1, run-8 finding 2026-07-11 and ORCH-RETROSPECTIVE-RUN10.md Finding 2): decompose a commission to the UNIT OF INDEPENDENT RESUMPTION -- no numeric item/file-count rule; judge by whether a fresh session could pick up the slug alone and know what to build and how to tell it's done."
 claude_md = "- **Decompose to the unit of independent resumption** -- not below it, not above it, no numeric item/file-count rule (a fixed target is cargo-cultable and wrong as often as right). Judge by one question: could a fresh session pick up this slug alone and know what to build and how to tell it's done? (autoharn-panel prior art, CLAUDE.md point 1: too fine adds ledger ceremony with no resumability gain, run10; too coarse hides a seam a successor could have picked up separately, run-8.)"
 
 [[decision]]
 slug = "claims-carry-witnesses"
 rule = "Every claim in a report states its evidentiary status per item: WITNESSED (with the observed output), REFUSED-AS-EXPECTED (a refusal that was the correct outcome), or UNEXERCISED (with the concrete blocker that stopped you). Docs follow the same rule -- an example carries real output or an UNWITNESSED mark. No umbrella claims covering multiple items at once."
-why = "this repo's own CLAUDE.md ORCHESTRATION section (already written project-agnostically, no translation needed): 'Claims carry witnesses. A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule (an example carries real output or an UNWITNESSED mark). No umbrella claims.' Wired per row 1722's genericity critique, which named this taxonomy the catalog's most conspicuous gap."
+why = "this repo's own CLAUDE.md ORCHESTRATION section, already written project-agnostically."
+citations = ["CLAUDE.md ORCHESTRATION section", "ledger row 1722 (genericity critique, named this taxonomy the catalog's most conspicuous gap)"]
 hydrates = "Durable decision adopted at world birth (claims-carry-witnesses, catalog tools/setup_tui/durable_decisions.py, why: this repo's own CLAUDE.md ORCHESTRATION section + ledger row 1722): every claim in a report states its evidentiary status per item -- WITNESSED (observed output), REFUSED-AS-EXPECTED, or UNEXERCISED (the concrete blocker); docs follow the same rule; no umbrella claims."
 claude_md = "- **Claims carry witnesses** -- every claim in a report states its evidentiary status per item: WITNESSED (with the observed output), REFUSED-AS-EXPECTED (a refusal that was the correct outcome), or UNEXERCISED (with the concrete blocker). Docs follow the same rule -- an example carries real output or an UNWITNESSED mark. No umbrella claims covering multiple items at once."
 
 [[decision]]
 slug = "unanchored-review-briefs"
 rule = "A review brief hands the reviewer the artifact, the spec, the law, and a refute posture -- never a pre-identified list of suspected defects. A reviewer told where to look is confirming a hypothesis, not discovering one; the finding is only as independent as the brief that produced it."
-why = "ledger row 1278 (this repo): 's37 verdict round dispatched UNANCHORED per row 1276's standing rule: a FRESH reviewer instance..., given the cumulative diff, the spec, the LAW, and the refute posture; no suspect lists from anyone.' Flagged by row 1722's genericity critique as more portable than several entries that made the original cut."
+why = "s37's verdict round dispatched unanchored: a fresh reviewer given the diff, spec, and law, never a suspect list."
+citations = ["ledger row 1278", "ledger row 1722 (genericity critique, more portable than several entries that made the original cut)"]
 hydrates = "Durable decision adopted at world birth (unanchored-review-briefs, catalog tools/setup_tui/durable_decisions.py, why: ledger row 1278): a review brief hands the reviewer the artifact, the spec, the law, and a refute posture -- never a pre-identified suspect list; a reviewer told where to look is confirming a hypothesis, not discovering one."
 claude_md = "- **Unanchored review briefs** -- a review brief hands the reviewer the artifact, the spec, the law, and a refute posture, never a pre-identified list of suspected defects. A reviewer told where to look is confirming a hypothesis, not discovering one; the finding is only as independent as the brief that produced it (ledger row 1278)."
 
 [[decision]]
 slug = "fresh-context-review-for-delegated-work"
 rule = "Delegated work gets a routine, fresh-context, independent review before acceptance; a change touching the project's sensitive core or critical path makes that review MANDATORY, not optional. The reviewer works from the ratified spec, the diff, and the witness harness -- never the delegate's own self-report -- and derives its own verdict from artifact-vs-spec, checking specifically for silent narrowing, improvisation, or malicious compliance."
-why = "ledger row 1492 (this repo, maintainer ruling 2026-07-19): 'all Sonnet builds (especially those invading into the kernel) need... a review (also Sonnet)... ADOPTED AS STANDING: every Sonnet build -- with kernel-touching builds mandatory, others by default -- receives a FRESH-CONTEXT ADVERSARIAL REVIEW before acceptance ... the reviewer receives the ratified build basis, the commit diff, the banked witness harness, and the LAW -- NEVER the builder's own report.' Generalized from \"kernel-touching\" to \"the project's sensitive core or critical path\" per row 1722's genericity critique (a one-word-class substitution, not a content change)."
+why = "maintainer ruling 2026-07-19: every Sonnet build receives a fresh-context adversarial review before acceptance, working from the ratified spec and diff, never the delegate's own report."
+citations = ["ledger row 1492", "ledger row 1722 (genericity critique -- generalized from 'kernel-touching' to 'sensitive core or critical path')"]
 hydrates = "Durable decision adopted at world birth (fresh-context-review-for-delegated-work, catalog tools/setup_tui/durable_decisions.py, why: ledger rows 1492/1722): delegated work gets a routine, fresh-context, independent review before acceptance; a change touching the project's sensitive core or critical path makes that review MANDATORY; the reviewer works from the ratified spec, the diff, and the witness harness, never the delegate's own self-report, checking for silent narrowing, improvisation, or malicious compliance."
 claude_md = "- **Fresh-context review for delegated work** -- delegated work gets a routine, fresh-context, independent review before acceptance; a change touching the project's sensitive core or critical path makes that review MANDATORY, not optional. The reviewer works from the ratified spec, the diff, and the witness harness -- never the delegate's own self-report -- checking specifically for silent narrowing, improvisation, or malicious compliance (ledger row 1492)."
 
 [[decision]]
 slug = "polychotomy-option-space-justification"
 rule = "SHOULD, not MUST: a polychotomy for the maintainer or another executive should justify the option SPACE itself (why these, why this many, why honest), not just the tradeoffs."
-why = "ledger row 1915; external specimen github.com/anthropics/claude-code/issues/78658 (worst-to-date); house specimen rows 1909/1914 -- a challenged dichotomy re-derived to six shapes."
+why = "a challenged dichotomy re-derived to six shapes; the worst external specimen to date named alongside it."
+citations = ["ledger row 1915", "github.com/anthropics/claude-code/issues/78658", "ledger rows 1909/1914"]
 hydrates = "Durable decision adopted at world birth (polychotomy-option-space-justification, why: ledger rows 1915/1909/1914): SHOULD, not mandatory -- justify the option SPACE, not the tradeoffs."
 claude_md = "- **Justify the option space (SHOULD, not mandatory)** -- justify the SPACE, not just tradeoffs (ledger row 1915; github.com/anthropics/claude-code/issues/78658; rows 1909/1914)."

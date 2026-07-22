@@ -102,5 +102,5 @@ def submit(state: dict, answers: dict) -> SectionResult:
 
 STEP = SectionSpec(
     slug="substrate", title="Substrate", group="Substrate & target", fields=fields, submit=submit,
-    description=(feature_facts.fact("substrate_existing").line() + "\n" +
-                 feature_facts.fact("substrate_dedicated").line()))
+    description=(feature_facts.fact("substrate_existing").elements(prefix="Existing-db path --") +
+                 feature_facts.fact("substrate_dedicated").elements(prefix="Dedicated-db path --")))

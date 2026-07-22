@@ -48,6 +48,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from tools.configtree import DescriptionElement
 from tools.setup_tui import content, probes
 from tools.setup_tui.plan import CommandAct
 from tools.setup_tui.runner import legacy_led_path, parse_row_id
@@ -55,10 +56,33 @@ from tools.setup_tui.runner import legacy_led_path, parse_row_id
 CLASS_CHOICES = content.PA_CLASS_CHOICES
 RELATION_CHOICES = content.PA_RELATION_CHOICES
 SCAFFOLD_BASE_PRINCIPALS = content.PA_SCAFFOLD_PRINCIPALS
-LESSON_REGISTER = content.PA_LESSONS["register"]
-LESSON_COMPETENCE = content.PA_LESSONS["competence"]
-LESSON_RELATION = content.PA_LESSONS["relation"]
-LESSON_CHARTER = content.PA_LESSONS["charter"]
+
+
+def _lesson_log_line(lesson_key: str) -> str:
+    """The `PlanEntry.lesson=` TEXT (a commit-transcript teaching line -- tabular/log output,
+    the SAME exempt class `facts_block`'s own one-line rendering is, never subject to the
+    interactive elucidation area's typed-element/measure discipline). Built HERE, in code, from
+    the STRUCTURED `constitutes`/`does_not` pair `principals_authority.toml`'s own
+    `[lessons.*]` sub-table now carries (round-6 restructure, ledger row 1117) -- the data
+    itself is never re-flattened into one string at rest, only assembled into one at this ONE
+    call site, for this ONE plain-text consumer."""
+    lesson = content.PA_LESSONS[lesson_key]
+    return f"CONSTITUTES: {lesson['constitutes']} DOES NOT: {lesson['does_not']}"
+
+
+def lesson_elements(lesson_key: str) -> "tuple[DescriptionElement, ...]":
+    """The interactive elucidation rendering of one lesson: two typed elements, Constitutes and
+    Does-not, each its own capped line -- the NEW accessor `steps_principals_authority.py`'s own
+    `ListField.help=` uses instead of a bare `PA_LESSONS[key]` string."""
+    lesson = content.PA_LESSONS[lesson_key]
+    return (DescriptionElement("Constitutes", lesson["constitutes"]),
+            DescriptionElement("Does not", lesson["does_not"]))
+
+
+LESSON_REGISTER = _lesson_log_line("register")
+LESSON_COMPETENCE = _lesson_log_line("competence")
+LESSON_RELATION = _lesson_log_line("relation")
+LESSON_CHARTER = _lesson_log_line("charter")
 LESSON_WORKFLOW_POINTER = content.PA_LESSONS["workflow_pointer"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

@@ -123,4 +123,4 @@ def submit(state: dict, answers: dict) -> SectionResult:
 
 STEP = SectionSpec(slug="fork-target", title="Fork/target", group="Substrate & target",
                     fields=fields, submit=submit,
-                    description=feature_facts.fact("fork_target_governed_files").line())
+                    description=feature_facts.fact("fork_target_governed_files").elements())

@@ -113,7 +113,7 @@ from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.setup_tui import checklist as ck  # noqa: E402
-from tools.setup_tui import steps, tui_app  # noqa: E402
+from tools.setup_tui import content, durable_decisions, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
@@ -724,7 +724,10 @@ async def case_9() -> None:
         await pilot.pause()
         desc_widgets = list(app.query_one("#pane-signed-genesis").query(".ct-section-description"))
         desc = [str(w.render()) for w in desc_widgets]
-        assert desc and "aspiration" in desc[0], f"expected an aspiration/external description, got {desc}"
+        assert desc and any(d.startswith("Aspiration:") for d in desc), \
+            f"expected a typed 'Aspiration:' element, got {desc}"
+        assert len(desc_widgets) >= 2, \
+            f"expected the section description to render as SEPARATE typed elements (Aspiration/Standards/Mechanism/External), not one blob -- got {len(desc_widgets)} widget(s)"
         offenders = [(w.id, w.size.width) for w in desc_widgets if w.size.width > MEASURE]
         assert not offenders, f"section description RENDERED width exceeds MEASURE={MEASURE}: {offenders}"
         print(f"case 9a ok: signed-genesis's OWN section description renders under its title, "
@@ -770,8 +773,10 @@ async def case_9() -> None:
         pa_pane = app.query_one("#pane-principals-authority")
         help_widgets = list(pa_pane.query(".ct-field-help"))
         help_lines = [str(w.render()) for w in help_widgets]
-        assert any("CONSTITUTES" in ln for ln in help_lines), \
-            f"expected the register ListField's own CONSTITUTES/DOES NOT lesson text, got {help_lines}"
+        assert any(ln.startswith("Constitutes:") for ln in help_lines), \
+            f"expected the register ListField's own typed 'Constitutes:' element, got {help_lines}"
+        assert any(ln.startswith("Does not:") for ln in help_lines), \
+            f"expected the register ListField's own typed 'Does not:' element, got {help_lines}"
         offenders = [(w.id, w.size.width) for w in help_widgets if w.size.width > MEASURE]
         assert not offenders, f"a ListField's own help line exceeds MEASURE={MEASURE}: {offenders}"
         print(f"case 9c ok: principals-authority's 'Principal'/'Competence'/'Relation'/'Role "
@@ -813,7 +818,7 @@ async def case_10() -> None:
 
         # --- before registering anyone, the competence picker offers only the honest sentinel ---
         comp_before = pane.query_one("#ct-field-competences-add", Button)
-        comp_before.scroll_visible()
+        comp_before.scroll_visible(animate=False)
         await pilot.pause()
         await pilot.click(comp_before)
         await pilot.pause()
@@ -828,7 +833,7 @@ async def case_10() -> None:
 
         # --- register a principal, THEN open the competence Add modal in the SAME visit ---
         reg_add = pane.query_one("#ct-field-register-add", Button)
-        reg_add.scroll_visible()
+        reg_add.scroll_visible(animate=False)
         await pilot.pause()
         await pilot.click(reg_add)
         await pilot.pause()
@@ -843,7 +848,7 @@ async def case_10() -> None:
         await pilot.pause()
 
         comp_add = pane.query_one("#ct-field-competences-add", Button)
-        comp_add.scroll_visible()
+        comp_add.scroll_visible(animate=False)
         await pilot.pause()
         await pilot.click(comp_add)
         await pilot.pause()
@@ -1020,6 +1025,157 @@ async def case_13() -> None:
         App.action_suspend_process = orig
 
 
+async def case_14() -> None:
+    """ROUND 6 (ledger row 1117, companion rule C13): the ELUCIDATION AREA itself renders no
+    bare ' | ' anywhere -- a real sweep of the LIVE app's own rendered elucidation widgets, not
+    just the data file -- and the content-loader refuses a synthetic delimiter-flattened string
+    RED-FIRST, at load, before it ever reaches a widget."""
+    # --- (a) RED-FIRST: the loader refuses a synthetic piped string, naming the key ---
+    try:
+        content._forbid_pipe_delimiter(
+            {"fact": [{"key": "x", "aspiration": "a | b", "external": "none"}]},
+            path="synthetic.toml")
+        raise AssertionError("expected the loader to refuse a synthetic ' | ' delimiter")
+    except content.ContentError as exc:
+        assert "synthetic.toml" in str(exc) and "aspiration" in str(exc), \
+            f"expected the refusal to NAME the offending file/key, got: {exc}"
+        print(f"case 14a ok (RED-FIRST, loader refusal): a synthetic piped string is refused at "
+              f"load, naming the file and key: {exc}")
+
+    # --- (b) GREEN: the REAL, currently-loaded data files carry no bare ' | ' at all (the fix
+    # that answers ledger row 1117's own specimen -- feature_facts.toml's aspiration/external,
+    # durable_decisions.toml's why, principals_authority.toml's lessons) ---
+    for _mod_name, _table in (("feature_facts", content.FEATURE_FACTS),
+                               ("durable_decisions", content.DURABLE_DECISIONS)):
+        for _row in _table:
+            for _k, _v in _row.items():
+                if isinstance(_v, str):
+                    assert " | " not in _v, f"{_mod_name} row {_row.get('key') or _row.get('slug')}.{_k} still carries a bare ' | ': {_v!r}"
+    print("case 14b ok: the REAL feature_facts.toml/durable_decisions.toml carry zero bare ' | ' "
+          "delimiters -- the loader's own refusal is exercised on every real load, not just a "
+          "synthetic probe")
+
+    # --- (c) GREEN, LIVE: sweep every rendered elucidation widget in the REAL running app for a
+    # bare pipe, and confirm components render as SEPARATE labeled elements (never one blob) ---
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        # Unblock dest-gated sections so their real elucidation renders.
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case14-dest"
+        await pilot.pause()
+        for slug in app._panes:
+            await app._panes[slug].refresh_blocked()
+        await pilot.pause()
+
+        pipe_offenders: list[str] = []
+        elucidation_selector = ".ct-section-description, .ct-field-help, .ct-choice-help"
+        section_element_counts: dict[str, int] = {}
+        for slug in app._panes:
+            tree.select_node(_find_node(tree, slug))
+            await pilot.pause()
+            pane = app.query_one(f"#pane-{slug}")
+            widgets = list(pane.query(elucidation_selector))
+            section_element_counts[slug] = len(widgets)
+            for w in widgets:
+                text = str(w.render())
+                if " | " in text:
+                    pipe_offenders.append(f"{slug}#{w.id}: {text!r}")
+        assert not pipe_offenders, f"bare ' | ' found in LIVE elucidation rendering: {pipe_offenders}"
+        print(f"case 14c ok (GREEN, live): swept EVERY section's own rendered elucidation "
+              f"widgets ({elucidation_selector}) across all {len(app._panes)} sections -- zero "
+              f"bare ' | ' separators anywhere; per-section element counts: "
+              f"{section_element_counts}")
+
+
+async def case_15() -> None:
+    """ADR-ADOPTION SYNOPSES (round-6 addendum, maintainer's own verdict: "helpful only to
+    someone who already knows every ADR ... a pointer is not an elucidation ... fails the
+    named-consumer test"). Proves: each adoptable ADR renders a non-empty Synopsis element that
+    is NOT the file-path pointer, and the pointer renders AFTER it, never replacing it."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case15-dest"
+        await pilot.pause()
+        await app._panes["hydration"].refresh_blocked()
+        tree.select_node(_find_node(tree, "hydration"))
+        await pilot.pause()
+        pane = app.query_one("#pane-hydration")
+        choice_lines = [str(w.render()) for w in pane.query(".ct-choice-help")]
+
+        synopsis_lines = [ln for ln in choice_lines if ln.startswith("Synopsis:")]
+        pointer_lines = [ln for ln in choice_lines if ln.startswith("File:")]
+        assert synopsis_lines, f"expected at least one ADR entry's own Synopsis element, got sample: {choice_lines[:5]}"
+        assert pointer_lines, "expected at least one ADR entry's own File pointer element"
+        for syn in synopsis_lines:
+            assert not syn.startswith("File:"), f"a Synopsis line must not double as the pointer line: {syn!r}"
+        pending = [ln for ln in synopsis_lines if "synopsis pending maintainer review" in ln]
+        authored = [ln for ln in synopsis_lines if "synopsis pending maintainer review" not in ln]
+        assert authored, f"expected at least one REAL, non-pending ADR synopsis, got only: {synopsis_lines}"
+        print(f"case 15a ok: {len(authored)} ADR entries render a real, authored synopsis "
+              f"(distinct from the pointer line); {len(pending)} named as pending maintainer "
+              f"review (never fabricated) -- e.g. {authored[0][:100]!r}...")
+
+        # Ordering: for the SAME ADR option, the synopsis widget mounts BEFORE the file-pointer
+        # widget (synopsis first, pointer follows, per the coordinator's own instruction) --
+        # checked pairwise by list POSITION (each option's own Synopsis/File pair is adjacent,
+        # in that order, in the widget-mount stream).
+        all_help_widgets = list(pane.query(".ct-choice-help"))
+        rendered = [str(w.render()) for w in all_help_widgets]
+        checked = 0
+        for i, text in enumerate(rendered):
+            if text.startswith("Synopsis:") and i + 1 < len(rendered):
+                assert rendered[i + 1].startswith("File:"), \
+                    f"expected the Synopsis element to be immediately followed by its own File pointer, got: {text!r} then {rendered[i+1]!r}"
+                checked += 1
+        assert checked > 0, "expected at least one matched synopsis/pointer pair to check ordering on"
+        print(f"case 15b ok: synopsis renders BEFORE its own file-path pointer for every matched "
+              f"ADR entry checked ({checked} pair(s)) -- the pointer follows the synopsis, "
+              f"never replaces it")
+
+        # content.ADR_SYNOPSES sanity: authored for every ADR list_adrs() currently returns,
+        # named-pending for none silently missing.
+        adrs = durable_decisions.list_adrs()
+        missing_synopsis = [n for n, _, _ in adrs if n not in content.ADR_SYNOPSES]
+        print(f"case 15c ok: {len(adrs)} adoptable ADR(s) known; {len(missing_synopsis)} have no "
+              f"authored synopsis entry at all (render as the honest pending marker): {missing_synopsis}")
+
+
+async def case_16() -> None:
+    """CHECKBOX CHROME (round-6 addendum, point 4): a bare Checkbox's own default CSS draws
+    `border: tall` -- a full top+bottom rule around EVERY option, a wall of borders once a
+    catalog runs to a dozen-plus entries. Proves the `.ct-checkbox-compact` class (no border) is
+    actually applied to every MultiChoiceField option, at a normal terminal size."""
+    app = tui_app.build_app(_fresh_state(), dry_run=True)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "fork-target"))
+        await pilot.pause()
+        app.query_one("#pane-fork-target #ct-field-dest", Input).value = "/tmp/ctj-case16-dest"
+        await pilot.pause()
+        await app._panes["hydration"].refresh_blocked()
+        tree.select_node(_find_node(tree, "hydration"))
+        await pilot.pause()
+        pane = app.query_one("#pane-hydration")
+        # Only the MultiChoiceField's OWN option checkboxes (id contains "-opt-") are in scope --
+        # an ordinary standalone ConfirmField checkbox (e.g. "Run hydration now?") was never the
+        # "wall of borders" complaint (that is specifically a STACKED catalog of many options).
+        boxes = [cb for cb in pane.query(Checkbox) if "-opt-" in str(cb.id or "")]
+        assert boxes, "expected at least one MultiChoiceField option Checkbox in hydration"
+        bordered = [str(cb.id) for cb in boxes if str(cb.styles.border.top[0]) not in ("", "none")]
+        assert not bordered, f"expected NO per-option border (Qt-idiom checklist, not a boxed control per row), still bordered: {bordered}"
+        print(f"case 16 ok: all {len(boxes)} checkbox options in hydration's MultiChoiceField "
+              f"groups render with NO per-option border ('.ct-checkbox-compact') -- no wall of "
+              f"borders even with a durable-decisions catalog this size")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -1035,6 +1191,9 @@ async def _main() -> None:
     await case_11()
     await case_12()
     await case_13()
+    await case_14()
+    await case_15()
+    await case_16()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "

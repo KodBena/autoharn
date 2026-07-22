@@ -50,7 +50,8 @@ from tools.configtree.fields import ChoiceField, ListField, MultiChoiceField, se
 from tools.configtree.spec import (CommitSpec, SectionSpec, ready_for_commit, section_answers,
                                     section_field_errors)
 from tools.configtree.widgets import (FieldError, ListFieldWidget, MultiChoiceFieldWidget,
-                                       build_field_widget, field_widget_id, read_field_value)
+                                       build_field_widget, elucidation_widgets, field_widget_id,
+                                       read_field_value)
 
 
 class SectionPane(Vertical):
@@ -69,8 +70,7 @@ class SectionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static(f"{self.spec.title}", classes="ct-section-title")
-        if self.spec.description:
-            yield Static(self.spec.description, classes="ct-section-description", markup=False)
+        yield from elucidation_widgets(self.spec.description, "ct-section-description")
         self._blocked_reason = self.spec.blocked(self.state) if self.spec.blocked else None
         self._errors = {}
         with VerticalScroll(classes="ct-section-body"):
@@ -100,18 +100,15 @@ class SectionPane(Vertical):
                                                   on_change=self._make_multi_change(f))
                 else:
                     yield build_field_widget(f, answers[name])
-                    # ELUCIDATION (ledger row 1115): a plain field's own `help` renders as one
-                    # capped line right under it -- `ListField`/`MultiChoiceField` render their
-                    # own `help` INSIDE their dedicated widget instead (its own Label sits above
-                    # the rows/checkboxes, not a bare section-loop Static).
-                    if getattr(f, "help", None):
-                        yield Static(f.help, classes="ct-field-help", markup=False)
+                    # ELUCIDATION (ledger row 1115): a plain field's own `help` renders as its
+                    # own capped element(s) right under it -- `ListField`/`MultiChoiceField`
+                    # render their own `help` INSIDE their dedicated widget instead (its own
+                    # Label sits above the rows/checkboxes, not a bare section-loop Static).
+                    yield from elucidation_widgets(getattr(f, "help", None), "ct-field-help")
                     if isinstance(f, ChoiceField) and f.option_help:
                         for value, _ in f.options:
-                            help_text = f.option_help.get(value)
-                            if help_text:
-                                yield Static(f"{value}: {help_text}", classes="ct-choice-help",
-                                             markup=False)
+                            yield from elucidation_widgets(f.option_help.get(value),
+                                                             "ct-choice-help", prefix=value)
                 err = FieldError()
                 err.set_text(commit_errors.get(name) or live_errors.get(name, ""))
                 self._errors[name] = err

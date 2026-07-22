@@ -50,6 +50,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.configtree import DescriptionElement
 from tools.setup_tui import content
 from tools.setup_tui.plan import Hole, WriteAct
 
@@ -62,11 +63,25 @@ END_MARKER = "<!-- END COMPILED DURABLE DECISIONS (setup_tui) -->"
 
 @dataclass(frozen=True)
 class DurableDecision:
+    """`why`/`citations` SCHEMA (round-6 restructure, ledger row 1117 -- companion rule C13):
+    `why` is ONE short, citation-free sentence; `citations` lists the ledger-row/file pointers
+    that ground it, each rendered as its OWN element by `elements()` below -- never re-joined
+    into `why`'s own prose. `rule`/`hydrates`/`claude_md` are unchanged: literal artifact TEXT
+    (a ledger-decision statement, a CLAUDE.md fragment), not interactive elucidation."""
     slug: str
     rule: str
     why: str
     hydrates: str      # the exact `led decision` statement this selection writes
     claude_md: str      # the fragment compiled into the new world's CLAUDE.md
+    citations: tuple[str, ...] = ()
+
+    def elements(self) -> "tuple[DescriptionElement, ...]":
+        """The interactive elucidation rendering: `why` first, then each citation its own line --
+        `steps_hydration.py`'s own MultiChoiceField `option_help` uses this instead of a bare
+        `decision.why` string."""
+        out = [DescriptionElement("Why", self.why)]
+        out.extend(DescriptionElement("Citation", c) for c in self.citations)
+        return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -101,7 +116,10 @@ class DurableDecision:
 # after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
-CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in content.DURABLE_DECISIONS]
+CATALOG: list[DurableDecision] = [
+    DurableDecision(**{**entry, "citations": tuple(entry.get("citations", ()))})
+    for entry in content.DURABLE_DECISIONS
+]
 
 # The non-catalog hydration items that remain as-is (spec §3, "Relation to the existing screen-8
 # items"): per-world facts, not durable decisions -- named here only so feature_facts.py and the
@@ -154,6 +172,22 @@ def list_adrs() -> list[tuple[str, str, str]]:
         out.append((number, title, str(path.relative_to(REPO_ROOT))))
     out.sort(key=lambda t: t[0])
     return out
+
+
+_ADR_SYNOPSIS_PENDING = "(synopsis pending maintainer review)"
+
+
+def adr_synopsis_elements(number: str, relpath: str) -> "tuple[DescriptionElement, ...]":
+    """The ADR-adoption submenu's own per-entry elucidation (maintainer round-6 addendum: "a
+    pointer is not an elucidation ... helpful only to someone who already knows every ADR").
+    ORIENTATION, NOT THE LAW (content.py's own `adr_synopses.toml` header note): a 1-3 sentence
+    digest of what the ADR binds you to if adopted, authored by lifting/lightly trimming the
+    ADR's own words -- `content.ADR_SYNOPSES` is the one home for that text (data, never
+    hardcoded here). A number with no authored synopsis reads the honest pending-review marker,
+    never a fabricated one. The file-path pointer is a SEPARATE, final element -- it follows the
+    synopsis, it does not replace it."""
+    synopsis = content.ADR_SYNOPSES.get(number, _ADR_SYNOPSIS_PENDING)
+    return (DescriptionElement("Synopsis", synopsis), DescriptionElement("File", relpath))
 
 
 def adr_decision_statement(number: str, title: str, relpath: str) -> str:

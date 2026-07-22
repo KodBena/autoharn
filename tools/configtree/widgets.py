@@ -13,9 +13,35 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, RadioButton, RadioSet, Static
 
-from tools.configtree.fields import ChoiceField, ConfirmField, ListField, MultiChoiceField, TextField
+from tools.configtree.fields import (ChoiceField, ConfirmField, ElucidationValue, ListField,
+                                      MultiChoiceField, TextField)
 
 FIELD_ID_PREFIX = "ct-field-"
+
+
+def elucidation_widgets(value: "ElucidationValue | None", css_class: str, *,
+                         prefix: "str | None" = None):
+    """The ONE renderer for `fields.ElucidationValue` (companion rule C13, law/adr/0019 appendix
+    -- "content is typed semantic elements; no layout carried inside a string", ledger row 1117):
+    a plain string renders as ONE capped `Static`; a tuple of `DescriptionElement`s renders each
+    as its OWN capped `Static`, one label:text line per element, NEVER concatenated into one
+    paragraph -- a `mechanism` file-path citation gets its own line this way, never comma-joined
+    and never wrapped mid-directory. `prefix`, if given (a `ChoiceField`'s own option VALUE --
+    its `option_help` entries render together, disambiguated by option, under one `RadioSet`
+    rather than next to individual buttons the way `MultiChoiceFieldWidget` can), is prepended to
+    every rendered line so the operator can tell which option a line belongs to. Every call site
+    that used to build its own ad hoc `Static(text, classes=...)` for a help/description/
+    option_help slot goes through this function instead, so a str vs a typed-elements value never
+    needs two rendering paths."""
+    if value is None:
+        return
+    if isinstance(value, str):
+        text = f"{prefix}: {value}" if prefix else value
+        yield Static(text, classes=css_class, markup=False)
+        return
+    for element in value:
+        label = f"{prefix} -- {element.label}" if prefix else element.label
+        yield Static(f"{label}: {element.text}", classes=css_class, markup=False)
 
 
 def field_widget_id(name: object) -> str:
@@ -151,8 +177,7 @@ class ListFieldWidget(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label(str(self.spec.label), classes="ct-field-label")
-        if self.spec.help:
-            yield Static(self.spec.help, classes="ct-field-help", markup=False)
+        yield from elucidation_widgets(self.spec.help, "ct-field-help")
         yield ListView(id=f"{self.id}-list")
         with Horizontal():
             yield Button(f"Add {self.spec.label}", id=f"{self.id}-add")
@@ -220,16 +245,19 @@ class MultiChoiceFieldWidget(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label(str(self.spec.label), classes="ct-field-label")
-        if self.spec.help:
-            yield Static(self.spec.help, classes="ct-field-help", markup=False)
+        yield from elucidation_widgets(self.spec.help, "ct-field-help")
         for value, option_label in self.spec.options:
+            # `classes="ct-checkbox-compact"` (round 6, coordinator addendum): a bare `Checkbox`
+            # defaults to `border: tall` (Textual's own `ToggleButton.DEFAULT_CSS`) -- a full
+            # top+bottom rule around EVERY option; stacked across a catalog of a dozen-plus
+            # entries this reads as a wall of borders, Textual's default styling doing charity
+            # work nobody asked for. Slimmed via CSS (`app.py`'s own `.ct-checkbox-compact` rule)
+            # to a single thin rule between entries, the Qt-idiom checklist look.
             cb = Checkbox(option_label, value=(value in self.selected),
-                          id=f"{self.id}-opt-{value}")
+                          id=f"{self.id}-opt-{value}", classes="ct-checkbox-compact")
             self._boxes[value] = cb
             yield cb
-            help_text = (self.spec.option_help or {}).get(value)
-            if help_text:
-                yield Static(help_text, classes="ct-choice-help", markup=False)
+            yield from elucidation_widgets((self.spec.option_help or {}).get(value), "ct-choice-help")
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         for value, cb in self._boxes.items():

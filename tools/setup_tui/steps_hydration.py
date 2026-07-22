@@ -31,22 +31,27 @@ def fields(state: dict) -> tuple:
     # out of state in `submit` below, never via a second field declaration (a duplicated
     # projection is refused at App construction, `tools.configtree.spec.validate_shared_ownership`).
     decision_opts = tuple((d.slug, d.slug) for d in durable_decisions.CATALOG)
-    decision_help = {d.slug: d.why for d in durable_decisions.CATALOG}
+    decision_help = {d.slug: d.elements() for d in durable_decisions.CATALOG}
     adrs = durable_decisions.list_adrs()
     adr_opts = tuple((number, f"ADR-{number}: {title}") for number, title, _ in adrs)
-    adr_help = {number: f"see {relpath} for the full text" for number, title, relpath in adrs}
+    # ORIENTATION, NOT THE LAW (maintainer round-6 addendum: "a pointer is not an elucidation"):
+    # a real 1-3 sentence synopsis of what the ADR binds you to, THEN the file-path pointer --
+    # `durable_decisions.adr_synopsis_elements` is the one place this is built, from
+    # `content.ADR_SYNOPSES` data, never hardcoded here.
+    adr_help = {number: durable_decisions.adr_synopsis_elements(number, relpath)
+                for number, _, relpath in adrs}
     return (
         ConfirmField(name="run", label="Run hydration now?", default=True,
                      help="Compiles CLAUDE.md durable-decision fragments and files real 'led "
                      "decision' rows for whatever is selected below -- turning this off skips "
                      "the whole step, nothing selected below is applied."),
         ConfirmField(name="fork_provenance", label="Hydrate: fork provenance?",
-                     help=feature_facts.fact("hydration_fork_provenance").line()),
+                     help=feature_facts.fact("hydration_fork_provenance").elements()),
         TextField(name="fork_provenance_statement", label="Statement for 'fork provenance' "
                   "decision row", required=False),
         ConfirmField(name="role_charters", label="Hydrate: role charters to register? (see "
                      "the Principals & authority step for the actual charter form)",
-                     help=feature_facts.fact("hydration_role_charters").line()),
+                     help=feature_facts.fact("hydration_role_charters").elements()),
         MultiChoiceField(name="durable_decisions", label="Durable decisions to adopt",
                           options=decision_opts, option_help=decision_help,
                           help="Each selected entry writes one real 'led decision' row and "

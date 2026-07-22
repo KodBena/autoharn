@@ -1,0 +1,95 @@
+# tools/setup_tui/data/adr_synopses.toml -- ADR-adoption submenu synopses (ADR-0012 P10 data
+# file, maintainer round-6 addendum, ledger row 1117 family).
+#
+# ORIENTATION, NOT THE LAW. Each `text` below is a maintainer-reviewable DIGEST of one
+# law/adr/*.md file -- authored by lifting or lightly trimming that ADR's OWN words (its stated
+# "plain words first" preface, its "spine" sentence, or its Decision section's opening), never
+# freely paraphrased -- so an operator deciding what a NEW world should adopt at birth has
+# something to read besides a bare file-path pointer (the defect this file answers: "each entry
+# fails the named-consumer test -- a pointer is not an elucidation"). The ADR file itself remains
+# the sole authoritative text; a synopsis here that turns out unfaithful is a defect in THIS
+# file, not in the law. An entry the maintainer has not yet reviewed for faithfulness is not
+# silently trusted -- see the build report accompanying this commit for the full list.
+#
+# Loaded by tools/setup_tui/durable_decisions.py via content.py; content.py's generic ' | '
+# delimiter refusal (companion rule C13, ledger row 1117) applies to every string below too.
+
+[[synopsis]]
+number = "0000"
+text = "Binds every contributor: when a defect is found, ask first what TYPE would make the whole class impossible to express, and what operational lapse let it recur -- fix the type, not just the instance."
+
+[[synopsis]]
+number = "0001"
+text = "(synopsis pending maintainer review -- this ADR is retired-to-history, a tombstone only; it holds no live rule content to summarize as something a new world adopts)"
+
+[[synopsis]]
+number = "0002"
+text = "When code hits a bad config, an unexpected shape, a timeout, or any other deviation from what it expects, the rule is to say so clearly -- raise, fail a build or test, log visibly -- rather than quietly limping on, guessing, or hiding the problem behind a plausible-looking default."
+
+[[synopsis]]
+number = "0003"
+text = "Domain-specific instance facts and domain-general problem-class machinery get named, separated coupling bands; a forward-looking 'what would a different instance require?' question forces honest separation, and abstractions are never extracted before a second concrete consumer exists."
+
+[[synopsis]]
+number = "0004"
+text = "When editing a file under conditions where the full source is not in immediate view, the only changes that go in are the specific lines the tool, test, or task is about -- a 'while I'm in here' full-file rewrite is not permitted."
+
+[[synopsis]]
+number = "0005"
+text = "Documentation Discipline, Rule 1 alone: anything that names a piece of work or a fact (an ADR number, a reference rate, a derived layout) has exactly one owning home; parallel records of the same handle drift silently, often invisibly, until two copies disagree."
+
+[[synopsis]]
+number = "0006"
+text = "Every source file's opening header states its own path, its purpose, and, where a project makes this declaration at all, its license."
+
+[[synopsis]]
+number = "0007"
+text = "Soft thresholds, a density heuristic, and content-aware formatting rules keep a source file small enough, and dense enough with decisions rather than boilerplate, that a reader or reviewer can hold it in working memory."
+
+[[synopsis]]
+number = "0008"
+text = "When a choice involves classification, the choice is honest only if the vocabulary or taxonomy precisely fits the case -- fuzzy matches and synthetic fabrications are the failure mode this tenet forbids."
+
+[[synopsis]]
+number = "0009"
+text = "A perf-property or equivalence claim -- speedup, regression, null result, or 'matches the baseline' -- is honest only when the investigation behind it is captured in a form the next reader can reproduce."
+
+[[synopsis]]
+number = "0010"
+text = "Read a high-frequency reactive value as close as possible to the component that actually consumes it, never at a shared ancestor whose re-render would needlessly propagate; a data-dense visual renders via one single-surface draw call, not one reactive node per datum."
+
+[[synopsis]]
+number = "0011"
+text = "Every discipline-stating rule states plainly how it is enforced; a recurrence converts to a mechanism, not more prose; a net quantifies over the class, not the instance."
+
+[[synopsis]]
+number = "0012"
+text = "Nine checkable principles set against a table of named anti-pattern 'cancers' (frozen config, dissolved single-source-of-truth, hidden global state, copy-paste drivers, abandoned abstractions, magic constants, unenforceable prose conventions) -- each cancer maps to the principle that forbids it."
+
+[[synopsis]]
+number = "0013"
+text = "The work that was ratified is the work that is owed, in full, to its ratified end state; a deviation from it is authorized only by the ratifier, never by the executor's own sense that the remainder is not worth it; and the claim that the work is done is worth nothing until the artifact is verified to show it."
+
+[[synopsis]]
+number = "0014"
+text = "When the executor's own line of reasoning has demonstrably stalled -- an observable recurrence of mis-targeted attempts, not a passing feeling -- fetching an independent, deliberately un-led second opinion is the professional move; it is judiciously applied, never a mandate to spawn-and-offload, and the executor still owns the result."
+
+[[synopsis]]
+number = "0015"
+text = "A result is only as good as the environment that produced it: the machine state under which a verification ran is part of the verification's meaning, and a run outside its declared envelope is not evidence."
+
+[[synopsis]]
+number = "0016"
+text = "Once a service advertises it is standing, no client input of any content, size, shape, value, encoding, ordering, timing, or concurrency can make it crash, wedge, desync, corrupt, hang, leak, or behave statefully -- it refuses cleanly at the boundary, enforced by gates checked at build/test time, not left as an aspiration."
+
+[[synopsis]]
+number = "0017"
+text = "A document is finished only when a reader with zero conversational context can parse every sentence, resolve every reference from the text or its links alone, and learn from the document itself what each part is and why it is there."
+
+[[synopsis]]
+number = "0018"
+text = "A consult receives exactly the witnessed problem, its evidence, and the governing law -- never the commissioner's candidate answers, enumerated options, suspect lists, or priors; a front-loaded consult is a confirmation pass, not a judgment, and its verdict is void."
+
+[[synopsis]]
+number = "0019"
+text = "In an established genre, the convergent design IS the default spec; any UI structure the genre's reference exemplars do not exhibit is presumptively wrong, and the burden of proof sits on the deviation, never on the convention."

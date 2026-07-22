@@ -53,11 +53,37 @@ hand-edited comma-separated string of slugs; the model value is a typed `list[st
 case 13: ctrl+z is bound to Textual's own `App.action_suspend_process` (verified empirically
 against the installed Textual version 8.2.8), shown in the Footer.
 
+ROUND 6 (same day, ledger row 1117 -- companion rule C13, law/adr/0019 appendix: "content is
+typed semantic elements; no layout carried inside a string"). The maintainer's own diagnosis: the
+round-5 elucidation fix answered the WIDTH axis (C12/MEASURE) but not the STRUCTURE axis --
+`feature_facts.toml` stored aspiration/citations/external as ONE string joined with a homemade
+' | ' delimiter, and `steps_*.py` rendered it as PROSE via `.line()` (a method meant for a
+tabular checklist log line), producing a wall of wrapped text with the separator visible
+mid-paragraph -- the SAME class as round 4/5's own 348-char tuple-repr label, structure flattened
+to a string. Fixed: `feature_facts.toml`, `durable_decisions.toml` (`why`), and
+`principals_authority.toml` (`[lessons]`) are schema'd into named component keys (see this
+round's own commit for the exact schema each got); a new `tools.configtree.DescriptionElement`
+typed-elements primitive renders each component as its own capped, labeled line
+(`elucidation_widgets`, the ONE shared renderer); and `content.py`'s loader refuses ANY string
+value containing a bare ' | ' anywhere in ANY data file, at load, naming the file and key --
+mechanical, not per-file opt-in. Case 14 proves this red-first (a synthetic piped string) then
+green (every real data file, and every LIVE rendered elucidation widget, swept for the same
+class). A same-session addendum named a second, adjacent defect: the ADR-adoption submenu's own
+"see law/adr/<file> for the full text" line was a bare pointer, "helpful only to someone who
+already knows every ADR" -- case 15 proves each adoptable ADR now renders a real 1-3 sentence
+synopsis (lifted/lightly trimmed from the ADR's own words, `tools/setup_tui/data/
+adr_synopses.toml`, ORIENTATION not the law) BEFORE its own file-path pointer, never replacing
+it, with an honest "(synopsis pending maintainer review)" marker for the one ADR (0001, retired
+to history) with no live rule content to summarize. Case 16 proves the per-checkbox border
+Textual's own `ToggleButton` default CSS draws (a wall of borders once a catalog runs long) is
+slimmed to none, the Qt-idiom checklist look.
+
 This is the actual stdout of `.venv/bin/python seen-red/setup-tui-configtree-journey/
 run_fixtures.py` (a venv with `textual` installed -- `python3 -m venv .venv && .venv/bin/pip
 install textual`), against the REAL tools.setup_tui.steps.SECTIONS registry and the REAL
 tools.configtree.app.ConfigTreeApp, witnessed 2026-07-22 (round 1) and re-witnessed 2026-07-22
-(round 5, cases 9-13 added, cases 0-8 re-run green against the round-5 code):
+(round 5, cases 9-13 added; round 6, cases 14-16 added; every prior case re-run green against
+the round-6 code):
 
 case 0a ok (the maintainer's exact reproduction, FIXED): toggling preflight's 'run' checkbox to False leaves substrate's OWN 'run' checkbox at True -- no cross-section aliasing
 case 0b ok: typing into substrate's 'host' field ('aliasing-probe-host') leaves rehearsal's OWN 'host' field unchanged ('192.168.122.1')
@@ -116,7 +142,14 @@ case 12a ok (RED, reproduced): the OLD check-physical-state-first ordering refus
 case 12b ok (GREEN, single disposition): the CURRENT ordering trusts dest_would_exist FIRST -- exactly ONE row for this item (DRY-SKIPPED), no 'screen 7' ghost text anywhere in the checklist
 case 12c ok: the run=False path ALSO yields exactly ONE disposition row ('ceremony', DEFAULTED), never a second contradicting one
 case 13 ok: ctrl+z is bound and invokes App.action_suspend_process (headless-safe -- a non-suspend-capable driver is Textual's own documented no-op, never a crash). UNEXERCISED: the live-terminal leg -- an operator should run 'python3 -m tools.setup_tui' in a REAL terminal, press ctrl+z, and confirm the shell job actually suspends (fg to resume).
-ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal, elucidation (section/field/option descriptions restored within measure), principal-reference ChoiceFields fed live from the register list, a real in-UI config-loading action node usable at start with DECLINED-vs-DEFAULTED record wording, and a single-disposition, dest_would_exist-first ordering fix for signed-genesis's own destination-scaffolded check with the 'screen 7' ghost text gone.
+case 14a ok (RED-FIRST, loader refusal): a synthetic piped string is refused at load, naming the file and key: tools/setup_tui/content.py: synthetic.toml.fact[0].aspiration contains a bare ' | ' separator -- a homemade multi-fact delimiter is refused at load; schema the structure into named keys/lists instead (companion rule C13, ledger row 1117): 'a | b'
+case 14b ok: the REAL feature_facts.toml/durable_decisions.toml carry zero bare ' | ' delimiters -- the loader's own refusal is exercised on every real load, not just a synthetic probe
+case 14c ok (GREEN, live): swept EVERY section's own rendered elucidation widgets (.ct-section-description, .ct-field-help, .ct-choice-help) across all 10 sections -- zero bare ' | ' separators anywhere; per-section element counts: {'preflight': 0, 'substrate': 7, 'fork-target': 4, 'rehearsal': 0, 'birth': 0, 'principals-authority': 14, 'signed-genesis': 7, 'boundary': 7, 'observability': 11, 'hydration': 93}
+case 15a ok: 19 ADR entries render a real, authored synopsis (distinct from the pointer line); 1 named as pending maintainer review (never fabricated) -- e.g. 'Synopsis: Binds every contributor: when a defect is found, ask first what TYPE would make the whole '...
+case 15b ok: synopsis renders BEFORE its own file-path pointer for every matched ADR entry checked (20 pair(s)) -- the pointer follows the synopsis, never replaces it
+case 15c ok: 20 adoptable ADR(s) known; 0 have no authored synopsis entry at all (render as the honest pending marker): []
+case 16 ok: all 33 checkbox options in hydration's MultiChoiceField groups render with NO per-option border ('.ct-checkbox-compact') -- no wall of borders even with a durable-decisions catalog this size
+ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics throughout (no per-section save exists): a state-aliasing reproduction and structural fix across every field kind, arbitrary-order navigation with a blocked-to-unblocked flip on a SINGLE keystroke, live inline validation both polarities with focus never leaving the field, a full ten-section journey typed live to a clean dry-run commit via the ONE commit button, a commit-time business-rule refusal (red) and its retry (green), keyboard/Tab/scroll navigation primitives, ctrl+q's exit-code contract, single-editable-home for both shared facts (dest owned by Fork/target, world by Birth) with a RED-first load-time refusal for a synthetic double-owner declaration, a readable-measure width cap (MEASURE=78) swept across every section plus the original emitting site (the 'Add a principal' modal), RED-first against a synthetic uncapped Static at a 400-column terminal, elucidation (section/field/option descriptions restored within measure), principal-reference ChoiceFields fed live from the register list, a real in-UI config-loading action node usable at start with DECLINED-vs-DEFAULTED record wording, a single-disposition, dest_would_exist-first ordering fix for signed-genesis's own destination-scaffolded check with the 'screen 7' ghost text gone, a loader-level refusal of any homemade ' | ' multi-fact delimiter (RED-first against a synthetic string, GREEN against every real data file and every LIVE rendered elucidation widget), ADR-adoption entries rendering a real synopsis distinct from and preceding their own file-path pointer, and a slimmed no-border checkbox chrome for stacked MultiChoiceField catalogs.
 
 (the three repeated "$ .../new-project.sh"/"$ .../teardown-world.sh" pairs are the REHEARSAL
 section's own live-choke-point echo under --dry-run -- "[dry-run: not executed]" per
@@ -125,10 +158,12 @@ embeds a wall-clock timestamp, hence "NNNN" above -- the substance is identical 
 that digit string varies.)
 
 RED legs (0a/0b/0c reproducing the maintainer's exact live defect; 2a; 3b; 4a; 7e the synthetic
-double-owner load-time refusal; 8a the synthetic uncapped-Static reproduction) prove the shapes
-this fixture claims to forbid/gate are actually caught -- a regression of any of them would fail
-this fixture red. GREEN legs (0d/0e/0f structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6; 7a/b/c/d;
-8b/c/d) prove the corresponding correct-path/fixed behavior once the prerequisite is met.
+double-owner load-time refusal; 8a the synthetic uncapped-Static reproduction; 12a the OLD
+check-physical-state-first ordering misfiring on a real transitional directory; 14a the loader's
+own synthetic-pipe refusal) prove the shapes this fixture claims to forbid/gate are actually
+caught -- a regression of any of them would fail this fixture red. GREEN legs (0d/0e/0f
+structural proof; 1b; 2b; 3a/c/d/e/f; 4b/c; 5; 6; 7a/b/c/d; 8b/c/d; 9/10/11/12b/c/13/14b/c/15/16)
+prove the corresponding correct-path/fixed behavior once the prerequisite is met.
 
 DEPENDENCY: this fixture requires `textual` (the Textual UI layer's own real widgets/Pilot
 harness) -- it is NOT covered by --from-config's textual-free guarantee (that headless path has

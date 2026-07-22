@@ -94,6 +94,13 @@ class ConfigTreeApp(App):
     than the viewport" a SCROLL, not an overlap (verified empirically: this exact overlap, and
     its fix, both reproduced against the real principals-authority section). */
     .ct-field-group {{ height: auto; }}
+    /* Round 6 (coordinator addendum): a bare Checkbox's OWN default CSS
+    (`ToggleButton.DEFAULT_CSS`) draws `border: tall` -- a full top+bottom rule around EVERY
+    option, a wall of borders once a catalog runs to a dozen-plus entries (otherwise Textual's
+    default styling doing charity work nobody asked for). Slimmed to no per-option border at all
+    (the Qt-idiom checklist look: a thin/no rule between entries, not a boxed control per row) --
+    the option's own label and juxtaposed elucidation line underneath are separation enough. */
+    .ct-checkbox-compact {{ border: none; padding: 0 1; }}
     """
     BINDINGS = [Binding("ctrl+q", "quit_app", "Quit", show=True, priority=True),
                 Binding("ctrl+c", "quit_app", "Quit", show=False, priority=True),
