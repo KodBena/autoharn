@@ -53,8 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tools.setup_tui import durable_decisions
-from tools.setup_tui.content.feature_facts_data import RAW_ENTRIES
+from tools.setup_tui import content, durable_decisions
 
 
 @dataclass(frozen=True)
@@ -76,7 +75,11 @@ class FeatureFact:
 # "CONTENT SPLIT" note) -- one line of construction, never a parse, never a runtime file read.
 # ---------------------------------------------------------------------------------------------
 
-REGISTRY: dict[str, FeatureFact] = {key: FeatureFact(**fields) for key, fields in RAW_ENTRIES.items()}
+REGISTRY: dict[str, FeatureFact] = {
+    row["key"]: FeatureFact(key=row["key"], label=row["label"], aspiration=row["aspiration"],
+                             external=row["external"])
+    for row in content.FEATURE_FACTS
+}
 
 
 def fact(key: str) -> FeatureFact:

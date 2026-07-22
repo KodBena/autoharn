@@ -184,32 +184,29 @@ REGISTRY: dict[str, str] = {
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
     "asof-export":                  "seen-red/asof-export/run_fixtures.py",
     "watchdog-liveness":            "seen-red/watchdog-liveness/run_fixtures.py",
-    "setup-tui-scripted-smoke":     "seen-red/setup-tui-scripted-smoke/run_fixtures.py",
+    # setup-tui-* (design/FABLE-SETUP-TUI-REBUILD-SPEC.md, 2026-07-22 wholesale rebuild): the
+    # teletype-shaped fixtures (scripted-smoke, navigation, textual-shell, typed-elements,
+    # ctrlc-quit-shadow) and every fixture whose ONLY mechanism was driving the deleted
+    # ui.py/ui_textual.py/screens.py/flow_position.py surfaces or a --scripted answers file
+    # (daemon-selection, boundary-interpreter-fallback, boundary-proc-cleanup,
+    # destination-birth-guard, dry-run-parity, principals-authority, signed-genesis,
+    # genesis-gate-hard-stop) are REMOVED here, in the same commit as their replacements --
+    # a census entry pointing at a deleted fixture is a red gate, correctly. Each removed
+    # fixture's own subject matter either has no analog under the new architecture (the
+    # teletype-specific ones) or is a residue the build report names explicitly.
     "setup-tui-feature-facts-drift": "seen-red/setup-tui-feature-facts-drift/run_fixtures.py",
-    "setup-tui-dry-run-parity":     "seen-red/setup-tui-dry-run-parity/run_fixtures.py",
-    "setup-tui-signed-genesis":     "seen-red/setup-tui-signed-genesis/run_fixtures.py",
-    "setup-tui-principals-authority": "seen-red/setup-tui-principals-authority/run_fixtures.py",
     "setup-tui-governed-files-drift": "seen-red/setup-tui-governed-files-drift/run_fixtures.py",
     "setup-tui-class-vocabulary-drift": "seen-red/setup-tui-class-vocabulary-drift/run_fixtures.py",
-    "setup-tui-boundary-proc-cleanup": "seen-red/setup-tui-boundary-proc-cleanup/run_fixtures.py",
     "setup-tui-signed-genesis-resume": "seen-red/setup-tui-signed-genesis-resume/run_fixtures.py",
     "setup-tui-write-file-atomicity": "seen-red/setup-tui-write-file-atomicity/run_fixtures.py",
-    "setup-tui-textual-shell":       "seen-red/setup-tui-textual-shell/run_fixtures.py",
     "setup-tui-pure-core-foundation": "seen-red/setup-tui-pure-core-foundation/run_fixtures.py",
     "setup-tui-purity-gate":         "seen-red/setup-tui-purity-gate/run_fixtures.py",
-    "setup-tui-ctrlc-quit-shadow":    "seen-red/setup-tui-ctrlc-quit-shadow/run_fixtures.py",
     "setup-tui-signed-genesis-key-pinning": "seen-red/setup-tui-signed-genesis-key-pinning/run_fixtures.py",
     "setup-tui-background-proc-hygiene": "seen-red/setup-tui-background-proc-hygiene/run_fixtures.py",
     "max-lines":                       "seen-red/max-lines/run_fixtures.py",
-    "setup-tui-boundary-interpreter-fallback": "seen-red/setup-tui-boundary-interpreter-fallback/run_fixtures.py",
     "setup-tui-destination-state":      "seen-red/setup-tui-destination-state/run_fixtures.py",
     "setup-tui-destination-state-parity": "seen-red/setup-tui-destination-state-parity/run_fixtures.py",
-    "setup-tui-destination-birth-guard": "seen-red/setup-tui-destination-birth-guard/run_fixtures.py",
     "setup-tui-destination-foreign-refusal": "seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py",
-    "setup-tui-daemon-selection":       "seen-red/setup-tui-daemon-selection/run_fixtures.py",
-    "setup-tui-genesis-gate-hard-stop": "seen-red/setup-tui-genesis-gate-hard-stop/run_fixtures.py",
-    "setup-tui-navigation":             "seen-red/setup-tui-navigation/run_fixtures.py",
-    "setup-tui-typed-elements":         "seen-red/setup-tui-typed-elements/run_fixtures.py",
     "setup-tui-config-file":            "seen-red/setup-tui-config-file/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):

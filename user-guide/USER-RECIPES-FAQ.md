@@ -185,7 +185,7 @@ the headless Textual journey (WX1), transcript parity with the plain backend for
 hands the real terminal to an interactive child process (gpg's own passphrase prompt during
 Signed genesis) reaching the real `App.suspend()` (WX4), abnormal-exit cleanup under a real
 SIGTERM (WX5), and `--dry-run` under the shell (WX6) — see
-[seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py).
+seen-red/setup-tui-textual-shell (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild).
 
 **The eleven screens, in order** (every screen skippable, the skip recorded — never silent;
 `--start-at <slug>` below jumps straight to any one of them — the slug, never a hand-typed
@@ -386,7 +386,7 @@ session:
   environment — an honest RED, not a fabricated pass; the fixture-backed WDR1 (byte-identical
   tree/ledger before vs. after) and WDR2 (argv parity, dry-run vs. live) witnesses against real
   infra live in
-  [seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py)
+  seen-red/setup-tui-dry-run-parity (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild)
   (degrades to UNEXERCISED, exit 0, without a reachable Postgres host and the boundary
   service's venv — same honest-degrade posture as this doc pass hit live). This particular
   table predates [design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)'s Textual-face build and was captured
@@ -394,7 +394,7 @@ session:
   per this doc's own no-retro-edit discipline. Where `textual` IS importable that row instead
   reads `available`, and the interactive face above the table becomes the real Textual
   application, not the numbered-menu fallback; see
-  [seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py) for
+  seen-red/setup-tui-textual-shell (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) for
   that build's own live witnesses.
 
 **What does the wizard actually guarantee if I kill it, or my machine dies, partway through?**
@@ -450,11 +450,11 @@ traceback) when one is missing (the 2026-07-19 out-of-sequence amendment, same s
 
 **This closes with one line each on the setup TUI's own drift backstops**, cross-referenced in full under
 ["Drift backstops" below](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale):
-[seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py) (the
+seen-red/setup-tui-scripted-smoke (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) (the
 setup surface's own scripted smoke fixture, hostile/malformed inputs),
 [seen-red/setup-tui-feature-facts-drift](../seen-red/setup-tui-feature-facts-drift/run_fixtures.py)
 (the feature-facts registry vs. what the screens actually expose), and
-[seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py) (WDR1
+seen-red/setup-tui-dry-run-parity (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) (WDR1
 byte-identical tree/ledger, WDR2 argv parity dry-vs-live, both needing real infra).
 
 ## Declaring things on the ledger
@@ -1448,7 +1448,7 @@ is each one's owning page):
   a deployment's live schema vs the kernel lineage chain, one `.detect.sql` probe per delta,
   reporting exactly which deltas the world lacks.
 
-- [seen-red/setup-tui-scripted-smoke](../seen-red/setup-tui-scripted-smoke/run_fixtures.py) —
+- seen-red/setup-tui-scripted-smoke (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) —
   the setup surface's own backstop, commissioned under the maintainer's 2026-07-19 standing
   rule ("the setup surface itself ... will drift unless maintained", ledger row 1700: `./led
   show 1700` at the repository root): a scripted TUI smoke fixture, census-registered, driving
@@ -1463,7 +1463,7 @@ is each one's owning page):
   compared both directions (the class this whole section describes, applied to the feature-
   facts column itself — this spec's own first deliberate consumer of the method,
   design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §1).
-- [seen-red/setup-tui-dry-run-parity](../seen-red/setup-tui-dry-run-parity/run_fixtures.py) —
+- seen-red/setup-tui-dry-run-parity (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) —
   the `--dry-run` amendment's own two real-infra witnesses (design/FABLE-SETUP-TUI-SPEC.md
   2026-07-19 amendment, ledger row 1719): WDR1 (a full dry-run flow against a real
   destination leaves the filesystem byte-identical before/after and writes zero ledger rows)
@@ -1471,7 +1471,7 @@ is each one's owning page):
   byte, order included); needs a reachable Postgres host and the boundary service's venv,
   degrading honestly to `UNEXERCISED` (exit 0) without either, rather than failing the build
   on missing optional local infra.
-- [seen-red/setup-tui-textual-shell](../seen-red/setup-tui-textual-shell/run_fixtures.py) —
+- seen-red/setup-tui-textual-shell (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) —
   the Textual-face build's own WX1-WX6 witnesses (design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md §4,
   commission ledger row 1818): a headless Textual journey through all eleven screens (WX1),
   transcript parity with the plain backend's `$ `-prefixed lines (WX2), the textual-absent

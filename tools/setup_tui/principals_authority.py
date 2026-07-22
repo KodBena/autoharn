@@ -48,19 +48,18 @@ import re
 import subprocess
 from pathlib import Path
 
-from tools.setup_tui import probes
+from tools.setup_tui import content, probes
 from tools.setup_tui.plan import CommandAct
-from tools.setup_tui.content.principals_authority_data import (
-    CLASS_CHOICES,
-    LESSON_CHARTER,
-    LESSON_COMPETENCE,
-    LESSON_REGISTER,
-    LESSON_RELATION,
-    LESSON_WORKFLOW_POINTER,
-    RELATION_CHOICES,
-    SCAFFOLD_BASE_PRINCIPALS,
-)
 from tools.setup_tui.runner import legacy_led_path, parse_row_id
+
+CLASS_CHOICES = content.PA_CLASS_CHOICES
+RELATION_CHOICES = content.PA_RELATION_CHOICES
+SCAFFOLD_BASE_PRINCIPALS = content.PA_SCAFFOLD_PRINCIPALS
+LESSON_REGISTER = content.PA_LESSONS["register"]
+LESSON_COMPETENCE = content.PA_LESSONS["competence"]
+LESSON_RELATION = content.PA_LESSONS["relation"]
+LESSON_CHARTER = content.PA_LESSONS["charter"]
+LESSON_WORKFLOW_POINTER = content.PA_LESSONS["workflow_pointer"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
