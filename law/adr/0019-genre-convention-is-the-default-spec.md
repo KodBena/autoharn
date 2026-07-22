@@ -60,3 +60,30 @@ real, not as the boundary of it.
 UI build basis) and review-only for the structural check — no mechanical gate reads
 screenshots today. If a recurrence survives spec-time and review, that recurrence is
 ADR-0011 Rule 2 grounds for minting the strongest feasible mechanism then available.*
+
+## 2026-07-22 — Rule 3 appended: one home per fact extends to the screen (unique placement)
+
+*(Dated append per ADR-0005 Rule 8, same day as ratification. Provenance: the shared-field
+rounds of the setup-TUI rebuild — a configuration value rendered editable under two
+sub-headings, then proposed as a read-only mirror; the maintainer adjudicated both away,
+verbatim: "ADR-0002 -- a duplicated mirror/projection of a value is a type error and
+refused on TUI start" — ledger rows 1112 and this append's own commit.)*
+
+**Rule 3 — The navigation hierarchy is a claim of unique placement, and the claim is
+typed.** A section tree asserts a partition of the configuration space: every fact has
+exactly one address. Rendering one value under two headings — editable or as a
+"convenience" mirror — falsifies that claim and mints a hidden dependency the operator
+can only discover empirically (touch one widget, watch another twitch). This is not a
+taste question; it is ADR-0012 P1 (one home per fact) applied to the presentation
+layer, because the screen is storage for the operator's mental model, and a duplicated
+widget is a denormalized projection owing a synchronization story no one was ever told.
+The named external pedigree, recorded so no future reader mistakes this for one
+maintainer's idiosyncrasy: unique placement / polyhierarchy-as-hazard (information
+architecture), hidden dependencies (Green & Petre's cognitive dimensions), 1:1
+control-to-variable mapping and the gulf of evaluation (Norman). Enforcement is NOT
+review-only: a duplicated projection of one fact is a TYPE ERROR, refused loudly at UI
+start, naming the fact and every section claiming it. The same defect appeared at the
+model layer (flat-keyspace aliasing) and the presentation layer (mirrored fields) in
+one build, one day: they are one class — two views bound to what should be one slot,
+or one slot masquerading as two facts — and the class is closed at construction, at
+both layers, not policed by eyes.
