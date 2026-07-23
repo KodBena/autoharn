@@ -175,22 +175,27 @@ def main() -> int:
             print(f"\n!! {f}")
         return 1
 
-    # Stand a REAL boundary_service against this exact schema and add boundary_url/
-    # boundary_deployment to deployment.json IN PLACE -- see the module-level comment above.
-    proc = bs_fixtures.serve_existing_world(dest / "deployment.json", tmpdir)
-
     # fixture-repairs review (MODERATE-silent finding): everything from here through the last
-    # case used to run with NO try/finally around it -- an uncaught exception anywhere in this
-    # stretch (a KeyError, an index error, a subprocess surprise) would skip BOTH
-    # `bs_fixtures.stop_server(proc)` (the boundary_service subprocess leaks, orphaned) and
-    # `_drop_scratch()` (the scratch schema/kern/role leak in the toy db, never reaped). The
-    # `try`/`finally` below guarantees the server is always reaped; an uncaught exception (as
-    # opposed to an ordinary FAILURES-list check mismatch, which still deliberately leaves the
-    # scratch substrate standing as evidence -- see the tail of main()) carries no check-level
-    # evidence worth preserving, so it also drops the scratch schema/role and tempdir itself
-    # rather than leaking them too.
+    # case used to run with NO try/finally around it, AND `serve_existing_world` itself used to
+    # be called BEFORE the try even started -- so a raise from serve_existing_world's own
+    # health-check timeout path (or any exception in the stretch below: a KeyError, an index
+    # error, a subprocess surprise) would skip BOTH `bs_fixtures.stop_server(proc)` (the
+    # boundary_service subprocess leaks, orphaned) and `_drop_scratch()` (the scratch
+    # schema/kern/role leak in the toy db, never reaped) -- with nothing at all cleaning up the
+    # tempdir/schema/role in the serve_existing_world-raises case, since that raise landed
+    # outside every try/finally in this function. `proc` is seeded None before the try, and the
+    # serve_existing_world call itself now lives INSIDE the try, so its own raise still reaches
+    # the except/finally cleanup below; the finally only reaps the server if it actually
+    # started. An uncaught exception (as opposed to an ordinary FAILURES-list check mismatch,
+    # which still deliberately leaves the scratch substrate standing as evidence -- see the
+    # tail of main()) carries no check-level evidence worth preserving, so it also drops the
+    # scratch schema/role and tempdir itself rather than leaking them too.
+    proc: subprocess.Popen | None = None
     crashed_with: BaseException | None = None
     try:
+        # Stand a REAL boundary_service against this exact schema and add boundary_url/
+        # boundary_deployment to deployment.json IN PLACE -- see the module-level comment above.
+        proc = bs_fixtures.serve_existing_world(dest / "deployment.json", tmpdir)
         # a real row to countersign in the review cases below -- message is either "led: row <id>
         # written." (s43 boundary) or "led <verb>: row <id> written." (pre-s43 legacy branch); the id
         # is always the SECOND-TO-LAST whitespace token (the last is "written.").
@@ -376,7 +381,8 @@ def main() -> int:
         print(f"\n!! UNCAUGHT EXCEPTION mid-fixture -- {exc!r} -- reaping server and dropping "
               f"scratch before re-raising (no check-level evidence to preserve for a crash)")
     finally:
-        bs_fixtures.stop_server(proc)
+        if proc is not None:
+            bs_fixtures.stop_server(proc)
 
     if crashed_with is not None:
         _drop_scratch()

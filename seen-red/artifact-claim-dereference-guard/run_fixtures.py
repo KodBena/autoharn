@@ -263,10 +263,18 @@ def main() -> int:
               f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
         return 1
 
-    proc = bs_fixtures.serve_existing_world(DEST / "deployment.json", tmpdir)
-
+    # fixture-repairs review (MODERATE-silent finding): serve_existing_world itself can raise
+    # (its health-check timeout path) -- it used to sit OUTSIDE this try/finally, so a raise
+    # from it would orphan the scratch schema/role/tempdir with no cleanup at all (the
+    # boundary_service subprocess in that case never started, or was already reaped by
+    # serve_existing_world's own failure path, so only the scratch substrate was ever at risk
+    # here). `proc` is seeded None before the try so the finally below can tell "never started"
+    # apart from "started, needs reaping", and the call itself now lives inside the try so its
+    # own raise still reaches the except/finally cleanup below.
+    proc: subprocess.Popen | None = None
     crashed_with: BaseException | None = None
     try:
+        proc = bs_fixtures.serve_existing_world(DEST / "deployment.json", tmpdir)
         gap_dead_evidence_path_accepted()
         gap_bare_directory_evidence_accepted()
         green_live_file_evidence()
@@ -283,7 +291,8 @@ def main() -> int:
         print(f"\n!! UNCAUGHT EXCEPTION mid-fixture -- {exc!r} -- reaping server and dropping "
               f"scratch before re-raising")
     finally:
-        bs_fixtures.stop_server(proc)
+        if proc is not None:
+            bs_fixtures.stop_server(proc)
 
     if crashed_with is not None:
         _drop_scratch()
