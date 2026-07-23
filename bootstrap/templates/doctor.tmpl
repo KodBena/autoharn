@@ -143,36 +143,53 @@ def check_lineage(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
 
 
 def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
-    """A freshly `--new-world`-scaffolded deployment carries NO `boundary_url`/
-    `boundary_deployment` by default (the scaffold deliberately never auto-starts a boundary
-    process -- see `check_boundary`'s own docstring) -- in that shape, the served/rebased
-    `./led` shim REFUSES BY DESIGN (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5),
-    and `./legacy/led` (the direct-psql original, demoted by placement, never deleted) is the
-    verb that actually works. A doctor that always ran the plain `./led` would report every
-    boundary-less, freshly-scaffolded world -- the common, default case -- as UNHEALTHY for a
-    fact the scaffold itself chose deliberately. So: prefer `./legacy/led` when no boundary is
-    configured (it exists on every world new enough to carry the rebase, and is the honestly
-    "working" verb in that mode -- track-work.sh's own header comment says so in the same
-    words); fall back to plain `./led` when a boundary IS configured, or when no `./legacy/`
-    directory exists at all (a pre-rebase world, where plain `./led` is itself the direct-psql
-    original)."""
-    legacy_bin = PROJECT_ROOT / "legacy" / "led"
-    plain_bin = PROJECT_ROOT / "led"
-    if not dep.boundary_url and legacy_bin.is_file() and os.access(legacy_bin, os.X_OK):
-        led_bin, cwd, label = legacy_bin, legacy_bin.parent, "./legacy/led"
-    else:
-        led_bin, cwd, label = plain_bin, PROJECT_ROOT, "./led"
+    """legacy-led-retirement inventory pass (ledger row 1149/1150; integration-merge
+    reconciliation task A, 2026-07-23): this check used to PREFER `./legacy/led` (the direct-
+    psql original) whenever no boundary was configured, on the theory that a freshly-scaffolded,
+    boundary-less world was the common case and `./legacy/led` was the honestly-"working" verb
+    in that mode. That theory is now FALSE -- `bootstrap/templates/legacy-led.tmpl` no longer
+    exists in this repository, and `new-project.sh` now scaffolds `<dest>/legacy/led` as a
+    one-line TEACHING-REFUSAL STUB (see new-project.sh's own "legacy/led: RETIRED" heredoc) that
+    always exits non-zero -- preferring it here would make doctor report FAIL against the stub's
+    own refusal text, never the real fact this check exists to answer. Post-retirement the
+    boundary is MANDATORY at every birth (no decline option, `tools/setup_tui/steps_boundary.py`
+    fields() docstring) -- there is exactly one lawful `led` per world now (`runner.
+    served_led_path`'s own docstring, the same fact this world's served `./led` shim enforces),
+    so this check drives ONLY the served `./led`, unconditionally: PASS iff it answers a real
+    read; FAIL -- never SKIP, never a legacy fallback -- with the concrete start command as
+    teaching, whether the boundary was never configured at all (no boundary-multiplex.toml) or
+    was configured but is not currently reachable (`check_boundary` below reports the SAME
+    unreachable fact independently; this FAIL is not contingent on that check having run)."""
+    led_bin = PROJECT_ROOT / "led"
+    toml_path = PROJECT_ROOT / "boundary-multiplex.toml"
+    if not dep.boundary_url:
+        if toml_path.is_file():
+            teach = (f"boundary configured but not running -- start it: (cd {AUTOHARN} && "
+                     f"python3 -m serving.boundary_service --config {toml_path} --port <PORT>) "
+                     f"then re-run doctor (the port is whichever one this world's own "
+                     f"boundary-multiplex.toml/deployment.json boundary_url names)")
+        else:
+            teach = (f"boundary never configured for this world -- run the setup wizard against "
+                     f"it: (cd {AUTOHARN} && python3 tools/setup_tui/app.py {PROJECT_ROOT}), "
+                     f"select Boundary in the tree, and commit -- there is no legacy/led fallback "
+                     f"to reach for (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)")
+        return _line("./led answers a read query", FAIL,
+                     f"boundary_url absent from deployment.json -- {teach}"), FAIL
     if not (led_bin.is_file() and os.access(led_bin, os.X_OK)):
-        return _line("./led answers a read query", FAIL, f"no executable {label} at {cwd}"), FAIL
+        return _line("./led answers a read query", FAIL, f"no executable ./led at {PROJECT_ROOT}"), FAIL
     try:
-        r = subprocess.run([str(led_bin), "--recent", "1"], cwd=cwd,
+        r = subprocess.run([str(led_bin), "--recent", "1"], cwd=PROJECT_ROOT,
                            capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.TimeoutExpired) as e:
         return _line("./led answers a read query", FAIL, f"{e.__class__.__name__}: {e}"), FAIL
     if r.returncode != 0:
         detail = _first_line(r.stderr) or _first_line(r.stdout) or f"exit {r.returncode}"
-        return _line("./led answers a read query", FAIL, f"({label}) {detail}"), FAIL
-    return _line("./led answers a read query", PASS, f"{label} --recent 1 exited 0"), PASS
+        teach = (f"start the boundary service: (cd {AUTOHARN} && python3 -m "
+                 f"serving.boundary_service --config {toml_path} --port <PORT>) then re-run "
+                 f"doctor -- the served ./led shim refuses every query while the boundary it "
+                 f"depends on is down (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5)")
+        return _line("./led answers a read query", FAIL, f"(./led) {detail} -- {teach}"), FAIL
+    return _line("./led answers a read query", PASS, f"./led --recent 1 exited 0"), PASS
 
 
 def check_boundary(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
