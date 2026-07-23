@@ -82,8 +82,13 @@ without being clobbered back to the bare default -- lives in
 seen-red/setup-tui-dry-run-parity (WDR1 already performs a real birth through boundary; this
 build's own addition there is witness (a)'s live half).
 
-Case 14 (DEFECT FIX WITNESS, autoharn1 succession commission row 1942, 2026-07-22): a
-`--from-config` birth with `boundary.configure = false` used to halt hydration outright at its
+Case 14 (DEFECT FIX WITNESS, 2026-07-22; ERRATUM ledger row 1173: this case was previously
+captioned "autoharn1 succession commission row 1942" as its supporting citation -- independently
+verified FALSE, autoharn1 row 1942 is autoharn1's OWN succession commission (the maintainer-
+commissioned rebirth to autoharn2) and documents nothing about decline-mode fallback; the
+citation is dropped here, not replaced, because this defect fix needed no ledger citation to
+stand on in the first place -- it is a live, reproduced-in-fixture regression, witnessed below):
+a `--from-config` birth with `boundary.configure = false` used to halt hydration outright at its
 first ledger write, because `screen_hydration` always resolved the served `./led` shim (which
 refuses without `deployment.json`'s `boundary_url`/`boundary_deployment` keys) even though the
 scaffold always ALSO writes a working `legacy/led` right there. Reproduces the exact halt shape --
@@ -291,8 +296,10 @@ def main() -> int:
 
         # --- case 14 -- RETIRED (legacy-led-retirement inventory pass, ledger row 1149/1150,
         # this build) -- was: "a `--from-config` birth with `boundary.configure = false` used to
-        # halt hydration ... resolve_led picks legacy/led, not the served shim" (autoharn1
-        # succession commission row 1942's own DEFECT FIX WITNESS, 2026-07-22). The scenario this
+        # halt hydration ... resolve_led picks legacy/led, not the served shim" (this file's own
+        # DEFECT FIX WITNESS, 2026-07-22; ERRATUM ledger row 1173: previously miscited as
+        # "autoharn1 succession commission row 1942" -- see this file's own module docstring for
+        # the correction). The scenario this
         # case reproduced no longer exists to reproduce: `boundary.configure = false` is not a
         # representable config shape anymore (the decline gate is retired, boundary is mandatory
         # at every birth, tools/setup_tui/screens.py's own screen_boundary docstring), and
@@ -350,7 +357,8 @@ def main() -> int:
         assert legacy_led_path not in led_row, (
             f"case 14: the 'led present' row must NOT name legacy/led -- it is a retired, non-"
             f"functional stub even when present on disk: {led_row!r}")
-        print("case 14 ok (POST-RETIREMENT RE-ASSERTION, was row 1942's DEFECT FIX WITNESS): "
+        print("case 14 ok (POST-RETIREMENT RE-ASSERTION, was this file's own DEFECT FIX WITNESS "
+              "-- ERRATUM ledger row 1173, previously miscited as row 1942): "
               "hydration's led resolution picks the served ./led even when a (non-functional) "
               "legacy/led file is also present on disk -- no candidate search remains")
 

@@ -183,7 +183,7 @@ BASELINE: dict[str, int] = {
     # child immediately died) plus three `led`-resolution sites choosing served vs legacy from
     # `state["boundary_url"]`. Genuinely new decision logic and a real defect fix, not padding.
     # +5 to 1791, same pass: register-principal usage defect found live + two scope-gap notes.
-    "tools/setup_tui/screens.py":                    1791,
+    "tools/setup_tui/screens.py":                    1798,  # +7, row 1173 errata (comment fix)
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
