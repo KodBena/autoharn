@@ -15,17 +15,42 @@ entirely. This gate mechanizes the first half: `_guard_recursion` (serving/bound
 is now the ONE function permitted to catch `RecursionError`; this gate refuses the file if any
 OTHER `except` clause in it names `RecursionError`, in a bare or tuple form.
 
+SECOND RESIDUAL (reviewer-demonstrated, closed here): the FIRST check above only names
+`RecursionError` literally -- so the nearest natural bypass, a deep-walk site wrapped in
+`except RuntimeError` (RecursionError's OWN SUPERCLASS, so it catches RecursionError by
+inheritance without ever spelling the name), or the wider `except Exception`/
+`except BaseException`/bare `except:`, sailed through clean. This gate now ALSO refuses any
+except-clause, attached to a `try` whose body calls a censused deep-walk site (`_guard_recursion`
+itself, `_iter_strings`, `_representability_axis_failure`, or a direct `json.loads`/`json.dumps`
+call), whose type expression names `RuntimeError`, `Exception`, or `BaseException` -- or is a
+bare `except:` -- unless that except line itself carries the
+`# deep-walk-recursion-guard-superclass-reviewed: <reason>` waiver comment (this file's own
+`WAIVER_TOKEN`; no such waiver exists in the shipped module today, so the check is unconditional
+there).
+
 WHAT THIS DOES NOT CLAIM (named, not silently implied): this is a grep/AST-based CENSUS gate
 (gates/no_lazy_imports.py's own family and instrument choice), not a semantic recursion-safety
-prover. A fourth site that recurses over caller-controlled data with NO except clause at all --
-an uncaught crash rather than a routed-around guard -- is a different, pre-existing defect
-class (an unhandled RecursionError bare 500) this gate does not detect. What it DOES
-mechanically guarantee: if a site in this file catches RecursionError at all, it does so
-through the one shared helper, never through a second, independently-authored net.
+prover. Named gaps that remain even after the superclass-catch closure above:
+  - A fourth site that recurses over caller-controlled data with NO except clause at all --
+    an uncaught crash rather than a routed-around guard -- is a different, pre-existing defect
+    class (an unhandled RecursionError bare 500) this gate does not detect.
+  - The deep-walk-site census (what counts as "a try wrapping a traversal call") is itself a
+    NAME LIST (`DEEP_WALK_CALL_NAMES` below plus the `json.loads`/`json.dumps` special case),
+    not a call-graph / alias analysis -- a traversal reached only through an intermediate
+    wrapper function this gate does not know the name of is invisible to it, same as any
+    AST-census gate's blind spot for indirection.
+  - The waiver token is a textual escape hatch, checked for PRESENCE only (like
+    gates/doc_attestation_presence.py's own `doc-attest-exempt:` token) -- it does not
+    (cannot) judge whether the stated reason is actually sound.
+What it DOES mechanically guarantee: if a site in this file catches RecursionError at all, it
+does so through the one shared helper, never through a second, independently-authored net --
+whether that second net names `RecursionError` directly or reaches it by catching one of its
+superclasses.
 
 Exit 0 (clean) when `_guard_recursion` exists, itself contains an `except ... RecursionError
-...` clause, and no OTHER such clause exists anywhere else in the file. Exit 1, naming every
-offending line, otherwise.
+...` clause, no OTHER such clause exists anywhere else in the file, AND no unwaived
+superclass-catch (`RuntimeError`/`Exception`/`BaseException`/bare) wraps a censused deep-walk
+call. Exit 1, naming every offending line, otherwise.
 
 Usage:
     python3 gates/deep_walk_recursion_guard.py [path-to-boundary_service.py]
@@ -40,6 +65,19 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_TARGET = REPO / "serving" / "boundary_service.py"
 GUARD_HELPER_NAME = "_guard_recursion"
 
+# The deep-walk-site census for the superclass-catch check below: a NAME LIST (this gate's own
+# admitted blind spot -- see the module docstring's named-gaps list), not a call-graph analysis.
+# `_guard_recursion` itself is included because the reviewer's demonstrated evasion wraps the
+# CALL SITE (`_guard_recursion(json.loads, ...)`, `_guard_recursion(_iter_strings, ...)`, etc.)
+# in its OWN broader except clause rather than adding a new site inside the helper.
+DEEP_WALK_CALL_NAMES = {GUARD_HELPER_NAME, "_iter_strings", "_representability_axis_failure"}
+# json.loads/json.dumps are also censused directly (an open-coded call that never even reaches
+# _guard_recursion -- the other half of the reviewer's demonstrated bypass shape).
+JSON_ATTR_NAMES = {"loads", "dumps"}
+
+SUPERCLASS_NAMES = {"RuntimeError", "Exception", "BaseException"}
+WAIVER_TOKEN = "deep-walk-recursion-guard-superclass-reviewed:"
+
 
 def _names_recursion_error(node: ast.expr) -> bool:
     """True if an except-clause type expression names RecursionError -- a bare `Name`, or any
@@ -48,6 +86,55 @@ def _names_recursion_error(node: ast.expr) -> bool:
         return node.id == "RecursionError"
     if isinstance(node, ast.Tuple):
         return any(_names_recursion_error(e) for e in node.elts)
+    return False
+
+
+def _names_superclass_evasion(node: ast.expr | None) -> bool:
+    """True if an except-clause type expression names one of RecursionError's OWN superclasses
+    (`RuntimeError`, `Exception`, `BaseException`) -- the nearest natural bypass of the
+    RecursionError-specific check above, since catching a superclass catches RecursionError by
+    inheritance without ever spelling its name. `node is None` is a bare `except:`, the widest
+    form of the same evasion."""
+    if node is None:
+        return True
+    if isinstance(node, ast.Name):
+        return node.id in SUPERCLASS_NAMES
+    if isinstance(node, ast.Tuple):
+        return any(_names_superclass_evasion(e) for e in node.elts)
+    return False
+
+
+def _is_deep_walk_call(node: ast.AST) -> bool:
+    """True if `node` is a Call to a censused deep-walk site: `_guard_recursion`/`_iter_strings`/
+    `_representability_axis_failure` by name, or a direct `json.loads`/`json.dumps` attribute
+    call."""
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id in DEEP_WALK_CALL_NAMES
+    if isinstance(func, ast.Attribute):
+        return (func.attr in JSON_ATTR_NAMES
+                and isinstance(func.value, ast.Name) and func.value.id == "json")
+    return False
+
+
+def _try_wraps_deep_walk_call(try_node: ast.Try) -> bool:
+    """True if `try_node`'s own body (not its handlers/orelse/finally) calls a censused
+    deep-walk site anywhere in its descendants."""
+    for stmt in try_node.body:
+        for sub in ast.walk(stmt):
+            if _is_deep_walk_call(sub):
+                return True
+    return False
+
+
+def _handler_has_waiver(handler: ast.ExceptHandler, lines: list[str]) -> bool:
+    """The waiver is a textual token (checked for PRESENCE only, like
+    gates/doc_attestation_presence.py's `doc-attest-exempt:`) on the `except` line itself."""
+    lineno = handler.lineno
+    if 1 <= lineno <= len(lines):
+        return WAIVER_TOKEN in lines[lineno - 1]
     return False
 
 
@@ -61,6 +148,8 @@ def violations_in(path: Path, base: Path = REPO) -> list[str]:
         display = path.relative_to(base)
     except ValueError:
         display = path
+
+    lines = path.read_text(encoding="utf-8").splitlines()
 
     # Locate `_guard_recursion`'s own line range by AST (every descendant node's lineno) --
     # never a hand-typed line number, so a reflow/rename of the file cannot desync this gate.
@@ -91,6 +180,25 @@ def violations_in(path: Path, base: Path = REPO) -> list[str]:
                 f"`{GUARD_HELPER_NAME}` — a deep-walk site bypassing the single "
                 f"guarded-traversal helper (boundary-recursion-net-single-invariant, "
                 f"ledger row 1628)")
+
+    # Superclass-catch evasion (reviewer-demonstrated): a try wrapping a censused deep-walk
+    # call, caught by RecursionError's OWN SUPERCLASS (RuntimeError/Exception/BaseException) or
+    # a bare `except:`, catches RecursionError by inheritance without ever spelling the name --
+    # the nearest natural bypass of the RecursionError-literal check above. Scoped to ONLY the
+    # try statements whose body calls a censused deep-walk site (`_try_wraps_deep_walk_call`),
+    # never every Exception catch in the file, to keep the false-positive rate at the same
+    # discipline as the check above.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try) and _try_wraps_deep_walk_call(node):
+            for handler in node.handlers:
+                if _names_superclass_evasion(handler.type) and not _handler_has_waiver(handler, lines):
+                    caught = "bare `except:`" if handler.type is None else \
+                        f"`except {ast.unparse(handler.type)}`"
+                    out.append(
+                        f"{display}:{handler.lineno}: {caught} wraps a deep-walk call -- "
+                        f"catching RuntimeError catches RecursionError by inheritance -- name "
+                        f"RecursionError and route through {GUARD_HELPER_NAME}, or annotate why "
+                        f"not (# {WAIVER_TOKEN} <reason> on the except line)")
 
     # The helper itself must still actually carry the net -- either a literal
     # `except RecursionError` / `except (..., RecursionError, ...)`, OR (this codebase's own
