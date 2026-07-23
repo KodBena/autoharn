@@ -241,7 +241,11 @@ BASELINE: dict[str, int] = {
     # a DECLARED raw/history reader by design -- the general review-legibility surface must show
     # a superseded review too). Genuinely new classification content, not padding. Written plain,
     # no golfing.
-    "gates/ledger_reader_allowlist.py":                 525,
+    # Reconciled +1 to 526 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A, ledger row 1150,
+    # kernel/lineage/s57-obligation-revocation-event.sql): CHAIN += s57 -- exercises review_gap's
+    # own third, narrowing-only anti-join, an already-allowlisted entry whose reason text is
+    # UPDATED in place (no new row). One genuinely load-bearing line, not padding.
+    "gates/ledger_reader_allowlist.py":                 526,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently

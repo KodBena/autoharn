@@ -190,6 +190,18 @@ EXPECTED_ROUTES = {
     ("GET", "/d/{deployment}/standing/principals"), ("GET", "/d/{deployment}/work/items"),
     ("POST", "/d/{deployment}/write/ledger"), ("POST", "/d/{deployment}/write/review"),
     ("POST", "/d/{deployment}/write/registration"), ("POST", "/d/{deployment}/write/obligation"),
+    # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md (ratified ledger decision row 1652, landed
+    # BEFORE this delta -- this fixture's own EXPECTED_ROUTES had gone stale against it, a
+    # pre-existing hazard fixed here in passing per CLAUDE.md's engineering-responsibility rule,
+    # since this same delta already touches this fixture's own target file): the three-route
+    # amendment.
+    ("GET", "/d/{deployment}/views/{view}"), ("GET", "/d/{deployment}/rows/asof/{ts}"),
+    ("GET", "/d/{deployment}/meta"),
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Parts A+B (maintainer-ratified ledger row 1150):
+    # the sixth s43-family write surface (Part A) plus the three artifact routes (Part B).
+    ("POST", "/d/{deployment}/write/obligation_revoke"),
+    ("GET", "/d/{deployment}/artifacts/{hash}"), ("GET", "/d/{deployment}/artifacts/{hash}/stat"),
+    ("POST", "/d/{deployment}/artifacts"),
 }
 
 

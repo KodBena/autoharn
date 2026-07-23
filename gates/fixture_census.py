@@ -157,6 +157,8 @@ REGISTRY: dict[str, str] = {
     "belief-substrate-v1":             "seen-red/belief-substrate-v1/run_fixtures.py",
     "belief-substrate-v2":             "seen-red/belief-substrate-v2/run_fixtures.py",
     "reservation-residue":             "seen-red/reservation-residue/run_fixtures.py",
+    "s57-obligation-revocation-event": "seen-red/s57-obligation-revocation-event/run_fixtures.py",
+    "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",

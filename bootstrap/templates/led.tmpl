@@ -20,7 +20,11 @@ item's own comment for exactly how it is served and any disclosed narrowing vers
 byte-for-byte original. Phase 1B (same ledger row, coordinator narrowing corrected) closed the
 remainder of the `led work *` surface -- `review-gap`/`startable`/`resolve-violation`/
 `supersede-cascade`, all eleven of eleven sub-verbs now covered -- and the two remaining
-statement-grammar prefixes, `actual:`/`outcome:`.
+statement-grammar prefixes, `actual:`/`outcome:`. design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md
+Parts A+B (maintainer-ratified ledger row 1150) close the FINAL two: `led obligate revoke` now
+targets the new `kernel.obligation_revoke` boundary function (kernel/lineage/
+s57-obligation-revocation-event.sql), and `led artifact put|get|stat` now targets the three new
+`/artifacts/*` routes (serving/boundary_service.py) -- see each item's own COVERED entry below.
   COVERED:
     led --recent [N] / led current [N] / led show <id>      (reads, /rows/current, /rows/{id})
     led question-status / review-gap / stamp-distinctness / standing   (reads, /views/{view})
@@ -106,28 +110,40 @@ statement-grammar prefixes, `actual:`/`outcome:`.
         `./led work open ...`/`./led work resolve-violation ...` as fresh subprocesses; this
         port calls the equivalent Python functions in-process, re-deriving each step's written
         row id via GET /rows/current exactly as legacy's own recursive shell-outs do)
-  NOT COVERED (refuses, teaching `./legacy/led`, never silently falling through):
-    led obligate revoke <scope>    -- a raw, privilege-gated DELETE (has_table_privilege-checked
-        in the legacy tool itself) -- STRUCTURALLY incompatible with the boundary's own charter
-        ("the service NEVER falls back to raw INSERT [or any DML]; there is no code path that
-        writes SQL DML", design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §4) -- the SAME class of
-        exclusion spec §5 itself names for `judge` ("not a ledger client in the boundary's
-        sense"), applied here to one subcommand rather than a whole verb.
-    led artifact put|get|stat   -- design/FABLE-ARTIFACT-STORE-SPEC.md's OWN scope line ("NOT
-        routed in v1"): the artifact store is deliberately not exposed on the boundary at all in
-        this build -- adding /artifacts/{hash} routes is a route-table amendment under the
-        read-surface spec's own re-ratification discipline, named as future work. If the boundary
-        cannot carry it, the verb refuses teaching `./legacy/led` -- the served route table is not
-        extended for it here.
-    As of legacy-led-retirement phase 1B, these are the ONLY two items left NOT COVERED: every
-    `led work *` sub-verb (eleven of eleven) and every one of legacy's own eight statement-
-    grammar pre-flight prefixes are now served through the boundary path.
+    led obligate revoke <scope> --reason "<text>"   (write, kind=obligation_revoked via
+        /write/obligation_revoke -- design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A,
+        kernel/lineage/s57-obligation-revocation-event.sql: the raw DELETE this verb used to
+        issue is retired; revocation is now a typed, journaled ledger event, and the obligation
+        row itself is never deleted -- "in force" is a derivation review_gap itself now makes.
+        DISCLOSED GRAMMAR ADDITION, not silently unchanged: `--reason` is a NEW, MANDATORY flag
+        -- the raw DELETE this replaces carried no reasoning at all, and the kernel function's
+        own contract requires a non-empty `reason` (ADR-0013: a revocation is a maintainer act,
+        and its stated ground is part of the record). `<scope>` alone, with no `--reason`, is
+        REFUSED at the CLI with teach-text before any write is attempted -- the positional
+        argument itself is unchanged from the legacy grammar.)
+    led artifact put <path> [--media-type ...] | get <hash> [--out <path>] | stat <hash>
+                                               (write/read, design/FABLE-LEGACY-LED-RETIREMENT-
+        SPEC.md Part B: three new routes, POST /artifacts, GET /artifacts/{hash},
+        GET /artifacts/{hash}/stat -- unchanged CLI grammar from legacy-led.tmpl's own `led
+        artifact` verb. `get` re-verifies the received bytes against the requested hash
+        CLIENT-SIDE too (belt-and-braces with the boundary's own server-side re-verification on
+        the way out -- see serving/boundary_service.py's `artifact_get` docstring), preserving
+        the legacy tool's own WA6 corruption-drill teach-text byte-for-byte.)
+  NOT COVERED: NONE remain (as of design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Parts A+B, ledger
+    row 1150) -- every `led work *` sub-verb, every statement-grammar pre-flight prefix, and both
+    of the two former structural exclusions (`obligate revoke`, `artifact put|get|stat`) are now
+    served through the boundary path. The two disclosed READ-SHAPE divergences named throughout
+    this section above (JSON-per-line listing for `led work list`/`--json` views; the
+    supersession-aware `led work asof`) remain the only documented behavior differences from
+    `./legacy/led`.
 
 Lazy imports banned (CLAUDE.md, 2026-07-02): every import is top-of-file."""
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -609,12 +625,110 @@ def cmd_obligate(cfg: bcc.ServedConfig, scope: str, assigned_by_name: str, oblig
     return bcc.write_and_report(cfg.base, "obligation", payload, echo_row_id=False)
 
 
-def cmd_obligate_revoke(scope: str) -> int:
-    print("led obligate revoke: NOT SERVED -- a raw, privilege-gated DELETE, structurally "
-          "outside the boundary's own charter (it never issues SQL DML; design/"
-          "FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §4). Use ./legacy/led obligate revoke "
-          f"{scope!r} instead.", file=sys.stderr)
-    return 4
+def cmd_obligate_revoke(cfg: bcc.ServedConfig, scope: str, reason: str) -> int:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A: targets kernel.obligation_revoke via
+    POST /write/obligation_revoke (kernel/lineage/s57-obligation-revocation-event.sql) -- the raw
+    DELETE this verb used to issue (or, before that, refuse to issue) is retired; revocation is
+    now a typed, journaled ledger event and the countersign_obligation row itself is never
+    deleted. `reason` is mandatory (the kernel function's own contract; see cmd_obligate_revoke's
+    caller for the CLI-side refusal when `--reason` is omitted)."""
+    actor = _resolve_actor(cfg)
+    payload: dict = {"scope": scope, "reason": reason}
+    if actor is not None:
+        payload["actor"] = actor
+    return bcc.write_and_report(cfg.base, "obligation_revoke", payload)
+
+
+_ARTIFACT_MEDIA_EXT_MAP = {".md": "text/markdown", ".markdown": "text/markdown",
+                           ".toml": "application/toml", ".json": "application/json"}
+
+
+def cmd_artifact_put(cfg: bcc.ServedConfig, path: str, media_type: str | None) -> int:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: POST /artifacts, targeting
+    kernel.artifact_write (kernel/lineage/s51-artifact-store.sql) through the boundary. Grammar
+    and media_type-inference-by-extension are byte-for-byte legacy-led.tmpl's own (see that
+    file's own `artifact put` case) -- the size cap is enforced by the kernel alone (P1: no
+    second size limit; the boundary route imposes no artifact-specific bound of its own, see
+    serving/boundary_service.py's MAX_ARTIFACT_BODY_BYTES docstring for the buffering-only bound
+    that DOES exist)."""
+    p = Path(path)
+    if not p.is_file():
+        print(f"led artifact put: REFUSED -- {path!r} does not exist or is not a regular file "
+              f"-- nothing to register.", file=sys.stderr)
+        return 1
+    data = p.read_bytes()
+    media = media_type or _ARTIFACT_MEDIA_EXT_MAP.get(p.suffix.lower(), "text/plain")
+    actor = _resolve_actor(cfg)
+    payload: dict = {"bytes": base64.b64encode(data).decode("ascii"), "media_type": media}
+    if actor is not None:
+        payload["actor"] = actor
+    exit_code, verdict = bcc.post_artifact(cfg.base, payload)
+    if exit_code == 0:
+        print(f"led artifact put: {verdict.get('message')} (from {path})")
+        return 0
+    sys.stderr.write(
+        f"led artifact put: REFUSED by the kernel write boundary (SQLSTATE {verdict.get('sqlstate')}; "
+        f"journaled as write_refused row {verdict.get('refusal_id')}):\n"
+        f"  {verdict.get('message')}\n")
+    return 1
+
+
+def cmd_artifact_get(cfg: bcc.ServedConfig, hash_: str, out: str | None) -> int:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: GET /artifacts/{hash}. Re-verifies the
+    received bytes against `hash_` CLIENT-SIDE too -- belt-and-braces with the boundary's own
+    server-side re-verification on the way out (serving/boundary_service.py's `artifact_get`),
+    preserving legacy-led.tmpl's own WA6 corruption-drill teach-text byte-for-byte (a corrupt
+    store must fail loud here too, never serve silently-wrong bytes, even if the server-side
+    check somehow regressed)."""
+    if not re.match(r'^[0-9a-f]{64}$', hash_):
+        print(f"usage: led artifact get <64-hex-char-sha256-hash> [--out <path>]", file=sys.stderr)
+        return 4
+    try:
+        raw, _content_type = bcc.get_bytes(cfg.base, f"/artifacts/{hash_}")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 404:
+            print(f"led artifact get: REFUSED -- no artifact registered with hash '{hash_}'.",
+                  file=sys.stderr)
+            print("  See 'led artifact stat <hash>' to check, or 'led artifact put <path>' to "
+                  "register one.", file=sys.stderr)
+            return 1
+        raise
+    computed = hashlib.sha256(raw).hexdigest()
+    if computed != hash_:
+        print(f"led artifact get: REFUSED -- CORRUPT STORE -- the bytes returned for hash",
+              file=sys.stderr)
+        print(f"  '{hash_}' do NOT hash to '{hash_}' (computed '{computed}' instead).",
+              file=sys.stderr)
+        print("  kernel/lineage/s51-artifact-store.sql: a corrupt store fails loud here, never",
+              file=sys.stderr)
+        print("  serves silently-wrong bytes under a claimed hash. Nothing was written.",
+              file=sys.stderr)
+        return 1
+    if out:
+        Path(out).write_bytes(raw)
+        print(f"led artifact get: wrote {hash_} -> {out} (hash verified).", file=sys.stderr)
+    else:
+        sys.stdout.buffer.write(raw)
+    return 0
+
+
+def cmd_artifact_stat(cfg: bcc.ServedConfig, hash_: str) -> int:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: GET /artifacts/{hash}/stat."""
+    if not re.match(r'^[0-9a-f]{64}$', hash_):
+        print(f"usage: led artifact stat <64-hex-char-sha256-hash>", file=sys.stderr)
+        return 4
+    try:
+        row = bcc.get_json(cfg.base, f"/artifacts/{hash_}/stat")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 404:
+            print(f"led artifact stat: REFUSED -- no artifact registered with hash '{hash_}'.",
+                  file=sys.stderr)
+            return 1
+        raise
+    for k, v in row.items():
+        if v is not None:
+            print(f"{k:15s}: {v}")
+    return 0
 
 
 def cmd_review(cfg: bcc.ServedConfig, entry_id: int, verdict: str, independence: str,
@@ -1514,10 +1628,21 @@ def main(argv: list[str]) -> int:
         return cmd_register_principal(cfg, argv[1], argv[2])
     if argv and argv[0] == "obligate":
         if len(argv) >= 2 and argv[1] == "revoke":
-            if len(argv) != 3:
-                print("usage: led obligate revoke <scope>", file=sys.stderr)
+            p = argparse.ArgumentParser(prog="led obligate revoke", add_help=False)
+            p.add_argument("scope")
+            p.add_argument("--reason", default=None)
+            try:
+                ns = p.parse_args(argv[2:])
+            except SystemExit:
+                print("usage: led obligate revoke <scope> --reason \"<text>\"", file=sys.stderr)
                 return 4
-            return cmd_obligate_revoke(argv[2])
+            if not ns.reason or not ns.reason.strip():
+                print("led obligate revoke: REFUSED -- --reason is MANDATORY (kernel/lineage/"
+                      "s57-obligation-revocation-event.sql: a revocation is a maintainer act, "
+                      "and its stated ground is part of the record).", file=sys.stderr)
+                print("usage: led obligate revoke <scope> --reason \"<text>\"", file=sys.stderr)
+                return 4
+            return cmd_obligate_revoke(cfg, ns.scope, ns.reason)
         if len(argv) != 4:
             print("usage: led obligate <scope> <assigned-by-principal> <obliged-actor-principal>", file=sys.stderr)
             return 4
@@ -1583,11 +1708,36 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 4
     if argv and argv[0] == "artifact":
-        print("led artifact: NOT SERVED -- design/FABLE-ARTIFACT-STORE-SPEC.md's own scope line "
-              "(\"NOT routed in v1\"): the artifact store is reachable via ./legacy/led (and any "
-              "direct-psql world verb) only. If the boundary cannot carry it, the verb refuses "
-              "teaching ./legacy/led -- the served route table is not extended for it. Use "
-              f"./legacy/led {' '.join(argv)} instead.", file=sys.stderr)
+        sub = argv[1] if len(argv) > 1 else ""
+        if sub == "put":
+            p = argparse.ArgumentParser(prog="led artifact put", add_help=False)
+            p.add_argument("path")
+            p.add_argument("--media-type", dest="media_type", default=None)
+            try:
+                ns = p.parse_args(argv[2:])
+            except SystemExit:
+                print("usage: led artifact put <path> [--media-type text/markdown|text/plain|"
+                      "application/toml|application/json]", file=sys.stderr)
+                return 4
+            return cmd_artifact_put(cfg, ns.path, ns.media_type)
+        if sub == "get":
+            p = argparse.ArgumentParser(prog="led artifact get", add_help=False)
+            p.add_argument("hash")
+            p.add_argument("--out", default=None)
+            try:
+                ns = p.parse_args(argv[2:])
+            except SystemExit:
+                print("usage: led artifact get <64-hex-char-sha256-hash> [--out <path>]",
+                      file=sys.stderr)
+                return 4
+            return cmd_artifact_get(cfg, ns.hash, ns.out)
+        if sub == "stat":
+            if len(argv) != 3:
+                print("usage: led artifact stat <64-hex-char-sha256-hash>", file=sys.stderr)
+                return 4
+            return cmd_artifact_stat(cfg, argv[2])
+        print(f"led artifact {sub}: REFUSED -- usage: led artifact put <path> [--media-type ...] "
+              f"| get <hash> [--out <path>] | stat <hash>", file=sys.stderr)
         return 4
 
     # The generic <kind> <statement...> write path, flags consumed before the positional kind.
