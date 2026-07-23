@@ -409,6 +409,48 @@ if [ "$PIN" = "submodule" ]; then
 fi
 
 if [ -n "$NEW_WORLD" ]; then
+    # DB-SIDE PRE-FLIGHT GUARD (ledger row 1148's ratified direction, reproduced mechanism):
+    # `CREATE TABLE IF NOT EXISTS` silently SKIPS a wrong-shaped leftover relation from a prior,
+    # partial birth, and s15-schema.sql's later `INSERT ... ON CONFLICT (db_role)` then dies
+    # because the skipped table's own PK never got created -- the "s15 dead end" row 1148 closed:
+    # re-birth over partial DB state, not a kernel defect. This mirrors the dest-DIRECTORY guard
+    # above (classify_destination, ~line 336) but on the DATABASE side: query the catalog for
+    # ANY existing relation under the target schema OR kernel-schema namespaces, BEFORE any DDL
+    # below runs, and refuse loudly rather than walk in and die partway through. Queried live,
+    # right here (never cached) -- a rehearsal that just tore its own scratch world down to zero
+    # residue (teardown-world.sh's own verified-zero-residue step) sees an empty catalog and
+    # passes; only genuine leftover state trips this.
+    _preflight_psql_in() { printf '%s\n' "$1"; }
+    PREFLIGHT_RELS=$(_preflight_psql_in \
+        "SELECT n.nspname || '.' || c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN (:'schema', :'kern') AND c.relkind IN ('r','v','m','p','S') ORDER BY 1;" \
+        | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v kern="$KERN" -tA)
+    PREFLIGHT_COUNT=$(printf '%s\n' "$PREFLIGHT_RELS" | grep -c . || true)
+    if [ "$PREFLIGHT_COUNT" -gt 0 ]; then
+        PREFLIGHT_SAMPLE=$(printf '%s\n' "$PREFLIGHT_RELS" | head -5 | sed 's/^/     - /')
+        # Same scratch-safe naming test teardown-world.sh itself applies to $NEW_WORLD -- so the
+        # teardown command this refusal prints is the EXACT command that will succeed, including
+        # the --force-non-scratch flag when (and only when) the world name needs it.
+        PREFLIGHT_FORCE_FLAG=""
+        case "$NEW_WORLD" in
+            run[0-9]*|s[0-9]*|faqwit*|svcfx*|probeworld*|*_scratch) ;;
+            *) PREFLIGHT_FORCE_FLAG=" --force-non-scratch" ;;
+        esac
+        echo "new-project.sh: REFUSED -- schema '$SCHEMA' and/or kernel schema '$KERN' in $DB@$HOST" >&2
+        echo "                already carry $PREFLIGHT_COUNT relation(s)/object(s) -- this is NOT" >&2
+        echo "                an empty target for a fresh --new-world birth. Found (up to 5 shown):" >&2
+        printf '%s\n' "$PREFLIGHT_SAMPLE" >&2
+        echo "                Re-birthing a kernel lineage over partial DB state is the known s15" >&2
+        echo "                dead end (ledger row 1148): CREATE TABLE IF NOT EXISTS silently skips" >&2
+        echo "                a wrong-shaped leftover table, and s15's own ON CONFLICT (db_role)" >&2
+        echo "                insert later dies because that skipped table's PK was never created." >&2
+        echo "                Clear it first with the sanctioned teardown verb, then re-run:" >&2
+        echo "                    bootstrap/teardown-world.sh $NEW_WORLD --db $DB --host $HOST \\" >&2
+        echo "                        --schema $SCHEMA --kern $KERN --role $ROLE$PREFLIGHT_FORCE_FLAG" >&2
+        echo "                Nothing was touched -- no DDL below has run yet." >&2
+        exit 1
+    fi
+    unset -f _preflight_psql_in
+
     echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s44 + s45 + s46 + s47 + s48 + s49 + s50 + s51 + s52 + s53 + s54 + s55 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
@@ -922,15 +964,16 @@ if [ -n "$NEW_WORLD" ]; then
 fi
 rm -f "$LAW_SECTION_FILE"
 
-# the eight verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain,
-# asof-export): thin shims,
+# the ten verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain,
+# asof-export, attest-doc, doctor): thin shims,
 # not frozen sed-substituted copies (BACKLOG maintainer ruling 2026-07-11, "runs are strictly
 # linear" disposition 6, "live verbs"; audit and distance-to-clean joined the same way later,
 # each a new template file rather than an edit to an existing live one -- see their own
 # commissions; verify-commission (design/MAINT-GPG-TRUST-LAYER.md Rung 2) and asof-export
 # (ledger item asof-export-inspection-copy, vestigial_documentation/design/FABLE-21CFR11-STANDING-ASSESSMENT.md §11.10(b))
 # each follow the SAME distance-to-clean precedent -- a brand-new template file carries none of
-# led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere).
+# led.tmpl's freeze risk, so it is safe to add regardless of any live wired session elsewhere.
+# doctor (ledger rows 1147/1148, virgin-experience round) is the newest of these, same precedent.
 # Baking was the asymmetry: hooks already execute live from this autoharn checkout per invocation
 # (settings.json's __AUTOHARN_ROOT__ above), but led/judge/pickup were frozen copies -- a
 # just-fixed led defect stayed live in every already-scaffolded world forever, reachable only by
@@ -987,8 +1030,8 @@ mkdir -p "$PROJECT_ROOT/roles"
 sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
 echo "wrote roles/README.md"
 
-echo "-- the nine project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export; do
+echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -1042,7 +1085,7 @@ echo "wrote orchlog (wrapper -> $EXEC_ROOT/orchlog --repo $EXEC_ROOT)"
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export orchlog \
+        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor orchlog \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"
@@ -1066,10 +1109,12 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # already registered above); nothing to paste."
     echo ""
     echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
-    echo " ./verify-chain, ./attest-doc, ./asof-export, ./orchlog are ready to use from inside that session; read"
+    echo " ./verify-chain, ./attest-doc, ./asof-export, ./doctor, ./orchlog are ready to use from inside that session; read"
     echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
-    echo " command. (./orchlog lists the harness changelog -- notes on things a restarting session"
-    echo " would want to know about autoharn itself, e.g. \`./orchlog\` or \`./orchlog since <sha>\`.)"
+    echo " command. (./doctor answers \"is this world set up right?\" in one witnessed call --"
+    echo " read it first if anything below looks off. ./orchlog lists the harness changelog --"
+    echo " notes on things a restarting session would want to know about autoharn itself, e.g."
+    echo " \`./orchlog\` or \`./orchlog since <sha>\`.)"
     echo ""
     echo "----- BEGIN MAINTAINER SIGNING BLOCK -----"
     echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"

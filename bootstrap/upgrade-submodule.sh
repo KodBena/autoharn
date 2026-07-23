@@ -128,7 +128,7 @@ echo "-- pin bumped and committed: $(cd "$DEST" && git log -1 --oneline) --"
 
 # --- 6. verify every verb still answers ------------------------------------------------------
 echo "-- verifying every operator verb resolves into the new pin --"
-VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc"
+VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc doctor"
 FAIL=0
 for v in $VERBS; do
     if [ ! -x "$DEST/.autoharn/bootstrap/templates/$v.tmpl" ]; then

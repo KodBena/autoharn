@@ -105,7 +105,14 @@ if [ -e "$DEST/.autoharn" ]; then
 fi
 
 # --- 3. discover the CURRENT live-exec AUTOHARN_ROOT from the 8 shims, and confirm agreement ---
+# `doctor` (added after this script's original 8) is deliberately OPTIONAL here, never REQUIRED:
+# a deployment scaffolded before `./doctor` existed legitimately has no such shim, and hard-
+# requiring it would refuse conversion for every pre-existing deployment on this fix's account.
+# When present, it is folded into $VERBS below so it gets discovered/repointed/committed exactly
+# like the other 8 -- absent, it is silently skipped, same posture as everywhere else in this
+# repo that treats `doctor` as additive-and-optional to already-scaffolded worlds.
 VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc"
+[ -f "$DEST/doctor" ] && VERBS="$VERBS doctor"
 DISCOVERED=""
 for v in $VERBS; do
     shim="$DEST/$v"
@@ -141,7 +148,7 @@ if [ ! -d "$DISCOVERED" ]; then
     echo "                         Nothing touched." >&2
     exit 1
 fi
-echo "-- all 8 operator-verb shims agree: currently exec'ing $DISCOVERED live --"
+echo "-- all $(set -- $VERBS; echo $#) operator-verb shims agree: currently exec'ing $DISCOVERED live --"
 
 # --- 4. that checkout must be clean, and its commit determinable ------------------------------
 DISCOVERED_SHA="$(cd "$DISCOVERED" && git rev-parse HEAD 2>/dev/null || true)"
@@ -183,8 +190,7 @@ echo ""
 echo "ABOUT TO CONVERT $DEST:"
 echo "  - add autoharn as a git submodule at $DEST/.autoharn, pinned to $DISCOVERED_SHA"
 echo "    (submodule remote: $SUBMODULE_URL)"
-echo "  - repoint led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain,"
-echo "    attest-doc, and every hook command in .claude/settings.json at that pinned copy"
+echo "  - repoint $VERBS, and every hook command in .claude/settings.json at that pinned copy"
 echo "  - commit the change in $DEST's own git history"
 echo "  - after this, a merge to autoharn's working branch will NEVER change this deployment's"
 echo "    behavior again -- the next intentional autoharn version needs"
@@ -249,7 +255,7 @@ fi
 echo "-- committing in $DEST's own git history --"
 (cd "$DEST" && git add \
     .gitmodules .autoharn \
-    led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc \
+    $VERBS \
     .claude/settings.json .claude/HOOKS.md 2>/dev/null || true)
 if (cd "$DEST" && git diff --cached --quiet) 2>/dev/null; then
     echo "   nothing to commit (unexpected -- check $DEST's git status by hand)"

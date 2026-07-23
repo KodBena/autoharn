@@ -55,7 +55,7 @@ from pathlib import Path
 # tuple in the same change.
 _SHIM_NAMES = (
     "led", "judge", "pickup", "audit", "distance-to-clean",
-    "verify-commission", "verify-chain", "attest-doc", "attest-tags", "migrate",
+    "verify-commission", "verify-chain", "attest-doc", "attest-tags", "migrate", "doctor",
 )
 
 # A hardcoded real-host path a portable shim must never carry (cf63e40's regression class: a
