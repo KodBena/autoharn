@@ -764,7 +764,14 @@ chmod 700 "$PROJECT_ROOT/.claude/secrets"
 # Append-if-missing (idempotent, mirrors the stamp-secret/genesis-seed never-rotate posture
 # elsewhere in this script): a marker pair brackets the block so a re-scaffold (--force) or a
 # second scaffold call against the same dest-dir never duplicates it.
-echo "-- .gitignore (scaffolding-owned churn paths in the subject repo) --"
+#
+# .claude/secrets/ (tracker item experience-secret-gitignore-hazard) belongs in this SAME block,
+# alongside .claude/logs/: it holds THIS deployment's stamp secret
+# (.claude/secrets/stamp_secret.hex, seeded above) -- a real credential, not mere churn, and
+# tracking it git-side would let a future world's stamp secret leak into this repo's own
+# history. Scaffold-owned, same as .claude/logs/, so it belongs in the SAME scaffold-written
+# block rather than a second one grown here (ADR-0012 P1).
+echo "-- .gitignore (scaffolding-owned churn + secret paths in the subject repo) --"
 GITIGNORE="$PROJECT_ROOT/.gitignore"
 GITIGNORE_MARK_BEGIN="# >>> autoharn scaffold-owned churn (bootstrap/new-project.sh) >>>"
 GITIGNORE_MARK_END="# <<< autoharn scaffold-owned churn <<<"
@@ -781,9 +788,14 @@ else
         echo "# diff/mutation-purity check run against this repo (ent-observatory cycle-001, NEW"
         echo "# lesson 1). Append-if-missing; safe to re-run."
         echo ".claude/logs/"
+        echo "# .claude/secrets/ (tracker item experience-secret-gitignore-hazard): this"
+        echo "# deployment's OWN stamp secret (.claude/secrets/stamp_secret.hex) -- a real"
+        echo "# credential, never tracked git-side, so no future world's secret can leak into"
+        echo "# this repo's own history."
+        echo ".claude/secrets/"
         echo "$GITIGNORE_MARK_END"
     } >> "$GITIGNORE"
-    echo "   appended scaffold-owned churn block to $GITIGNORE (.claude/logs/)"
+    echo "   appended scaffold-owned churn+secret block to $GITIGNORE (.claude/logs/, .claude/secrets/)"
 fi
 if (cd "$PROJECT_ROOT" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
     :
