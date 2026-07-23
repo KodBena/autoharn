@@ -1,6 +1,6 @@
 == scaffolding WORLD, chain head s57-obligation-revocation-event.sql ==
 === server-healthy ===
-  [ok] boundary service up at http://127.0.0.1:54361
+  [ok] boundary service up at http://127.0.0.1:41731
 
 == W1: led obligate -> led review-gap shows gap; led obligate revoke -> gap clears ==
 === w1-obligate-cli-exit0 ===
@@ -27,19 +27,19 @@
 
 == W3: led artifact put/get/stat round-trip ==
 === w3-put-exit0 ===
-  [ok] exit=0 stdout='led artifact put: artifact registered: 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd (from /tmp/legacy-led-retirement-part-ab-g_m_3e91/w3-fixture.md)\n' stderr=''
+  [ok] exit=0 stdout='led artifact put: artifact registered: 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd (from /tmp/legacy-led-retirement-part-ab-4_fmfla4/w3-fixture.md)\n' stderr=''
 
 === w3-put-prints-hash ===
-  [ok] stdout='led artifact put: artifact registered: 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd (from /tmp/legacy-led-retirement-part-ab-g_m_3e91/w3-fixture.md)\n'
+  [ok] stdout='led artifact put: artifact registered: 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd (from /tmp/legacy-led-retirement-part-ab-4_fmfla4/w3-fixture.md)\n'
 
 === w3-get-exit0 ===
-  [ok] exit=0 stderr='led artifact get: wrote 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd -> /tmp/legacy-led-retirement-part-ab-g_m_3e91/w3-get-out.md (hash verified).\n'
+  [ok] exit=0 stderr='led artifact get: wrote 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd -> /tmp/legacy-led-retirement-part-ab-4_fmfla4/w3-get-out.md (hash verified).\n'
 
 === w3-get-byte-identical ===
   [ok] round-tripped bytes match the original file
 
 === w3-stat-exit0-and-sane ===
-  [ok] exit=0 stdout='hash           : 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd\nsize           : 56\nmedia_type     : text/markdown\nregistered_at  : 2026-07-23T05:56:32.358036+02:00\nregistered_by  : author-fixture\n'
+  [ok] exit=0 stdout='hash           : 890d935362ae0b690046576ea0a5be5402437291acc2b87b3a50ddb319995efd\nsize           : 56\nmedia_type     : text/markdown\nregistered_at  : 2026-07-23T06:09:23.561342+02:00\nregistered_by  : author-fixture\n'
 
 == W4: asserted-hash mismatch on POST /artifacts -- REFUSED by the kernel ==
 === w4-refused ===
