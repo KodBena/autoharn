@@ -431,6 +431,23 @@ BOUNDARY_SERVICE_VERSION = "1.1.0"
 # registry-membership growth):
 #   reservations_outstanding.review_id    -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
 #   review_verdicts.review_id             -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
+# The two entries below are a THIRD, additive registry growth (legacy-led-retirement phase 1B,
+# ledger row 1149) -- serving `led work review-gap`/`startable`/`resolve-violation`/
+# `supersede-cascade`'s own reads through the boundary path, same closed-registry mechanism, no
+# new route, no BOUNDARY_SERVICE_VERSION bump:
+#   work_review_gap.slug                  -- already registered above (s29+); named again here
+#                                             only in this comment's own cross-reference, not a
+#                                             second dict entry (see the pre-existing line below)
+#   work_edge_parent.child_slug           -- kernel/lineage/s32-edge-views-single-home.sql (RAW,
+#                                             includes every parent-edge ever written, retracted
+#                                             or not -- see that view's own COMMENT ON VIEW).
+#                                             child_slug is the natural key: validate_work_item()
+#                                             (s22+) refuses a duplicate opening act per slug, so
+#                                             a slug can be the CHILD end of at most one edge ever
+#                                             -- unlike parent_slug, which repeats once per child.
+#   work_startable.slug                   -- kernel/lineage/s39-blocks-start.sql (work_slug, text
+#                                             -- the SAME natural key work_item_current already
+#                                             uses one view over)
 VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "question_status": ("question_id", "id"),
     "review_gap": ("id", "id"),
@@ -448,6 +465,9 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     # shape review_stamp_distinctness already uses one row over.
     "reservations_outstanding": ("review_id", "id"),
     "review_verdicts": ("review_id", "id"),
+    # legacy-led-retirement phase 1B (ledger row 1149) -- see this dict's own leading comment.
+    "work_edge_parent": ("child_slug", "slug"),
+    "work_startable": ("slug", "slug"),
 }
 
 # The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
