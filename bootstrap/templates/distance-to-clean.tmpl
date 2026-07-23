@@ -32,6 +32,28 @@ AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
 PROJECT_ROOT = DEPLOYMENT_PATH.parent
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2): intercept --help/-h HERE, before deployment.json is
+# ever touched. Without this, main() called _load_config() unconditionally -- argv was never
+# consulted at all -- so a deployment-less checkout's `--help` produced the SAME shared
+# "deployment record not found ... pickup, judge, and led alike" refusal every OTHER
+# deployment-resolving verb produces, with no marker naming 'distance-to-clean' anywhere (a
+# dispatch-parity hazard: a wrong-target dispatch landing on this verb would look identical to
+# the real one). This is a real, side-effect-free usage line naming this verb, printed and
+# exited BEFORE boundary_cli_client/ensure_running/doc_attestation_presence are even imported.
+if any(a in ("--help", "-h") for a in sys.argv[1:]):
+    print(
+        "usage: distance-to-clean\n"
+        "\n"
+        "distance-to-clean -- one-line-per-section debt count against this repo's own hygiene\n"
+        "bars, served via the boundary (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md\n"
+        "§5): review-gap, question-status, work-violations, work-items (open+claimed),\n"
+        "work-review-gap, doc-attestation. Prints TOTAL debt; exits 0 iff TOTAL is 0 and no\n"
+        "dimension was blocked/errored, 1 otherwise. Read-only; takes no arguments beyond\n"
+        "--help/-h."
+    )
+    sys.exit(0)
+
 sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:

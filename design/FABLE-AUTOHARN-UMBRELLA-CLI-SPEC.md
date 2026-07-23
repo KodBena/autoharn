@@ -72,6 +72,25 @@ the descriptor exists, its implementation waits for the multi-host arc.
 verbs gain `--dry-run`: print the exact payload and target surface, write nothing,
 exit 0. The garbage-statement guard carries over unchanged.
 
+**Addendum, 2026-07-23 (round-3 parity review):** "never requires a reachable
+boundary" was not yet true for four of the ten relocated verbs. `judge`, `doctor`,
+`distance-to-clean` (+ its `legacy-` sibling), and `verify-chain` resolved
+`deployment.json` unconditionally, before ever looking at argv — on a
+deployment-less checkout their `--help` fell through to
+`filing/deployment_record.py`'s shared missing-file refusal, which is not
+self-identifying (it names "pickup, judge, and led" as a group, a wrong-target-
+dispatch hazard the parity fixture's round-3 pass caught: a verb whose libexec
+file was swapped for a different verb's implementation still "looked" like the
+right verb, via that shared boilerplate). All four now intercept `--help`/`-h`
+before any deployment/config resolution and print a real, self-identifying usage
+line — the same treatment `audit.tmpl` got in round 2. This discharges the row-1159
+residual for these four; `led`, `pickup`, `attest-tags`, `migrate`, `asof-export`,
+and `audit` were already clean. A sweep of all ten confirms none of the remaining
+six has a pre-`--help` resolution step (see
+`seen-red/umbrella-cli-dispatch-parity/run_fixtures.py` case f, which now asserts
+each verb's own usage marker is present AND the shared refusal boilerplate is
+absent — structural, not prose).
+
 ## 6. Transition
 
 The ten root executables become one-line alias shims (`exec ./autoharn <verb> "$@"`

@@ -13,7 +13,16 @@ Cases:
   c-alias-shim-still-works -- each deprecated `./<verb>` alias execs successfully (--help exits
                                  0, or its own pre-existing --help behavior, both proving the
                                  relocation did not break dispatch) AND prints its one-line
-                                 deprecation notice to stderr.
+                                 deprecation notice to stderr AND (round-3 review fix, see case
+                                 f's own note below for the shared `_USAGE_MARKERS` this reuses)
+                                 shows that verb's own usage marker on stdout -- the deprecation
+                                 notice alone is printed unconditionally by the alias shim BEFORE
+                                 its own `exec ./autoharn <verb> "$@"` line ever runs, so a shim
+                                 rewritten to exec the WRONG verb (the round-3 reviewer's second
+                                 attack: `./led` rewritten to `exec ./autoharn judge "$@"`) still
+                                 printed led's own hardcoded deprecation text while silently
+                                 serving judge's usage underneath -- reproduced red, then fixed,
+                                 this round.
   d-unknown-verb-refuses -- `autoharn frobnicate-not-a-verb` exits 2, refuses without touching
                                  anything, and its stderr names the known roster.
   e-service-is-handled-directly -- `autoharn service --help` exits 0 without going through
@@ -40,34 +49,59 @@ Cases:
                                  exec-target-missing text -- the one signature a broken dispatch
                                  line produces that no verb's own real refusal text would ever
                                  spell. `--help` was verified (by hand, this round) side-effect-
-                                 free for all ten verbs: six (led, pickup, attest-tags, migrate,
-                                 asof-export, audit) print real usage text and exit 0; the other
-                                 four (judge, distance-to-clean, doctor, verify-chain) refuse
-                                 loudly BEFORE any write -- this repo's own root has no
-                                 deployment.json, so each of those four's own construction-time
-                                 "no deployment record"/"no Postgres host resolved" refusal fires
-                                 first, which is itself still proof the REAL script ran (the exact
-                                 refusal text is verb-specific, never the shell's own generic
-                                 "not found"). ALSO (round-2 review AXIS 1 disqualifying fix): a
+                                 free for all ten verbs -- all ten now print real, self-
+                                 identifying usage text and exit 0 (round-3 review note below:
+                                 this was NOT yet true for four of them at the time this sentence
+                                 was first written; the STALE claim that their construction-time
+                                 deployment/PGHOST refusal was "still proof the REAL script ran"
+                                 is corrected there, not repeated here). ALSO (round-2 review
+                                 AXIS 1 disqualifying fix): a
                                  wrong-target dispatch -- a verb FILE whose content is a DIFFERENT
                                  verb's implementation, filename right, content wrong, the exact
                                  risk of a ten-file relocation -- would still satisfy every check
                                  above (exit 0, real-looking usage text, no shell exec-failure
-                                 signature). So this case additionally asserts VERB IDENTITY: the
-                                 combined stdout+stderr of `./autoharn <verb> --help` must contain
-                                 that verb's own name as a literal substring (verified per verb, by
-                                 hand, this round -- every one of the ten already does, e.g. "led --
-                                 read from..." / "usage: attest-tags ..." / "judge: deployment
-                                 record not found..."). `audit` was the one verb that FAILED this
-                                 when first checked (its --help fell all the way through to
-                                 engine/contemp_audit.py's eager, import-time PGHOST resolution
-                                 before argparse ever saw argv, producing the SAME generic
-                                 "REFUSED: no Postgres host resolved" text every OTHER
-                                 PGHOST-needing verb produces, no "audit" substring anywhere) --
-                                 fixed per the reviewer's own instruction (a marker added to the
-                                 TEMPLATE, not a weakened assertion): bootstrap/templates/audit.tmpl
-                                 now intercepts --help/-h itself, before any Python/DB code runs,
-                                 and prints a real, self-identifying usage line.
+                                 signature). So this case additionally asserts VERB IDENTITY.
+                                 `audit` was the one verb that FAILED this when first checked
+                                 (its --help fell all the way through to engine/contemp_audit.py's
+                                 eager, import-time PGHOST resolution before argparse ever saw
+                                 argv, producing the SAME generic "REFUSED: no Postgres host
+                                 resolved" text every OTHER PGHOST-needing verb produces, no
+                                 "audit" substring anywhere) -- fixed per the reviewer's own
+                                 instruction (a marker added to the TEMPLATE, not a weakened
+                                 assertion): bootstrap/templates/audit.tmpl intercepts --help/-h
+                                 itself, before any Python/DB code runs, and prints a real,
+                                 self-identifying usage line.
+
+                                 ROUND-3 REVIEW (SEVERE, two escapes -- both reproduced red, then
+                                 fixed, this round): the round-2 identity check (a bare "verb name
+                                 appears as a whole token anywhere in combined output" test) was
+                                 ITSELF still an escape for the OTHER four PGHOST/deployment-
+                                 resolving verbs. judge, distance-to-clean, doctor, and
+                                 verify-chain (unlike audit) had NO --help interception at all:
+                                 each fell through, unconditionally, to
+                                 filing/deployment_record.py's own missing-file refusal, whose
+                                 text literally reads "...the LEDGER_DEPLOYMENT or
+                                 PICKUP_DEPLOYMENT environment variable (used by pickup, judge,
+                                 and led alike)". So a wrong-target dispatch swapping ANY TWO of
+                                 those four verbs (reproduced red: libexec/autoharn/judge
+                                 rewritten to `exec ... verify-chain.tmpl "$@"`) still printed
+                                 output containing the literal substring "judge" -- via that
+                                 SHARED boilerplate, not via anything specific to the real verb --
+                                 so the whole-token check passed even though the WRONG verb's
+                                 implementation was running underneath. FIXED (this round):
+                                 bootstrap/templates/judge.tmpl, doctor.tmpl,
+                                 distance-to-clean.tmpl (+ its legacy- sibling, actually reached
+                                 by THIS repo's own dispatch), and verify-chain.tmpl now all
+                                 intercept --help/-h before any deployment/config resolution,
+                                 exactly like audit.tmpl already did (discharges the standing
+                                 row-1159 residual for these four -- see each template's own
+                                 comment). The identity check itself is ALSO tightened: rather
+                                 than a bare verb-name token, `_USAGE_MARKERS` (module level,
+                                 shared with case c) holds each verb's own self-identifying
+                                 usage/header LINE, and `_assert_no_shared_boilerplate` positively
+                                 asserts the shared deployment/PGHOST refusal text is ABSENT --
+                                 the shared-boilerplate collision is now structurally impossible,
+                                 not merely unlikely.
   g-help-sweep-never-writes -- round-2 review AXIS 1 moderate fix: `./autoharn`'s own comment
                                  claimed "this TOP-LEVEL `autoharn --help`/`autoharn service
                                  --help` behavior IS witnessed directly by ... case f ... and
@@ -85,7 +119,6 @@ RUN: python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
 """
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -101,6 +134,59 @@ _EXPECTED_VERBS = {
     "led", "judge", "pickup", "distance-to-clean", "attest-tags", "audit", "doctor",
     "migrate", "asof-export", "verify-chain",
 }
+
+# Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
+# by hand (this round) against that verb's OWN real --help output (see the module docstring's
+# round-3 addendum). This replaces the old bare "verb name appears as a whole token anywhere in
+# combined output" check, which the round-3 reviewer broke on both polarities: (1) all four of
+# judge/distance-to-clean/doctor/verify-chain used to fall through, --help-unhandled, to
+# filing/deployment_record.py's own shared missing-file refusal text, which literally contains
+# the substring "pickup, judge, and led alike" -- so EVERY ONE of those four verbs' "--help"
+# output satisfied a same-verb identity check trivially, even under a wrong-target dispatch that
+# swapped one of the four for another (the swapped-in verb's OWN refusal text still names the
+# original verb via that shared boilerplate); (2) a bare substring/whole-token match on the verb
+# name is satisfiable by ANY of the four verbs' real usage prose mentioning another verb by name
+# in passing (e.g. distance-to-clean's own usage text says "same views `led review-gap` ...
+# already expose"), so "led" would falsely register as present in distance-to-clean's own
+# output. Each marker below is the verb's own self-identifying usage/header LINE (or a
+# distinctive fragment of it), chosen so it cannot appear in any OTHER verb's real output or in
+# the shared deployment/PGHOST refusal boilerplate -- verified per verb, by hand, this round.
+# `pickup`'s marker deliberately does NOT use "usage: pickup" -- its underlying argparse `prog`
+# is still the pre-relocation filename `legacy-pickup.tmpl` (a separate, smaller naming quirk
+# out of this round's scope), so its own docstring header line is used instead.
+_USAGE_MARKERS = {
+    "led": "led -- read from and write to this project's decision ledger.",
+    "judge": "usage: judge [--drop-record] [extra ledger_differential.py flags...]",
+    "pickup": "pickup — the resume verb (",
+    "distance-to-clean": "usage: distance-to-clean",
+    "attest-tags": "usage: attest-tags [--repo PATH] [--keys-dir PATH] [--json]",
+    "audit": "usage: audit [--retain] [--differential]",
+    "doctor": "usage: doctor",
+    "migrate": "usage: migrate <deployment-dir> [--dry-run]",
+    "asof-export": "usage: asof-export [-h] {read,export} ...",
+    "verify-chain": "usage: verify-chain [--head]",
+}
+
+# The shared boilerplate that caused the round-3 SEVERE escapes: filing/deployment_record.py's
+# missing-file message (names "pickup, judge, and led" as PICKUP_DEPLOYMENT/LEDGER_DEPLOYMENT
+# consumers) and filing/pghost_resolve.py's PGHOST-resolution refusal (the same shape that
+# tripped audit.tmpl in round 2). A verb's --help output must never contain either -- structural
+# proof the shared-boilerplate collision is no longer possible, not merely an assertion in prose.
+_SHARED_REFUSAL_MARKERS = (
+    "pickup, judge, and led alike",
+    "REFUSED: no Postgres host resolved",
+)
+
+
+def _assert_no_shared_boilerplate(verb: str, combined: str) -> str | None:
+    """Returns a FAIL message, or None if clean."""
+    for marker in _SHARED_REFUSAL_MARKERS:
+        if marker in combined:
+            return (f"'{verb} --help' output contains the shared deployment/PGHOST refusal "
+                     f"boilerplate ({marker!r}) -- this is the exact round-3 escape (a verb's "
+                     f"--help falling through to a shared refusal that happens to name other "
+                     f"verbs too); combined output: {combined!r}")
+    return None
 
 
 def _run(argv: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -159,14 +245,38 @@ def case_b_help_mentions_every_verb() -> bool:
 
 
 def case_c_alias_shim_still_works() -> bool:
+    """Round-3 review fix: extended to assert VERB IDENTITY through the ALIAS path too, not
+    merely the deprecation notice -- the reviewer's second attack (`./led` rewritten to exec
+    `autoharn judge` instead of `autoharn led`) satisfied the OLD version of this case
+    completely: the deprecation line is printed unconditionally by the alias shim itself,
+    BEFORE its own `exec ./autoharn <verb> "$@"` line ever runs, so a shim pointed at the WRONG
+    verb still printed "led: DEPRECATED spelling -- use 'autoharn led' instead" (the shim's own
+    hardcoded verb name), then silently served judge's own usage text underneath with nothing
+    here to notice. This case now additionally asserts the SAME per-verb `_USAGE_MARKERS` marker
+    (module-level, shared with case f) appears in the alias invocation's own stdout -- proving
+    the alias's `exec` actually reached the real verb, not merely that its hardcoded deprecation
+    string named the right verb."""
     ok = True
     for verb in sorted(_EXPECTED_VERBS):
         r = _run([str(REPO_ROOT / verb), "--help"])
         if f"DEPRECATED spelling -- use 'autoharn {verb}'" not in r.stderr:
             print(f"c-alias-shim-still-works: FAIL -- ./{verb} --help printed no deprecation notice")
             ok = False
+        marker = _USAGE_MARKERS[verb]
+        if marker not in r.stdout:
+            print(f"c-alias-shim-still-works: FAIL -- ./{verb} --help via the alias never shows "
+                  f"{verb}'s own usage marker ({marker!r}) -- looks like the alias execs the "
+                  f"WRONG verb underneath (its deprecation line named {verb!r} but the served "
+                  f"content did not). stdout: {r.stdout!r}")
+            ok = False
+            continue
+        boilerplate_fail = _assert_no_shared_boilerplate(verb, r.stdout + r.stderr)
+        if boilerplate_fail:
+            print(f"c-alias-shim-still-works: FAIL -- {boilerplate_fail}")
+            ok = False
     if ok:
-        print("c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)")
+        print("c-alias-shim-still-works: PASS (all ten alias shims print their deprecation "
+              "notice AND serve their own verb's real usage content -- no wrong-target alias)")
     return ok
 
 
@@ -223,31 +333,51 @@ def case_f_real_invocation_reaches_libexec() -> bool:
                   f"no output at all -- cannot confirm the real script ran")
             ok = False
             continue
-        # ROUND-2 REVIEW AXIS 1 DISQUALIFYING FIX: a wrong-target dispatch (a verb FILE whose
-        # CONTENT is a DIFFERENT verb's implementation -- filename right, implementation wrong,
-        # exactly the risk of a ten-file relocation) would satisfy every check above: exit 0 (or
-        # whatever exit the OTHER verb's --help produces), plausible-looking usage/refusal text,
-        # no shell exec-failure signature. Catch it by asserting VERB IDENTITY: this verb's own
-        # name must appear, literally, as a whole token, somewhere in its own --help output.
-        # WHOLE-TOKEN, not a bare substring test: a bare `verb in combined` check was FIRST
-        # tried and itself went red on a legitimate case -- "led" is a substring of "ledger",
-        # so pickup's real --help text ("... only ledger rows newer than this ...") served under
-        # `led`'s own filename (the reviewer's exact attack, reproduced below) still satisfied a
-        # bare substring check. The boundary below (neither character adjacent to the match may
-        # be alnum/hyphen/underscore) treats hyphenated verb names as one token and rejects
-        # "ledger" while still matching "led -- read from...", "usage: attest-tags ...", etc. --
-        # every one of the ten verbs' real --help text was verified (by hand, this round) to
-        # satisfy this exact boundary check; see this file's own module docstring.
-        if re.search(rf"(?<![A-Za-z0-9_-]){re.escape(verb)}(?![A-Za-z0-9_-])", combined) is None:
+        # ROUND-2 REVIEW AXIS 1 DISQUALIFYING FIX (tightened round 3, see below): a wrong-target
+        # dispatch (a verb FILE whose CONTENT is a DIFFERENT verb's implementation -- filename
+        # right, implementation wrong, exactly the risk of a ten-file relocation) would satisfy
+        # every check above: exit 0 (or whatever exit the OTHER verb's --help produces),
+        # plausible-looking usage/refusal text, no shell exec-failure signature. Round 2 caught
+        # this by asserting the verb's own name appears as a whole token anywhere in combined
+        # output. ROUND 3 REVIEW: that whole-token check was ITSELF still an escape -- with all
+        # four of judge/distance-to-clean/doctor/verify-chain falling through, --help-unhandled,
+        # to filing/deployment_record.py's shared missing-file refusal (which literally reads
+        # "...used by pickup, judge, and led alike"), a wrong-target dispatch swapping any TWO of
+        # those four verbs still produced a whole-token match on the ORIGINAL verb's name (via
+        # that shared boilerplate, not via any content specific to the real verb) -- reproduced
+        # red, and fixed, THIS round (module docstring's round-3 addendum): `bootstrap/templates/
+        # judge.tmpl`, `doctor.tmpl`, `distance-to-clean.tmpl` (+ its `legacy-` sibling actually
+        # reached by this repo's own dispatch), and `verify-chain.tmpl` now all intercept
+        # --help/-h before any deployment/config resolution, exactly like `audit.tmpl` already
+        # did. The identity check below is now the per-verb `_USAGE_MARKERS` marker (module-
+        # level, shared with case c) -- each verb's own self-identifying usage/header LINE, not
+        # merely its bare name -- PLUS an explicit assertion that the shared deployment/PGHOST
+        # refusal boilerplate is ABSENT, so the shared-boilerplate collision is now structurally
+        # impossible rather than merely unlikely.
+        marker = _USAGE_MARKERS.get(verb)
+        if marker is None:
+            print(f"f-real-invocation-reaches-libexec: FAIL -- no _USAGE_MARKERS entry for "
+                  f"{verb!r} (the dispatch table grew a verb this fixture doesn't know how to "
+                  f"identify -- add one)")
+            ok = False
+            continue
+        if marker not in combined:
             print(f"f-real-invocation-reaches-libexec: FAIL -- 'autoharn {verb} --help' output "
-                  f"never names {verb!r} anywhere -- looks like a WRONG-TARGET dispatch (another "
-                  f"verb's implementation served under this verb's filename). "
-                  f"combined output: {combined!r}")
+                  f"never shows {verb}'s own usage marker ({marker!r}) -- looks like a "
+                  f"WRONG-TARGET dispatch (another verb's implementation served under this "
+                  f"verb's filename). combined output: {combined!r}")
+            ok = False
+            continue
+        boilerplate_fail = _assert_no_shared_boilerplate(verb, combined)
+        if boilerplate_fail:
+            print(f"f-real-invocation-reaches-libexec: FAIL -- {boilerplate_fail}")
             ok = False
     if ok:
         print("f-real-invocation-reaches-libexec: PASS (every verb's real libexec/autoharn/<verb> "
-              "reached via `./autoharn <verb> --help`, never a broken-exec shell diagnostic, and "
-              "each verb's own name appears in its own --help output -- no wrong-target dispatch)")
+              "reached via `./autoharn <verb> --help`, never a broken-exec shell diagnostic, "
+              "each verb's own self-identifying usage marker is present, and none of them fall "
+              "through to the shared deployment/PGHOST refusal boilerplate -- no wrong-target "
+              "dispatch, no shared-boilerplate collision)")
     return ok
 
 

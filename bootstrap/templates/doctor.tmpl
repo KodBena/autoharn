@@ -49,6 +49,28 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deploymen
 # distance-to-clean.tmpl and attest-doc.tmpl both use.
 PROJECT_ROOT = DEPLOYMENT_PATH.parent
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2): intercept --help/-h HERE, before deployment.json is
+# ever touched. Without this, main() called check_deployment() unconditionally -- argv was never
+# consulted at all -- so a deployment-less checkout's `--help` produced the SAME shared
+# "deployment record not found ... pickup, judge, and led alike" refusal every OTHER
+# deployment-resolving verb produces, with no marker naming 'doctor' anywhere (a dispatch-parity
+# hazard: a wrong-target dispatch landing on this verb would look identical to the real one).
+# This is a real, side-effect-free usage line naming this verb, printed and exited BEFORE
+# deployment_record is even imported.
+if any(a in ("--help", "-h") for a in sys.argv[1:]):
+    print(
+        "usage: doctor\n"
+        "\n"
+        "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
+        "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
+        "high-water/epoch, ./led answers a read query, boundary URL, principals registered.\n"
+        "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
+        "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
+        "least one FAIL line. Takes no arguments beyond --help/-h."
+    )
+    sys.exit(0)
+
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
