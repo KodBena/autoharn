@@ -99,9 +99,15 @@ def load_config_file(path: str | Path) -> ConfigDoc:
 # SECTION IS ON are checked contextually by `validate` below, not listed here statically (a
 # `substrate.db` requirement that only applies when `substrate.run = true` cannot be a flat
 # always-required set without also wrongly demanding it when substrate is off).
+# legacy-led-retirement inventory pass (ledger row 1149/1150): "boundary.configure" REMOVED
+# from this tuple -- it is no longer a gate at all (the section is always walked, no decline
+# option; SECTION_GATE_KEY["boundary"] is now None, mirroring "fork_target"). Its own scalar,
+# "boundary.start_now", moves IN here instead, from contextual (checked only when the now-
+# retired gate was on) to unconditionally required, since the section itself is now
+# unconditional too -- "fork_target" has no scalar of its own to add the same way.
 REQUIRED_GATES = (
     "substrate.run", "rehearsal.run", "birth.run", "principals_authority.run",
-    "signed_genesis.run", "boundary.configure", "observability.run", "hydration.run",
+    "signed_genesis.run", "boundary.start_now", "observability.run", "hydration.run",
 )
 
 

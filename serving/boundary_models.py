@@ -56,6 +56,7 @@ class CapabilityManifest(BaseModel):
     s41_identity: bool = Field(description="principal identity/relation views present (kernel/lineage/s41-principal-bindings-and-relations.sql): principal_relations")
     s43_boundary: bool = Field(description="the four SECURITY DEFINER write-verdict functions present (kernel/lineage/s43-typed-verdict-write-boundary.sql): kernel.ledger_write")
     credited_view: bool = Field(description="the s44 credited-reading view present (unbuilt as of this service's authoring -- spec §7): credited_current")
+    s45_standing_lifecycle: bool = Field(description="s45's widened principal_binding_active_kind_shape CHECK present (kernel/lineage/s45-standing-lifecycle.sql) -- the SAME single fact bootstrap/templates/legacy-led.tmpl's own has_s45_standing_lifecycle() probes; a served `led principal declare-standing|undeclare-standing|suspend|lift-suspension|revoke` payload includes principal_binding_active iff this is true (legacy-led-retirement inventory pass, ledger row 1149)")
 
 
 class HealthResponse(BaseModel):
@@ -266,3 +267,23 @@ class ObligationWriteIntFields(BaseModel):
 
     assigned_by: int | None = None
     obliges_actor: int | None = None
+
+
+class ObligationRevokeWriteIntFields(BaseModel):
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A's enumeration authority for
+    `POST /write/obligation_revoke` (`kernel.obligation_revoke`,
+    kernel/lineage/s57-obligation-revocation-event.sql): its closed contract's ONE bigint-typed
+    key (`actor`, optional -- absent falls to the same set_actor standing-declaration default
+    every ledger write does); `scope`/`reason` are text, out of this model's scope."""
+
+    actor: int | None = None
+
+
+class ArtifactWriteIntFields(BaseModel):
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B's enumeration authority for
+    `POST /d/{deployment}/artifacts` (`kernel.artifact_write`, kernel/lineage/
+    s51-artifact-store.sql): its closed contract's ONE bigint-typed key (`actor`, optional);
+    `bytes` (base64 text), `media_type`, and the optional asserted `hash` are text, out of this
+    model's scope."""
+
+    actor: int | None = None

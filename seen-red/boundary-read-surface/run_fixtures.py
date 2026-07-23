@@ -238,6 +238,39 @@ def birth_fixture_rows(base: str, world: str, author: int) -> None:
        "attest_expected": "wrfx-model", "attest_session": f"wrfx-session-{RUN_SUFFIX}",
        "attest_basis": "fixture"})
 
+    # principal_relations/principal_role_bindings/principal_keys/principal_competences (legacy-
+    # led-retirement inventory pass, ledger row 1149 -- the fourth VIEW_REGISTRY growth, see that
+    # dict's own comment): one in-force row each, via the SAME generic /write/ledger surface
+    # `led principal *`'s served port now targets -- exactly the shape s41's own D-5 views
+    # project off `principal_relation_asserted`/`principal_role_bound`/`principal_key_bound`/
+    # `principal_competence_granted`, `principal_binding_active=true`. `reviewer_id` (already
+    # registered above for review_stamp_distinctness/review_gap) is the second endpoint/subject.
+    w({"kind": "principal_relation_asserted", "statement": "WR fixture relation asserted",
+       "actor": author, "principal_subject": author, "principal_object": reviewer_id,
+       "principal_relation": "acts-for", "principal_binding_active": True})
+    w({"kind": "principal_role_bound", "statement": "WR fixture role bound", "actor": author,
+       "principal_subject": reviewer_id, "principal_role_name": f"wrfx-role-{RUN_SUFFIX}",
+       "principal_binding_active": True})
+    # principal_keys (s41 D-3): key bindings are refused for a non-human subject (agent_class
+    # 'model'/'subagent'/'tool') -- ledger policy, a key attests a human's own act. A dedicated
+    # human-class principal is registered here just for this one row.
+    status, reg_h = bs_fixtures.http_post(f"{base}/write/registration", {
+        "name": f"wrfx-human-{RUN_SUFFIX}", "agent_class": "human", "actor": author,
+        "purpose": "WR fixture human principal (principal_keys needs a human subject)"})
+    if status != 200 or reg_h.get("disposition") != "accepted":
+        raise RuntimeError(f"fixture human registration refused: status={status} body={reg_h}")
+    human_id = int(bs_fixtures.psql_tuples(
+        f"SET ROLE {world}_rw; SELECT id FROM {world}_kernel.principal "
+        f"WHERE name = 'wrfx-human-{RUN_SUFFIX}';"))
+    w({"kind": "principal_key_bound", "statement": "WR fixture key bound", "actor": author,
+       "principal_subject": human_id,
+       "principal_key_fingerprint": "0" * 40, "principal_binding_active": True})
+    w({"kind": "principal_competence_granted", "statement": "WR fixture competence granted",
+       "actor": author, "principal_subject": reviewer_id,
+       "principal_competence_activity": f"wrfx-activity-{RUN_SUFFIX}",
+       "principal_competence_band": "wrfx-band", "principal_competence_basis": "wrfx-basis",
+       "principal_binding_active": True})
+
 
 def main() -> int:
     failures: list[str] = []

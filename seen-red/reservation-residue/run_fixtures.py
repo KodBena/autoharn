@@ -35,6 +35,7 @@ Usage: python3 seen-red/reservation-residue/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -45,10 +46,26 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LINEAGE = REPO / "kernel" / "lineage"
+LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
+PYVENV = Path.home() / "w" / "vdc" / "venvs" / "generic" / "bin" / "python"
 sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(REPO / "engine"))
+sys.path.insert(0, str(REPO / "serving"))
 from pghost_resolve import resolve_pghost  # noqa: E402
 import ledger_differential  # noqa: E402
+import deployment_record  # noqa: E402
+
+# legacy-led-retirement inventory pass (ledger row 1149), part 2(b): this fixture used to drive
+# its work-item/review acts through `world_dir/legacy/led` (the scaffolded direct-psql shim) --
+# migrated onto the served path per seen-red/boundary-cli-rebase's own precedent, reusing its
+# scratch-config/server-standing helpers off seen-red/boundary-service/run_fixtures.py rather
+# than re-deriving them a second time (ADR-0012 P1).
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -162,11 +179,27 @@ COMMIT;
         raise RuntimeError(f"birth sequence failed: {cp.stdout}\n{cp.stderr}")
 
 
-def legacy_led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess[str]:
+# world name -> (Popen, served-deployment.json path), populated by scaffold_classic below,
+# consulted by served_led (module-level so served_led's own signature stays untouched from the
+# retired legacy_led's -- every call site below is unchanged, ADR-0012 P1: one registry, not a
+# world_dir-derived path re-guessed at every call site).
+_SERVED: dict[str, tuple[subprocess.Popen, Path]] = {}
+
+
+def served_led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess[str]:
+    """Replaces the retired `legacy_led` (world_dir/legacy/led, direct psql) -- runs the SAME
+    served `bootstrap/templates/led.tmpl` every non-fixture world uses, against the real
+    `serving.boundary_service` instance `scaffold_classic` now stands per world (see `_SERVED`
+    above). Every verb this fixture calls (register-principal, work open/claim/close, review)
+    is fully COVERED by the served path (legacy-led-retirement phase 1/1B, ledger row 1149)."""
+    world = world_dir.name
+    _proc, dep_path = _SERVED[world]
     e = dict(os.environ)
     if env:
         e.update(env)
-    return sh(["bash", str(world_dir / "legacy" / "led"), *args], cwd=str(world_dir), env=e)
+    e["AUTOHARN"] = str(REPO)
+    e["PICKUP_DEPLOYMENT"] = str(dep_path)
+    return sh([str(PYVENV), str(LED_TMPL), *args], cwd=str(world_dir), env=e)
 
 
 def scaffold_classic(world: str, chain: list[str]) -> Path:
@@ -174,7 +207,13 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
     apply of `chain` (the s30/s31/.../s48 scaffold_classic idiom) -- s56 is deliberately NOT
     wired into new-project.sh's LINEAGE_CHAIN by this build (the s34/s48 "do not wire
     LINEAGE_CHAIN" precedent for a delta not itself commissioned to land the chain wiring), so
-    classic+manual is the honest wiring for both worlds this fixture builds."""
+    classic+manual is the honest wiring for both worlds this fixture builds.
+
+    legacy-led-retirement inventory pass (ledger row 1149): additionally stands a REAL
+    `serving.boundary_service` against this exact schema/kern/role (every `chain` this fixture
+    ever calls with already carries s43, kernel/lineage/s43-typed-verdict-write-boundary.sql --
+    see CHAIN_S55 above) and writes a served-shape deployment.json (boundary_url/
+    boundary_deployment) beside the classic one `served_led` above resolves by world name."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
@@ -198,17 +237,45 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
         raise RuntimeError(f"CLASSIC apply FAILED ({world}, chain ends {chain[-1]}): "
                            f"{ra.stdout[-2000:]} {ra.stderr[-2000:]}")
     birth(world, "author-fixture")
+
+    # boundary-multiplex.toml's own deployment-name domain is [a-z0-9-]{1,64} (spec §2) -- this
+    # fixture's own world names carry underscores (postgres identifiers allow them; the TOML
+    # table key/`/d/{name}` URL segment does not), so the deployment NAME is a dash-substituted
+    # sibling of `world`, independent of `pgschema`/`pgkern` (boundary_multiplex_config.py's own
+    # docstring: "the TOML table key itself becomes DeploymentRecord.name" -- never required to
+    # match the schema name).
+    dep_name = world.replace("_", "-")
+    tmp_cfg = tmp / f"{world}-boundary-multiplex.toml"
+    tmp_cfg.write_text(
+        f'[deployments.{dep_name}]\n'
+        f'pghost = "{PGHOST}"\n'
+        f'pgdatabase = "{PGDB}"\n'
+        f'pguser = "{role}"\n'
+        f'pgschema = "{schema}"\n'
+        f'pgkern = "{kern}"\n',
+        encoding="utf-8")
+    proc, port = bs_fixtures.start_server(tmp_cfg)
+    base = f"http://127.0.0.1:{port}/d/{dep_name}"
+    if not bs_fixtures.wait_health(base):
+        tail = bs_fixtures.stop_server(proc)
+        raise RuntimeError(f"boundary_service for {world} never became healthy: {tail[-1500:]}")
+    served_dep = tmp / f"{world}-served-deployment.json"
+    rec = deployment_record.DeploymentRecord(
+        db=PGDB, host=PGHOST, schema=schema, kern=kern, role=role, name=world,
+        boundary_url=f"http://127.0.0.1:{port}", boundary_deployment=dep_name)
+    deployment_record.write_deployment(served_dep, rec)
+    _SERVED[world] = (proc, served_dep)
     return world_dir
 
 
 def open_claim_close_deferred(world_dir: Path, world: str, slug: str, title: str) -> int:
     """Open, claim, close --review-deferred a work item as `author` -- returns the work_closed
     row's own ledger id (the review's `regards`)."""
-    r = legacy_led(world_dir, "work", "open", slug, title)
+    r = served_led(world_dir, "work", "open", slug, title)
     assert r.returncode == 0, f"work open {slug} failed: {r.stdout}{r.stderr}"
-    r = legacy_led(world_dir, "work", "claim", slug)
+    r = served_led(world_dir, "work", "claim", slug)
     assert r.returncode == 0, f"work claim {slug} failed: {r.stdout}{r.stderr}"
-    r = legacy_led(world_dir, "work", "close", slug, "dropped", "--review-deferred")
+    r = served_led(world_dir, "work", "close", slug, "dropped", "--review-deferred")
     assert r.returncode == 0, f"work close {slug} failed: {r.stdout}{r.stderr}"
     return int(sql1(f"SELECT id FROM {world}.ledger WHERE kind='work_closed' AND work_slug='{slug}' "
                     f"ORDER BY id DESC LIMIT 1;"))
@@ -216,7 +283,7 @@ def open_claim_close_deferred(world_dir: Path, world: str, slug: str, title: str
 
 def review(world_dir: Path, world: str, regards: int, verdict: str, actor_name: str,
           statement: str) -> tuple[int | None, subprocess.CompletedProcess[str]]:
-    r = legacy_led(world_dir, "review", str(regards), verdict, "self-review", statement,
+    r = served_led(world_dir, "review", str(regards), verdict, "self-review", statement,
                    env={"LED_ACTOR": actor_name})
     row_id = None
     if r.returncode == 0:
@@ -336,9 +403,9 @@ def main() -> int:
         d_pre = detect(world_pre, "s56-reservation-residue.detect.sql")
         check("detect-negative-pre-s56", d_pre == "f", f"detect.sql on WORLD PRE: {d_pre!r} (expected f)", failures)
 
-        legacy_led(world_dir_pre, "register-principal", "closer", "model", "--purpose", "fixture closer",
+        served_led(world_dir_pre, "register-principal", "closer", "model", "--purpose", "fixture closer",
                   env={"LED_ACTOR": "author-fixture"})
-        legacy_led(world_dir_pre, "register-principal", "reviewer", "model", "--purpose", "fixture reviewer",
+        served_led(world_dir_pre, "register-principal", "reviewer", "model", "--purpose", "fixture reviewer",
                   env={"LED_ACTOR": "author-fixture"})
 
         # --- red-first: reproduce the defect LIVE on a pre-s56 world (spec section 6(iii)) ------
@@ -360,11 +427,11 @@ def main() -> int:
         d_s56 = detect(world_s56, "s56-reservation-residue.detect.sql")
         check("detect-positive-s56", d_s56 == "t", f"detect.sql on WORLD S56: {d_s56!r} (expected t)", failures)
 
-        legacy_led(world_dir, "register-principal", "closer", "model", "--purpose", "fixture closer",
+        served_led(world_dir, "register-principal", "closer", "model", "--purpose", "fixture closer",
                   env={"LED_ACTOR": "author-fixture"})
-        legacy_led(world_dir, "register-principal", "reviewer", "model", "--purpose", "fixture reviewer",
+        served_led(world_dir, "register-principal", "reviewer", "model", "--purpose", "fixture reviewer",
                   env={"LED_ACTOR": "author-fixture"})
-        legacy_led(world_dir, "register-principal", "reviewer3", "model", "--purpose", "fixture reviewer3",
+        served_led(world_dir, "register-principal", "reviewer3", "model", "--purpose", "fixture reviewer3",
                   env={"LED_ACTOR": "author-fixture"})
 
         # --- (ii) plain attest discharges, unchanged --------------------------------------------
@@ -464,6 +531,8 @@ def main() -> int:
         engine_coherence_case(world_s56, "s56-resv", failures)
 
     finally:
+        for _world, (_proc, _dep) in _SERVED.items():
+            bs_fixtures.stop_server(_proc)
         teardown(world_pre)
         teardown(world_s56)
 

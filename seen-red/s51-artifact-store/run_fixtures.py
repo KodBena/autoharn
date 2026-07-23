@@ -6,9 +6,9 @@ kernel/, bootstrap/ (beyond reading the templates as fixtures), or any live worl
 
 WITNESSES (spec's own WA1..WA8 enumeration):
   WA1  put -> hash printed; get -> bytes byte-identical (round-trip); stat sane. Exercised BOTH
-       at the kernel.artifact_write function level AND through the real CLI
-       (bootstrap/templates/legacy-led.tmpl, as an actual subprocess -- the boundary-cli-rebase
-       precedent's own `run_cli` pattern).
+       at the kernel.artifact_write function level AND through the real CLI (bootstrap/
+       templates/led.tmpl, served, against a real boundary_service -- the boundary-cli-rebase
+       precedent's own `run_cli` pattern; legacy-led-retirement inventory pass, ledger row 1149).
   WA2  idempotent re-put of identical bytes -> same hash, no second row, verdict says
        already-present.
   WA3  size cap: a >1 MiB input -> artifact_too_large typed refusal, journaled digest-only,
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -48,11 +49,23 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 LINEAGE = REPO / "kernel" / "lineage"
-LEGACY_LED_TMPL = REPO / "bootstrap" / "templates" / "legacy-led.tmpl"
+LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
+PYVENV = Path.home() / "w" / "vdc" / "venvs" / "generic" / "bin" / "python"
 sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(REPO / "serving"))
 from pghost_resolve import resolve_pghost  # noqa: E402
 import deployment_record  # noqa: E402
+
+# legacy-led-retirement inventory pass (ledger row 1149), part 2(b): reuses seen-red/
+# boundary-service/run_fixtures.py's own scratch-server-standing helpers (ADR-0012 P1), the
+# same reuse this pass's other kernel-delta fixture migrations (reservation-residue, belief-
+# substrate-v1) already use.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -210,28 +223,44 @@ COMMIT;
 def run_cli(args: list[str], deployment: Path, env_extra: dict | None = None) -> subprocess.CompletedProcess:
     """Text-mode subprocess capture -- every fixture call site here uses `--out <path>` for
     `get` (bytes land on disk, never on stdout), so stdout/stderr are always safely decodable
-    prose (hashes, teach-text, stat output)."""
+    prose (hashes, teach-text, stat output). legacy-led-retirement inventory pass (ledger row
+    1149): runs the SERVED `bootstrap/templates/led.tmpl` (Part B's own `led artifact put|get|
+    stat` routes -- POST /artifacts, GET /artifacts/{hash}[/stat]) against a real
+    `serving.boundary_service` instance (see `write_served_deployment`/`start_boundary_for`
+    below) -- replaces the direct `bash legacy-led.tmpl` subprocess this fixture used before."""
     env = dict(os.environ)
     env["AUTOHARN"] = str(REPO)
     env["PICKUP_DEPLOYMENT"] = str(deployment)
     if env_extra:
         env.update(env_extra)
-    return subprocess.run(["bash", str(LEGACY_LED_TMPL), *args], capture_output=True, text=True,
+    return subprocess.run([str(PYVENV), str(LED_TMPL), *args], capture_output=True, text=True,
                            env=env, timeout=60)
 
 
-def write_legacy_deployment(path: Path, world: str) -> None:
+def start_boundary_for(world: str, tmpdir: Path) -> tuple[subprocess.Popen, Path]:
+    """Stands a real `serving.boundary_service` against `world` (this fixture's own scratch
+    schema, already s43-headed via CHAIN_S50) and returns (proc, served-deployment-path) --
+    `proc` must be stopped (bs_fixtures.stop_server) before `world`'s schema is torn down."""
+    cfg_path = bs_fixtures.write_scratch_multiplex_config(tmpdir, world)
+    proc, port = bs_fixtures.start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{world}"
+    if not bs_fixtures.wait_health(base):
+        tail = bs_fixtures.stop_server(proc)
+        raise RuntimeError(f"boundary_service for {world} never became healthy: {tail[-1500:]}")
+    served_dep = tmpdir / f"{world}-served-deployment.json"
     rec = deployment_record.DeploymentRecord(
         db=PGDB, host=PGHOST, schema=world, kern=f"{world}_kernel", role=f"{world}_rw",
-        name=world)
-    deployment_record.write_deployment(path, rec)
+        name=world, boundary_url=f"http://127.0.0.1:{port}", boundary_deployment=world)
+    deployment_record.write_deployment(served_dep, rec)
+    return proc, served_dep
 
 
 def main() -> int:
     failures: list[str] = []
     world = "s51fx"
     tmpdir = tempfile.mkdtemp(prefix="s51-artifact-store-")
-    dep_path = Path(tmpdir) / f"{world}-legacy-deployment.json"
+    boundary_proc: subprocess.Popen | None = None
+    dep_path = Path(tmpdir) / f"{world}-served-deployment.json"
     try:
         print(f"== scaffolding WORLD (chain ends {CHAIN_S50[-1]}, s51 NOT yet applied) ==")
         apply_chain(world, CHAIN_S50)
@@ -239,7 +268,11 @@ def main() -> int:
               "s51 .detect.sql reads f on the s50-headed (pre-s51) chain", failures)
 
         author_id = birth(world)
-        write_legacy_deployment(dep_path, world)
+        # legacy-led-retirement inventory pass (ledger row 1149): a real boundary_service,
+        # standing before s51 itself is even applied -- fine, since every WA1/WA6/WA8 CLI call
+        # below runs strictly AFTER `apply_s51` below; the server's own per-request capability
+        # detection (serving/boundary_service.py) needs no restart when s51 lands mid-fixture.
+        boundary_proc, dep_path = start_boundary_for(world, Path(tmpdir))
 
         print("== applying s51 in place ==")
         apply_s51(world)
@@ -434,20 +467,22 @@ SET session_replication_role = DEFAULT;
         put_cp2 = run_cli(["artifact", "put", str(charter_path)], dep_path,
                            env_extra={"LED_ACTOR": "author-fixture"})
         check("wa8-artifact-put-ok", put_cp2.returncode == 0, f"stderr={put_cp2.stderr!r}", failures)
-        # role_charter.py's --led default is "./legacy/led" (a scaffolded world's own shim,
-        # relative to the caller's CWD) -- this fixture has no scaffolded world, so it overrides
-        # --led with legacy-led.tmpl's OWN path directly (the tool's documented override), which
-        # is independently executable (its own #!/usr/bin/env bash shebang).
-        register_cp = sh(["python3", str(REPO / "tools" / "role_charter.py"), "register",
-                           "author-fixture", str(charter_path), "--led", str(LEGACY_LED_TMPL)],
+        # legacy-led-retirement inventory pass (ledger row 1149): role_charter.py's own --led
+        # DEFAULT is already "./led" (the served shim) -- its parsers were already written
+        # against the served output shapes (unlike tools/role_brief.py's own disclosed, still-
+        # open gap). This fixture has no scaffolded world directory at all, so `--led` is
+        # overridden with the served LED_TMPL's OWN path directly (the tool's documented
+        # override), pointed at the served deployment.json this fixture's own boundary serves.
+        register_cp = sh([str(PYVENV), str(REPO / "tools" / "role_charter.py"), "register",
+                           "author-fixture", str(charter_path), "--led", str(LED_TMPL)],
                           cwd=str(REPO), env={**os.environ, "AUTOHARN": str(REPO),
                                                "PICKUP_DEPLOYMENT": str(dep_path),
                                                "LED_ACTOR": "author-fixture"})
         check("wa8-charter-register", register_cp.returncode == 0,
               f"exit={register_cp.returncode} stdout={register_cp.stdout!r} "
               f"stderr={register_cp.stderr!r}", failures)
-        show_cp = sh(["python3", str(REPO / "tools" / "role_charter.py"), "show", "author-fixture",
-                      "--led", str(LEGACY_LED_TMPL)],
+        show_cp = sh([str(PYVENV), str(REPO / "tools" / "role_charter.py"), "show", "author-fixture",
+                      "--led", str(LED_TMPL)],
                      cwd=str(REPO), env={**os.environ, "AUTOHARN": str(REPO),
                                           "PICKUP_DEPLOYMENT": str(dep_path)})
         check("wa8-charter-show-resolves-ok",
@@ -464,6 +499,8 @@ SET session_replication_role = DEFAULT;
               "exact bytes role_charter.py's independent hash computation also matched", failures)
 
     finally:
+        if boundary_proc is not None:
+            bs_fixtures.stop_server(boundary_proc)
         teardown("s51fx")
         teardown("s51fxrestore")
 

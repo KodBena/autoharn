@@ -62,10 +62,33 @@ def floor_atoms(target_name: str) -> set[str]:
     if not capable:
         return set()
     rel = t.rel()
+    # kernel/lineage/s57-obligation-revocation-event.sql (design/FABLE-LEGACY-LED-RETIREMENT-
+    # SPEC.md Part A): a revoked obligation's scope is excluded from `obliged`, mirroring
+    # review_gap's own re-issue INDEPENDENTLY (I6) -- never importing that kernel view. GATED on
+    # the ledger carrying obligation_revoked_scope AT ALL (not merely on there being zero rows of
+    # that kind): a pre-s57 schema has NO such column, so referencing it unconditionally would be
+    # a bare "column does not exist" SQL error, not an empty result -- the capability check below
+    # is what keeps this extension behavior-preserving on every schema this floor ran against
+    # before s57 existed, rather than merely assuming the column's absence is harmless.
+    has_revocation = t.has_col("obligation_revoked_scope")
+    revoked_cte = (
+        f"""revoked AS (
+        SELECT rv.obligation_revoked_scope AS scope
+        FROM {rel} rv
+        WHERE rv.kind = 'obligation_revoked'
+          AND NOT EXISTS (SELECT 1 FROM {rel} s3 WHERE s3.supersedes = rv.id)
+      ),
+      """
+        if has_revocation else ""
+    )
+    obliged_where = "WHERE o.scope NOT IN (SELECT scope FROM revoked)" if has_revocation else ""
     sql = f"""
     WITH
       led AS (SELECT id, actor, supersedes FROM {rel}),
-      obliged AS (SELECT DISTINCT obliges_actor AS actor FROM {t.schema}.countersign_obligation),
+      {revoked_cte}obliged AS (
+        SELECT DISTINCT o.obliges_actor AS actor FROM {t.schema}.countersign_obligation o
+        {obliged_where}
+      ),
       superseded AS (SELECT DISTINCT supersedes AS id FROM led WHERE supersedes IS NOT NULL),
       reviews AS (
         SELECT l.id, l.actor, l.regards, l.statement FROM {rel} l

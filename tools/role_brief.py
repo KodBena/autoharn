@@ -19,18 +19,28 @@ reuses (parse_current_line, STATEMENT scanning) without re-importing role_charte
 (kept a standalone stdlib script per the spec's "Deliverables" list -- two files, not one with
 a lazy cross-import).
 
-TRANSPORT HONESTY (spec, deliverable 2): `--led` is ONE knob for every section, exactly the
-convention tools/workflow_compile.py's generated drive.py already established for the SAME
-work-family gap. It defaults to "./legacy/led" (never the served "./led") because two of this
-brief's sections -- CLAIMABLE WORK (`led work startable`) and part of OBLIGATION DEBT
-(`led work review-gap`) -- are work-family verbs the served boundary does NOT cover yet
-(bootstrap/templates/led.tmpl's own "NOT COVERED... led work *" list); using one knob rather
-than two keeps every section servable from a single invocation instead of silently degrading
-some sections when only the served shim is reachable. A deployment where only the served `./led`
-is reachable can still get the served-covered sections (STANDING, IN-FORCE DECISIONS, the
-review_gap half of OBLIGATION DEBT, OPEN QUESTIONS) by passing `--led ./led` explicitly -- the
-work-family sections will then fail loudly (this tool relays `led`'s own refusal/error text
-verbatim, never silently omits a section) rather than serving a false empty section.
+TRANSPORT HONESTY (spec, deliverable 2): `--led` is ONE knob for every section. It defaults to
+"./legacy/led", not the served "./led" -- STILL NOT FIXED as of the legacy-led-retirement
+INVENTORY pass (ledger row 1149, which deletes `legacy-led.tmpl` from the repo outright): this
+file's own PARSERS (`parse_current_line`'s pipe format; the `psql -x`-shaped expanded-record
+scanner) are written against legacy-led.tmpl's specific OUTPUT SHAPES -- served led.tmpl prints
+a DIFFERENT shape (`[id] kind: statement`, no `actor_name` at all; `key : value` lines for
+`show`; JSON-per-line for `/views/*`) these parsers do not recognize. Pointing this tool at
+`./led` today would SILENTLY MISPARSE (every section reading empty), the vacuous-pass class
+this project's doctrine (F49) exists to catch. A correct fix needs either a new served
+mechanism resolving an actor id to its principal NAME (`build_decisions_section`'s per-role
+filter needs exactly that; no existing route does it in bulk) or an honest narrowing to
+id-based filtering -- real, scoped work this pass's own mandate (migrate executable-reference
+SITES, not redesign a consumer's filtering semantics) does not license doing as a rushed side
+effect. Left AS IS, with one direct consequence of THIS pass's own deletion flagged: `--led`
+still defaults to "./legacy/led", which post-deletion resolves to `legacy/led`'s teaching-
+refusal stub, never legacy-led.tmpl (gone) -- every default invocation now REFUSES LOUDLY with
+that stub's text instead of running legacy's original. That is the SAFE failure mode versus
+the alternative (pointing the default at `./led` today, which silently misparses) -- a loud
+refusal beats a vacuous pass. `--led ./led` remains explicitly supported for the served-covered
+sections (STANDING, IN-FORCE DECISIONS minus true actor-name filtering, the review_gap half of
+OBLIGATION DEBT, OPEN QUESTIONS); work-family sections still fail loudly rather than serve a
+false empty section. Named here as an unresolved gap needing its own scoped follow-on spec.
 
 JUDGMENT CALLS THIS TOOL MAKES WHERE THE SPEC IS SILENT ON MECHANICS (mirroring
 tools/workflow_compile.py's own J-notes and tools/role_charter.py's own JC-notes):

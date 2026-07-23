@@ -79,7 +79,11 @@ run = true    # checklist: full signed-genesis section engaged (gpg present, key
 commission_statement = "Found and operate the 'omega' deployment as the maintainer's day-to-day working world."    # ARCHAEOLOGY CALL: the ORIGINAL statement (setup-checklist row "genesis commission written") carried a dangling path-shaped token warning (~/w/omega) -- excluded per spec §5 as noise, not intent; this restates the same INTENT (a founding commission for this world) in clean prose.
 
 [boundary]
-configure = true    # deployment.json carries boundary_url/boundary_deployment; boundary-multiplex.toml present on disk with omega's own pghost/pgdatabase/pguser/pgschema/pgkern
+# legacy-led-retirement inventory pass (ledger row 1149/1150): `configure` retired from the
+# schema entirely -- the boundary is now MANDATORY at every birth (no decline option), so it is
+# no longer a captured DECISION (this section is always walked, like [fork_target]'s own
+# always-on shape); the original omega archaeology's `configure = true` fact is simply no
+# longer representable as a config key (nothing to disagree with -- omega DID configure one).
 start_now = true    # deployment.json boundary_url = "http://127.0.0.1:8421" matches the auto-start BackgroundAct's own port-picked shape (no start-daemons script/systemd unit present in the tree -- the DIRECT in-process auto-start path, not the DaemonSelection fallback, which postdates this world's birth)
 
 [observability]

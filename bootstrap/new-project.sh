@@ -1042,7 +1042,7 @@ SHIM
 done
 
 # ./legacy/ (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row 1631):
-# the direct-psql originals of the FOUR rebased verbs, whole and executable, demoted by placement
+# the direct-psql originals of the rebased verbs, whole and executable, demoted by placement
 # never deleted -- "operator recovery when the boundary is down" (spec §5's own words). judge/
 # audit/attest-doc/verify-commission/verify-chain do NOT rebase (spec §5's own closed
 # enumeration: judge "drives clingo + differential against the world, not a ledger client in the
@@ -1051,9 +1051,27 @@ done
 # never duplicated here) -- so this loop covers ONLY led/pickup/asof-export/distance-to-clean,
 # each pointed at its OWN `legacy-<verb>.tmpl` sibling (bootstrap/templates/, the pre-rebase
 # content, byte-identical save the one-line recovery header each carries at its own top).
-echo "-- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5) --"
+#
+# `led` IS THE ONE EXCEPTION (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's retirement act,
+# ledger row 1149/1150): `legacy-led.tmpl` is DELETED from this repository outright -- the
+# boundary is mandatory at every birth now (no decline path left that needs a working direct-
+# psql `led`), and `led principal *` closed the one family that was ever missing from the served
+# path. `legacy/led` still gets a FILE here (destination.py's own AUTOHARN_COMPLETE classifier
+# guarantee depends on its existence), but it is a one-line teaching refusal, never a working
+# CLI -- pickup/asof-export/distance-to-clean are UNCHANGED, real shims, same as always.
+echo "-- ./legacy/ (pickup/asof-export/distance-to-clean's direct-psql originals; led is a teaching-refusal stub, retired) --"
 mkdir -p "$PROJECT_ROOT/legacy"
-for verb in led pickup asof-export distance-to-clean; do
+cat > "$PROJECT_ROOT/legacy/led" <<'STUB'
+#!/bin/sh
+echo "legacy/led: RETIRED 2026-07 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md) -- every surface" >&2
+echo "  serves through ./led now; the boundary is mandatory at every birth, and led principal *" >&2
+echo "  (grant-competence/relate and their 11 siblings) closed the one family the served path" >&2
+echo "  was ever missing. Use ./led instead." >&2
+exit 1
+STUB
+chmod +x "$PROJECT_ROOT/legacy/led"
+echo "wrote legacy/led (RETIRED teaching-refusal stub, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)"
+for verb in pickup asof-export distance-to-clean; do
     cat > "$PROJECT_ROOT/legacy/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && cd .. && pwd)"

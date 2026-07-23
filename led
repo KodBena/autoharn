@@ -1,6 +1,14 @@
 #!/bin/sh
-# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
-# (runs are linear, dust-and-settled), it keeps the direct-psql original
-# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
+# Part C completion (ledger rows 1158/1159, maintainer-approved plan, 2026-07-23): this repo's
+# own world now has its own standing boundary service (boundary-multiplex.toml, deployment.json's
+# boundary_url/boundary_deployment keys) -- ./led is the served shim, the SAME shape
+# bootstrap/new-project.sh scaffolds for every new world.
+#
+# legacy-led-retirement (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row 1149/1150):
+# `bootstrap/templates/legacy-led.tmpl` is DELETED from this repository outright -- the boundary
+# is now mandatory at every birth (no decline path left that needed a working direct-psql `led`),
+# and `led principal *` closed the one verb family the served path was ever missing. `./legacy/led`
+# (once scaffolded) is now a one-line teaching refusal, never a working CLI -- use ./led for
+# everything.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-led.tmpl" "$@"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/led.tmpl" "$@"

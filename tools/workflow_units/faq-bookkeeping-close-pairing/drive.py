@@ -4,25 +4,35 @@ design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md's driver artifact for workflow 'faq-
 
 Executes the wave by kernel conversation: for each phase, in an order re-derived by re-polling
 `led work claim` every round (never precomputed here -- the claim's own verdict is the gate,
-per the governing spec's one design commitment), CLAIM (as --actor, default 'author'; a
-refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH (prints the
-phase's prose brief -- authors/implements/reviews text from the source TOML -- for the caller's
-own agent dispatch; this driver does not itself invoke an agent), CLOSE (--review-deferred by
-default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews clause names a
-bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+per the governing spec's one design commitment), CLAIM (as --role-map, default 'author'; a
+refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH, CLOSE
+(--review-deferred by default, or --review-bookkeeping --witness commit:<sha> when the phase's
+reviews clause names a bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+
+DISPATCH, per design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (commission row 1663, replacing the
+old J1 raw-prose default -- see that note in tools/workflow_compile.py's own docstring): before
+claiming, the resolved principal is checked against `tools/role_charter.py show <principal>`.
+CHARTED (an in-force registered charter exists): the claim proceeds and DISPATCH hands the
+agent that charter text plus a freshly computed `tools/role_brief.py brief <principal>` --
+"charter + brief, nothing else" (the spec's own words). UNCHARTED: REFUSED, with
+role_charter's own teaching relayed verbatim, and the phase is BLOCKED-uncharted this round --
+UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway (says so) and
+falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
+J1 behavior, preserved only as an explicit opt-in degraded path).
 
 Usage:
-    python3 faq-bookkeeping-close-pairing/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
-                              [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+    python3 faq-bookkeeping-close-pairing/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
+                              [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
+                              [--dry-run] [--rounds N]
 
 --instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
 hydrate.sh for this wave -- slugs are `faq-bookkeeping-close-pairing-<instance>-<phase>`, so a different token drives a
 DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
-Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
-an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
-at CLOSE time (a close, unlike a claim, should not refuse once claimed, so that IS treated as
-unexpected here) or a local usage error (exit 2).
+Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units,
+uncharted or kernel-refused alike, are an ordinary, reportable outcome, not a driver failure);
+exit 1 on an unexpected kernel refusal at CLOSE time (a close, unlike a claim, should not refuse
+once claimed, so that IS treated as unexpected here) or a local usage error (exit 2).
 """
 from __future__ import annotations
 
@@ -33,6 +43,8 @@ import sys
 
 STEM = "faq-bookkeeping-close-pairing"
 TOML_REL = "design/workflows/faq-bookkeeping-close-pairing.toml"
+ROLE_CHARTER_PY = "/home/bork/w/vdc/1/autoharn/tools/role_charter.py"
+ROLE_BRIEF_PY = "/home/bork/w/vdc/1/autoharn/tools/role_brief.py"
 
 PHASES = ['open-items', 'claim-items', 'close-judgment', 'close-companion']
 BRIEFS = {'open-items': 'authors: the operator/orchestrator opening both work items together: the judgment item, and a companion item citing it (--refs work:<slug>) whose entire resolution IS the promised commit\nimplements: the operator/orchestrator, via ./led work open (judgment item) and ./led work open ... --refs work:<slug> (companion item)\ndone: both work_opened rows exist -- the judgment item and the companion item citing it\nlanding_zone: the ledger -- the two work_opened rows (judgment item, companion item)', 'claim-items': 'implements: the operator/orchestrator, via ./led work claim on both items\ndone: both work_claimed rows exist\nlanding_zone: the ledger -- the two work_claimed rows', 'close-judgment': "authors: whichever principal's judgment the first item's close actually carries -- the FAQ's own text: 'the first item closes on its own merits... because it carries judgment'\nimplements: the operator/orchestrator, via ./led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred\nreviews: the review disposition itself IS the judgment content of this phase -- whichever of the two ordinary constructors is used, per the FAQ's own worked example (--review-witness self-review, in the scratch-world transcript)\ndone: a work_closed row exists for the judgment item, resolution=shipped, carrying exactly one review-disposition constructor (--review-witness or --review-deferred)\nlanding_zone: the ledger -- the judgment item's work_closed row, carrying its review disposition", 'close-companion': "implements: the operator/orchestrator, via ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>\nreviews: explicitly none -- the FAQ's own text: '--review-bookkeeping claims ONLY this commit exists -- nothing about its content, correctness, or completeness'; the CLI machine-checks the claim structurally (COMMIT-EXISTENCE, s38 Element 3) rather than via a judgment review\ndone: a work_closed row exists for the companion item, resolution=shipped, --review-bookkeeping, with a --witness commit:<sha> the CLI has confirmed exists in this world's own repository\nlanding_zone: the ledger -- the companion item's work_closed row, carrying work_review_disposition=bookkeeping and work_review_ref=commit:<sha>; the commit itself lands in the world's own git repository, which the close act's construction-time check confirms rather than merely asserts"}
@@ -44,6 +56,18 @@ INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
     proc = subprocess.run([led] + args, capture_output=True, text=True,
                            env={**os.environ, "LED_ACTOR": actor})
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def check_charter(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_CHARTER_PY, "show", principal, "--led", led],
+                           capture_output=True, text=True)
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def fetch_brief(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_BRIEF_PY, "brief", principal, "--led", led],
+                           capture_output=True, text=True)
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
@@ -59,9 +83,13 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
+    # legacy-led-retirement pass (row 1149): NOT flipped to "./led" (see hydrate.sh's comment) --
+    # this value also feeds `fetch_brief`'s `--led` into role_brief.py, whose parsers still
+    # silently misparse served output (disclosed, still-open gap) -- out of this pass's scope.
     led = "./legacy/led"
     instance: str | None = None
-    actor_overrides: dict[str, str] = {}
+    role_map: dict[str, str] = {}
+    allow_uncharted = False
     commit_witness: dict[str, str] = {}
     dry_run = False
     rounds = len(PHASES) + 1
@@ -73,8 +101,10 @@ def main(argv: list[str]) -> int:
             led = argv[i + 1]; i += 2
         elif a == "--instance":
             instance = argv[i + 1]; i += 2
-        elif a == "--actor":
-            actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--role-map":
+            role_map.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--allow-uncharted":
+            allow_uncharted = True; i += 1
         elif a == "--commit-witness":
             commit_witness.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--dry-run":
@@ -114,7 +144,36 @@ def main(argv: list[str]) -> int:
             slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
-            actor = actor_overrides.get(phase, DEFAULT_ACTOR)
+            actor = role_map.get(phase, DEFAULT_ACTOR)
+            print(f"round {round_no}: phase '{phase}' -> principal '{actor}' (--role-map)")
+
+            charter_rc, charter_out = check_charter(led, actor)
+            if charter_rc != 0:
+                if not allow_uncharted:
+                    print(
+                        f"  REFUSED (uncharted) -- '{actor}' has no in-force registered "
+                        f"charter; phase '{phase}' is BLOCKED-uncharted this round. Register "
+                        f"one (python3 tools/role_charter.py register {actor} <path>) or pass "
+                        f"--allow-uncharted to proceed anyway (loud escape hatch, not silent). "
+                        f"role_charter's own teaching, verbatim:\n{charter_out}"
+                    )
+                    continue
+                print(
+                    f"  -- --allow-uncharted: proceeding with UNCHARTED principal '{actor}' "
+                    f"for phase '{phase}' -- falling back to the TOML's own raw prose brief "
+                    f"(the pre-row-1663 J1 default). role_charter said:\n{charter_out}"
+                )
+                dispatch_text = BRIEFS.get(phase, "")
+            else:
+                brief_rc, brief_out = fetch_brief(led, actor)
+                if brief_rc == 0:
+                    dispatch_text = charter_out + "\n\n" + brief_out
+                else:
+                    dispatch_text = (
+                        charter_out + f"\n\n(role_brief FAILED, rc={brief_rc}, relayed "
+                        f"verbatim rather than silently omitted:\n{brief_out})"
+                    )
+
             print(f"round {round_no}: attempting claim of '{slug}' as '{actor}' ...")
             if dry_run:
                 print(f"  (dry-run) would run: LED_ACTOR={actor} {led} work claim {slug}")
@@ -124,8 +183,7 @@ def main(argv: list[str]) -> int:
                 print(f"  BLOCKED -- kernel refusal (verbatim):\n{claim_out}")
                 continue
             print(f"  claimed: {claim_out}")
-            brief = BRIEFS.get(phase, "")
-            print(f"  DISPATCH -- brief for '{phase}':\n{brief}")
+            print(f"  DISPATCH -- charter+brief for '{phase}' (principal '{actor}'):\n{dispatch_text}")
             if phase in BOOKKEEPING_PHASES:
                 close_args = ["work", "close", slug, "shipped", "--review-bookkeeping",
                               "--witness", f"commit:{commit_witness[phase]}"]

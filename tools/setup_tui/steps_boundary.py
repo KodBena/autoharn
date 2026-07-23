@@ -6,11 +6,12 @@ from __future__ import annotations
 import json
 import os
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
+from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import destination, feature_facts, governed_files, probes
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
-from tools.setup_tui.plan import BackgroundAct, CommandAct, DaemonSelection, PlanEntry, WriteAct
+from tools.setup_tui.plan import (BackgroundAct, CallableAct, CommandAct, DaemonSelection,
+                                   PlanEntry, WriteAct)
 
 BOUNDARY_PROC_PRODUCES = "boundary-proc"
 _SLUG = "boundary"
@@ -22,8 +23,18 @@ def fields(state: dict) -> tuple:
     # boundary reads both shared facts straight out of state in `submit` below, never via a
     # second field declaration (a duplicated projection is refused at App construction,
     # `tools.configtree.spec.validate_shared_ownership`).
+    #
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): the "Configure the boundary
+    # service now?" decline gate that stood here is REMOVED -- the boundary is MANDATORY at
+    # every birth per the ratified coupling (row 1150) now that legacy-led.tmpl is retired:
+    # declining used to fall back to `legacy/led`, now a one-line teaching-refusal stub, never a
+    # working CLI -- "decline" would brick the rest of this run's commit. Configuration CHOICES
+    # (host/db/port/auto-start-now-vs-later) are unchanged; only the existence gate is gone. Row
+    # 1942 (autoharn1's own ledger) is NOT a ratification of decline's continued existence -- it
+    # is a DEFECT-FIX WITNESS (Case 14, runner.resolve_led) that a declining run correctly fell
+    # back to a working legacy/led; that target no longer working is the reason this option
+    # retires now, not a conflict with that earlier witness.
     return (
-        ConfirmField(name="run", label="Configure the boundary service now?", default=True),
         ConfirmField(name="override", label="Override and proceed WITHOUT a confirmed successful "
                      "birth? (only used if birth was not confirmed)"),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
@@ -42,11 +53,6 @@ def submit(state: dict, answers: dict) -> SectionResult:
                                              "check this box to proceed anyway"})
     if not state.get("birth_ok") and answers["override"]:
         cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
-    if not answers["run"]:
-        touched = is_field_touched(state, _SLUG, "run")
-        cl.add("boundary", "boundary", ck.choice_status(touched),
-               "operator declined" if touched else "default (never visited/toggled)")
-        return SectionResult(ok=True, info_lines=("boundary configuration skipped.",))
 
     # "dest"/"world" are Fork/target's and Birth's own owned fields respectively -- read the
     # shared facts directly, never via a field of boundary's own (dropped, see `fields`'s own
@@ -126,6 +132,41 @@ def submit(state: dict, answers: dict) -> SectionResult:
                                lesson="starts the boundary service, this process's own child",
                                act=BackgroundAct(argv=tuple(argv2), cwd=str(state["_repo_root"])),
                                produces=BOUNDARY_PROC_PRODUCES))
+
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159, item 2 --
+        # FAILURE HONESTY): the BackgroundAct above reports ok=True the instant Popen() succeeds
+        # (commit_executor.py's own `_run_entry` -- forking/exec'ing is not the same fact as "the
+        # service actually came up"), so a genuinely failed start (the concrete case this closes:
+        # the picked port is ALREADY occupied -- uvicorn's own bind refuses and the child exits
+        # within milliseconds) would otherwise sail through as a false accept, and every act
+        # queued AFTER it -- principals-authority, signed-genesis, hydration -- would then run
+        # against a boundary that is not there: a half-born world, no different from the
+        # silent-fallback class this whole re-sequencing exists to foreclose. This CallableAct
+        # (the one generic commit-time-effect escape hatch, `plan.py`'s own docstring) polls the
+        # SAME health URL for up to 10s (`probes.wait_for_health`) and is the ACT that actually
+        # fails the commit -- REFUSED, with the last probe's own detail as teaching -- when the
+        # service never answers; per-act atomicity means NOTHING queued after this entry ever
+        # runs (`commit_executor.execute`'s own "stops at the FIRST entry whose act does not
+        # succeed"). No silent fallback to legacy/led exists to reach for either way -- the
+        # operator's only lawful next step is fixing the port/env and re-running the commit
+        # (which resumes exactly here, the journal's own resume-from-PENDING contract).
+        def _boundary_health_gate() -> tuple[bool, str]:
+            ok, last = probes.wait_for_health(f"{boundary_url}/d/{world}/health", timeout_s=10.0)
+            if ok:
+                return True, f"boundary healthy: {last}"
+            return False, (
+                f"REFUSED -- the boundary service never answered {boundary_url}/d/{world}/health "
+                f"within 10s (last probe: {last}). The most likely cause is the port ({port}) "
+                f"already being occupied by another process -- check with `ss -ltnp | grep "
+                f"{port}` (or lsof -i :{port}), free the port or re-run this section to pick a "
+                f"different one, then retry the commit. NOTHING after this act ran (per-act "
+                f"atomicity); principals-authority/signed-genesis/hydration never touched a "
+                f"half-born world.")
+        plan.append(PlanEntry(screen="boundary", item="service health gate",
+                               lesson="confirms the boundary actually came up before any "
+                                      "ledger-writing act trusts it",
+                               act=CallableAct(fn=_boundary_health_gate,
+                                                label=f"poll {boundary_url}/d/{world}/health")))
         updates["boundary_will_start"] = True
         updates["boundary_world"] = world
     else:

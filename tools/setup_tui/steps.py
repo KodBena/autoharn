@@ -32,9 +32,17 @@ SECTIONS = (
     steps_fork_target.STEP,
     steps_rehearsal_birth.REHEARSAL_STEP,
     steps_rehearsal_birth.BIRTH_STEP,
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (ledger row 1158/1159):
+    # "boundary" moved ahead of "principals-authority"/"signed-genesis" -- `commit_pane.py`'s
+    # own `_run_submit_sweep` calls every section's `submit` "exactly once, in registry order"
+    # (that docstring, verbatim), so THIS tuple's order is the real commit-time execution order,
+    # not merely a sidebar-display convention -- by the time principals-authority/signed-genesis
+    # actually queue+run their own acts, the boundary service is already configured and its
+    # `led` served (both modules' own `_served_led`/`served_led_path` default), never the
+    # retired `legacy/led` direct-psql shim.
+    steps_boundary.STEP,
     steps_principals_authority.STEP,
     steps_signed_genesis.STEP,
-    steps_boundary.STEP,
     steps_observability.STEP,
     steps_hydration.STEP,
 )

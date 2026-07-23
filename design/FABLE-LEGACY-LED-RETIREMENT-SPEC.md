@@ -5,10 +5,22 @@
 ratification of parts A and B below. Removal condition: superseded by a polished live
 edition or by the retirement's completion record. -->
 
-- **Status:** Fable-authored 2026-07-23; parts A and B await maintainer ratification.
+- **Status:** Fable-authored 2026-07-23; ALL THREE PARTS RATIFIED in one act (ledger row
+  1150) and now COMPLETE. Part A (obligation revocation as a typed kernel event,
+  kernel/lineage/s57-obligation-revocation-event.sql) and Part B (the three artifact
+  routes) both witnessed and merged (row 1158). Part C's own retirement act completed by
+  the legacy-led-retirement INVENTORY pass (row 1149): the mechanically-diffed coverage
+  gap it found (the entire `led principal *` family, 13 sub-verbs) closed, every
+  executable reference migrated to the served path, the boundary-decline gate removed
+  (mandatory at every birth), and `bootstrap/templates/legacy-led.tmpl` git rm'd
+  outright -- `./legacy/led` is now a one-line teaching refusal. One flagged, unresolved
+  gap remains open for a maintainer decision: `bootstrap/track-work.sh`'s own standing,
+  no-boundary-by-design deployments have no working `led` verb post-retirement (see that
+  script's own header and user-guide/USER-GUIDE.md §3a).
 - **State of play:** phase 1/1b (commits ea41423/56259a3) rebased every `led` surface
   onto the boundary except two: `obligate revoke` and `artifact put|get|stat`. Both are
-  spec-gated, not effort-gated. This spec is those two gates, plus the retirement act.
+  spec-gated, not effort-gated. This spec is those two gates, plus the retirement act --
+  all now discharged, per the Status line above.
 
 ## Part A — obligation revocation becomes a typed kernel event (kernel delta, next slot)
 

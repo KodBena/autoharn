@@ -41,3 +41,7 @@ ephemera/toy-run1-salvage/
 # this checkout); deployment.json.example (tracked, placeholder values) is the public surface
 # instead. See README.md "Configuration" for the field table.
 /deployment.json
+
+# boundary-multiplex.toml -- THIS world's own running boundary-service config (same reasoning
+# as deployment.json above: carries a real LAN host, per-deployment, operational not source).
+/boundary-multiplex.toml

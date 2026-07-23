@@ -202,7 +202,10 @@ HYDRATE_TEMPLATE = '''#!/usr/bin/env bash
 # rows -- not a kernel property.
 set -uo pipefail
 
-LED="./legacy/led"
+# legacy-led-retirement pass (row 1149): flipped to served "./led" -- SAFE (unlike DRIVE_TEMPLATE
+# below, still on legacy): every verb here (work open/depends, obligate) is COVERED, and every
+# string matched in `$out` is the KERNEL's own RAISE EXCEPTION text either way.
+LED="./led"
 INSTANCE=""
 OBLIGATE_ASSIGNED_BY="reviewer"
 OBLIGATE_OBLIGED_ACTOR="author"
@@ -411,6 +414,9 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
+    # legacy-led-retirement pass (row 1149): NOT flipped to "./led" (see hydrate.sh's comment) --
+    # this value also feeds `fetch_brief`'s `--led` into role_brief.py, whose parsers still
+    # silently misparse served output (disclosed, still-open gap) -- out of this pass's scope.
     led = "./legacy/led"
     instance: str | None = None
     role_map: dict[str, str] = {{}}

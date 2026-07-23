@@ -71,9 +71,12 @@ type = "bool"
 path = "signed_genesis.commission_statement"
 type = "str"
 
-[[key]]
-path = "boundary.configure"
-type = "bool"
+# legacy-led-retirement inventory pass (ledger row 1149/1150): "boundary.configure" RETIRED --
+# the boundary is now MANDATORY at every birth (no decline option, tools/setup_tui/steps_
+# boundary.py's own fields() docstring), so it is no longer a captured decision at all (this
+# section is always walked, mirroring [fork_target]'s own always-on section_gate below). A
+# config file still carrying `configure = ...` now REFUSES as an unknown key
+# (config_file.py validate()'s own generic closed-schema check), never silently ignored.
 
 [[key]]
 path = "boundary.start_now"
@@ -141,7 +144,7 @@ gate = "signed_genesis.run"
 
 [[section_gate]]
 section = "boundary"
-gate = "boundary.configure"
+gate = ""
 
 [[section_gate]]
 section = "observability"

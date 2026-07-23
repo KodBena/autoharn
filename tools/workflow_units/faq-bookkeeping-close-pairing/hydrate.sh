@@ -20,7 +20,10 @@
 # rows -- not a kernel property.
 set -uo pipefail
 
-LED="./legacy/led"
+# legacy-led-retirement pass (row 1149): flipped to served "./led" -- SAFE (unlike DRIVE_TEMPLATE
+# below, still on legacy): every verb here (work open/depends, obligate) is COVERED, and every
+# string matched in `$out` is the KERNEL's own RAISE EXCEPTION text either way.
+LED="./led"
 INSTANCE=""
 OBLIGATE_ASSIGNED_BY="reviewer"
 OBLIGATE_OBLIGED_ACTOR="author"

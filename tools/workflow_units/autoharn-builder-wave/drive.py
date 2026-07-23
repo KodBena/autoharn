@@ -4,25 +4,35 @@ design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md's driver artifact for workflow 'auto
 
 Executes the wave by kernel conversation: for each phase, in an order re-derived by re-polling
 `led work claim` every round (never precomputed here -- the claim's own verdict is the gate,
-per the governing spec's one design commitment), CLAIM (as --actor, default 'author'; a
-refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH (prints the
-phase's prose brief -- authors/implements/reviews text from the source TOML -- for the caller's
-own agent dispatch; this driver does not itself invoke an agent), CLOSE (--review-deferred by
-default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews clause names a
-bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+per the governing spec's one design commitment), CLAIM (as --role-map, default 'author'; a
+refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH, CLOSE
+(--review-deferred by default, or --review-bookkeeping --witness commit:<sha> when the phase's
+reviews clause names a bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+
+DISPATCH, per design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (commission row 1663, replacing the
+old J1 raw-prose default -- see that note in tools/workflow_compile.py's own docstring): before
+claiming, the resolved principal is checked against `tools/role_charter.py show <principal>`.
+CHARTED (an in-force registered charter exists): the claim proceeds and DISPATCH hands the
+agent that charter text plus a freshly computed `tools/role_brief.py brief <principal>` --
+"charter + brief, nothing else" (the spec's own words). UNCHARTED: REFUSED, with
+role_charter's own teaching relayed verbatim, and the phase is BLOCKED-uncharted this round --
+UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway (says so) and
+falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
+J1 behavior, preserved only as an explicit opt-in degraded path).
 
 Usage:
-    python3 autoharn-builder-wave/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
-                              [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+    python3 autoharn-builder-wave/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
+                              [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
+                              [--dry-run] [--rounds N]
 
 --instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
 hydrate.sh for this wave -- slugs are `autoharn-builder-wave-<instance>-<phase>`, so a different token drives a
 DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
-Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
-an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
-at CLOSE time (a close, unlike a claim, should not refuse once claimed, so that IS treated as
-unexpected here) or a local usage error (exit 2).
+Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units,
+uncharted or kernel-refused alike, are an ordinary, reportable outcome, not a driver failure);
+exit 1 on an unexpected kernel refusal at CLOSE time (a close, unlike a claim, should not refuse
+once claimed, so that IS treated as unexpected here) or a local usage error (exit 2).
 """
 from __future__ import annotations
 
@@ -33,6 +43,8 @@ import sys
 
 STEM = "autoharn-builder-wave"
 TOML_REL = "design/workflows/autoharn-builder-wave.toml"
+ROLE_CHARTER_PY = "/home/bork/w/vdc/1/autoharn/tools/role_charter.py"
+ROLE_BRIEF_PY = "/home/bork/w/vdc/1/autoharn/tools/role_brief.py"
 
 PHASES = ['claim', 'build-and-witness', 'close-deferred', 'orchestrator-merge']
 BRIEFS = {'claim': "authors: maintainer/orchestrator (ledger work item authored via ./led work open, prior to this wave)\nimplements: sonnet builder (./led work claim <slug> inside its own isolated worktree)\ndone: the ledger row `work_claimed: <slug>` exists for this builder's principal, per CLAUDE.md's standing delegation contract.\nlanding_zone: this project's append-only Postgres ledger (via ./led), read by ./pickup on the next hydration.", 'build-and-witness': "authors: sonnet builder\nimplements: sonnet builder\nreviews: sonnet builder, self-witnessed both polarities on scratch worlds (t/t and f/f, per the standing witness discipline) -- CLAUDE.md's 'Class-ratified fail-safe deltas' ruling names this as the bar for kernel-lineage work; this build item (non-kernel) applies the same witness discipline by analogy, not by that ruling's own scope.\ndone: the deliverable is witnessed on both polarities (or, for non-kernel work like this DSL build, the equivalent: every deliverable exercised and its refusal paths exercised too) before any close is attempted -- CLAUDE.md's standing witness discipline: 'A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker.'\nlanding_zone: the builder's own isolated worktree under .claude/worktrees/, committed but not pushed; witness output recorded in the builder's final report to the orchestrator.", 'close-deferred': 'authors: sonnet builder\nimplements: sonnet builder (./led work close <slug> shipped --review-deferred --witness <short-sha>)\nreviews: deferred explicitly -- --review-deferred means the independent countersign has NOT yet happened at this phase; it is owed to the orchestrator at the next phase, not skipped.\ndone: `./led work close <slug> shipped --review-deferred --witness <short-sha>` is filed, naming the commit the witness evidence lives at.\nlanding_zone: the ledger row `work_closed: <slug> (shipped)` with `--review-deferred` and `--witness <short-sha>`, naming the worktree commit; the worktree branch itself, awaiting merge.', 'orchestrator-merge': "authors: orchestrator\nimplements: orchestrator (merges each builder's worktree branch, wires cross-item seams no single builder could see)\nreviews: orchestrator, discharging the review deferred at close-deferred, per CLAUDE.md's runs-are-linear ruling: a run's world is dust once merged, so this review happens at the seam, not by reopening the builder's own worktree.\ndone: the branch is merged, cross-item seams (files two builders both touched) are wired and re-verified, and the deferred review from close-deferred is discharged -- either confirmed or sent back.\nlanding_zone: the repository's main branch (post-merge), plus a `decision` ledger row per user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's merge convention (`merge: <branch> -> <commit> (work items: <slug>)`)."}
@@ -44,6 +56,18 @@ INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
     proc = subprocess.run([led] + args, capture_output=True, text=True,
                            env={**os.environ, "LED_ACTOR": actor})
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def check_charter(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_CHARTER_PY, "show", principal, "--led", led],
+                           capture_output=True, text=True)
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def fetch_brief(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_BRIEF_PY, "brief", principal, "--led", led],
+                           capture_output=True, text=True)
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
@@ -59,9 +83,13 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
+    # legacy-led-retirement pass (row 1149): NOT flipped to "./led" (see hydrate.sh's comment) --
+    # this value also feeds `fetch_brief`'s `--led` into role_brief.py, whose parsers still
+    # silently misparse served output (disclosed, still-open gap) -- out of this pass's scope.
     led = "./legacy/led"
     instance: str | None = None
-    actor_overrides: dict[str, str] = {}
+    role_map: dict[str, str] = {}
+    allow_uncharted = False
     commit_witness: dict[str, str] = {}
     dry_run = False
     rounds = len(PHASES) + 1
@@ -73,8 +101,10 @@ def main(argv: list[str]) -> int:
             led = argv[i + 1]; i += 2
         elif a == "--instance":
             instance = argv[i + 1]; i += 2
-        elif a == "--actor":
-            actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--role-map":
+            role_map.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--allow-uncharted":
+            allow_uncharted = True; i += 1
         elif a == "--commit-witness":
             commit_witness.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--dry-run":
@@ -114,7 +144,36 @@ def main(argv: list[str]) -> int:
             slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
-            actor = actor_overrides.get(phase, DEFAULT_ACTOR)
+            actor = role_map.get(phase, DEFAULT_ACTOR)
+            print(f"round {round_no}: phase '{phase}' -> principal '{actor}' (--role-map)")
+
+            charter_rc, charter_out = check_charter(led, actor)
+            if charter_rc != 0:
+                if not allow_uncharted:
+                    print(
+                        f"  REFUSED (uncharted) -- '{actor}' has no in-force registered "
+                        f"charter; phase '{phase}' is BLOCKED-uncharted this round. Register "
+                        f"one (python3 tools/role_charter.py register {actor} <path>) or pass "
+                        f"--allow-uncharted to proceed anyway (loud escape hatch, not silent). "
+                        f"role_charter's own teaching, verbatim:\n{charter_out}"
+                    )
+                    continue
+                print(
+                    f"  -- --allow-uncharted: proceeding with UNCHARTED principal '{actor}' "
+                    f"for phase '{phase}' -- falling back to the TOML's own raw prose brief "
+                    f"(the pre-row-1663 J1 default). role_charter said:\n{charter_out}"
+                )
+                dispatch_text = BRIEFS.get(phase, "")
+            else:
+                brief_rc, brief_out = fetch_brief(led, actor)
+                if brief_rc == 0:
+                    dispatch_text = charter_out + "\n\n" + brief_out
+                else:
+                    dispatch_text = (
+                        charter_out + f"\n\n(role_brief FAILED, rc={brief_rc}, relayed "
+                        f"verbatim rather than silently omitted:\n{brief_out})"
+                    )
+
             print(f"round {round_no}: attempting claim of '{slug}' as '{actor}' ...")
             if dry_run:
                 print(f"  (dry-run) would run: LED_ACTOR={actor} {led} work claim {slug}")
@@ -124,8 +183,7 @@ def main(argv: list[str]) -> int:
                 print(f"  BLOCKED -- kernel refusal (verbatim):\n{claim_out}")
                 continue
             print(f"  claimed: {claim_out}")
-            brief = BRIEFS.get(phase, "")
-            print(f"  DISPATCH -- brief for '{phase}':\n{brief}")
+            print(f"  DISPATCH -- charter+brief for '{phase}' (principal '{actor}'):\n{dispatch_text}")
             if phase in BOOKKEEPING_PHASES:
                 close_args = ["work", "close", slug, "shipped", "--review-bookkeeping",
                               "--witness", f"commit:{commit_witness[phase]}"]

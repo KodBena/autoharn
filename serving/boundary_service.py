@@ -322,13 +322,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import datetime
+import hashlib
 import json
 import math
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -358,6 +361,7 @@ import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX
 # disciplined service).
 import migrate_core  # noqa: E402  (bootstrap/migrate_core.py)
 from boundary_models import (  # noqa: E402
+    ArtifactWriteIntFields,
     BodyReadTimeout,
     CapabilityAbsent,
     CapabilityManifest,
@@ -366,6 +370,7 @@ from boundary_models import (  # noqa: E402
     InfraFailure,
     LedgerWriteIntFields,
     MetaResponse,
+    ObligationRevokeWriteIntFields,
     ObligationWriteIntFields,
     PayloadTooLarge,
     RegistrationWriteIntFields,
@@ -379,8 +384,12 @@ from boundary_models import (  # noqa: E402
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified ledger decision row 1652: this service's
 # own declared version -- bumped from the implied pre-amendment "1.0.0" (eleven routes) to name
 # the fourteen-route closure. A SERVICE-owned fact (never a kernel fact); reported verbatim by
-# GET /meta.
-BOUNDARY_SERVICE_VERSION = "1.1.0"
+# GET /meta. Bumped AGAIN to 1.2.0 by design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A+B (ledger
+# row 1150): three new routes (POST /write/obligation_revoke via the existing WRITE_SURFACES
+# table -- no route-table growth of its own kind, just a new dict entry; GET /artifacts/{hash},
+# GET /artifacts/{hash}/stat, POST /artifacts -- genuinely new route SHAPES, unlike
+# VIEW_REGISTRY's own registry-only growths, which this version deliberately does NOT track).
+BOUNDARY_SERVICE_VERSION = "1.2.0"
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -431,6 +440,34 @@ BOUNDARY_SERVICE_VERSION = "1.1.0"
 # registry-membership growth):
 #   reservations_outstanding.review_id    -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
 #   review_verdicts.review_id             -- kernel/lineage/s56 (r.id, a ledger row id, aliased)
+# The two entries below are a THIRD, additive registry growth (legacy-led-retirement phase 1B,
+# ledger row 1149) -- serving `led work review-gap`/`startable`/`resolve-violation`/
+# `supersede-cascade`'s own reads through the boundary path, same closed-registry mechanism, no
+# new route, no BOUNDARY_SERVICE_VERSION bump:
+#   work_review_gap.slug                  -- already registered above (s29+); named again here
+#                                             only in this comment's own cross-reference, not a
+#                                             second dict entry (see the pre-existing line below)
+#   work_edge_parent.child_slug           -- kernel/lineage/s32-edge-views-single-home.sql (RAW,
+#                                             includes every parent-edge ever written, retracted
+#                                             or not -- see that view's own COMMENT ON VIEW).
+#                                             child_slug is the natural key: validate_work_item()
+#                                             (s22+) refuses a duplicate opening act per slug, so
+#                                             a slug can be the CHILD end of at most one edge ever
+#                                             -- unlike parent_slug, which repeats once per child.
+#   work_startable.slug                   -- kernel/lineage/s39-blocks-start.sql (work_slug, text
+#                                             -- the SAME natural key work_item_current already
+#                                             uses one view over)
+# A FOURTH additive registry growth (legacy-led-retirement inventory pass, ledger row 1149,
+# closing the coverage-diff's own witnessed gap -- `led principal grant-competence`/`relate`
+# and their six siblings were the only remaining NOT-COVERED family): the four s41 D-5 derived
+# binding views (kernel/lineage/s41-principal-bindings-and-relations.sql), each already carrying
+# a `row_id` column (the carrying event's own ledger id -- an id-shaped natural key, same
+# pagination shape as review_stamp_distinctness/reservations_outstanding above). No new route,
+# no BOUNDARY_SERVICE_VERSION bump -- same mechanism, fourth use.
+#   principal_relations.row_id       -- s41 D-5 (relate/unrelate)
+#   principal_role_bindings.row_id   -- s41 D-5 (bind-role/release-role)
+#   principal_keys.row_id            -- s41 D-5 (bind-key/revoke-key)
+#   principal_competences.row_id     -- s41 D-5 (grant-competence/withdraw-competence)
 VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "question_status": ("question_id", "id"),
     "review_gap": ("id", "id"),
@@ -448,15 +485,29 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     # shape review_stamp_distinctness already uses one row over.
     "reservations_outstanding": ("review_id", "id"),
     "review_verdicts": ("review_id", "id"),
+    # legacy-led-retirement phase 1B (ledger row 1149) -- see this dict's own leading comment.
+    "work_edge_parent": ("child_slug", "slug"),
+    "work_startable": ("slug", "slug"),
+    # legacy-led-retirement inventory pass (ledger row 1149) -- see this dict's own leading
+    # comment, fourth registry growth.
+    "principal_relations": ("row_id", "id"),
+    "principal_role_bindings": ("row_id", "id"),
+    "principal_keys": ("row_id", "id"),
+    "principal_competences": ("row_id", "id"),
 }
 
-# The four s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4)
-# is built from this dict, never re-typed per route.
+# The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
+# built from this dict, never re-typed per route. `obligation_revoke` (design/FABLE-LEGACY-LED-
+# RETIREMENT-SPEC.md Part A, kernel/lineage/s57-obligation-revocation-event.sql) is the sixth
+# such function and its own tiny (scope/reason/actor) payload fits the generic psql `-v` transport
+# comfortably -- unlike artifact_write (Part B, below), which needs its own dedicated route
+# because its payload can approach ~1.4 MiB (see `artifact_put`'s own docstring).
 WRITE_SURFACES: dict[str, str] = {
     "ledger": "ledger_write",
     "review": "review_write",
     "registration": "registration_write",
     "obligation": "obligation_write",
+    "obligation_revoke": "obligation_revoke",
 }
 
 # A5.2: per-surface pydantic models are the ENUMERATION AUTHORITY for "every integer-typed
@@ -471,6 +522,11 @@ WRITE_SURFACE_INT_FIELDS: dict[str, type] = {
     "review": ReviewWriteIntFields,
     "registration": RegistrationWriteIntFields,
     "obligation": ObligationWriteIntFields,
+    "obligation_revoke": ObligationRevokeWriteIntFields,
+    # "artifact" is deliberately NOT keyed through WRITE_SURFACES/make_write_route (Part B's own
+    # dedicated route, artifact_put, reuses this SAME dict directly via
+    # `_bound_write_payload_ints("artifact", payload)` -- see that route's own docstring for why).
+    "artifact": ArtifactWriteIntFields,
 }
 
 # A deployment.json identifier (schema/kern/role) must look like a plain SQL identifier --
@@ -479,6 +535,12 @@ WRITE_SURFACE_INT_FIELDS: dict[str, type] = {
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+# design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: the artifact store's own content-addressed
+# key shape (kernel/lineage/s51-artifact-store.sql's `artifact_hash_shape` CHECK, mirrored here
+# for a path-parameter-level typed 422, the SAME idiom `_out_of_range_id` already establishes for
+# id-typed parameters -- never let a malformed hash reach psql's own text-literal interpolation).
+_ARTIFACT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # A2.2's raw-body write-ingress bound (ADR-0012 P1: one home, not one literal per checkpoint),
 # 1 MiB -- generous for any ledger payload. Enforced at `_read_bounded_body` (checkpoint a,
@@ -569,6 +631,23 @@ HISTORY_DEFAULT_LIMIT = 1000
 # 512 is generous headroom, not a measured ceiling. Named ONCE (ADR-0012 P1) rather than an
 # inline literal at the one call site that checks it.
 MAX_AFTER_SLUG_BYTES = 512
+
+# design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `POST /d/{deployment}/artifacts`' own raw-
+# body buffering bound. NOT a second, independent judgment of "is this artifact too large" (the
+# spec's own P1 instruction: "kernel hash-verification is the refusal authority; no second size
+# limit") -- kernel.artifact_write's own 1 MiB (1048576-byte) cap (kernel/lineage/
+# s51-artifact-store.sql) is the ONE authority on artifact size. This constant is DERIVED from
+# that cap, never chosen independently: base64 inflates raw bytes by a strict ceil(n/3)*4 factor,
+# so a payload whose `bytes` field decodes to <= the kernel's own cap can NEVER re-encode past
+# this bound, and any request THAT exceeds it necessarily carries decoded content the kernel
+# would refuse anyway (base64 never shrinks) -- so this bound can never disagree with the
+# kernel's own refusal, it only bounds how much this service buffers in memory before that
+# refusal is reached (the SAME buffering rationale MAX_WRITE_BODY_BYTES states for the four
+# generic write routes, sized here for the one route whose payload is not prose but base64
+# bytes). +4096 is generous JSON-envelope headroom (media_type/hash/actor keys, quoting) -- not
+# itself a second artifact-size judgment, just room for the request's own structure.
+_ARTIFACT_KERNEL_CAP_BYTES = 1_048_576  # kernel/lineage/s51-artifact-store.sql's own cap, mirrored
+MAX_ARTIFACT_BODY_BYTES = ((_ARTIFACT_KERNEL_CAP_BYTES + 2) // 3) * 4 + 4096
 
 
 class PsqlInfraFailure(Exception):
@@ -838,6 +917,27 @@ def _query_json(cfg: BoundaryConfig, sql: str, extra_v: dict[str, str] | None = 
     return json.loads(lines[-1])
 
 
+def _query_json_stdin_var(cfg: BoundaryConfig, var_name: str, file_path: str, sql: str) -> Any:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B's sibling to `_query_json` above, for a
+    payload too large to cross as a psql `-v` execve argument (kernel/lineage/
+    s51-artifact-store.sql's OWN header: "never a command-line `-v` argument for this payload...
+    MAX_ARG_STRLEN caps any ONE execve argument, and a 1 MiB artifact base64s to ~1.4 MiB").
+    Mirrors seen-red/s51-artifact-store/run_fixtures.py's own `kernel_write_large` transport
+    exactly: `\\set <var_name> \\`cat '<file_path>'\\`` -- psql's backtick-command value carrier
+    loads the file's content into a psql variable via a PIPE READ, never an execve argument, so
+    no MAX_ARG_STRLEN wall applies. `file_path` is ALWAYS this service's own tempfile (never
+    caller-controlled text spliced into SQL), so this is the same trust boundary `_psql`'s own
+    schema/kern/role interpolation already relies on (ADR-0002 rung 1), not a new one. Same
+    exit-code fidelity as `_query_json` (`_classify_psql_exit`)."""
+    script = f"\\set {var_name} `cat '{file_path}'`\n{sql}"
+    cp = _psql(cfg, script)
+    _classify_psql_exit(cp)
+    lines = [ln for ln in cp.stdout.splitlines() if ln.strip()]
+    if not lines:
+        return None
+    return json.loads(lines[-1])
+
+
 def _classify_psql_exit(cp: subprocess.CompletedProcess[str]) -> None:
     """A4.3's exit-code fidelity, factored out (ADR-0012 P1) so `_lineage_head` below -- the
     design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md /meta route's own detect-query runner, which needs
@@ -943,7 +1043,24 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
         f"ON n.oid = p.pronamespace WHERE n.nspname = '{cfg.kern}' "
         f"AND p.proname = 'ledger_write' AND p.prosecdef));",
     ))
-    return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43, credited_view=credited)
+    # legacy-led-retirement inventory pass (ledger row 1149): the ONE fact `has_s45_standing_
+    # lifecycle()` (bootstrap/templates/legacy-led.tmpl) probes -- the widened
+    # principal_binding_active_kind_shape CHECK naming principal_standing_declared, a fact
+    # only s45's re-issue produces (kernel/lineage/s45-standing-lifecycle.detect.sql fact 1 of
+    # 4; the single fact is sufficient here exactly as it is for legacy's own probe -- the
+    # detect file's other three facts exist for the detect ceremony's OWN thoroughness, not
+    # because any one alone is ambiguous).
+    s45 = bool(_query_json(
+        cfg,
+        f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_constraint con "
+        f"JOIN pg_class rel ON rel.oid = con.conrelid "
+        f"JOIN pg_namespace ns ON ns.oid = rel.relnamespace "
+        f"WHERE ns.nspname = '{cfg.schema}' AND rel.relname = 'ledger' AND con.contype = 'c' "
+        f"AND con.conname = 'principal_binding_active_kind_shape' "
+        f"AND pg_get_constraintdef(con.oid) LIKE '%principal_standing_declared%'));",
+    ))
+    return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43,
+                               credited_view=credited, s45_standing_lifecycle=s45)
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
@@ -1098,14 +1215,21 @@ def _log_unclassified_failure(context: str, exc: Exception) -> None:
 
 
 class _BodyTooLarge(Exception):
-    """Raised by `_read_bounded_body` (checkpoint a), via the `_bounded_raw_body` FastAPI
-    dependency -- caught once, by the app-level exception handler (`create_app`), and turned
-    into the typed `payload_too_large` response. Not caught inline in the write route itself
-    (A3.1's plain-`def` shape) because the dependency runs BEFORE the (now synchronous, off-
-    the-event-loop) handler is ever dispatched."""
+    """Raised by `_read_bounded_body` (checkpoint a), via the `_bounded_raw_body`/
+    `_bounded_artifact_body` FastAPI dependencies -- caught once, by the app-level exception
+    handler (`create_app`), and turned into the typed `payload_too_large` response. Not caught
+    inline in the write route itself (A3.1's plain-`def` shape) because the dependency runs
+    BEFORE the (now synchronous, off-the-event-loop) handler is ever dispatched.
 
-    def __init__(self, observed_bytes: int, message: str) -> None:
+    `limit_bytes` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B) carries WHICH bound fired
+    -- MAX_WRITE_BODY_BYTES for the four generic write routes, MAX_ARTIFACT_BODY_BYTES for
+    `POST /artifacts` -- so the exception handler reports the bound that actually refused,
+    never a hardcoded one (the SAME per-checkpoint honesty A8 already established between this
+    checkpoint and MAX_PSQL_ARG_BYTES)."""
+
+    def __init__(self, limit_bytes: int, observed_bytes: int, message: str) -> None:
         super().__init__(message)
+        self.limit_bytes = limit_bytes
         self.observed_bytes = observed_bytes
         self.message = message
 
@@ -1305,34 +1429,36 @@ def _bound_write_payload_ints(surface: str, payload: dict[str, Any]) -> JSONResp
     return None
 
 
-async def _read_bounded_body(request: Request) -> bytes:
-    """A2.2 checkpoint (a): MAX_WRITE_BODY_BYTES enforced on the RAW request body, BEFORE any
-    JSON parsing. Two sub-cases, both named in the spec: a Content-Length header, when the
-    client sent one, is checked FIRST and refuses without ever reading the body (the 100 MB
-    whole-body-buffered-then-parsed hazard A2.2 names, foreclosed before a single byte is
-    read); a body with no (or a lying) Content-Length is bounded by reading it incrementally
-    and aborting the instant the running total exceeds the bound -- never buffered whole first
-    and measured after."""
+async def _read_bounded_body(request: Request, max_bytes: int = MAX_WRITE_BODY_BYTES) -> bytes:
+    """A2.2 checkpoint (a): `max_bytes` enforced on the RAW request body, BEFORE any JSON
+    parsing (default MAX_WRITE_BODY_BYTES, the four generic write routes' own bound; Part B's
+    `POST /artifacts` calls this with MAX_ARTIFACT_BODY_BYTES instead -- see `_bounded_artifact_
+    body`). Two sub-cases, both named in the spec: a Content-Length header, when the client sent
+    one, is checked FIRST and refuses without ever reading the body (the 100 MB whole-body-
+    buffered-then-parsed hazard A2.2 names, foreclosed before a single byte is read); a body with
+    no (or a lying) Content-Length is bounded by reading it incrementally and aborting the
+    instant the running total exceeds the bound -- never buffered whole first and measured
+    after."""
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
             declared = int(content_length)
         except ValueError:
             declared = None
-        if declared is not None and declared > MAX_WRITE_BODY_BYTES:
+        if declared is not None and declared > max_bytes:
             raise _BodyTooLarge(
-                declared,
+                max_bytes, declared,
                 f"the request's Content-Length ({declared} bytes) exceeds the "
-                f"{MAX_WRITE_BODY_BYTES}-byte write bound (checkpoint a, before JSON parsing) "
+                f"{max_bytes}-byte write bound (checkpoint a, before JSON parsing) "
                 f"-- refused before reading the body.")
     chunks: list[bytes] = []
     total = 0
     async for chunk in request.stream():
         total += len(chunk)
-        if total > MAX_WRITE_BODY_BYTES:
+        if total > max_bytes:
             raise _BodyTooLarge(
-                total,
-                f"the request body exceeds the {MAX_WRITE_BODY_BYTES}-byte write bound "
+                max_bytes, total,
+                f"the request body exceeds the {max_bytes}-byte write bound "
                 f"(checkpoint a, before JSON parsing) -- refused mid-read, never buffered "
                 f"whole first.")
         chunks.append(chunk)
@@ -1379,6 +1505,25 @@ async def _bounded_raw_body(request: Request) -> bytes:
     like A2.2's own two size checkpoints."""
     try:
         return await asyncio.wait_for(_read_bounded_body(request), timeout=BODY_READ_TIMEOUT_S)
+    except asyncio.TimeoutError as e:
+        raise _BodyReadTimeout(
+            BODY_READ_TIMEOUT_S,
+            f"the request body was not fully received within BODY_READ_TIMEOUT_S="
+            f"{BODY_READ_TIMEOUT_S}s (a stalled/trickled body-read phase, distinct from the "
+            f"psql-phase time axis, spec A5.3) -- refused."
+        ) from e
+
+
+async def _bounded_artifact_body(request: Request) -> bytes:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B's sibling to `_bounded_raw_body` above,
+    for `POST /d/{deployment}/artifacts` alone -- the SAME body-read-timeout wrapping, bounded by
+    MAX_ARTIFACT_BODY_BYTES instead of MAX_WRITE_BODY_BYTES (an artifact payload's base64 `bytes`
+    field can legitimately approach ~1.4 MiB for a kernel-cap-sized upload, well past the four
+    generic write routes' own 1 MiB bound -- see MAX_ARTIFACT_BODY_BYTES's own docstring for why
+    this is not a second size judgment)."""
+    try:
+        return await asyncio.wait_for(
+            _read_bounded_body(request, MAX_ARTIFACT_BODY_BYTES), timeout=BODY_READ_TIMEOUT_S)
     except asyncio.TimeoutError as e:
         raise _BodyReadTimeout(
             BODY_READ_TIMEOUT_S,
@@ -1470,8 +1615,10 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # write handler -- a dependency's exception propagates to the app's own exception
         # handling before the handler is ever dispatched to the threadpool, so this is still
         # the ONE place checkpoint (a) becomes the typed 413 (ADR-0012 P1). A8: checkpoint
-        # (a)'s bound is the raw-body/buffering one, and limit_bytes says so honestly.
-        return payload_too_large(MAX_WRITE_BODY_BYTES, exc.observed_bytes, exc.message)
+        # (a)'s bound is the raw-body/buffering one, and limit_bytes says so honestly -- carried
+        # on the exception itself (Part B: two DIFFERENT checkpoint-(a) bounds now exist,
+        # MAX_WRITE_BODY_BYTES and MAX_ARTIFACT_BODY_BYTES; never hardcode one here again).
+        return payload_too_large(exc.limit_bytes, exc.observed_bytes, exc.message)
 
     @app.exception_handler(_BodyReadTimeout)
     async def _body_read_timeout_handler(request: Request, exc: _BodyReadTimeout) -> JSONResponse:
@@ -1638,11 +1785,17 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
-        if not _regclass_exists(cfg, f"{cfg.schema}.principal_relations"):
+        # Hazard fixed in reach (legacy-led-retirement inventory pass, ledger row 1149): this
+        # gate used to probe `principal_relations` (s41-only) even though the view THIS route
+        # actually queries, `principal_standing_current`, is defined by s40 alone (kernel/
+        # lineage/s40-principal-identity-events.sql line ~612) -- an s40-only, pre-s41 kernel
+        # was spuriously refused here even though the object this route serves exists and is
+        # perfectly queryable. Gate on the object this route actually reads.
+        if not _regclass_exists(cfg, f"{cfg.schema}.principal_standing_current"):
             return capability_absent(
-                "s41-identity",
-                "This world carries no principal-identity/relation views "
-                "(kernel/lineage/s41-principal-bindings-and-relations.sql) -- "
+                "s40-identity",
+                "This world carries no principal-identity views "
+                "(kernel/lineage/s40-principal-identity-events.sql) -- "
                 "GET /standing/principals is refused rather than served from a view this "
                 "world's kernel does not have.")
         # A5.4: the SAME `limit`/`after_id` discipline as /rows/current -- `principal_standing_
@@ -1994,6 +2147,147 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
 
     for surface, fn in WRITE_SURFACES.items():
         app.add_api_route(f"/d/{{deployment}}/write/{surface}", make_write_route(surface, fn), methods=["POST"])
+
+    def _artifact_capability_absent(cfg: BoundaryConfig) -> JSONResponse | None:
+        """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: the SAME s43-capability-manifest
+        idiom `make_write_route`'s own handler uses (`prosecdef` existence probe), applied to
+        `kernel.artifact_write` -- a world without s51 applied refuses all three artifact routes
+        typed, never falls back to any other path."""
+        if bool(_query_json(
+            cfg,
+            f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n "
+            f"ON n.oid = p.pronamespace WHERE n.nspname = '{cfg.kern}' "
+            f"AND p.proname = 'artifact_write' AND p.prosecdef));",
+        )):
+            return None
+        return capability_absent(
+            "s51-artifact-store",
+            "This world carries no s51 artifact store (kernel.artifact_write absent) -- the "
+            "artifact routes refuse entirely rather than falling back to any other path "
+            "(design/FABLE-ARTIFACT-STORE-SPEC.md; design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md "
+            "Part B).")
+
+    def _bad_artifact_hash(h: str) -> JSONResponse:
+        return JSONResponse(status_code=422, content={
+            "detail": f"artifact hash {h!r} is not a well-formed 64-lowercase-hex-char SHA-256 "
+                      f"digest (kernel/lineage/s51-artifact-store.sql: hash is the artifact "
+                      f"table's own PK, always lowercase hex)."})
+
+    @app.get("/d/{deployment}/artifacts/{hash}")
+    def artifact_get(deployment: str, hash: str) -> Response:
+        """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 1: content, streamed as the
+        artifact's own stored media_type -- not wrapped in a JSON envelope (the legacy CLI's own
+        `led artifact get` writes bytes to a file/stdout directly; this route mirrors that shape
+        rather than forcing every caller through a base64 JSON decode for what is, on the wire,
+        already raw content). Server-side hash re-verification on the way OUT (mirroring the
+        legacy CLI's own WA6 corruption-drill discipline, s51-artifact-store.sql's spec: "a
+        corrupt store must fail loud, never serve silently wrong bytes") -- belt-and-braces with
+        any client-side re-check the rebased CLI shim also performs."""
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        if not _ARTIFACT_HASH_RE.match(hash):
+            return _bad_artifact_hash(hash)
+        cap_err = _artifact_capability_absent(cfg)
+        if cap_err is not None:
+            return cap_err
+        row = _query_json(
+            cfg,
+            f"SELECT to_jsonb(t) FROM (SELECT encode(bytes,'base64') AS b64, media_type "
+            f"FROM {cfg.kern}.artifact WHERE hash = '{hash}') t;")
+        if row is None:
+            return JSONResponse(status_code=404, content={
+                "detail": f"no artifact registered with hash {hash!r}."})
+        raw = base64.b64decode(row["b64"])
+        computed = hashlib.sha256(raw).hexdigest()
+        if computed != hash:
+            return JSONResponse(status_code=500, content={
+                "detail": f"CORRUPT STORE -- the bytes stored for hash {hash!r} do NOT hash to "
+                          f"it (computed {computed!r} instead); kernel/lineage/"
+                          f"s51-artifact-store.sql: a corrupt store fails loud here, never "
+                          f"serves silently-wrong bytes under a claimed hash. Nothing served."})
+        return Response(content=raw, media_type=row["media_type"])
+
+    @app.get("/d/{deployment}/artifacts/{hash}/stat")
+    def artifact_stat(deployment: str, hash: str) -> Response:
+        """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 2: metadata only, no bytes --
+        mirrors `led artifact stat`'s own legacy shape (hash, size, media_type, registered_at,
+        registered_by NAME)."""
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        if not _ARTIFACT_HASH_RE.match(hash):
+            return _bad_artifact_hash(hash)
+        cap_err = _artifact_capability_absent(cfg)
+        if cap_err is not None:
+            return cap_err
+        row = _query_json(
+            cfg,
+            f"SELECT to_jsonb(t) FROM (SELECT a.hash, a.size, a.media_type, a.registered_at, "
+            f"p.name AS registered_by FROM {cfg.kern}.artifact a "
+            f"LEFT JOIN {cfg.kern}.principal p ON p.id = a.registered_by "
+            f"WHERE a.hash = '{hash}') t;")
+        if row is None:
+            return JSONResponse(status_code=404, content={
+                "detail": f"no artifact registered with hash {hash!r}."})
+        return JSONResponse(content=row)
+
+    def artifact_put(deployment: str, request: Request, raw_body: bytes = Depends(_bounded_artifact_body)) -> Response:
+        """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 3: register bytes.
+        DELIBERATELY NOT built from `make_write_route` (that helper's transport -- a psql `-v`
+        execve argument, bounded by MAX_PSQL_ARG_BYTES=100000 -- is exactly the wall
+        kernel/lineage/s51-artifact-store.sql's own header names as too small for a base64
+        artifact payload; see `_query_json_stdin_var`'s own docstring). This handler runs the
+        SAME parse-closure/value-closure/id-domain checkpoints `make_write_route` does, in the
+        SAME order, then hands the re-serialized payload to psql via a server-side tempfile
+        instead of an argv slot -- no MAX_PSQL_ARG_BYTES checkpoint applies here (P1: the
+        kernel's own 1 MiB cap, verified server-side inside kernel.artifact_write, is the ONLY
+        size authority; this route imposes no second one)."""
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        cap_err = _artifact_capability_absent(cfg)
+        if cap_err is not None:
+            return cap_err
+        try:
+            payload = json.loads(raw_body) if raw_body else None
+        except (ValueError, RecursionError) as e:
+            axis, detail = _classify_parse_failure(e)
+            return JSONResponse(status_code=422, content={
+                "detail": f"malformed write payload -- {axis} axis: {detail}"})
+        if not isinstance(payload, dict):
+            return JSONResponse(status_code=422, content={
+                "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
+        int_field_oor = _bound_write_payload_ints("artifact", payload)
+        if int_field_oor is not None:
+            return int_field_oor
+        payload_json, reser_axis, reser_detail = _reserialize_or_value_axis_failure(payload)
+        if payload_json is None:
+            return JSONResponse(status_code=422, content={
+                "detail": f"malformed write payload -- {reser_axis} axis: {reser_detail}"})
+        try:
+            repr_detail = _representability_axis_failure(payload)
+        except RecursionError as e:
+            axis, detail = _classify_parse_failure(e)
+            return JSONResponse(status_code=422, content={
+                "detail": f"malformed write payload -- {axis} axis: {detail}"})
+        if repr_detail is not None:
+            return JSONResponse(status_code=422, content={
+                "detail": f"malformed write payload -- representability axis: {repr_detail}"})
+        # NO MAX_PSQL_ARG_BYTES checkpoint here -- see this function's own docstring; the payload
+        # crosses to psql via a tempfile, never an argv slot.
+        fd, tmp_path = tempfile.mkstemp(prefix="boundary-artifact-put-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload_json)
+            verdict = _query_json_stdin_var(
+                cfg, "payload", tmp_path,
+                f"SELECT to_jsonb(v) FROM {cfg.kern}.artifact_write(:'payload'::jsonb) v;")
+        finally:
+            os.unlink(tmp_path)
+        return JSONResponse(status_code=200, content=verdict)
+
+    app.add_api_route("/d/{deployment}/artifacts", artifact_put, methods=["POST"])
 
     return app
 

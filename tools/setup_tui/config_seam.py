@@ -29,12 +29,9 @@ FOUR JOBS:
 Stdlib + this package only, top-of-file imports (the lazy-import gate applies)."""
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import re
-import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 
 from tools.configtree import FieldName, NodeId, ScopedFieldKey
@@ -95,8 +92,11 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
             "use_scratch_identity": True,  # --from-config is never a human at the keyboard
             "name": "", "email": "", "gnupghome": "",
         },
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): no "run" key -- the
+        # section is unconditional (steps_boundary.py's own fields() docstring, decline gate
+        # removed), so there is no gate for a config-driven run to answer either.
         "boundary": {
-            "run": bool(g("boundary.configure", False)), "override": True, "dest": dest,
+            "override": True, "dest": dest,
             "world": world, "host": str(g("substrate.host", "")), "db": str(g("substrate.db", "")),
             "start_now": bool(g("boundary.start_now", False)),
         },
@@ -121,7 +121,6 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
         },
     }
     return out
-
 
 # --------------------------------------------------------------------------------------------
 # 2. --initial-config: seed the wizard's shared `state` -- every `steps_*.py` field default reads
@@ -188,7 +187,8 @@ _SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
     "birth.run": ("birth", "run"),
     "signed_genesis.run": ("signed-genesis", "run"),
     "signed_genesis.commission_statement": ("signed-genesis", "statement"),
-    "boundary.configure": ("boundary", "run"),
+    # no "boundary.configure" entry -- retired (ledger row 1149/1150): the section carries no
+    # "run" field to seed, it is unconditional.
     "boundary.start_now": ("boundary", "start_now"),
     "observability.run": ("observability", "run"),
     "observability.otelcol": ("observability", "otelcol"),
@@ -361,7 +361,10 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
         if stmt_rows:
             out["signed_genesis.commission_statement"] = stmt_rows[0]["statement"]
 
-    out["boundary.configure"] = "boundary_url" in state
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): "boundary.configure" is
+    # retired from SCHEMA entirely -- capturing it here would make `render_toml` raise (its own
+    # "not in SCHEMA -- caller bug" guard), correctly, since it is no longer a decision this run
+    # made (the section is unconditional).
     out["boundary.start_now"] = bool(state.get("boundary_will_start"))
 
     out["observability.run"] = bool(state.get("observability_engaged"))

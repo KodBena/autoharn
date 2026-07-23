@@ -170,6 +170,29 @@ def get_json(base: str, path: str, params: dict[str, Any] | None = None) -> Any:
     return body
 
 
+def get_bytes(base: str, path: str) -> tuple[bytes, str]:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `GET /artifacts/{hash}` serves raw
+    content (streamed, not a JSON envelope -- see serving/boundary_service.py's own
+    `artifact_get` docstring), so this is a SEPARATE choke point from `get_json` above (which
+    always JSON-decodes the response body). Returns (raw bytes, the response's own Content-Type
+    header) on 200; raises `BoundaryRefusal` on any typed non-200 (the boundary's own refusal
+    shapes ARE JSON on the refusal path, decoded exactly as `get_json` does for its own 4xx/5xx)."""
+    url = base + path
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=65.0) as resp:
+            return resp.read(), resp.headers.get("Content-Type", "application/octet-stream")
+    except urllib.error.HTTPError as e:
+        body_bytes = e.read()
+        try:
+            body = json.loads(body_bytes) if body_bytes else None
+        except json.JSONDecodeError:
+            body = {"detail": body_bytes.decode("utf-8", errors="replace")}
+        raise BoundaryRefusal(e.code, body) from e
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        raise BoundaryUnreachable(f"{e.__class__.__name__}: {e}") from e
+
+
 def get_all_rows(base: str, path: str, cursor: str = "after_id", limit: int = 1000) -> list[dict]:
     """Walks EVERY page of a paginated read route to completion, returning the full row list --
     the client-side half of spec's own "no server-side filter grammar in v1: shims filter
@@ -222,7 +245,13 @@ def get_all_rows(base: str, path: str, cursor: str = "after_id", limit: int = 10
 # `BoundaryRefusal`) -- kept in sync by hand; a future view added to `VIEW_REGISTRY` with a
 # key column other than 'id'/'slug' needs a matching entry here, named as a residual risk rather
 # than silently assumed away.
-_SLUG_FIELD_OVERRIDE: dict[str, str] = {"countersign_obligation": "scope"}  # work_item_violations/work_review_gap/work_item_current all key on the default 'slug'
+_SLUG_FIELD_OVERRIDE: dict[str, str] = {
+    "countersign_obligation": "scope",
+    # legacy-led-retirement phase 1B (ledger row 1149): work_edge_parent keys on child_slug, not
+    # the default 'slug' -- work_item_violations/work_review_gap/work_item_current/work_startable
+    # all key on the default 'slug' and need no entry here.
+    "work_edge_parent": "child_slug",
+}
 _ID_FIELD_OVERRIDE: dict[str, str] = {
     "question_status": "question_id",
     "review_stamp_distinctness": "review_id",
@@ -242,6 +271,22 @@ def post_write(base: str, surface: str, payload: dict) -> tuple[int, dict]:
         raise BoundaryRefusal(status, body)
     if not isinstance(body, dict) or "disposition" not in body:
         raise BoundaryRefusal(status, body)  # a 200 with a non-verdict shape is still not a kernel verdict
+    return (0 if body["disposition"] == "accepted" else 1), body
+
+
+def post_artifact(base: str, payload: dict) -> tuple[int, dict]:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `POST /artifacts` -- the SAME
+    verdict-shaped response `post_write` already handles (kernel.artifact_write reuses s43's
+    write_verdict type unchanged), but the route is `/artifacts`, not `/write/{surface}` (Part B
+    deliberately does NOT run this payload through the generic `/write/` route table -- see
+    serving/boundary_service.py's own `artifact_put` docstring for why: the payload can approach
+    ~1.4 MiB, past `/write/`'s own MAX_PSQL_ARG_BYTES transport wall). Mirrors `post_write`'s own
+    body exactly, one path literal different."""
+    status, body = _http("POST", f"{base}/artifacts", payload, timeout=90.0)
+    if status != 200:
+        raise BoundaryRefusal(status, body)
+    if not isinstance(body, dict) or "disposition" not in body:
+        raise BoundaryRefusal(status, body)
     return (0 if body["disposition"] == "accepted" else 1), body
 
 
@@ -268,13 +313,23 @@ def write_and_report(base: str, surface: str, payload: dict, *, echo_row_id: boo
     return 1
 
 
-def report_boundary_exception(prog: str, exc: Exception) -> int:
+def report_boundary_exception(prog: str, exc: Exception, boundary_url: str | None = None) -> int:
     """The ONE place a rebased shim's top-level dispatch turns a `BoundaryRefusal`/
     `BoundaryUnreachable`/`BoundaryClientError` into stderr text + an exit code (ADR-0012 P1) --
     spec §5: "The boundary's own refusals ... surface as the shim's stderr with their teach-text
     and a distinct nonzero exit code." Never reached for a genuine kernel write_verdict refusal
     (that path returns exit 1 through `write_and_report`/`post_write` directly, without ever
-    raising)."""
+    raising).
+
+    `boundary_url` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger row
+    1158/1159, item 5: "the started boundary service's liveness is honestly handled -- if it
+    dies, ./led's refusal must teach how to restart it"): when the caller can supply it (its own
+    `ServedConfig.record.boundary_url`), a `BoundaryUnreachable` teaches the ONE restart command
+    for the STANDARD deployment shape this project's own tooling always produces (a
+    `boundary-multiplex.toml` beside `deployment.json`, launched via `python3 -m
+    serving.boundary_service`) -- the ensure-running umbrella spec automates this later; this is
+    the honest bridge until then. `None` (the default) preserves the prior, generic teach-text
+    exactly, for a caller that has no config in scope at its own exception-handling site."""
     if isinstance(exc, BoundaryRefusal):
         # Two message-key conventions coexist on the boundary's own typed shapes: the NAMED
         # pydantic models (PayloadTooLarge/InfraFailure/UnknownView/...) carry "message"; the
@@ -296,10 +351,21 @@ def report_boundary_exception(prog: str, exc: Exception) -> int:
             f"call):\n  {message}\n")
         return 3
     if isinstance(exc, BoundaryUnreachable):
+        shown_url = boundary_url or "unknown -- see this deployment.json"
         sys.stderr.write(
             f"{prog}: REFUSED -- the boundary service itself could not be reached "
             f"({exc.detail}). Nothing was read or written. Is the boundary process running at "
-            f"the deployment record's own boundary_url?\n")
+            f"the deployment record's own boundary_url ({shown_url})?\n")
+        if boundary_url is not None:
+            sys.stderr.write(
+                f"  Restart (this project's standard shape -- a boundary-multiplex.toml beside "
+                f"deployment.json, this same {boundary_url!r} URL's own port): from this "
+                f"deployment's own directory, run:\n"
+                f"    python3 -m serving.boundary_service --config boundary-multiplex.toml "
+                f"--port <the port in {boundary_url!r}> &\n"
+                f"  (background it, e.g. with `nohup ... &` or a process manager -- the "
+                f"ensure-running umbrella spec automates this standing-service lifecycle later; "
+                f"this is the bridge until then.)\n")
         return 4
     if isinstance(exc, BoundaryClientError):
         sys.stderr.write(f"{prog}: REFUSED -- {exc}\n")

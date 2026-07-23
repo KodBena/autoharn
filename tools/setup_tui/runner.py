@@ -58,13 +58,16 @@ def parse_row_id(output: str) -> int | None:
 
 
 def legacy_led_path(dest: str) -> str:
-    """`<dest>/legacy/led` -- ONE HOME (ADR-0012 P1) for this path string. Before this fix it was
-    independently re-typed as `os.path.join(dest, "legacy", "led")` in three places
-    (principals_authority.py, signed_genesis.py, screens.py) -- the exact P1 anti-pattern (row B)
-    this package's own `ROW_ID_RE`/`parse_row_id` fix above already remediated for the row-id
-    regex. This world's own direct-psql shim (bootstrap/templates/legacy-led.tmpl); every
-    AUTOHARN_COMPLETE world carries it unconditionally (destination.py's own classifier
-    guarantee, `_LEGACY_LED_REL`)."""
+    """`<dest>/legacy/led` -- ONE HOME (ADR-0012 P1) for this path string. RETIRED as an
+    execution target (legacy-led-retirement inventory pass, ledger row 1149/1150,
+    design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's own retirement act): `bootstrap/templates/
+    legacy-led.tmpl` no longer exists in this repository, and the scaffolded `<dest>/legacy/led`
+    shim is now a one-line teaching refusal, never a working direct-psql CLI. This path string
+    still names a REAL FILE every scaffolded world carries (destination.py's own
+    AUTOHARN_COMPLETE classifier guarantee, `_LEGACY_LED_REL`) -- kept for that existence-check
+    use (`screens.py`'s "legacy/led present" completeness rows), never for driving a real
+    command through it; no caller in this package resolves an execution target to this path
+    anymore (see `resolve_led` below)."""
     return os.path.join(dest, "legacy", "led")
 
 
@@ -72,33 +75,35 @@ def served_led_path(dest: str) -> str:
     """`<dest>/led` -- the rebased, SERVED shim (bootstrap/templates/led.tmpl) that refuses
     outright without `deployment.json`'s `boundary_url`/`boundary_deployment` keys
     (serving/boundary_cli_client.py `load_served_config`) -- those keys are written only once
-    `screen_boundary` has actually run."""
+    `screen_boundary` has actually run. Since legacy-led-retirement (ledger row 1149/1150,
+    boundary now mandatory at every birth), this is the ONLY led execution target this whole
+    package ever resolves."""
     return os.path.join(dest, "led")
 
 
 def resolve_led(dest: str) -> str | None:
-    """Resolves which led executable an ALREADY-EXISTING world (real files checked live on disk)
-    should be driven through for an ordinary attributed write -- mirrors
-    `bootstrap/extract_context.py`'s own `_find_led`, same fact, cited verbatim here: "legacy/led
-    (the direct-psql original) is preferred over ./led (the boundary_url/boundary_deployment-
-    requiring HTTP client, bootstrap/templates/led.tmpl) here specifically: ingestion is a batch
-    of ordinary attributed writes into a target world that need not have a boundary service wired
-    or running at all -- requiring one would make this tool depend on serving infrastructure
-    orthogonal to its own job." Hydration writes are exactly that same class. Prefers
-    `legacy_led_path(dest)`, falls back to `served_led_path(dest)` only for an older pre-split
-    scaffold that lacks legacy/led (the same docstring's own named case,
-    MAINT-EXPERIENCE-REBIRTH-RUNBOOK.md Step 1's witnessed instance). Returns `None` if neither
-    exists as an executable file.
+    """Resolves the led executable an ALREADY-EXISTING world (real files checked live on disk)
+    should be driven through for an ordinary attributed write.
+
+    legacy-led-retirement inventory pass (ledger row 1149/1150): this function used to prefer
+    `legacy_led_path(dest)`, falling back to `served_led_path(dest)` only for an older pre-split
+    scaffold -- mirroring `bootstrap/extract_context.py`'s own (now similarly retired) `_find_led`
+    preference. That preference is GONE: legacy-led.tmpl no longer exists in this repository, the
+    boundary is mandatory at every birth (no decline option, `screens.screen_boundary`'s own
+    docstring), and `legacy_led_path(dest)` resolves to a one-line teaching-refusal stub that
+    would never perform the write a caller here is resolving this path FOR. This now checks only
+    `served_led_path(dest)`, live, exactly as `bootstrap/extract_context.py`'s own retired
+    `_find_led` docstring names it: "no candidate search remains -- there is exactly one lawful
+    `led` per world." Returns `None` if it does not exist as an executable file.
 
     NOT for a `dest` that is still a QUEUED, not-yet-committed plan entry (birth hasn't run yet
-    this session) -- there is nothing on disk yet to check, and the scaffold's own guarantee
-    (every AUTOHARN_COMPLETE world carries legacy/led) already answers the question; a caller in
-    that position uses `legacy_led_path(dest)` directly, exactly as
-    principals_authority.py/signed_genesis.py already do (their own module docstrings) and as
-    `screens.screen_hydration`'s `dest_would_exist` branch now does too."""
-    for cand in (legacy_led_path(dest), served_led_path(dest)):
-        if os.path.isfile(cand) and os.access(cand, os.X_OK):
-            return cand
+    this session) -- there is nothing on disk yet to check; a caller in that position uses
+    `served_led_path(dest)` directly, exactly as principals_authority.py/signed_genesis.py
+    already do (their own module docstrings) and as `screens.screen_hydration`'s
+    `dest_would_exist` branch now does too."""
+    cand = served_led_path(dest)
+    if os.path.isfile(cand) and os.access(cand, os.X_OK):
+        return cand
     return None
 
 

@@ -16,7 +16,7 @@ from tools.configtree import (ConfirmField, MultiChoiceField, SectionResult, Sec
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import durable_decisions, feature_facts
 from tools.setup_tui.plan import CommandAct, PlanEntry
-from tools.setup_tui.runner import legacy_led_path, resolve_led
+from tools.setup_tui.runner import resolve_led, served_led_path
 
 _SLUG = "hydration"
 
@@ -111,13 +111,25 @@ def submit(state: dict, answers: dict) -> SectionResult:
     if not dest:
         return SectionResult(ok=False, errors={"": "destination (set in Fork/target) required"})
     if state.get("dest_would_exist"):
-        led = legacy_led_path(dest)
-        cl.add("hydration", "led present", ck.DRY_SKIPPED, f"'{led}' queued earlier")
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): the boundary is mandatory
+        # at every birth now (no decline option, steps_boundary.py's own docstring) and runs
+        # BEFORE hydration in step order -- by the time this act executes at commit time the
+        # world's served `./led` is already configured and live, exactly like principals-
+        # authority/signed-genesis (all three re-sequenced the same way). `legacy_led_path`
+        # resolves to a one-line teaching-refusal stub since legacy-led.tmpl no longer exists --
+        # never a lawful execution target.
+        led = served_led_path(dest)
+        cl.add("hydration", "led present", ck.DRY_SKIPPED,
+               f"'{led}' queued earlier this run (written by birth+boundary) -- not "
+               f"independently checkable read-only, recorded honestly rather than faked")
     else:
+        # An OUT-OF-SEQUENCE entry (an already-existing world, not queued this session) may
+        # predate the boundary-mandatory retirement. `resolve_led` no longer prefers legacy/led
+        # (retired with legacy-led.tmpl) -- just the served `./led`, live-checked for existence.
         led = resolve_led(dest)
         if led is None:
             cl.add("hydration", "led present", ck.WITNESSED, f"RED: no led under {dest}")
-            return SectionResult(ok=False, errors={"": f"no led/legacy-led found under {dest} "
+            return SectionResult(ok=False, errors={"": f"no led found under {dest} "
                                                  "(destination set in Fork/target)"})
         cl.add("hydration", "led present", ck.WITNESSED, led)
 

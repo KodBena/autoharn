@@ -171,7 +171,11 @@ BASELINE: dict[str, int] = {
     # tools/setup_tui/screens.py -- REMOVED from BASELINE 2026-07-22
     # (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2, wholesale rebuild): `git rm`'d whole -- the
     # teletype-driving screen functions have no successor file, the decision/action logic they
-    # carried lives on split across tools/setup_tui/steps_*.py (each well under ceiling).
+    # carried lives on split across tools/setup_tui/steps_*.py (each well under ceiling). The
+    # legacy-led-retirement Part C re-sequencing/health-gate/served-led changes that would have
+    # bumped this file's count on the pre-rebuild line (row 1158/1159) are ported into the
+    # steps_*.py successors instead (merge of worktree-agent-a17ac09f50b3745c0, integration
+    # branch) -- there is no longer a screens.py path for this row to describe.
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -217,12 +221,21 @@ BASELINE: dict[str, int] = {
     # a DECLARED raw/history reader by design -- the general review-legibility surface must show
     # a superseded review too). Genuinely new classification content, not padding. Written plain,
     # no golfing.
-    "gates/ledger_reader_allowlist.py":                 525,
+    # Reconciled +1 to 526 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A, ledger row 1150,
+    # kernel/lineage/s57-obligation-revocation-event.sql): CHAIN += s57 -- exercises review_gap's
+    # own third, narrowing-only anti-join, an already-allowlisted entry whose reason text is
+    # UPDATED in place (no new row). One genuinely load-bearing line, not padding.
+    "gates/ledger_reader_allowlist.py":                 526,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
     # trusted). Genuinely new decision logic, not padding. Written plain, no golfing.
-    "tools/setup_tui/signed_genesis.py":                525,
+    # Reconciled +7 to 532 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger
+    # row 1158/1159): `write_commission_act` gained the `led` parameter (the caller now resolves
+    # served-vs-legacy from `state["boundary_url"]` rather than this module hardcoding
+    # legacy/led unconditionally) plus the docstring update explaining the re-sequencing. Genuinely
+    # new decision-boundary logic, not padding. Written plain, no golfing.
+    "tools/setup_tui/signed_genesis.py":                532,
     "gates/interpreter_boundary_lint.py":               498,
     "hooks/stamp_intercept.py":                         482,
     # NEW to BASELINE, 461 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
@@ -276,6 +289,21 @@ BASELINE: dict[str, int] = {
     # flagged), not grandfathered debt -- the ratchet working, same shape as durable_decisions.py
     # above.
     "hooks/pretooluse_sql_block.py":                    420,
+    # NEW to BASELINE 2026-07-23 (integration merge, TUI-rebuild line x retirement line):
+    # 406 lines -- both sides' own docstrings (the rebuild's P10 CONTENT SPLIT note, the
+    # retirement's SCREEN POSITION AND VERB CHOICE re-sequencing note) are genuinely independent
+    # provenance the merge honestly keeps side by side, not padding; no logic duplicated, just
+    # two histories' worth of "why" on one file. Written plain, no golfing; witnessed growth of
+    # a previously-under-ceiling (359-line) file, crossing the ceiling only as a merge artifact.
+    "tools/setup_tui/principals_authority.py":          406,
+    # NEW to BASELINE 2026-07-23 (integration merge, same pass): 405 lines -- runner.py's own
+    # `legacy_led_path`/`served_led_path`/`resolve_led` docstrings were each rewritten in place by
+    # the retirement line to explain the legacy-led.tmpl retirement (ledger row 1149/1150), net
+    # honest growth (the retired-preference explanation replacing, not simply appending to, the
+    # old preference explanation) merged cleanly against the rebuild line's own unrelated hunks
+    # elsewhere in the same file. Written plain, no golfing; witnessed growth of a previously-
+    # under-ceiling file, crossing the ceiling only as a merge artifact.
+    "tools/setup_tui/runner.py":                        405,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
 }

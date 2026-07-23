@@ -190,6 +190,18 @@ EXPECTED_ROUTES = {
     ("GET", "/d/{deployment}/standing/principals"), ("GET", "/d/{deployment}/work/items"),
     ("POST", "/d/{deployment}/write/ledger"), ("POST", "/d/{deployment}/write/review"),
     ("POST", "/d/{deployment}/write/registration"), ("POST", "/d/{deployment}/write/obligation"),
+    # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md (ratified ledger decision row 1652, landed
+    # BEFORE this delta -- this fixture's own EXPECTED_ROUTES had gone stale against it, a
+    # pre-existing hazard fixed here in passing per CLAUDE.md's engineering-responsibility rule,
+    # since this same delta already touches this fixture's own target file): the three-route
+    # amendment.
+    ("GET", "/d/{deployment}/views/{view}"), ("GET", "/d/{deployment}/rows/asof/{ts}"),
+    ("GET", "/d/{deployment}/meta"),
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Parts A+B (maintainer-ratified ledger row 1150):
+    # the sixth s43-family write surface (Part A) plus the three artifact routes (Part B).
+    ("POST", "/d/{deployment}/write/obligation_revoke"),
+    ("GET", "/d/{deployment}/artifacts/{hash}"), ("GET", "/d/{deployment}/artifacts/{hash}/stat"),
+    ("POST", "/d/{deployment}/artifacts"),
 }
 
 
@@ -1696,12 +1708,17 @@ def main() -> int:
               f"GET /health on WORLD NOCAP (chain ends {CHAIN_NOCAP[-1]}, no s40/s41/s43): "
               f"status={st_h_nc} body={body_h_nc}", failures)
 
-        # -- W11 ABSENT legs: this world carries NEITHER s22 nor s41 -- both gates refuse.
+        # -- W11 ABSENT legs: this world carries NEITHER s40 nor s22 -- both gates refuse.
+        # (legacy-led-retirement inventory pass, ledger row 1149: /standing/principals' own
+        # gate was re-pointed at principal_standing_current, the view it actually queries --
+        # s40, not s41 -- since that view is defined by kernel/lineage/s40-principal-identity-
+        # events.sql alone; this world (pre-s22/s40/s41) still lacks it, so the capability
+        # name in the refusal body is now "s40-identity", not "s41-identity".)
         st_sp_nc, v_sp_nc = http_get(base_nc + "/standing/principals") if up_nc else (0, {})
         st_wi_nc, v_wi_nc = http_get(base_nc + "/work/items") if up_nc else (0, {})
-        check("w11-absent-legs-s41-and-s22-refuse",
+        check("w11-absent-legs-s40-and-s22-refuse",
               up_nc and st_sp_nc == 409 and v_sp_nc.get("disposition") == "capability_absent"
-              and v_sp_nc.get("capability") == "s41-identity"
+              and v_sp_nc.get("capability") == "s40-identity"
               and st_wi_nc == 409 and v_wi_nc.get("disposition") == "capability_absent"
               and v_wi_nc.get("capability") == "s22-work",
               f"GET /standing/principals status={st_sp_nc} body={v_sp_nc}; "

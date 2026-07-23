@@ -81,6 +81,7 @@ CHAIN = [
     "s54-belief-views.sql",
     "s55-dispatch-grain-independence.sql",
     "s56-reservation-residue.sql",
+    "s57-obligation-revocation-event.sql",
 ]
 # s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md,
 # maintainer-ratified 2026-07-22) extends this SAME gate's scratch CHAIN. discharging_attest
@@ -331,8 +332,8 @@ ALLOWLIST: dict[str, str] = {
     # -- current-truth readers with a RESIDUAL correctly-scoped inline leg (the spec's own
     #    'already filtered' finding — each raw read is a row-scoped in-force anti-join on the
     #    specific candidate row, not an unfiltered quantification) --
-    "review_gap": "actor-keyed obligation view (s15) — both raw reads carry their own row-scoped "
-                  "in-force anti-joins, correct since s15; outside s31's four re-issued members.",
+    "review_gap": "actor-keyed obligation view (s15) — all three raw reads (s57 row 1150 adds a "
+                  "row-scoped un-superseded-obligation_revoked anti-join) are row-scoped and correct.",
     "question_status": "question-row side factors through ledger_current (s31); the per-answer legs are "
                        "row-scoped in-force anti-joins on each answer candidate (already filtered).",
     "work_review_gap": "close-row side factors through ledger_current (s31); the discharge-review leg now "
