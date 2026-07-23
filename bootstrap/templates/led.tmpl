@@ -17,7 +17,10 @@ the legacy-led-retirement phase-1 pass (ledger row 1149): `led work open|claim|d
 list|violations|asof`, `led decomposition-review-status`, `led briefing`, and the generic path's
 client-side statement-grammar pre-flight all moved from NOT COVERED to COVERED below -- see each
 item's own comment for exactly how it is served and any disclosed narrowing versus the legacy
-byte-for-byte original.
+byte-for-byte original. Phase 1B (same ledger row, coordinator narrowing corrected) closed the
+remainder of the `led work *` surface -- `review-gap`/`startable`/`resolve-violation`/
+`supersede-cascade`, all eleven of eleven sub-verbs now covered -- and the two remaining
+statement-grammar prefixes, `actual:`/`outcome:`.
   COVERED:
     led --recent [N] / led current [N] / led show <id>      (reads, /rows/current, /rows/{id})
     led question-status / review-gap / stamp-distinctness / standing   (reads, /views/{view})
@@ -26,15 +29,13 @@ byte-for-byte original.
         -f/-e/--supersedes/--amends/--amends-scope/--answers/--refs/--concern/--evidence/
         --confidence/--event-time, and `decision`'s own --grade, ALL carried through to the
         payload exactly as the legacy tool's own flag set names them, PLUS (legacy-led-
-        retirement phase 1) the SAME client-side statement-grammar pre-flight the legacy
+        retirement phase 1/1B) the SAME client-side statement-grammar pre-flight the legacy
         generic path runs before ANY write is attempted: a statement beginning `resource:`/
-        `estimate:`/`taxon:`/`interface:`/`review:`/`review-done:` (after leading-whitespace
-        strip) is validated against its own closed field grammar (see `_GRAMMAR_CHECKERS`
-        below, ported byte-identical refusal text from legacy-led.tmpl) -- REFUSED, nothing
-        written, before the payload is even built, on a malformed declaration. `actual:`/
-        `outcome:` carry the SAME kind of legacy pre-flight but are NOT in this pass's named
-        six-prefix list (commissioning text, ledger row 1149) -- they remain `./legacy/led`-only,
-        named here rather than silently absorbed into "the grammar preflight is now covered".
+        `estimate:`/`actual:`/`taxon:`/`interface:`/`outcome:`/`review:`/`review-done:` (after
+        leading-whitespace strip) is validated against its own closed field grammar (see
+        `_GRAMMAR_CHECKERS` below, ported byte-identical refusal text from legacy-led.tmpl) --
+        REFUSED, nothing written, before the payload is even built, on a malformed declaration.
+        All eight of legacy's own statement-grammar prefixes are now covered -- none remain.
     led register-principal <name> <class>      (write, registration_write)
     led obligate <scope> <assigned-by> <obliged-actor>                 (write, obligation_write)
     led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>  (write)
@@ -85,6 +86,26 @@ byte-for-byte original.
         route correctly drops it once its own retraction lands at-or-before the same
         timestamp. Timestamp grammar is also STRICTER (ISO-8601 only, matching /rows/asof/{ts}
         itself) than legacy's looser postgres-timestamptz-cast acceptance.
+    led work review-gap        (read, /views/work_review_gap, already in VIEW_REGISTRY)
+    led work startable         (read, /views/work_startable -- ADDED to VIEW_REGISTRY this
+        pass, phase 1B, per the s56-views precedent, keyed on slug/slug; a pre-s39 kernel's
+        404 is translated to legacy's own teach-text)
+    led work resolve-violation <target-id> <reissued|retired> "<basis>"
+        (--review-witness r | --review-deferred) [--witness r] [--supersedes id] [--class name]
+                                               (write, kind=work_violation_disposition via
+        /write/ledger; class re-derivation reads /views/work_item_violations (ordinary path)
+        or GET /rows/current for the named row (--supersedes correction path) -- same
+        ambiguity-refusal/mismatch-refusal teach-text as legacy)
+    led work supersede-cascade <old-slug> <new-slug> <title...>
+        [--parent p] [--discharge composite] [--refs r]
+                                               (a CLI COMPOSITION of `work open --supersedes`
+        and `work resolve-violation`, reading /views/work_edge_parent -- ADDED to VIEW_REGISTRY
+        this pass, keyed on child_slug/slug, per the s56-views precedent -- plus
+        /views/work_item_current and /views/work_item_violations for the per-child walk.
+        DISCLOSED IMPLEMENTATION-SHAPE DIFFERENCE, not a semantic one: legacy re-execs
+        `./led work open ...`/`./led work resolve-violation ...` as fresh subprocesses; this
+        port calls the equivalent Python functions in-process, re-deriving each step's written
+        row id via GET /rows/current exactly as legacy's own recursive shell-outs do)
   NOT COVERED (refuses, teaching `./legacy/led`, never silently falling through):
     led obligate revoke <scope>    -- a raw, privilege-gated DELETE (has_table_privilege-checked
         in the legacy tool itself) -- STRUCTURALLY incompatible with the boundary's own charter
@@ -92,24 +113,15 @@ byte-for-byte original.
         writes SQL DML", design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md §4) -- the SAME class of
         exclusion spec §5 itself names for `judge` ("not a ledger client in the boundary's
         sense"), applied here to one subcommand rather than a whole verb.
-    led work review-gap / led work startable / led work resolve-violation / led work
-        supersede-cascade   -- UNEXERCISED by this pass (ledger row 1149 named exactly
-        open|claim|depends|close|list|violations|asof, not the whole `work` surface) -- named
-        rather than silently dropped, a disclosed scope boundary of THIS commission, not a
-        structural incompatibility; a future pass can extend coverage to these four the same
-        way this one did for the seven above.
     led artifact put|get|stat   -- design/FABLE-ARTIFACT-STORE-SPEC.md's OWN scope line ("NOT
         routed in v1"): the artifact store is deliberately not exposed on the boundary at all in
         this build -- adding /artifacts/{hash} routes is a route-table amendment under the
         read-surface spec's own re-ratification discipline, named as future work. If the boundary
         cannot carry it, the verb refuses teaching `./legacy/led` -- the served route table is not
         extended for it here.
-    the `actual:`/`outcome:` statement-grammar PRE-FLIGHT validation -- structurally the SAME
-        mechanism as the six ported above, but not named in this pass's own commissioning text
-        (ledger row 1149's six-prefix list); a statement beginning with either prefix writes
-        through the generic path completely unvalidated client-side today (the kernel itself
-        still accepts any statement text under any kind regardless, unchanged) -- a disclosed,
-        bounded narrowing, not a correctness gap the kernel depends on.
+    As of legacy-led-retirement phase 1B, these are the ONLY two items left NOT COVERED: every
+    `led work *` sub-verb (eleven of eleven) and every one of legacy's own eight statement-
+    grammar pre-flight prefixes are now served through the boundary path.
 
 Lazy imports banned (CLAUDE.md, 2026-07-02): every import is top-of-file."""
 from __future__ import annotations
@@ -355,6 +367,110 @@ def _check_review_queue(trimmed: str) -> bool:
     return True
 
 
+def _check_actual(trimmed: str) -> bool:
+    normalized = _normalize_statement(trimmed)
+    body = normalized[len("actual:"):]
+    parts = [p.strip() for p in body.split("|")]
+    fields = ("TASK-SLUG", "TOOL-CALLS", "SUBAGENT-SPAWNS", "WALL-CLOCK", "TOKENS", "SOURCE")
+    valid_token_oom = ("1K", "10K", "100K", "1M", "10M+")
+    point_count_re = re.compile(r"^\d+$")
+    duration_re = re.compile(r"^\d+(\.\d+)?[smhd](-\d+(\.\d+)?[smhd])?$", re.IGNORECASE)
+    token_exact_re = re.compile(r"^\d+(\.\d+)?[KM]$", re.IGNORECASE)
+    bare_number_re = re.compile(r"^\d+$")
+
+    def refuse(msg: str) -> bool:
+        print(f"led: REFUSED -- malformed 'actual:' statement -- {msg}.", file=sys.stderr)
+        print("  grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md \"The 'actual:' statement grammar\"):", file=sys.stderr)
+        print("    actual: <TASK-SLUG> | <TOOL-CALLS> | <SUBAGENT-SPAWNS> | <WALL-CLOCK> | <TOKENS> | <SOURCE>", file=sys.stderr)
+        print(f"  the six fields, in order: {', '.join(fields)}", file=sys.stderr)
+        print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- may name a whole", file=sys.stderr)
+        print("  work item or a single spawn within it, e.g. item-slug-b-round-2)", file=sys.stderr)
+        print("  TOOL-CALLS/SUBAGENT-SPAWNS must be a bare non-negative integer -- NEVER a range (a", file=sys.stderr)
+        print("  measurement is a point, not a range; this is the one deliberate divergence from", file=sys.stderr)
+        print("  estimate:'s matching fields)", file=sys.stderr)
+        print("  WALL-CLOCK must be a duration like 20m/2h/1d/90s, or a range 10m-30m", file=sys.stderr)
+        print(f"  TOKENS must be an exact-ish K/M-suffixed count (204K, 1.2M), or one of the closed OOM", file=sys.stderr)
+        print(f"  bucket vocabulary {' | '.join(valid_token_oom)}, or a bare number no greater than 999", file=sys.stderr)
+        print("  (a bare number above 999 is refused -- ambiguous between a real count and a typo)", file=sys.stderr)
+        print("  SOURCE must be non-empty (state where the measurement came from)", file=sys.stderr)
+        print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+        print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+        print("  this is an ACTUAL for operational-efficiency retrospectives ONLY, never for cost", file=sys.stderr)
+        print("  policing (the same never-police invariant estimate: states, stated twice at", file=sys.stderr)
+        print("  commissioning, applies here verbatim) -- WALL-CLOCK/TOKENS are harness-sourced and", file=sys.stderr)
+        print("  DIAGNOSTIC-GRADE, permanently, per the action-stream ruling (ledgered 2026-07-13);", file=sys.stderr)
+        print("  see user-guide/USER-RETROSPECTIVE-RECIPE.md's actual: grammar section for the", file=sys.stderr)
+        print("  TOOL-CALLS/SUBAGENT-SPAWNS grade exception -- only the INTAKE SHAPE is refused", file=sys.stderr)
+        print("  here, never the measurement's meaning.", file=sys.stderr)
+        return False
+
+    if len(parts) != len(fields):
+        return refuse(f"expected exactly {len(fields)} '|'-separated fields, got {len(parts)}")
+    slug, tool_calls, spawns, wall_clock, tokens, source = parts
+    if not _SLUG_RE.match(slug):
+        return refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+    if not point_count_re.match(tool_calls):
+        return refuse(f"TOOL-CALLS field {tool_calls!r} is not a bare non-negative integer (ranges are refused here)")
+    if not point_count_re.match(spawns):
+        return refuse(f"SUBAGENT-SPAWNS field {spawns!r} is not a bare non-negative integer (ranges are refused here)")
+    if not duration_re.match(wall_clock):
+        return refuse(f"WALL-CLOCK field {wall_clock!r} is not a duration like 20m/2h/1d/90s or a range 10m-30m")
+    tokens_ok = (tokens in valid_token_oom or bool(token_exact_re.match(tokens))
+                 or (bool(bare_number_re.match(tokens)) and int(tokens) <= 999))
+    if not tokens_ok:
+        return refuse(f"TOKENS field {tokens!r} is not an exact-ish K/M-suffixed count, a valid OOM "
+                      f"bucket {valid_token_oom}, or a bare number <= 999")
+    if not source:
+        return refuse("SOURCE field is empty -- state where the measurement came from")
+    return True
+
+
+def _check_outcome(trimmed: str) -> bool:
+    normalized = _normalize_statement(trimmed)
+    body = normalized[len("outcome:"):]
+    parts = [p.strip() for p in body.split("|")]
+    fields = ("TASK-SLUG", "MODEL", "SEAM-VERDICT", "DEFECTS-FOUND-AT-SEAM", "NOTES")
+    model_re = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+    def refuse(msg: str) -> bool:
+        print(f"led: REFUSED -- malformed 'outcome:' statement -- {msg}.", file=sys.stderr)
+        print("  grammar (user-guide/USER-RETROSPECTIVE-RECIPE.md \"The 'outcome:' statement grammar\"):", file=sys.stderr)
+        print("    outcome: <TASK-SLUG> | <MODEL> | <SEAM-VERDICT> | <DEFECTS-FOUND-AT-SEAM> | <NOTES>", file=sys.stderr)
+        print(f"  the five fields, in order: {', '.join(fields)}", file=sys.stderr)
+        print("  TASK-SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same slug a", file=sys.stderr)
+        print("  'led work open <slug>'/'estimate:' row for it would use, so a retrospective can join", file=sys.stderr)
+        print("  on it)", file=sys.stderr)
+        print("  MODEL must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, e.g. 'sonnet',", file=sys.stderr)
+        print("  'opus', 'claude-sonnet-4-5' -- no spaces, so grouping by exact string match is honest)", file=sys.stderr)
+        print("  SEAM-VERDICT must be non-empty (what the seam review concluded, in the orchestrator's", file=sys.stderr)
+        print("  own words -- no closed vocabulary is imposed here)", file=sys.stderr)
+        print("  DEFECTS-FOUND-AT-SEAM must be non-empty (name what was found, or state '0'/'none' --", file=sys.stderr)
+        print("  never blank; a clean seam is a fact worth recording, not an absence)", file=sys.stderr)
+        print("  NOTES must be non-empty (free text; state 'none' if there is nothing to add)", file=sys.stderr)
+        print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
+        print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
+        print("  this is an OUTCOME for RETROSPECTIVE model-capability observation ONLY, never for", file=sys.stderr)
+        print("  policing a model or a task -- the same never-police invariant `estimate:`/`actual:`", file=sys.stderr)
+        print("  state applies here verbatim; MODEL is DECLARED-BY-DISPATCHER grade (diagnostic, not", file=sys.stderr)
+        print("  witnessed) -- only the INTAKE SHAPE is refused here, never the observation's content.", file=sys.stderr)
+        return False
+
+    if len(parts) != len(fields):
+        return refuse(f"expected exactly {len(fields)} '|'-separated fields, got {len(parts)}")
+    slug, model, seam_verdict, defects, notes = parts
+    if not _SLUG_RE.match(slug):
+        return refuse(f"TASK-SLUG field {slug!r} does not match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)")
+    if not model_re.match(model):
+        return refuse(f"MODEL field {model!r} does not match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (a bare model identifier, no spaces)")
+    if not seam_verdict:
+        return refuse("SEAM-VERDICT field is empty -- state what the seam review concluded")
+    if not defects:
+        return refuse("DEFECTS-FOUND-AT-SEAM field is empty -- name what was found, or state '0'/'none'")
+    if not notes:
+        return refuse("NOTES field is empty -- state 'none' if there is nothing to add")
+    return True
+
+
 def _check_review_done(trimmed: str) -> bool:
     normalized = _normalize_statement(trimmed)
     body = normalized[len("review-done:"):]
@@ -389,19 +505,23 @@ def _check_review_done(trimmed: str) -> bool:
 _GRAMMAR_CHECKERS = [
     ("resource:", _check_resource),
     ("estimate:", _check_estimate),
+    ("actual:", _check_actual),
     ("taxon:", _check_taxon),
     ("interface:", _check_interface),
+    ("outcome:", _check_outcome),
     ("review-done:", _check_review_done),
     ("review:", _check_review_queue),
 ]
 
 
 def _preflight_grammar(statement: str) -> bool:
-    """Returns True if `statement` is either subject to none of the six ported grammars, or
+    """Returns True if `statement` is either subject to none of the eight ported grammars
+    (resource:/estimate:/actual:/taxon:/interface:/outcome:/review:/review-done: -- the
+    original six from phase 1 plus actual:/outcome: added phase 1B, ledger row 1149), or
     subject to one and it validates; False (having already printed REFUSED teach-text to
     stderr, byte-identical to legacy-led.tmpl's own) if a recognized prefix's statement fails
     its own grammar. Runs ONLY on the generic <kind> <statement...> write path (cmd_generic),
-    exactly where legacy runs its six checks -- never on `led review`/`led work *`, which build
+    exactly where legacy runs its checks -- never on `led review`/`led work *`, which build
     their own statements from typed fields, not user free text under one of these prefixes."""
     trimmed = statement.lstrip()
     for prefix, checker in _GRAMMAR_CHECKERS:
@@ -979,6 +1099,348 @@ def cmd_work_asof(cfg: bcc.ServedConfig, ts: str) -> int:
     return 0
 
 
+def cmd_work_review_gap(cfg: bcc.ServedConfig) -> int:
+    """Ported off legacy-led.tmpl's `work review-gap` -- work_review_gap, item-keyed (s29's own
+    sibling of the ACTOR-keyed top-level `led review-gap`), read via GET /views/work_review_gap
+    (already in VIEW_REGISTRY, keyed on slug)."""
+    rows = bcc.get_all_rows(cfg.base, "/views/work_review_gap", cursor="after_slug")
+    for r in rows:
+        print(json.dumps(r, sort_keys=True))
+    return 0
+
+
+def cmd_work_startable(cfg: bcc.ServedConfig) -> int:
+    """Ported off legacy-led.tmpl's `work startable` -- work_startable (kernel/lineage/
+    s39-blocks-start.sql): open, unclaimed items whose blocks-start antecedents (if any) are all
+    resolved. Added to VIEW_REGISTRY this same pass (legacy-led-retirement phase 1B, ledger row
+    1149) -- a pre-s39 kernel gets the boundary's own capability_absent 404, translated here to
+    the same teach-text legacy's own live relation-existence gate prints."""
+    try:
+        rows = bcc.get_all_rows(cfg.base, "/views/work_startable", cursor="after_slug")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 404:
+            print("led work startable: REFUSED -- requires kernel/lineage/s39-blocks-start.sql "
+                  "applied to this project's schema (work_startable view not found -- this "
+                  "world's kernel predates s39). Apply s39 as a maintainer act, or use 'led "
+                  "work list' in the meantime.", file=sys.stderr)
+            return 1
+        raise
+    for r in rows:
+        print(json.dumps(r, sort_keys=True))
+    return 0
+
+
+def _current_row(cfg: bcc.ServedConfig, kind: str, slug: str) -> dict | None:
+    """Walks GET /rows/current (the in-force, supersession-filtered read) looking for the ONE
+    row of `kind` whose work_slug is `slug` -- validate_work_item() (s22+) admits at most one
+    CURRENT such row per (kind, slug) for work_opened; used the same way for work_claimed/
+    work_closed (also at-most-one-current in ordinary operation). Returns None if no match."""
+    for r in bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id"):
+        if r.get("kind") == kind and r.get("work_slug") == slug:
+            return r
+    return None
+
+
+def _work_item_current_row(cfg: bcc.ServedConfig, slug: str) -> dict | None:
+    for r in bcc.get_all_rows(cfg.base, "/views/work_item_current", cursor="after_slug"):
+        if r.get("slug") == slug:
+            return r
+    return None
+
+
+def _violations_for_slug(cfg: bcc.ServedConfig, slug: str, violation: str) -> list[int]:
+    """Sorted target_id list matching (slug, violation) off GET /views/work_item_violations --
+    the same view `led work violations` already reads, filtered client-side (no server-side
+    filter grammar, spec's own discipline)."""
+    rows = bcc.get_all_rows(cfg.base, "/views/work_item_violations", cursor="after_slug")
+    return sorted({r["target_id"] for r in rows
+                   if r.get("slug") == slug and r.get("violation") == violation
+                   and r.get("target_id") is not None})
+
+
+def cmd_work_resolve_violation(cfg: bcc.ServedConfig, argv: list[str]) -> int:
+    """Ported off legacy-led.tmpl's `work resolve-violation` (kernel/lineage/
+    s37-violation-disposition.sql). Class is RE-DERIVED against work_item_violations (or, on
+    the --supersedes correction path, against the disposition row being corrected) at write
+    time -- never parsed from display text, exactly legacy's own discipline."""
+    witness = review_witness = supersedes = class_flag = None
+    review_deferred = False
+    args: list[str] = []
+    it = iter(argv)
+    for tok in it:
+        if tok == "--witness":
+            witness = next(it, None)
+        elif tok == "--review-witness":
+            review_witness = next(it, None)
+        elif tok == "--review-deferred":
+            review_deferred = True
+        elif tok == "--supersedes":
+            supersedes = next(it, None)
+        elif tok == "--class":
+            class_flag = next(it, None)
+        elif tok.startswith("--"):
+            print(f"led work resolve-violation: REFUSED -- unrecognized flag '{tok}'.", file=sys.stderr)
+            print("  led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"", file=sys.stderr)
+            print("    accepts only: --witness <successor-ref>, --review-witness <ref>,", file=sys.stderr)
+            print("    --review-deferred, --supersedes <old-disposition-id>, --class <name>.", file=sys.stderr)
+            print("    NOTHING was written.", file=sys.stderr)
+            return 1
+        else:
+            args.append(tok)
+    if len(args) < 3:
+        print("usage: led work resolve-violation <violating-act-id> <reissued|retired> \"<basis>\"",
+              file=sys.stderr)
+        print("         (--review-witness <ref> | --review-deferred) [--witness <successor-ref>]",
+              file=sys.stderr)
+        print("         [--supersedes <old-disposition-id>] [--class <name>]", file=sys.stderr)
+        return 4
+    target_id, resolution = args[0], args[1]
+    basis = " ".join(args[2:])
+    if supersedes and class_flag:
+        print("led work resolve-violation: REFUSED -- --class and --supersedes are not combined: "
+              "--class disambiguates the ordinary construction path; --supersedes (the correction "
+              "path) derives class from the disposition it corrects. Omit --class when using "
+              "--supersedes.", file=sys.stderr)
+        return 1
+    if resolution not in ("reissued", "retired"):
+        print(f"led work resolve-violation: REFUSED -- resolution must be exactly 'reissued' or "
+              f"'retired' (got {resolution!r}).", file=sys.stderr)
+        return 1
+    if review_witness and review_deferred:
+        print("led work resolve-violation: REFUSED -- --review-witness and --review-deferred are "
+              "the TWO CONSTRUCTORS of a review disposition; exactly ONE, never both.", file=sys.stderr)
+        return 1
+    if not review_witness and not review_deferred:
+        print("led work resolve-violation: REFUSED -- a review-silent disposition is "
+              "unrepresentable. Choose exactly ONE: --review-witness <ref> | --review-deferred.",
+              file=sys.stderr)
+        return 1
+    if resolution == "reissued" and not witness:
+        print("led work resolve-violation: WARNING -- reissued with no --witness <successor-ref> "
+              "cited -- the kernel cannot verify successor equivalence, so this is NOT refused, "
+              "but the disposition's checkable basis then holds VACUOUSLY. Prefer citing the "
+              "successor row id when one exists.", file=sys.stderr)
+
+    if supersedes:
+        old = _current_row_by_id(cfg, supersedes)
+        if old is None or old.get("kind") != "work_violation_disposition":
+            print(f"led work resolve-violation: REFUSED -- --supersedes {supersedes} does not "
+                  f"name a currently in-force work_violation_disposition row (already "
+                  f"superseded, wrong kind, or does not exist). Run 'led work violations' or "
+                  f"read work_violation_history to find the row you mean.", file=sys.stderr)
+            return 1
+        class_ = old.get("work_violation_class")
+        old_target = old.get("work_violation_target_id")
+        if str(old_target) != str(target_id):
+            print(f"led work resolve-violation: REFUSED -- --supersedes {supersedes} answers "
+                  f"target {old_target}, not {target_id} (this command's own first argument) -- "
+                  f"a correction must name the SAME target its predecessor answered.", file=sys.stderr)
+            return 1
+    else:
+        rows = bcc.get_all_rows(cfg.base, "/views/work_item_violations", cursor="after_slug")
+        classes = sorted({r["violation"] for r in rows if str(r.get("target_id")) == str(target_id)})
+        if not classes:
+            print(f"led work resolve-violation: REFUSED -- target {target_id} is not currently "
+                  f"an in-force work_item_violations member (re-derived against the view "
+                  f"itself). Run './led work violations' to see what is currently answerable. "
+                  f"(If you are CORRECTING a wrong disposition rather than answering a fresh "
+                  f"violation, add --supersedes <the wrong disposition's row id>.)", file=sys.stderr)
+            return 1
+        if len(classes) > 1:
+            if class_flag:
+                if class_flag not in classes:
+                    print(f"led work resolve-violation: REFUSED -- --class {class_flag!r} is "
+                          f"not one of the classes target {target_id} currently matches: "
+                          f"{classes}.", file=sys.stderr)
+                    return 1
+                class_ = class_flag
+            else:
+                print(f"led work resolve-violation: REFUSED -- target {target_id} matches MORE "
+                      f"THAN ONE work_item_violations class at once: {classes}. Disambiguate "
+                      f"with --class <name>. Each matched class is a SEPARATE disposition -- "
+                      f"resolve them ONE AT A TIME, one --class per invocation.", file=sys.stderr)
+                return 1
+        else:
+            class_ = classes[0]
+            if class_flag and class_flag != class_:
+                print(f"led work resolve-violation: REFUSED -- --class {class_flag!r} does not "
+                      f"match the one class target {target_id} currently matches ({class_!r}).",
+                      file=sys.stderr)
+                return 1
+
+    disposition, review_ref = ("witnessed", review_witness) if review_witness else ("deferred", None)
+    actor = _resolve_actor(cfg)
+    payload: dict = {"kind": "work_violation_disposition", "work_violation_class": class_,
+                      "work_violation_target_id": int(target_id), "work_resolution": resolution,
+                      "rationale": basis, "work_review_disposition": disposition,
+                      "statement": f"work_violation_disposition: {class_} target {target_id} ({resolution})"}
+    if witness:
+        try:
+            payload["work_violation_witness"] = int(witness)
+        except ValueError:
+            print(f"led work resolve-violation: REFUSED -- --witness {witness!r} must be a "
+                  f"ledger row id (a bare integer, the successor row's own id).", file=sys.stderr)
+            return 4
+    if review_ref:
+        payload["work_review_ref"] = review_ref
+    if supersedes:
+        payload["supersedes"] = int(supersedes)
+    if actor is not None:
+        payload["actor"] = actor
+    return bcc.write_and_report(cfg.base, "ledger", payload)
+
+
+def _current_row_by_id(cfg: bcc.ServedConfig, row_id: str) -> dict | None:
+    """Walks GET /rows/current looking for the exact row id -- ledger_current's own "in force"
+    reading (a superseded row is simply absent from this walk), used by the --supersedes
+    correction path above exactly the way legacy's own `ledger_current WHERE id = :sid` does."""
+    try:
+        rid = int(row_id)
+    except ValueError:
+        return None
+    for r in bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id"):
+        if r.get("id") == rid:
+            return r
+    return None
+
+
+def cmd_work_supersede_cascade(cfg: bcc.ServedConfig, argv: list[str]) -> int:
+    """Ported off legacy-led.tmpl's `work supersede-cascade` (kernel/lineage/
+    s37-violation-disposition.sql element 5) -- a CLI COMPOSITION of ordinary acts (`work open
+    --supersedes`, `work resolve-violation`), no kernel involvement beyond what those two
+    already provide. DISCLOSED IMPLEMENTATION-SHAPE DIFFERENCE, not a semantic one: legacy
+    re-execs `./led work open ...`/`./led work resolve-violation ...` as fresh subprocesses;
+    this port calls `cmd_work_open`/`cmd_work_resolve_violation` as ordinary in-process function
+    calls (the natural shape once the whole tool is one Python process) and re-derives each
+    step's own written row id via GET /rows/current exactly as legacy's own recursive shell-outs
+    do (neither parses the other call's OWN stdout)."""
+    cascade_parent = cascade_discharge = cascade_refs = None
+    args: list[str] = []
+    it = iter(argv)
+    for tok in it:
+        if tok == "--parent":
+            cascade_parent = next(it, None)
+        elif tok == "--discharge":
+            cascade_discharge = next(it, None)
+        elif tok == "--refs":
+            cascade_refs = next(it, None)
+        elif tok.startswith("--"):
+            print(f"led work supersede-cascade: REFUSED -- unrecognized flag '{tok}'.", file=sys.stderr)
+            print("  accepts only: --parent <grandparent-slug>, --discharge composite, --refs <ref>.",
+                  file=sys.stderr)
+            return 1
+        else:
+            args.append(tok)
+    if len(args) < 3:
+        print("usage: led work supersede-cascade <old-slug> <new-slug> <title...>", file=sys.stderr)
+        print("         [--parent <grandparent-slug>] [--discharge composite] [--refs <ref>]",
+              file=sys.stderr)
+        print("       Supersedes <old-slug> under <new-slug>, then cascades <old-slug>'s DIRECT "
+              "children only (one level).", file=sys.stderr)
+        return 4
+    old_slug, new_slug = args[0], args[1]
+    cascade_title = " ".join(args[2:])
+
+    old_open = _current_row(cfg, "work_opened", old_slug)
+    if old_open is None:
+        print(f"led work supersede-cascade: REFUSED -- '{old_slug}' is not currently an in-force "
+              f"work_opened item (already superseded, or never opened) -- refusing on this dirty "
+              f"starting state rather than guessing what was meant.", file=sys.stderr)
+        return 1
+    old_open_id = old_open["id"]
+
+    edges = bcc.get_all_rows(cfg.base, "/views/work_edge_parent", cursor="after_slug")
+    children = sorted({e["child_slug"] for e in edges if e.get("parent_slug") == old_slug})
+    has_grandchild = any(e.get("parent_slug") in children for e in edges)
+    if has_grandchild:
+        print(f"led work supersede-cascade: REFUSED -- '{old_slug}' has a grandchild-shaped "
+              f"descendant (a child that itself has children) -- this convenience verb walks "
+              f"ONE level only. Repair the deeper level by hand (led work resolve-violation "
+              f"...), or re-invoke this verb one level at a time, bottom-up.", file=sys.stderr)
+        return 1
+
+    print(f"led work supersede-cascade: superseding '{old_slug}' (row {old_open_id}) under "
+          f"'{new_slug}'...", file=sys.stderr)
+    open_argv = [new_slug, cascade_title, "--supersedes", str(old_open_id)]
+    if cascade_parent:
+        open_argv += ["--parent", cascade_parent]
+    if cascade_discharge:
+        open_argv += ["--discharge", cascade_discharge]
+    if cascade_refs:
+        open_argv += ["--refs", cascade_refs]
+    rc = cmd_work_open(cfg, open_argv)
+    if rc != 0:
+        print(f"led work supersede-cascade: STOPPED -- 'led work open {new_slug} ...' did not "
+              f"succeed (see its own error above). No child was touched.", file=sys.stderr)
+        return rc
+    new_open = _current_row(cfg, "work_opened", new_slug)
+    if new_open is None:
+        print(f"led work supersede-cascade: STOPPED -- 'led work open {new_slug} ...' did not "
+              f"succeed (see its own error above). No child was touched.", file=sys.stderr)
+        return 1
+
+    for child in children:
+        child_row = _work_item_current_row(cfg, child)
+        child_state = child_row.get("state") if child_row else None
+        if child_state == "closed":
+            iteration = 0
+            first = True
+            while True:
+                targets = _violations_for_slug(cfg, child, "orphaned_by_retraction")
+                if not targets:
+                    if first:
+                        print(f"led work supersede-cascade: '{child}' is closed but no "
+                              f"orphaned_by_retraction violation surfaced for it -- skipping "
+                              f"(already answered, or nothing to answer).", file=sys.stderr)
+                    break
+                first = False
+                iteration += 1
+                if iteration > 20:
+                    print(f"led work supersede-cascade: REFUSED -- the closed-child orphan "
+                          f"disposal for '{child}' did not converge after 20 steps -- refusing "
+                          f"rather than looping forever.", file=sys.stderr)
+                    return 1
+                rc = cmd_work_resolve_violation(cfg, [
+                    str(targets[0]), "retired",
+                    f"child closed and settled at cascade time (supersede-cascade, parent "
+                    f"superseded {old_slug} -> {new_slug})", "--review-deferred"])
+                if rc != 0:
+                    return rc
+        else:
+            new_child = f"{child}--via-{new_slug}"
+            child_open = _current_row(cfg, "work_opened", child)
+            child_open_id = child_open["id"] if child_open else None
+            rc = cmd_work_open(cfg, [
+                new_child, f"reopened under {new_slug} (supersede-cascade)",
+                "--parent", new_slug, "--supersedes", str(child_open_id),
+                "--refs", f"row:{child_open_id}"])
+            if rc != 0:
+                return rc
+            new_child_open = _current_row(cfg, "work_opened", new_child)
+            new_child_open_id = new_child_open["id"] if new_child_open else None
+            iteration = 0
+            while True:
+                targets = _violations_for_slug(cfg, child, "orphaned_by_retraction")
+                if not targets:
+                    break
+                iteration += 1
+                if iteration > 20:
+                    print(f"led work supersede-cascade: REFUSED -- the orphan recursion for "
+                          f"'{child}' did not converge after 20 steps -- refusing rather than "
+                          f"looping forever.", file=sys.stderr)
+                    return 1
+                rc = cmd_work_resolve_violation(cfg, [
+                    str(targets[0]), "reissued",
+                    f"surviving act on the old slug '{child}' orphaned one level down by the "
+                    f"reopen (supersede-cascade recursion)", "--review-deferred",
+                    "--witness", str(new_child_open_id)])
+                if rc != 0:
+                    return rc
+    print(f"led work supersede-cascade: done -- '{new_slug}' opened, direct children of "
+          f"'{old_slug}' cascaded. Run 'led work violations' to confirm.", file=sys.stderr)
+    return 0
+
+
 def cmd_generic(cfg: bcc.ServedConfig, args: argparse.Namespace) -> int:
     statement = " ".join(args.statement)
     if not _preflight_grammar(statement):
@@ -1106,9 +1568,19 @@ def main(argv: list[str]) -> int:
                 print("usage: led work asof <timestamp>", file=sys.stderr)
                 return 4
             return cmd_work_asof(cfg, rest[0])
+        if sub == "review-gap":
+            return cmd_work_review_gap(cfg)
+        if sub == "startable":
+            return cmd_work_startable(cfg)
+        if sub == "resolve-violation":
+            return cmd_work_resolve_violation(cfg, rest)
+        if sub == "supersede-cascade":
+            return cmd_work_supersede_cascade(cfg, rest)
         print(f"led work {sub}: UNEXERCISED by the boundary rebase (legacy-led-retirement "
-              f"phase 1 covers open|claim|depends|close|list|violations|asof only) -- named, "
-              f"not silently dropped; use ./legacy/led work {sub} instead.", file=sys.stderr)
+              f"phase 1/1B covers open|claim|depends|close|list|violations|asof|review-gap|"
+              f"startable|resolve-violation|supersede-cascade -- eleven of eleven `led work *` "
+              f"sub-verbs) -- named, not silently dropped; use ./legacy/led work {sub} instead.",
+              file=sys.stderr)
         return 4
     if argv and argv[0] == "artifact":
         print("led artifact: NOT SERVED -- design/FABLE-ARTIFACT-STORE-SPEC.md's own scope line "

@@ -222,7 +222,13 @@ def get_all_rows(base: str, path: str, cursor: str = "after_id", limit: int = 10
 # `BoundaryRefusal`) -- kept in sync by hand; a future view added to `VIEW_REGISTRY` with a
 # key column other than 'id'/'slug' needs a matching entry here, named as a residual risk rather
 # than silently assumed away.
-_SLUG_FIELD_OVERRIDE: dict[str, str] = {"countersign_obligation": "scope"}  # work_item_violations/work_review_gap/work_item_current all key on the default 'slug'
+_SLUG_FIELD_OVERRIDE: dict[str, str] = {
+    "countersign_obligation": "scope",
+    # legacy-led-retirement phase 1B (ledger row 1149): work_edge_parent keys on child_slug, not
+    # the default 'slug' -- work_item_violations/work_review_gap/work_item_current/work_startable
+    # all key on the default 'slug' and need no entry here.
+    "work_edge_parent": "child_slug",
+}
 _ID_FIELD_OVERRIDE: dict[str, str] = {
     "question_status": "question_id",
     "review_stamp_distinctness": "review_id",

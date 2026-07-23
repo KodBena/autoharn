@@ -27,9 +27,24 @@ MULTIPLEX-AND-CLI-REBASE-SPEC.md §5's own extension point):
   WM9  `led decomposition-review-status` runs against the boundary and reports mode/verdict.
   WM10 `led briefing` is byte-identical to `legacy-led.tmpl briefing` (both no-DB-access, so both
        run against the SAME served_dep with no server dependency for the legacy leg either).
-  WM11 differential courtesy check: `legacy-led.tmpl work list/violations` against the SAME
-       scratch world the rebased WM7 cycle just wrote to, confirming legacy's own (differently
-       formatted, by disclosed design) reads see the identical slugs/rows.
+  WM11 differential courtesy check: `legacy-led.tmpl work list/violations/startable/review-gap`
+       against the SAME scratch world the rebased WM7/WM12-14 writes just landed on, confirming
+       legacy's own (differently formatted, by disclosed design) reads see the identical
+       slugs/rows.
+
+Extended AGAIN for phase 1B (same ledger row 1149, coordinator narrowing corrected -- the
+remaining four `led work *` sub-verbs and the `actual:`/`outcome:` grammar prefixes):
+  WM12 `led work review-gap` / `led work startable` run against the boundary; startable lists
+       the still-open, unclaimed slugB and excludes the claimed-then-closed slugA.
+  WM13 `led work resolve-violation`, standalone: an unknown target refused red-first, then a
+       genuine orphaned_by_retraction violation (created by directly superseding a parent's own
+       opening act) resolved green, then a duplicate disposition on the SAME target kernel-
+       refused (in-force uniqueness).
+  WM14 `led work supersede-cascade`: a dirty starting state (a slug that was never opened)
+       refused red-first, then a genuine parent-with-closed-child cascade succeeds end to end
+       (retires the closed child's own orphaned_by_retraction violation automatically, opens the
+       new parent slug) -- verified against the DB directly that zero violations remain for the
+       child and the new parent slug is present in `work list`.
 
 REUSE (ADR-0012 P1): scaffolding helpers imported from seen-red/boundary-service/run_fixtures.py,
 the same pattern every sibling suite in this tree already uses.
@@ -246,6 +261,29 @@ def main() -> int:
               r_good_grammar.returncode == 0 and "written" in r_good_grammar.stdout,
               f"exit={r_good_grammar.returncode} stdout={r_good_grammar.stdout!r} "
               f"stderr={r_good_grammar.stderr!r}", failures)
+        # actual:/outcome: (phase 1B, ledger row 1149) -- same both-polarity discipline.
+        r_bad_actual = run_cli(LED_TMPL, ["note", "actual: bad|only-two-fields"], REPO, served_dep)
+        check("wm8-malformed-actual-refused-red-first",
+              r_bad_actual.returncode == 1 and "malformed 'actual:' statement" in r_bad_actual.stderr
+              and "NOTHING was written" in r_bad_actual.stderr,
+              f"exit={r_bad_actual.returncode} stderr={r_bad_actual.stderr!r}", failures)
+        r_good_actual = run_cli(LED_TMPL, ["note", "actual: wm7-task | 2 | 0 | 6m | 500 | harness"],
+                                 REPO, served_dep)
+        check("wm8-well-formed-actual-accepted",
+              r_good_actual.returncode == 0 and "written" in r_good_actual.stdout,
+              f"exit={r_good_actual.returncode} stdout={r_good_actual.stdout!r} "
+              f"stderr={r_good_actual.stderr!r}", failures)
+        r_bad_outcome = run_cli(LED_TMPL, ["note", "outcome: bad|sonnet|verdict-only"], REPO, served_dep)
+        check("wm8-malformed-outcome-refused-red-first",
+              r_bad_outcome.returncode == 1 and "malformed 'outcome:' statement" in r_bad_outcome.stderr
+              and "NOTHING was written" in r_bad_outcome.stderr,
+              f"exit={r_bad_outcome.returncode} stderr={r_bad_outcome.stderr!r}", failures)
+        r_good_outcome = run_cli(LED_TMPL, ["note", "outcome: wm7-task | sonnet | clean | none | none"],
+                                  REPO, served_dep)
+        check("wm8-well-formed-outcome-accepted",
+              r_good_outcome.returncode == 0 and "written" in r_good_outcome.stdout,
+              f"exit={r_good_outcome.returncode} stdout={r_good_outcome.stdout!r} "
+              f"stderr={r_good_outcome.stderr!r}", failures)
 
         # ================= WM9: decomposition-review-status / WM10: briefing =====================
         print("== WM9: led decomposition-review-status / WM10: led briefing ==")
@@ -261,8 +299,92 @@ def main() -> int:
               f"rebased_exit={r_briefing_rebased.returncode} legacy_exit={r_briefing_legacy.returncode} "
               f"equal={r_briefing_rebased.stdout == r_briefing_legacy.stdout}", failures)
 
+        # ======== WM12: led work review-gap / startable (phase 1B, ledger row 1149) ==============
+        print("== WM12: led work review-gap / led work startable ==")
+        r_rg = run_cli(LED_TMPL, ["work", "review-gap"], REPO, served_dep)
+        check("wm12-review-gap-runs-clean", r_rg.returncode == 0,
+              f"exit={r_rg.returncode} stdout={r_rg.stdout!r} stderr={r_rg.stderr!r}", failures)
+        r_startable = run_cli(LED_TMPL, ["work", "startable"], REPO, served_dep)
+        startable_slugs = {json.loads(ln).get("slug") for ln in r_startable.stdout.splitlines() if ln.strip()}
+        check("wm12-startable-lists-unclaimed-open-slugB",
+              r_startable.returncode == 0 and slugB in startable_slugs and slugA not in startable_slugs,
+              f"exit={r_startable.returncode} slugs={startable_slugs} stderr={r_startable.stderr!r}",
+              failures)
+
+        # === WM13: led work resolve-violation, standalone (ordinary, non-ambiguous, non-cascade) ===
+        print("== WM13: led work resolve-violation, standalone (red-first, then green) ==")
+        r_rv_bad = run_cli(LED_TMPL, ["work", "resolve-violation", "999999999", "retired",
+                                       "no such target", "--review-deferred"], REPO, served_dep)
+        check("wm13-resolve-violation-unknown-target-refused-red-first",
+              r_rv_bad.returncode == 1 and "not currently an in-force" in r_rv_bad.stderr,
+              f"exit={r_rv_bad.returncode} stderr={r_rv_bad.stderr!r}", failures)
+        slugQ = f"wm13-q-{RUN_SUFFIX}"
+        slugR = f"wm13-r-{RUN_SUFFIX}"
+        run_cli(LED_TMPL, ["work", "open", slugQ, "WM13 parent Q"], REPO, served_dep)
+        run_cli(LED_TMPL, ["work", "open", slugR, "WM13 child R", "--parent", slugQ], REPO, served_dep)
+        # Q's own opening row id, read as ground truth off the DB directly (not a CLI round-trip).
+        q_open_id = bs_fixtures.psql_tuples(
+            f"SELECT id FROM {world}.ledger_current WHERE kind='work_opened' AND work_slug='{slugQ}';")
+        r_supersede_q = run_cli(LED_TMPL, ["work", "open", f"{slugQ}-v2", "WM13 parent Q v2",
+                                            "--supersedes", q_open_id], REPO, served_dep)
+        check("wm13-setup-supersede-q-orphans-r",
+              r_supersede_q.returncode == 0, f"exit={r_supersede_q.returncode} "
+              f"stdout={r_supersede_q.stdout!r} stderr={r_supersede_q.stderr!r}", failures)
+        r_target = bs_fixtures.psql_tuples(
+            f"SELECT target_id FROM {world}.work_item_violations WHERE violation="
+            f"'orphaned_by_retraction' AND slug='{slugR}';")
+        check("wm13-setup-r-shows-as-orphaned", r_target.strip() != "",
+              f"work_item_violations target_id query result: {r_target!r}", failures)
+        r_rv_good = run_cli(LED_TMPL, ["work", "resolve-violation", r_target.strip(), "retired",
+                                        "WM13 standalone resolution, dormant until R closes",
+                                        "--review-deferred"], REPO, served_dep)
+        check("wm13-resolve-violation-accepted",
+              r_rv_good.returncode == 0 and "written" in r_rv_good.stdout,
+              f"exit={r_rv_good.returncode} stdout={r_rv_good.stdout!r} stderr={r_rv_good.stderr!r}",
+              failures)
+        r_rv_dup = run_cli(LED_TMPL, ["work", "resolve-violation", r_target.strip(), "retired",
+                                       "duplicate attempt", "--review-deferred"], REPO, served_dep)
+        check("wm13-resolve-violation-duplicate-kernel-refused",
+              r_rv_dup.returncode == 1,
+              f"exit={r_rv_dup.returncode} stderr={r_rv_dup.stderr!r}", failures)
+
+        # ============ WM14: led work supersede-cascade (composition, closed-child branch) ========
+        print("== WM14: led work supersede-cascade -- closed-child orphan disposal ==")
+        r_cascade_bad = run_cli(LED_TMPL, ["work", "supersede-cascade", "no-such-slug-at-all",
+                                            "irrelevant-new-slug", "title"], REPO, served_dep)
+        check("wm14-supersede-cascade-dirty-state-refused-red-first",
+              r_cascade_bad.returncode == 1 and "not currently an in-force" in r_cascade_bad.stderr,
+              f"exit={r_cascade_bad.returncode} stderr={r_cascade_bad.stderr!r}", failures)
+        slugP = f"wm14-p-{RUN_SUFFIX}"
+        slugC = f"wm14-c-{RUN_SUFFIX}"
+        slugP2 = f"wm14-p2-{RUN_SUFFIX}"
+        run_cli(LED_TMPL, ["work", "open", slugP, "WM14 parent P"], REPO, served_dep)
+        run_cli(LED_TMPL, ["work", "open", slugC, "WM14 child C", "--parent", slugP], REPO, served_dep)
+        run_cli(LED_TMPL, ["work", "claim", slugC], REPO, served_dep)
+        r_close_c = run_cli(LED_TMPL, ["work", "close", slugC, "dropped", "--review-deferred"],
+                             REPO, served_dep)
+        check("wm14-setup-close-c", r_close_c.returncode == 0,
+              f"exit={r_close_c.returncode} stderr={r_close_c.stderr!r}", failures)
+        r_cascade = run_cli(LED_TMPL, ["work", "supersede-cascade", slugP, slugP2, "WM14 parent P v2"],
+                             REPO, served_dep)
+        check("wm14-supersede-cascade-succeeds",
+              r_cascade.returncode == 0
+              and "done" in r_cascade.stderr,
+              f"exit={r_cascade.returncode} stdout={r_cascade.stdout!r} stderr={r_cascade.stderr!r}",
+              failures)
+        remaining = bs_fixtures.psql_tuples(
+            f"SELECT count(*) FROM {world}.work_item_violations WHERE slug='{slugC}';")
+        check("wm14-cascade-resolved-the-closed-child-orphan", remaining.strip() == "0",
+              f"remaining violations for {slugC}: {remaining!r}", failures)
+        r_list_p2 = run_cli(LED_TMPL, ["work", "list", "--all"], REPO, served_dep)
+        p2_present = any(json.loads(ln).get("slug") == slugP2 for ln in r_list_p2.stdout.splitlines()
+                          if ln.strip())
+        check("wm14-cascade-new-parent-slug-present", p2_present,
+              f"stdout={r_list_p2.stdout!r}", failures)
+
         # ================= WM11: differential courtesy check, legacy vs rebased ==================
-        print("== WM11: legacy `led work list`/`led work violations` vs rebased, same world ==")
+        print("== WM11: legacy `led work list`/`led work violations`/`review-gap`/`startable` vs "
+              "rebased, same world ==")
         legacy_list = run_cli(LEGACY_LED_TMPL, ["work", "list", "--all"], REPO, served_dep)
         check("wm11-legacy-list-names-every-rebased-slug",
               legacy_list.returncode == 0 and all(s in legacy_list.stdout for s in (slugA, slugB)),
@@ -274,6 +396,15 @@ def main() -> int:
               f"legacy_exit={legacy_violations.returncode} rebased_exit={rebased_violations.returncode} "
               f"legacy_stdout={legacy_violations.stdout!r} rebased_stdout={rebased_violations.stdout!r}",
               failures)
+        legacy_startable = run_cli(LEGACY_LED_TMPL, ["work", "startable"], REPO, served_dep)
+        check("wm11-legacy-startable-names-same-slugB",
+              legacy_startable.returncode == 0 and slugB in legacy_startable.stdout
+              and slugA not in legacy_startable.stdout,
+              f"exit={legacy_startable.returncode} stdout={legacy_startable.stdout!r}", failures)
+        legacy_review_gap = run_cli(LEGACY_LED_TMPL, ["work", "review-gap"], REPO, served_dep)
+        check("wm11-legacy-review-gap-runs-clean-same-world", legacy_review_gap.returncode == 0,
+              f"exit={legacy_review_gap.returncode} stdout={legacy_review_gap.stdout!r} "
+              f"stderr={legacy_review_gap.stderr!r}", failures)
 
         # ==================== WM6: ./legacy/ verb runs green, boundary KILLED =====================
         print("== WM6: legacy-led.tmpl runs green against its world with the boundary DEAD ==")
@@ -302,7 +433,7 @@ def main() -> int:
     if failures:
         print(f"FAILURES: {failures}")
         return 1
-    print("ALL WM5/WM6/WM7/WM8/WM9/WM10/WM11 CHECKS OK")
+    print("ALL WM5/WM6/WM7/WM8/WM9/WM10/WM11/WM12/WM13/WM14 CHECKS OK")
     return 0
 
 
