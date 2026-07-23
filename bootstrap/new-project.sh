@@ -307,6 +307,11 @@ fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) --
+# THIS script's own scaffold loop below is the authority every other bootstrap script that
+# writes or discovers these shims now sources instead of re-listing them by hand.
+. "$AUTOHARN_ROOT/bootstrap/shim-verbs.sh"
+
 # AUTOHARN_COMMIT -- the autoharn checkout's own commit hash at scaffold time, so a world's
 # evidence can be tied to the INSTRUMENT VERSION that produced it (prior regulator-panel
 # assessment's Tier-1 item 4: "no record ties a historical DENY to the hook bytes that produced
@@ -759,7 +764,14 @@ chmod 700 "$PROJECT_ROOT/.claude/secrets"
 # Append-if-missing (idempotent, mirrors the stamp-secret/genesis-seed never-rotate posture
 # elsewhere in this script): a marker pair brackets the block so a re-scaffold (--force) or a
 # second scaffold call against the same dest-dir never duplicates it.
-echo "-- .gitignore (scaffolding-owned churn paths in the subject repo) --"
+#
+# .claude/secrets/ (tracker item experience-secret-gitignore-hazard) belongs in this SAME block,
+# alongside .claude/logs/: it holds THIS deployment's stamp secret
+# (.claude/secrets/stamp_secret.hex, seeded above) -- a real credential, not mere churn, and
+# tracking it git-side would let a future world's stamp secret leak into this repo's own
+# history. Scaffold-owned, same as .claude/logs/, so it belongs in the SAME scaffold-written
+# block rather than a second one grown here (ADR-0012 P1).
+echo "-- .gitignore (scaffolding-owned churn + secret paths in the subject repo) --"
 GITIGNORE="$PROJECT_ROOT/.gitignore"
 GITIGNORE_MARK_BEGIN="# >>> autoharn scaffold-owned churn (bootstrap/new-project.sh) >>>"
 GITIGNORE_MARK_END="# <<< autoharn scaffold-owned churn <<<"
@@ -776,9 +788,14 @@ else
         echo "# diff/mutation-purity check run against this repo (ent-observatory cycle-001, NEW"
         echo "# lesson 1). Append-if-missing; safe to re-run."
         echo ".claude/logs/"
+        echo "# .claude/secrets/ (tracker item experience-secret-gitignore-hazard): this"
+        echo "# deployment's OWN stamp secret (.claude/secrets/stamp_secret.hex) -- a real"
+        echo "# credential, never tracked git-side, so no future world's secret can leak into"
+        echo "# this repo's own history."
+        echo ".claude/secrets/"
         echo "$GITIGNORE_MARK_END"
     } >> "$GITIGNORE"
-    echo "   appended scaffold-owned churn block to $GITIGNORE (.claude/logs/)"
+    echo "   appended scaffold-owned churn+secret block to $GITIGNORE (.claude/logs/, .claude/secrets/)"
 fi
 if (cd "$PROJECT_ROOT" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
     :
@@ -1056,8 +1073,8 @@ mkdir -p "$PROJECT_ROOT/roles"
 sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
 echo "wrote roles/README.md"
 
-echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor; do
+echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain -- SHIM_VERBS_ALL, bootstrap/shim-verbs.sh): thin shims exec'ing autoharn's live templates --"
+for verb in $SHIM_VERBS_ALL; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -1129,7 +1146,7 @@ echo "wrote orchlog (wrapper -> $EXEC_ROOT/orchlog --repo $EXEC_ROOT)"
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor orchlog \
+        $SHIM_VERBS_ALL orchlog \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"

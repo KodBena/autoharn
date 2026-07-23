@@ -80,11 +80,18 @@ NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 CONVERT = REPO / "bootstrap" / "convert-to-submodule.sh"
 UPGRADE = REPO / "bootstrap" / "upgrade-submodule.sh"
 LIVE_CHECK = REPO / "bootstrap" / "live_session_check.py"
+# bootstrap/shim-verbs.sh (tracker item submodule-shim-set-drift, ledger row 1182): the single
+# home for the shim verb set NEW_PROJECT/CONVERT/UPGRADE all now source -- without copying it
+# into the scratch worktree too, NEW_PROJECT's `. "$AUTOHARN_ROOT/bootstrap/shim-verbs.sh"` line
+# resolves against the scratch worktree's own bootstrap/ directory and fails if that file is not
+# also placed there byte-for-byte, same reasoning as the four scripts above.
+SHIM_VERBS = REPO / "bootstrap" / "shim-verbs.sh"
 PINNING_SCRIPTS = [
     ("bootstrap/new-project.sh", NEW_PROJECT),
     ("bootstrap/convert-to-submodule.sh", CONVERT),
     ("bootstrap/upgrade-submodule.sh", UPGRADE),
     ("bootstrap/live_session_check.py", LIVE_CHECK),
+    ("bootstrap/shim-verbs.sh", SHIM_VERBS),
 ]
 
 DB = "toy"

@@ -187,6 +187,13 @@ case "$DB" in
 esac
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) -- this
+# script's own verb loop below was found, while fixing that item, to have the SAME drift the two
+# named scripts had (silently missing `asof-export`); same hazard class, in reach, fixed here
+# rather than routed around. new-project.sh's own scaffold loop is the authority; every consumer
+# now sources this one file instead of a hand-maintained copy.
+. "$AUTOHARN_ROOT/bootstrap/shim-verbs.sh"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
 
@@ -569,7 +576,7 @@ echo "== writing $DEST verb shims (exec the DEST's OWN bootstrap/templates, neve
 # needed (ADR-0012 P1: the ONE existing connection mechanism, given the right identity, rather than
 # a second one grown here). The subsequent `SET ROLE <role>` each template still issues becomes a
 # harmless no-op (a role may always SET ROLE to itself).
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc doctor; do
+for verb in $SHIM_VERBS_ALL; do
     cat > "$DEST/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -577,7 +584,7 @@ exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" AUTOHARN="\$HERE" PGUSER="$D
 SHIM
     chmod +x "$DEST/$verb"
 done
-echo "wrote led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain, attest-doc, doctor"
+echo "wrote $SHIM_VERBS_ALL"
 
 # --- PROVENANCE: the honest "settled evidence, never refreshed" record --------------------------
 cat > "$DEST/FROZEN-PROVENANCE.md" <<PROV
