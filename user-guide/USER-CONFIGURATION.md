@@ -22,12 +22,19 @@ autoharn is not a service you point your project at, and it is not a framework y
 from. It is a **library of mechanism plus a stamping tool**: you clone or submodule this
 repository somewhere on disk once, and one scaffold command writes a small, self-contained set of
 files into *your own* project directory — the [world](../GLOSSARY.md#world) or standing deployment
-this page calls "your project" throughout. From that moment, your project's `./led`, `./judge`,
-and `./pickup` are three-line shims that `exec` straight out of the autoharn checkout (the
-"live verbs" design — see [the install-path contract](#the-install-path-contract--read-this-before-you-move-anything)
-below for what this means and what it costs), but every piece of **your** state — your ledger's
-connection facts, your per-project switches, your secrets, your work log — lives in **your**
-directory, never in autoharn's.
+this page calls "your project" throughout.
+
+**Two deployment shapes exist; [`README.md`](../README.md) is the one page that owns which is
+current — read it before choosing.** As of 2.0 the default is **pinned**: your project's shims
+`exec` out of its own `.autoharn` git submodule, pinned to an exact commit, so a `git pull` on
+some other autoharn checkout never touches your project. The section immediately below (["the
+install-path contract"](#the-install-path-contract--read-this-before-you-move-anything)) and the
+"live verbs" design it describes are about the **older, unpinned shape** — still supported,
+described in `README.md` as the legacy shape — where your project's `./led`/`./judge`/`./pickup`
+are three-line shims that `exec` straight out of *this* autoharn checkout, live, forever, and
+carry the relocation cost that section states plainly. Whichever shape you're on, every piece of
+**your** state — your ledger's connection facts, your per-project switches, your secrets, your
+work log — lives in **your** directory, never in autoharn's.
 
 This is a deliberate boundary, not an accident of how the scaffold happened to be written: **an
 adopter's project owns all of its own state; autoharn owns none of it.** Concretely, and checked
@@ -94,6 +101,12 @@ at the autoharn checkout by absolute path. This is why the next section matters 
 reorganize anything.
 
 ## The install-path contract — read this before you move anything
+
+**This section describes the older, unpinned ("live verbs") shape** — see ["autoharn as a
+library"](#autoharn-as-a-library) above for the 2.0 default (pinned submodule), which does not
+carry this cost: a pinned deployment's shims `exec` out of its own committed `.autoharn`
+submodule, not out of the autoharn checkout that scaffolded it, so moving that original checkout
+does not break an already-pinned project.
 
 **Every scaffolded project's `.claude/settings.json` and verb shims bake in the absolute
 filesystem path of the autoharn checkout that scaffolded them**, captured once at scaffold time

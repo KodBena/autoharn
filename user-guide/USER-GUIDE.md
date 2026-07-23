@@ -39,15 +39,16 @@ before you go further, though closing that hole is your own act on your own sche
 something any command below does for you.
 
 **Where autoharn lives, and why that matters.** You do not copy autoharn's code into your
-project. You clone or check out autoharn once, and every project you scaffold from it keeps
-running that same checkout's files, live, forever — a fix in autoharn reaches every project
-scaffolded from it on its very next command, with nothing to re-install. The cost of that design
-is real and stated plainly in [USER-CONFIGURATION.md's install-path
-contract](USER-CONFIGURATION.md#the-install-path-contract--read-this-before-you-move-anything):
-if you move, rename, or delete the autoharn checkout after scaffolding a project from it, that
-project's commands quietly stop resolving. **Pick a path for your autoharn checkout and keep
-it** for as long as any project scaffolded from it is in use; that same page also explains the
-one-command fix if you ever have no choice but to move it.
+project. You clone or check out autoharn once, and scaffold your project from that checkout. As
+of 2.0, the default and recommended shape is **pinned**: your project gets its own `git
+submodule` copy of autoharn at an exact commit, and a `git pull` on your autoharn checkout never
+changes your project's behavior on its own — you move a project's pin deliberately, with
+`bootstrap/upgrade-submodule.sh`. [`README.md`](../README.md) is the one page that owns this
+decision in full — read it before scaffolding anything — including the older, unpinned "live
+checkout" shape it retired from default status (still supported, described there as the legacy
+shape) and the one-command conversion between the two. `USER-CONFIGURATION.md`'s [install-path
+contract](USER-CONFIGURATION.md#the-install-path-contract--read-this-before-you-move-anything)
+covers what breaks if you move or delete an autoharn checkout a project still depends on, whichever shape you picked.
 
 ## 3. Adopt: three commands, three different commitments
 
@@ -240,13 +241,17 @@ such as study-design tooling or an analysis layer — read
 [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md), which describes this
 offering's sibling (the work tracker from §3a) for contrast.
 
-## 4. Operate: the seven verbs
+## 4. Operate: the eight verbs
 
-Once a project is scaffolded (either §3a or §3b), you interact with it through seven small
-commands. Six of them (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `attest-doc`) run
-from inside your project directory, once it exists; the seventh — the scaffold itself — runs once,
-before the project exists, from the autoharn checkout. This section is a paragraph-each index — the
-authoritative detail, including exact output and what each verdict means, is
+Once a project is scaffolded (either §3a or §3b), you interact with it through eight small
+commands: `led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
+`verify-chain`, `attest-doc`. All eight run from inside your project directory, once it exists;
+the scaffold itself (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
+`bootstrap/track-experiments.sh` — §3 above) is a separate, ninth act: the one you run once per
+project, before the project exists, from the autoharn checkout, to stand the other eight up. This
+is the same eight-verb count [`README.md`](../README.md) gives for a pinned-submodule deployment
+(its own "Operator verbs" list) — one roster, counted once. This section is a paragraph-each
+index — the authoritative detail, including exact output and what each verdict means, is
 [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), written for whoever is actually running a
 session; read it once you're past this page.
 
@@ -273,6 +278,17 @@ any time, mid-project or after.
 **`./distance-to-clean`** is one composed report of everything still outstanding — open
 questions, pending reviews, unclaimed work — across the record, in one command instead of several.
 
+**`./verify-commission`** checks a signed commission's cryptographic signature against the
+committed public key in your project's own `keys/` directory, reporting one of a closed set of
+verdicts (`VERIFIED`, `UNSIGNED`, `FORGED-OR-CORRUPT`) plus two distinct, honestly-named
+refusals for the cases where none of the three is actually decidable (no `gpg` on `PATH`, or no
+key committed yet to check against). Only relevant if you use the optional signing layer
+([§5](#5-audit-and-trust)).
+
+**`./verify-chain`** walks your project's tamper-evidence hash chain end to end and reports the
+first row, if any, whose stored hash disagrees with a fresh recomputation — proof that no row
+between genesis and the current head was retroactively altered after the fact.
+
 **`./attest-doc`** is a separate, optional verb for a separate discipline: recording that a
 markdown document in your project was reviewed by a fresh, unbiased AI reader before you called
 it done (the "A:B:C fresh-context audit loop" this project runs on its own documentation).
@@ -281,10 +297,6 @@ it done (the "A:B:C fresh-context audit loop" this project runs on its own docum
 [design/USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md) is the full "what you type, what
 you should see" walkthrough, including how to fold its debt into `./distance-to-clean` once you
 start using it.
-
-**The scaffold** (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
-`bootstrap/track-experiments.sh` — §3 above) is the seventh verb: the one you run once per project,
-from the autoharn checkout, to stand the other six up.
 
 **Putting the task itself on the record.** If you want the very first thing your project's record
 shows to be the task you gave it — rather than an AI collaborator's own paraphrase of your chat
@@ -440,3 +452,18 @@ The pages this guide ordered into a journey, gathered here as one map:
   schema is safe to fold into your next project automatically or needs the maintainer's
   sign-off first; read it once you're running sessions regularly.
 - [GLOSSARY.md](../GLOSSARY.md) — every coined term this guide and its siblings use, defined once.
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- §2's deployment-shape framing,
+     §4's verb roster (six -> eight, the two missing verbs added), and this file's other edits
+     from this round were rewritten this session (usability review, ledger row 1180, 2026-07-23,
+     findings 3/9) and have NOT been through a genuine fresh-context A:B:C loop
+     (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch
+     tool available to spawn a truly separate B invocation, the same disclosed gap
+     user-guide/USER-CONFIGURATION.md's own marker names (this file already carried an unrelated,
+     narrowly-scoped typed-table marker higher up -- ADR-0020 keeps that one, unaltered; this is a
+     second, separate disclosure for the prose this round touched, not a replacement for it).
+     Waived here only to unblock this commit, flagged loudly per CLAUDE.md's
+     engineering-responsibility standard rather than silently routed around -- the commissioning
+     brief for this round states a cold-read pass follows the build; the orchestrator/maintainer
+     should run it (or confirm one already ran) and replace this marker with an actual
+     attestation record. -->

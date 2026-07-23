@@ -1,16 +1,33 @@
-# Deploying autoharn to your project (git submodule)
+# autoharn — deploying to your project (git submodule)
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+autoharn gives a project of yours an append-only, tamper-evident record of what was decided,
+who decided it, and when — plus the small tools and Claude Code hooks that read and write that
+record so a collaborator (human or AI) is checked against it rather than trusted on their word.
+It is not a project-management app you adopt wholesale: you wire it into an existing project as
+a pinned git submodule, and it adds governance around the work you're already doing there.
 
+This page is only about deployment: getting autoharn wired into a project of your own, and
+keeping it that way. It assumes you have `psql` and `git` on your `PATH` and a Postgres database
+you can reach, and it tells you exactly what to type and what you should see.
 
-This page is only about deployment: getting autoharn wired into a project of your own as a
-pinned git submodule, and keeping it that way. It assumes you have `psql` and `git` on your
-`PATH` and a Postgres database you can reach, and it tells you exactly what to type and what
-you should see.
+**Getting started:** run the guided setup wizard —
 
-If you want to know what autoharn *is*, or how to collaborate/build inside the autoharn repo
-itself, that content now lives in [`docs/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) — not
-here. One exception, worth knowing before you deploy: the pointer immediately below.
+```
+python3 -m tools.setup_tui <dest-dir>
+```
+
+— from inside this autoharn checkout, with `<dest-dir>` set to your project's path. It is an
+interactive, honest-about-its-limits wizard (a sidebar tree of every configuration section, one
+form per section, a single commit step at the end) that scaffolds a pinned-submodule deployment
+for you, asking for exactly the settings named under [Configuration](#configuration) below as it
+goes. The four numbered procedures below (§1–§4) are the same scaffolding acts done by hand,
+one command at a time — useful for scripted/CI use, or if you'd rather see and type every step
+yourself, but the wizard is the path to reach for first.
+
+If you want to know what autoharn *is* in more depth, or how to collaborate/build inside the
+autoharn repo itself, that content lives in
+[`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) — not here. One exception,
+worth knowing before you deploy: the pointer immediately below.
 
 ### Architecture at a glance
 
@@ -88,10 +105,12 @@ this repo, the one you're reading this file in) materializes two independent rep
   `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`) that a deployment gets
   scaffolded with, to read and write that ledger day to day. This page does not explain what
   each one does individually — once a deployment exists, run any of them with no arguments for
-  its own usage text, or see [`docs/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) and
+  its own usage text, or see [`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) and
   [`USER-GUIDE.md`](user-guide/USER-GUIDE.md) for the fuller tour.
 
-There are four things you can do. Pick the one that matches your situation:
+The setup wizard above (`python3 -m tools.setup_tui`) does all of what follows for you,
+interactively. The four numbered procedures below are the same ground covered one command at a
+time — reach for them when you want to script a deployment, or see every flag spelled out:
 
 1. [Deploy autoharn to a brand-new project](#1-deploy-autoharn-to-a-brand-new-project) —
    `bootstrap/new-project.sh ... --pin submodule`
@@ -419,3 +438,20 @@ Settings you will see in a scaffolded deployment's `.claude/` directory (`govern
 `settings.json`, etc.) are hook/editor wiring, not part of the deployment/pinning surface this
 guide covers — see the docs written into that same `.claude/` directory by the scaffold itself
 (`GOVERNED_FILES.md`, `HOOKS.md`) for what those mean.
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this file's opening section
+     (what-autoharn-is, the setup-wizard-first framing, the "docs/PROJECT-OVERVIEW.md" link-text
+     fix) was rewritten this session (usability review, ledger row 1180, 2026-07-23, findings
+     1/3/5) and has NOT been through a genuine fresh-context A:B:C loop
+     (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch
+     tool available to spawn a truly separate B invocation, the same disclosed gap
+     user-guide/USER-CONFIGURATION.md's own marker names. Waived here only to unblock this commit,
+     flagged loudly per CLAUDE.md's engineering-responsibility standard rather than silently
+     routed around -- the commissioning brief for this round states a cold-read pass follows the
+     build; the orchestrator/maintainer should run it (or confirm one already ran) and replace
+     this marker with an actual attestation record. Relocated to file bottom per this same round's
+     finding 13 (a reader should meet the title before internal bookkeeping); the marker this
+     file used to carry near line 1 ("doc-tree relocation mechanical edit ... no prose rewrite")
+     is STRUCK, not carried forward unchanged, because it is no longer true once this pass touched
+     prose -- carrying a stale "no prose rewrite" claim forward would itself be the dishonest-
+     marker failure mode ADR-0002 forecloses. -->

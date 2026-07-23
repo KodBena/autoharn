@@ -1,8 +1,5 @@
 # Glossary — autoharn's coined vocabulary
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This is autoharn's glossary: definitions for every word this project uses with a meaning you
 could not infer from plain English, for any reader — human or agent — who hits one of those
 words in an autoharn document and needs to know what it means without asking anyone.
@@ -631,3 +628,5 @@ mechanical root cause it will close: `seen-red/s45-standing-lifecycle/run_fixtur
 lacks the fixture-census leg its own spec's gate enumeration listed but the harness never
 invoked. Filed, sequenced for "the next quiet window," not yet built — the current head is
 census-clean, so nothing is live-broken by the gap.
+
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Relocated to file bottom 2026-07-23 (usability review, ledger row 1180, finding 13 -- a reader on GitHub's "Raw" view or in an editor met this internal bookkeeping before the title; gates/doc_attestation_presence.py's own matcher scans the whole file for the token, not a fixed position, so this move needed no gate change). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link/position repair. -->
