@@ -1,7 +1,5 @@
 # ADR-0003: Domain-Coupling Bands
 
-<!-- doc-attest-exempt: 2026-07-22 strike-to-silence amendment (maintainer-ratified, ledger row 1125) invalidated the prior attestation; fresh A:B:C re-attestation queued with the standing attestation backlog. Removal condition: the recorded re-attestation. -->
-
 - **Status:** Accepted
 - **Genre:** Bounded Context Map (structural-descriptive with prescriptive
   elements) — a third genre after the *decision* of ADR-0001 and the *tenet*
@@ -175,9 +173,8 @@ different-instance port and a different-domain port would each require.
 
 1. **A second concrete instance materializes** (a different problem, or a
    different domain with the same shape). At that point, extraction stops
-   being premature by the caution horn's own logic — the second use case is
-   the trigger that flips the cost-benefit, and a band map becomes the
-   natural set of extraction points.
+   being premature — the second use case is the trigger that flips the
+   cost-benefit, and a band map becomes the natural set of extraction points.
 2. **The instance data and the machinery drift apart.** If a problem-class-
    general module accretes instance-specific facts (a hardcoded name, a
    domain-specific literal), the band boundary has leaked; that is the
@@ -204,6 +201,9 @@ different-instance port and a different-domain port would each require.
 - **[ADR-0011 (mechanization discipline)](0011-mechanization-discipline.md).**
   A band-conformance check would be this ADR's mechanization; its absence is
   a declared review-only enforcement surface, not an oversight.
+
+## Not goals (explicit)
+
 - **Not a refactoring mandate.** Existing code stays put.
 - **Not an abstraction-extraction roadmap.** No ports are being declared or
   planned by this document itself. A deployment designs its own seams; this

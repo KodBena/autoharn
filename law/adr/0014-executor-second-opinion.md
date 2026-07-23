@@ -1,7 +1,5 @@
 # ADR-0014: Request a Second Opinion When a Problem Resists Resolution
 
-<!-- doc-attest-exempt: 2026-07-23 recurrence-trigger amendment (maintainer-ratified, ledger rows 1143-1146) invalidated the prior attestation; fresh A:B:C re-attestation queued with the standing attestation backlog, alongside ADR-0003's. Removal condition: the recorded re-attestation. -->
-
 - **Status:** Provisional (emergency). Filed under thin executive bandwidth in
   the immediate wake of a session in which the *absence* of this guideline cost
   real work and real money — the executor locked onto one diagnosis and burned

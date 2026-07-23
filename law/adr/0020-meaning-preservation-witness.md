@@ -1,24 +1,32 @@
 # ADR-0020 — The meaning-preservation witness (no-content-lost never discharges no-meaning-changed)
 
-<!-- doc-attest-exempt: constitutional text authored by Fable and maintainer-ratified
-2026-07-23 ("I think small sibling ADR is right, it's an independent concern from
-zero-context reader"). Removal condition: a fresh-context A:B:C attestation pass over
-the law/ corpus. -->
-
 Ratified 2026-07-23. Provenance: the 2026-07-22/23 setup-TUI arc witnessed one defect
 class in five distinct habitats — a schema migration that turned "aspires to NIST SP
 800-63's decomposition" into a bare conformance claim by filing the standard's name
-into a `standards` field; a synopsis that re-promoted a demoted rule into flat law; a
-plain-language edition whose first three review passes each found a distinct severe
-meaning change (a swapped referent, six dropped consumer bindings, a reversed
-recommendation); a checklist recording untouched defaults as "operator declined"; and
-elucidation "fixed" for line length by deleting its content. Every instance passed its
+into a `standards` field (ledger row 1119; diagnosed as defect D1/D1a in the
+[Fable elucidation RCA, phase 1](../../design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md);
+[postmortem](history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md) Lesson 22); a synopsis
+that re-promoted a demoted rule into flat law (ledger row 1126, the ADR-0003
+strike-to-silence disposition); a plain-language edition whose first three review
+passes each found a distinct severe meaning change (a swapped referent, six dropped
+consumer bindings, a reversed recommendation) (ledger rows 1124 and 1129, the
+four-pass repeat-until-clean attestation of the
+[elucidation-consult ratification edition](../../design/ELUCIDATION-CONSULT-RATIFICATION-EDITION-2026-07-22.md));
+a checklist recording untouched defaults as "operator declined" (ledger row 1115;
+[postmortem](history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md) Lesson 6); and
+elucidation "fixed" for line length by deleting its content (ledger row 1115's
+censure; traced as the CONSERVATION PROXY's own precedent in
+[the RCA's phase 2, section A, step 4](../../design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md#phase-2--mechanistic-causal-speculation);
+[postmortem](history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md) Lesson 23).
+Every instance passed its
 mechanical checks, because every mechanical check attested token conservation or
 format, and the defects lived in what the artifact ASSERTS. The causal RCA named the
 mechanism the CONSERVATION PROXY: "no content lost" standing in for "no meaning
 changed" — every token preserved, the claim strengthened, the edge between tokens
-dead (law/adr/history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md; the archived RCA record
-in design/; ledger rows 1119–1121).
+dead (the full record spans the
+[postmortem](history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md), the
+[RCA](../../design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md), and ledger rows
+1119–1121, cited per specimen above rather than as one lump).
 
 ## The rule
 
