@@ -80,6 +80,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 AUTOHARN = REPO_ROOT / "autoharn"
 
+# case k calls serving/ensure_running.py's own spawn_and_wait directly (not through a subprocess)
+# so it can drive the exact hot-service-plus-late-straggler shape deterministically -- top-level
+# import, per CLAUDE.md's lazy-import ban.
+sys.path.insert(0, str(REPO_ROOT))
+from serving import ensure_running as er  # noqa: E402
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -373,6 +379,63 @@ def main() -> int:
             except (OSError, ValueError):
                 pass
         shutil.rmtree(j_scratch, ignore_errors=True)
+
+    # k-hot-service-late-straggler (round-2 review AXIS 2 SEVERE): a "winner" spawn_and_wait call
+    # already has the boundary up and its own pidfile written; a SECOND, later spawn_and_wait call
+    # against the SAME world (simulating a straggler invocation whose own earlier `probe()` call --
+    # made moments before, in a real concurrent-process race -- legitimately observed UNREACHABLE
+    # before the winner's bind completed) must ADOPT without ever deleting, replacing, or
+    # corrupting the winner's pidfile: the pre-fix code unconditionally did
+    # `pidfile.unlink(missing_ok=True)` here, so the straggler's own spawn attempt would delete the
+    # LIVE winner's pidfile, its own child would then fail to bind (the winner still holds the
+    # port) and exit without writing a new one, leaving the winner running but with NO pidfile at
+    # all -- unstoppable via `autoharn service stop` ("no pidfile" refusal) even though the service
+    # is healthy.
+    k_scratch = Path("/tmp") / f"umbrella-cli-ensure-running-straggler-fixture-{os.getpid()}"
+    k_scratch.mkdir(parents=True, exist_ok=True)
+    k_port = _free_port()
+    (k_scratch / "boundary-multiplex.toml").write_text(
+        "[deployments.svctest]\n"
+        "pghost = \"192.168.122.1\"\npgdatabase = \"toy\"\npguser = \"toy_rw\"\n"
+        "pgschema = \"toy\"\npgkern = \"toy_kernel\"\n", encoding="utf-8")
+    k_url = f"http://127.0.0.1:{k_port}"
+    k_pidfile = k_scratch / ".autoharn-service.pid"
+    try:
+        winner = er.spawn_and_wait(k_scratch, k_url, k_port, "svctest")
+        if winner.status != "own" or not k_pidfile.is_file():
+            print(f"k-hot-service-late-straggler: FAIL -- SETUP could not establish a winner "
+                  f"(status={winner.status!r}, pidfile_present={k_pidfile.is_file()})")
+            ok = False
+        else:
+            before_bytes = k_pidfile.read_bytes()
+            straggler = er.spawn_and_wait(k_scratch, k_url, k_port, "svctest")
+            after_bytes = k_pidfile.read_bytes() if k_pidfile.is_file() else None
+            winner_still_answers = er.probe(k_url, "svctest")[0] == er.OK
+            stop_still_works = False
+            if k_pidfile.is_file():
+                try:
+                    stop_pid = int(k_pidfile.read_text(encoding="utf-8").strip())
+                    stop_still_works = (stop_pid == winner.proc_pid)
+                except (OSError, ValueError):
+                    stop_still_works = False
+            if (straggler.status != "adopted" or after_bytes != before_bytes or
+                    not winner_still_answers or not stop_still_works):
+                print(f"k-hot-service-late-straggler: FAIL -- straggler status={straggler.status!r}, "
+                      f"pidfile_before={before_bytes!r} pidfile_after={after_bytes!r}, "
+                      f"winner_still_answers={winner_still_answers}, "
+                      f"stop_still_works={stop_still_works}")
+                ok = False
+            else:
+                print("k-hot-service-late-straggler: PASS (straggler adopted, winner's pidfile "
+                      "byte-identical, winner still reachable, stop still targets the real winner)")
+    finally:
+        if k_pidfile.is_file():
+            try:
+                pid = int(k_pidfile.read_text(encoding="utf-8").strip())
+                os.kill(pid, 15)
+            except (OSError, ValueError):
+                pass
+        shutil.rmtree(k_scratch, ignore_errors=True)
 
     shutil.rmtree(scratch, ignore_errors=True)
 

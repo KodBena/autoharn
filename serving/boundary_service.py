@@ -2385,9 +2385,16 @@ def main(argv: list[str] | None = None) -> int:
         # window). The actual lock is listen(): only ONE socket may hold the LISTEN state on a
         # given address:port even with SO_REUSEADDR set. So listen() is called HERE, synchronously,
         # immediately after bind() -- closing that window to zero -- and the pidfile is written
-        # only once THIS process's own listen() has ALSO succeeded (asyncio's own later listen()
-        # call on the same already-listening socket is a harmless no-op re-application of the
-        # same backlog).
+        # only once THIS process's own listen() has ALSO succeeded. Round-2 review MINOR fix:
+        # asyncio's own later `create_server()` call on this already-listening socket is NOT a
+        # harmless no-op re-application of the same backlog -- measured directly with `ss -ltn`
+        # against a scratch service spawned via this exact code path, the requested backlog of
+        # 2048 here reads back as 512 once uvicorn/asyncio has taken the socket over (asyncio's
+        # `loop.create_server` calls `sock.listen()` again with its own default backlog, silently
+        # overriding whatever this process asked for). Harmless for THIS module's purposes (this
+        # backlog only bounds a burst of near-simultaneous inbound connections, and 512 is still
+        # generous for a local single-boundary service), but it is a real, measured override, not
+        # a no-op -- do not rely on the 2048 figure surviving past this point.
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -2407,7 +2414,28 @@ def main(argv: list[str] | None = None) -> int:
         try:
             fd = os.open(args.pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
         except FileExistsError:
-            pass
+            # Round-2 review MODERATE-silent fix: this branch means THIS process just won a real
+            # bind()+listen() -- it IS the boundary, right now -- but a pidfile already sat at
+            # this exact path (an unrelated leftover, a caller reusing a stale path, or a lost
+            # race against ensure_running.py's own pre-unlink identity check). Silently passing
+            # here left a WRONG-PID pidfile in place with zero diagnostic: the service is up and
+            # correct, but UNRECORDED under its own real pid -- `autoharn service stop` would
+            # later act (or refuse to act) on whatever stale pid that file names, not on this
+            # process. Never fatal (the bind already succeeded; the service genuinely IS up and
+            # serving) -- but never silent either.
+            try:
+                squatting_content = Path(args.pidfile).read_text(encoding="utf-8")
+            except OSError as read_err:
+                squatting_content = f"<unreadable: {read_err.__class__.__name__}: {read_err}>"
+            sys.stderr.write(
+                f"boundary_service: WARNING -- pidfile {args.pidfile} already existed (content: "
+                f"{squatting_content!r}) when this process (pid {os.getpid()}) won the "
+                f"bind()+listen() on {args.host}:{args.port}. The service IS up and correctly "
+                f"serving under pid {os.getpid()}, but that pid was NOT recorded -- this existing "
+                f"pidfile was left untouched rather than overwritten. 'autoharn service stop' will "
+                f"act on the pidfile's OLD content, which is very likely wrong now. Remedy: remove "
+                f"{args.pidfile} by hand and re-run with --pidfile once this process is confirmed "
+                f"healthy, or stop this pid ({os.getpid()}) directly.\n")
         else:
             with os.fdopen(fd, "w") as f:
                 f.write(str(os.getpid()))

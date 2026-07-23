@@ -137,10 +137,60 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
                    f"Nothing was touched.")
     log_path = world_dir / "service.log"
     pidfile = world_dir / ".autoharn-service.pid"
-    # A STALE pidfile at this exact path (left behind by a service that died without cleanup) is
-    # safe to clear here: the caller already established the boundary is UNREACHABLE right now,
-    # so whatever pid this file names (if any) is not answering the port any more -- keeping it
-    # around would make the child's own O_CREAT|O_EXCL pidfile write below fail spuriously.
+    # ROUND-2 REVIEW AXIS 2 SEVERE FIX: the caller's own "boundary is UNREACHABLE" probe can be
+    # STALE by the time execution reaches this line -- two concurrent invocations can both
+    # legitimately observe UNREACHABLE moments apart, and a straggler's own spawn_and_wait can
+    # reach here well after a sibling invocation's spawn has already won the bind and written its
+    # pidfile. The OLD code unconditionally did `pidfile.unlink(missing_ok=True)` here, which
+    # would delete a WINNER's LIVE pidfile out from under it: the straggler's own child then loses
+    # the (already-held) bind and exits without writing a replacement, leaving the winner running
+    # but with no pidfile at all -- unstoppable via `autoharn service stop` ("no pidfile" refusal)
+    # even though the service is healthy.
+    #
+    # So: before touching the pidfile at all, check whether it already names a LIVE
+    # serving.boundary_service process for THIS world's own boundary-multiplex.toml
+    # (pid_is_boundary_service -- the same identity check `stop` itself uses, not a bare "the file
+    # exists" test). If it does, this invocation's own spawn is unnecessary and its pidfile is
+    # provably still someone else's live winner: short-circuit to "adopted" WITHOUT spawning a
+    # child or touching the pidfile. As a second, independent check (belt-and-suspenders, since
+    # `pid_is_boundary_service` only proves the process is A boundary_service for this world, not
+    # that it has finished binding this exact port), also re-probe the boundary URL itself right
+    # here -- if it now answers OK, some concurrent spawn has already won, pidfile or not, and this
+    # is an adopt too.
+    #
+    # Only when BOTH checks say "not live" is the pidfile provably describing either a dead pid or
+    # no pid at all -- safe to clear structurally, never on trust alone (the same standard `stop`
+    # already holds itself to).
+    #
+    # RESIDUAL WINDOW: the check-then-unlink pair below is still, in principle, two separate
+    # observations with a gap between them -- a winner's bind could theoretically land in that gap.
+    # But the gap is now a handful of Python bytecodes (a stat + a read + a /proc read + a possible
+    # HTTP probe, no sleep anywhere), several orders of magnitude narrower than the previous
+    # design's actual exposure (an entire concurrent invocation's subprocess.Popen-to-poll-loop
+    # lifetime). It is not eliminated because two independent OS-level processes cannot coordinate
+    # a single atomic test-and-clear on a plain file without a second synchronization primitive
+    # (e.g. flock) that this project has not introduced here -- the true zero-window backstop
+    # remains the spawned child's own O_CREAT|O_EXCL pidfile write in serving/boundary_service.py:
+    # a straggler that DOES lose to a winner born inside this narrow gap simply fails its own
+    # bind() (the winner already holds the port) and this function's own poll loop below correctly
+    # reports "adopted" either way -- the only thing this fix closes is DESTROYING the winner's
+    # pidfile in the process, not the (already-handled) race over who gets to serve.
+    existing_pid: int | None = None
+    if pidfile.is_file():
+        try:
+            existing_pid = int(pidfile.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            existing_pid = None
+    if existing_pid is not None and pid_is_boundary_service(existing_pid, toml_path):
+        return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=existing_pid,
+                             log_path=None, detail=None)
+    outcome, _detail = probe(url, boundary_deployment)
+    if outcome == OK:
+        return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=existing_pid,
+                             log_path=None, detail=None)
+    # Neither check found a live winner: whatever this pidfile names (if anything) is provably
+    # stale (a dead pid, an unrelated process, or simply absent) -- clearing it here is safe and
+    # necessary so the child's own O_CREAT|O_EXCL write below does not fail spuriously.
     pidfile.unlink(missing_ok=True)
     py = sys.executable
     argv_child = [py, "-m", "serving.boundary_service", "--config", str(toml_path),

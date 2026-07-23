@@ -12,15 +12,22 @@
 # teaching the same roster, rather than a bare shell "not found".
 #
 # --help NEVER writes and NEVER requires a reachable boundary (spec §5, row 1159) -- this
-# dispatcher's own --help path below runs before HERE/LIBEXEC touch anything beyond argv (this
-# TOP-LEVEL `autoharn --help`/`autoharn service --help` behavior IS witnessed directly by
-# seen-red/umbrella-cli-dispatch-parity's own fixture, case f in particular, which actually runs
-# `./autoharn <verb> --help` for every verb and confirms the dispatcher's own exec reached the
-# real libexec/autoharn/<verb> file). Each relocated verb's OWN *nested* --help path (its
-# internal argument parsing, once dispatch has already handed off) is unchanged from before this
-# build only in the weaker sense that this relocation did not touch those files' contents at all
-# -- that behavior is covered by whatever pre-existing per-verb fixture already exercised it
-# against the untouched bootstrap/templates/*.tmpl this file execs into, not by anything new here.
+# dispatcher's own --help path below runs before HERE/LIBEXEC touch anything beyond argv.
+# Round-2 review AXIS 1 moderate fix: this comment used to claim case f of
+# seen-red/umbrella-cli-dispatch-parity's own fixture witnessed BOTH top-level `autoharn --help`/
+# `autoharn service --help` AND "never writes" -- it witnessed neither. Top-level --help and
+# `service --help` are covered by that fixture's cases a/b/e (they run `autoharn --help` and
+# `autoharn service --help` directly); case f runs `./autoharn <verb> --help` per RELOCATED verb
+# and confirms the dispatcher's own exec reached the real libexec/autoharn/<verb> file (and,
+# since round 2, that each verb's own --help output names itself, catching a wrong-target
+# dispatch). The "never writes" claim is now its own witness, case g
+# (g-help-sweep-never-writes): a `git status --porcelain` snapshot taken immediately before and
+# after a full sweep of `autoharn --help`, `autoharn service --help`, and every verb's `--help`
+# must be byte-identical. Each relocated verb's OWN *nested* --help path (its internal argument
+# parsing, once dispatch has already handed off) is unchanged from before this build only in the
+# weaker sense that this relocation did not touch those files' contents at all -- that behavior
+# is covered by whatever pre-existing per-verb fixture already exercised it against the untouched
+# bootstrap/templates/*.tmpl this file execs into, not by anything new here.
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

@@ -181,3 +181,120 @@ ALL CASES PASS
 correctly-classified kernel/DB-level failure, not `BoundaryUnreachable`; case j's own assertions
 check for exactly that distinction, not a successful ledger read.) The full ten-case fixture
 passes reliably across multiple consecutive runs.
+
+---
+
+ROUND-2 REVIEW (2026-07-23), AXIS 2 SEVERE: a fresh-context reviewer, witnessing LIVE (not
+merely reasoning about the code), found `spawn_and_wait`'s own unconditional
+`pidfile.unlink(missing_ok=True)` -- right before spawning a child -- destroys a WINNER's LIVE
+pidfile when a second, later invocation (a "straggler") reaches this line after its OWN earlier
+`probe()` legitimately observed UNREACHABLE, but a sibling invocation has since won the bind and
+written its own pidfile. The straggler's own spawned child then fails to bind (the winner already
+holds the port), exits without writing a replacement pidfile, and the winner is left running --
+healthy, still serving -- but with NO pidfile at all: unstoppable via `autoharn service stop`
+("no pidfile" refusal) even though the service is up.
+
+Case k (`k-hot-service-late-straggler`) was added, calling `serving/ensure_running.py`'s own
+`spawn_and_wait` directly (not through a subprocess race, to make the shape deterministic): a
+first call establishes a "winner" (status "own", pidfile written); a second, immediate call
+against the SAME world simulates the straggler. Red-first, against the pre-round-2 code:
+
+$ python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
+[cases a-j PASS, unchanged]
+k-hot-service-late-straggler: FAIL -- straggler status='adopted', pidfile_before=b'527051'
+pidfile_after=None, winner_still_answers=True, stop_still_works=False
+
+AT LEAST ONE CASE FAILED
+
+The straggler DID correctly report "adopted" (status was never wrong) -- but the winner's own
+pidfile was destroyed in the process (pidfile_after=None) even though the winner process itself
+kept running and answering `/health` (winner_still_answers=True) -- exactly the "unstoppable but
+healthy" hazard the reviewer named.
+
+THE FIX (`serving/ensure_running.py`'s own `spawn_and_wait`): before touching the pidfile at all,
+check whether it already names a LIVE `serving.boundary_service` process for this world's own
+`boundary-multiplex.toml` (`pid_is_boundary_service` -- the SAME identity check `stop` already
+uses) AND re-probe the boundary URL itself; if either says "already live", short-circuit to
+`status="adopted"` WITHOUT spawning a child or touching the pidfile at all. Only when BOTH checks
+say "not live" (a dead pid, an unrelated process, or no pidfile at all) is clearing the pidfile
+safe -- exactly the same standard `stop` already holds itself to. The residual check-then-unlink
+window is narrowed from an entire concurrent invocation's subprocess lifetime down to a handful
+of Python bytecodes (a stat + a read + a `/proc` read + a probe, no sleep) -- not eliminated (two
+independent OS processes cannot coordinate a single atomic test-and-clear on a plain file without
+a second synchronization primitive this project has not introduced here), but the true
+zero-window backstop remains the spawned child's own `O_CREAT|O_EXCL` pidfile write in
+`serving/boundary_service.py`: a straggler that DOES lose to a winner born inside this narrow gap
+simply fails its own `bind()` and this function's own poll loop still correctly reports
+"adopted" -- the only thing this fix closes is DESTROYING the winner's pidfile in the process,
+not the (already-handled) race over who gets to serve. Full comment in
+`serving/ensure_running.py` states this residual window explicitly.
+
+Post-fix, case k (and the full eleven-case fixture) passes reliably across multiple consecutive
+runs:
+
+$ python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
+[cases a-j PASS, unchanged]
+k-hot-service-late-straggler: PASS (straggler adopted, winner's pidfile byte-identical, winner
+still reachable, stop still targets the real winner)
+
+ALL CASES PASS
+
+---
+
+ROUND-2 REVIEW (2026-07-23), AXIS 2 MODERATE-silent: `serving/boundary_service.py`'s own pidfile
+write (a genuine bind-winner finding a pre-existing pidfile at its exact `--pidfile` path)
+swallowed `FileExistsError` with a bare `pass` -- zero diagnostic, leaving a WRONG-PID pidfile in
+place silently even though the service is correctly up under a DIFFERENT, unrecorded pid.
+
+REPRODUCTION: a scratch world's pidfile path was pre-seeded with a bogus, non-matching pid
+("999999") before spawning `serving/boundary_service.py` directly against it with
+`--pidfile <that path>`. Against the pre-round-2 code (temporarily restored via `git stash`,
+confirmed reverted back immediately after this capture):
+
+UP: True
+PIDFILE CONTENT AFTER: 999999
+STDERR:
+ boundary_service: MAX_INFLIGHT_KERNEL_CALLS=24 (global) MAX_INFLIGHT_PER_DEPLOYMENT=24 (per
+each of 1 deployment(s): ['svctest'])
+INFO:     Started server process [...]
+INFO:     Waiting for application startup.
+...
+
+The service came up healthy and correctly serving -- but with ZERO mention anywhere of the
+pre-existing pidfile, its bogus content, or the fact that the real serving pid was never
+recorded. THE FIX: the `FileExistsError` branch now writes a loud stderr WARNING line, in the
+same style as the adjacent bind-failure branch, naming the pidfile path, its squatting content,
+that the service IS up (never fatal -- the bind already succeeded), and the operator remedy.
+Post-fix, same reproduction:
+
+UP: True
+PIDFILE CONTENT AFTER: 999999
+STDERR:
+ boundary_service: MAX_INFLIGHT_KERNEL_CALLS=24 (global) MAX_INFLIGHT_PER_DEPLOYMENT=24 (per
+each of 1 deployment(s): ['svctest'])
+boundary_service: WARNING -- pidfile /tmp/pidfile-squat-test/.autoharn-service.pid already
+existed (content: '999999') when this process (pid 527821) won the bind()+listen() on
+127.0.0.1:48539. The service IS up and correctly serving under pid 527821, but that pid was NOT
+recorded -- this existing pidfile was left untouched rather than overwritten. 'autoharn service
+stop' will act on the pidfile's OLD content, which is very likely wrong now. Remedy: remove
+/tmp/pidfile-squat-test/.autoharn-service.pid by hand and re-run with --pidfile once this
+process is confirmed healthy, or stop this pid (527821) directly.
+INFO:     Started server process [527821]
+...
+
+---
+
+ROUND-2 REVIEW (2026-07-23), AXIS 2 MINOR: `serving/boundary_service.py`'s own comment claimed
+asyncio's later `create_server()` call re-applying `listen()` on the already-bound-and-listening
+socket is "a harmless no-op re-application of the same backlog" -- measured directly against a
+scratch service spawned via this exact code path, `ss -ltn` showed `Send-Q 512`, not the
+requested 2048:
+
+$ ss -ltn 'sport = :<scratch-port>'
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port
+LISTEN 0      512        127.0.0.1:<port>      0.0.0.0:*
+
+asyncio's own `loop.create_server()` calls `sock.listen()` again with ITS OWN default backlog,
+silently overriding the 2048 requested here -- not a no-op. THE FIX: the comment now states the
+measured reality (512 observed, not 2048) and notes this is harmless for this module's own
+purposes (512 is still generous for a local single-boundary service) without claiming "no-op".

@@ -73,3 +73,100 @@ All ten verbs fail case f identically under the broken exec line -- the class SE
 now caught. The dispatch line was restored (byte-identical to the committed ./autoharn)
 immediately after this capture; the full six-case fixture then passes reliably (verified across
 multiple runs).
+
+---
+
+ROUND-2 REVIEW (2026-07-23), AXIS 1 DISQUALIFYING: a fresh-context reviewer found that a
+WRONG-TARGET dispatch -- a verb FILE whose CONTENT is a DIFFERENT verb's implementation
+(filename right, implementation wrong -- the exact risk of a ten-file relocation) -- serves the
+wrong verb with plausible output and exit 0, and case f (as it stood, checking only exit-127/
+"No such file or directory" and non-empty output) passed ALL cases regardless.
+
+REPRODUCTION (the reviewer's exact attack): `libexec/autoharn/pickup`'s content was copied
+byte-for-byte over `libexec/autoharn/led` (led's own file, wrong content):
+
+$ cp libexec/autoharn/pickup libexec/autoharn/led
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+a-libexec-roster-matches-dispatch-table: PASS
+b-help-mentions-every-verb: PASS
+c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+f-real-invocation-reaches-libexec: PASS (...)
+
+ALL CASES PASS
+
+`autoharn led --help` silently served pickup's own usage text ("pickup — the resume verb ...")
+under `led`'s name, exit 0, no exec-failure signature anywhere -- exactly the disqualifying gap.
+
+THE FIX: case f now additionally asserts VERB IDENTITY -- each verb's own name must appear, as a
+whole token, in its own `--help` output. The first attempt used a bare `verb in combined`
+substring test, which ITSELF went red on a legitimate false positive before being fixed further:
+"led" is a substring of "ledger", and pickup's real --help text ("... only ledger rows newer than
+this ...") served under led's own filename still satisfied a bare substring check:
+
+$ cp libexec/autoharn/pickup libexec/autoharn/led   # same attack
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py   # bare-substring version of case f
+[... a-e as above ...]
+f-real-invocation-reaches-libexec: PASS   # WRONG -- "led" matched inside "ledger", false negative
+
+Fixed to a boundary-aware regex (`(?<![A-Za-z0-9_-])<verb>(?![A-Za-z0-9_-])`, treating hyphenated
+verb names as one token) that rejects "ledger" while still matching every one of the ten verbs'
+real self-identifying text (verified per verb, by hand: "led -- read from...", "usage:
+attest-tags ...", "judge: deployment record not found...", etc. -- see the fixture's own module
+docstring for the full roster). `audit` was the one verb that genuinely lacked ANY self-
+identifying marker when first checked (its --help fell through to engine/contemp_audit.py's
+eager, import-time PGHOST resolution before argparse ever saw argv, producing the same generic
+"REFUSED: no Postgres host resolved" text every other PGHOST-needing verb produces) -- fixed per
+the reviewer's own instruction (a marker added to the TEMPLATE, not a weakened assertion):
+`bootstrap/templates/audit.tmpl` now intercepts `--help`/`-h` itself, before any Python/DB code
+runs, and prints a real, self-identifying, side-effect-free usage line naming 'audit'.
+
+REPRODUCTION with the FIXED (boundary-aware) case f, same wrong-target attack:
+
+$ cp libexec/autoharn/pickup libexec/autoharn/led
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+[... a-e as above ...]
+f-real-invocation-reaches-libexec: FAIL -- 'autoharn led --help' output never names 'led'
+anywhere -- looks like a WRONG-TARGET dispatch (another verb's implementation served under this
+verb's filename). combined output: 'usage: legacy-pickup.tmpl [-h] [--since SINCE] [-n LIMIT]
+\n\npickup — the resume verb (vestigial_documentation/design/ORCH-OPUS-\nREADINESS.md move 3;
+the fourth verb alongside\n\noptions:\n  -h, --help         show this help message and exit\n
+--since SINCE      timestamptz: only ledger rows newer than this\n  -n, --limit LIMIT  row
+limit where --since is not given (default 10)\n'
+g-help-sweep-never-writes: PASS
+
+AT LEAST ONE CASE FAILED
+
+`libexec/autoharn/led` was restored (byte-identical to the committed file, `diff` confirmed)
+immediately after this capture; the full seven-case fixture then passes reliably.
+
+Case f also now iterates the PARSED dispatch table (`_parsed_table_verbs`, the same parse case a
+already used) rather than a second, separately hand-typed `_EXPECTED_VERBS` census -- a new verb
+dropped into the dispatch table is auto-covered without touching this fixture.
+
+---
+
+ROUND-2 REVIEW (2026-07-23), AXIS 1 MODERATE: `./autoharn`'s own comment claimed case f
+witnessed top-level `autoharn --help`/`autoharn service --help` and that this whole surface
+"never writes" -- neither was actually witnessed (top-level --help/service --help are covered by
+cases a/b/e; nothing checked "never writes" mechanically). Fixed by rewording the comment to
+name exactly what each case covers, AND by adding case g (`g-help-sweep-never-writes`): a `git
+status --porcelain` snapshot taken immediately before and after a full sweep of `autoharn
+--help`, `autoharn service --help`, and every verb's own `--help` must be byte-identical --
+witnessing the never-writes claim directly rather than asserting it in prose. Full green run
+after all round-2 fixes (repeated 2026-07-23):
+
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+a-libexec-roster-matches-dispatch-table: PASS
+b-help-mentions-every-verb: PASS
+c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+f-real-invocation-reaches-libexec: PASS (every verb's real libexec/autoharn/<verb> reached via
+`./autoharn <verb> --help`, never a broken-exec shell diagnostic, and each verb's own name
+appears in its own --help output -- no wrong-target dispatch)
+g-help-sweep-never-writes: PASS (git status --porcelain byte-identical before/after the full
+top-level + service + per-verb --help sweep -- zero filesystem trace)
+
+ALL CASES PASS
