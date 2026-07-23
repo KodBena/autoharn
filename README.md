@@ -6,6 +6,16 @@ record so a collaborator (human or AI) is checked against it rather than trusted
 It is not a project-management app you adopt wholesale: you wire it into an existing project as
 a pinned git submodule, and it adds governance around the work you're already doing there.
 
+> ⚠️ **Dangerous bend — work in progress, no warranty.** This repository is under heavy,
+> active development. It is public domain (the Unlicense), which disclaims all warranty in
+> law; this notice disclaims it in spirit too. The documentation here speaks in
+> high-assurance ambitions — NIST- and NRC-flavored language, a law corpus, witnessed
+> claims — and those are **aims the design is built toward, not statements of its current
+> maturity**. It works, more or less, for its maintainer's own daily needs; everything
+> beyond that you should treat as aspiration until you have witnessed it yourself. (That
+> distinction — an aspiration is not a conformance claim — is enforced inside this project
+> as law, ADR-0020. It applies to this repository's own self-description first.)
+
 This page is only about deployment: getting autoharn wired into a project of your own, and
 keeping it that way. It assumes you have `psql` and `git` on your `PATH` and a Postgres database
 you can reach, and it tells you exactly what to type and what you should see.
