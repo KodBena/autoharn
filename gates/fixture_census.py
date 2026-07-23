@@ -118,6 +118,7 @@ REGISTRY: dict[str, str] = {
     "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
     "apparatus-unknown-keys":         "seen-red/apparatus-unknown-keys/run_fixtures.py",
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
+    "world-descriptor-registry":      "seen-red/world-descriptor-registry/run_fixtures.py",
     "led-refs-flag-order-parser-bug": "seen-red/led-refs-flag-order-parser-bug/run_fixtures.py",
     "led-work-depends-default-type-advisory": "seen-red/led-work-depends-default-type-advisory/run_fixtures.py",
     "led-help-token-closure":         "seen-red/led-help-token-closure/run_fixtures.py",

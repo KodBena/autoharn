@@ -19,3 +19,57 @@ AT LEAST ONE CASE FAILED
 The dispatch table was restored to its correct state (byte-identical to the committed ./autoharn)
 immediately after this capture; case a then reports PASS again (see the fixture's own green run
 in the umbrella-CLI build's completion report).
+
+---
+
+ROUND-1 REVIEW (2026-07-23), SEVERE-1: a fresh-context reviewer found the exact gap this
+family's own name promises to close was itself open -- NO case above ever executes a real
+`./autoharn <verb>` for one of the ten actual verbs; case c only drives the ALIAS shim, and
+checks for the alias's own deprecation line, which prints unconditionally BEFORE the alias's own
+`exec ./autoharn <verb>` call.
+
+REPRODUCTION: `./autoharn`'s own dispatch line was edited to
+`exec "$LIBEXEC/$VERB-BROKEN" "$@"` (a broken exec target -- the reviewer's own injection), and
+the fixture (as it stood, cases a-e only) was re-run:
+
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+a-libexec-roster-matches-dispatch-table: PASS
+b-help-mentions-every-verb: PASS
+c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+
+ALL CASES PASS
+
+Every case passed despite EVERY real verb invocation being completely broken -- exactly the
+finding: a broken exec line went undetected because no case ever ran `./autoharn <verb>` for a
+real verb and checked what came back.
+
+THE FIX: case f (`f-real-invocation-reaches-libexec`) was added, running `./autoharn <verb>
+--help` directly (not through the alias) for EVERY verb in the dispatch table, and asserting
+neither the exit code (127) nor the combined stdout+stderr carries the shell's own
+exec-target-missing signature ("No such file or directory") -- the one signature a broken
+dispatch line produces that no verb's own real refusal text would ever spell (each verb's own
+refusal, where `--help` is not a clean success, is always verb-specific prose: "judge: deployment
+record not found...", "REFUSED: no Postgres host resolved...", etc.). `--help` was confirmed
+side-effect-free for all ten verbs by hand this round (see the fixture's own module docstring).
+
+REPRODUCTION with the NEW case f, same broken-exec-line injection:
+
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+a-libexec-roster-matches-dispatch-table: PASS
+b-help-mentions-every-verb: PASS
+c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+f-real-invocation-reaches-libexec: FAIL -- 'autoharn asof-export --help' exit 127 looks like a
+broken dispatch, not the real verb (combined output: '.../autoharn: line 91:
+.../libexec/autoharn/asof-export-BROKEN: No such file or directory\n')
+f-real-invocation-reaches-libexec: FAIL -- (... and so on, all ten verbs FAIL the same way ...)
+
+AT LEAST ONE CASE FAILED
+
+All ten verbs fail case f identically under the broken exec line -- the class SEVERE-1 named is
+now caught. The dispatch line was restored (byte-identical to the committed ./autoharn)
+immediately after this capture; the full six-case fixture then passes reliably (verified across
+multiple runs).

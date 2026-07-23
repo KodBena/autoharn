@@ -18,7 +18,30 @@ c-matching-client-proceeds: PASS (GREEN case: cached, no second HTTP call)
 
 ALL CASES PASS
 
-(Case b's own PASS line above IS the red-case witness: `ProtocolVersionMismatch` was raised,
-carried both version strings, and `report_protocol_mismatch` mapped it to exit 4 with teaching
-text -- exactly the spec's own words. The client version was restored to its real value and the
-handshake cache cleared immediately after, so case c's GREEN run is genuinely independent.)
+(Case b's own PASS line above is a "RED case" in this project's internal-refusal-cases
+convention -- see e.g. seen-red/umbrella-cli-dispatch-parity's own case d, or seen-red/
+belief-substrate-v1's per-malformation-class cases: a case that PASSES by successfully producing
+an expected refusal. `ProtocolVersionMismatch` was raised, carried both version strings, and
+`report_protocol_mismatch` mapped it to exit 4 with teaching text -- exactly the spec's own words.
+The client version was restored to its real value and the handshake cache cleared immediately
+after, so case c's GREEN run is genuinely independent.)
+
+ROUND-1 REVIEW (2026-07-23): a fresh-context reviewer flagged that, unlike this family's own
+sibling fixtures (umbrella-cli-dispatch-parity, umbrella-cli-ensure-running), this red.txt had
+never shown an actual overall-FAIL run -- only the internal-refusal-cases convention above,
+which reads as an unsupported claim next to siblings that DO show a genuine capture. To close
+that gap honestly: `check_protocol_version` was temporarily stubbed to an unconditional no-op
+(simulating the version check being removed/broken), and the fixture re-run:
+
+$ python3 seen-red/umbrella-cli-version-handshake/run_fixtures.py
+a-server-carries-protocol-version: PASS ('1', 'single-operator')
+b-skewed-client-refuses: FAIL -- no ProtocolVersionMismatch raised
+c-matching-client-proceeds: FAIL -- matching call did not populate the cache
+
+AT LEAST ONE CASE FAILED
+
+With the check stubbed out, a genuinely skewed client is silently accepted (case b) and the
+per-process cache this build depends on is never populated (case c cascades from the same stub).
+`check_protocol_version` was restored immediately after this capture (byte-identical to the
+committed version), and the full three-case run passes reliably again (verified across multiple
+repeated runs).

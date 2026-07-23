@@ -18,6 +18,33 @@ Cases:
                                  anything, and its stderr names the known roster.
   e-service-is-handled-directly -- `autoharn service --help` exits 0 without going through
                                  libexec/autoharn/ (service is not one of the ten relocated verbs).
+  f-real-invocation-reaches-libexec -- round-1 review SEVERE-1: runs `./autoharn <verb> --help`
+                                 (a read-only, side-effect-free probe -- confirmed per verb below)
+                                 for EVERY verb in the dispatch table and asserts the dispatcher's
+                                 own `exec` actually reached the real `libexec/autoharn/<verb>`
+                                 file, rather than merely checking --help/alias-deprecation text
+                                 that a broken exec line could still satisfy. A reviewer had
+                                 injected `exec "$LIBEXEC/$VERB-BROKEN" "$@"` into ./autoharn and
+                                 NO existing case (a/b/c/d/e above) went red -- case c in
+                                 particular only checks the ALIAS shim's own deprecation line,
+                                 which prints unconditionally BEFORE the alias's own `exec ./
+                                 autoharn <verb>` call, so it stayed green even when that later
+                                 exec failed outright (shell exit 127, "No such file or
+                                 directory"). This case instead runs `./autoharn <verb>` directly
+                                 (not through the alias) and asserts: exit code is never 127, and
+                                 neither stdout nor stderr carries the shell's own
+                                 exec-target-missing text -- the one signature a broken dispatch
+                                 line produces that no verb's own real refusal text would ever
+                                 spell. `--help` was verified (by hand, this round) side-effect-
+                                 free for all ten verbs: five (led, pickup, attest-tags, migrate,
+                                 asof-export) print real usage text and exit 0; the other five
+                                 (judge, distance-to-clean, audit, doctor, verify-chain) refuse
+                                 loudly BEFORE any write -- this repo's own root has no
+                                 deployment.json, so each of those five's own construction-time
+                                 "no deployment record"/"no Postgres host resolved" refusal fires
+                                 first, which is itself still proof the REAL script ran (the exact
+                                 refusal text is verb-specific, never the shell's own generic
+                                 "not found").
 
 RUN: python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
 """
@@ -127,6 +154,31 @@ def case_e_service_is_handled_directly() -> bool:
     return True
 
 
+def case_f_real_invocation_reaches_libexec() -> bool:
+    # The one shell-level signature a broken `exec "$LIBEXEC/$VERB-BROKEN" "$@"` (or any dispatch
+    # line naming a nonexistent file) produces -- distinct from every verb's own real refusal
+    # text, which is always verb-specific prose, never this generic shell diagnostic.
+    _EXEC_FAILURE_SIGNATURE = "No such file or directory"
+    ok = True
+    for verb in sorted(_EXPECTED_VERBS):
+        r = _run([str(AUTOHARN), verb, "--help"])
+        combined = r.stdout + r.stderr
+        if r.returncode == 127 or _EXEC_FAILURE_SIGNATURE in combined:
+            print(f"f-real-invocation-reaches-libexec: FAIL -- 'autoharn {verb} --help' exit "
+                  f"{r.returncode} looks like a broken dispatch, not the real verb "
+                  f"(combined output: {combined!r})")
+            ok = False
+            continue
+        if not combined.strip():
+            print(f"f-real-invocation-reaches-libexec: FAIL -- 'autoharn {verb} --help' produced "
+                  f"no output at all -- cannot confirm the real script ran")
+            ok = False
+    if ok:
+        print("f-real-invocation-reaches-libexec: PASS (every verb's real libexec/autoharn/<verb> "
+              "reached via `./autoharn <verb> --help`, never a broken-exec shell diagnostic)")
+    return ok
+
+
 def main() -> int:
     results = [
         case_a_libexec_roster_matches_dispatch_table(),
@@ -134,6 +186,7 @@ def main() -> int:
         case_c_alias_shim_still_works(),
         case_d_unknown_verb_refuses(),
         case_e_service_is_handled_directly(),
+        case_f_real_invocation_reaches_libexec(),
     ]
     if all(results):
         print("\nALL CASES PASS")

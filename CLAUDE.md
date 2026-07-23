@@ -57,13 +57,16 @@ it; the key restates the reading posture the bullet above mandates):
   quantification universe:
   [ADR-0000's 2026-07-02 Rule 2(a) amendment](law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)). Sonnet executes; Opus authors only here, and only
   with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
-- **The operator surface is `./autoharn` and its subcommands; `autoharn --help` is the
-  authoritative self-updating list** (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows
-  1151-1183: one root executable, dispatching to `libexec/autoharn/<verb>`; the ten pre-umbrella
-  root executables — led, judge, pickup, distance-to-clean, attest-tags, audit, doctor, migrate,
-  asof-export, verify-chain — survive one deprecation window as one-line `./verb` alias shims,
-  removed at the first post-2.0.0 minor) plus refusals that teach. Operational truth lives in
-  ORCH-CAPABILITIES.md + those verbs; judgment/ and
+- **For THIS repository's OWN root deployment, the operator surface is `./autoharn` and its
+  subcommands; run `autoharn --help` for the authoritative, self-updating roster** (design/
+  FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows 1151-1183: one root executable, dispatching to
+  `libexec/autoharn/<verb>`; the pre-umbrella root executables survive one deprecation window as
+  one-line `./verb` alias shims, removed at the first post-2.0.0 minor) plus refusals that teach.
+  **This is scoped to this repo's own root** — every world scaffolded by
+  `bootstrap/new-project.sh` still gets the ten bare per-verb shims untouched by this build (the
+  scaffold migration is a named follow-on, not yet done); see
+  `user-guide/ORCH-OPERATING-CARD.md`'s forward note for the current, honestly-scoped status of
+  that gap. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule

@@ -39,6 +39,19 @@ A4's exit-code-fidelity ruling extended to this shim layer). Four codes, named O
   4  BOUNDARY UNREACHABLE -- the HTTP request to the boundary itself failed (connection refused,
                           DNS failure, timeout) -- this shim never had a response to classify.
                           Distinct from 3 (which DID get a response, just a refusing one).
+                          `ProtocolVersionMismatch` (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
+                          §3's version handshake) is DELIBERATELY mapped to this SAME code 4, not
+                          a fifth code of its own (round-1 review finding, decided and recorded
+                          here rather than left implicit): both cases mean "this shim never got a
+                          usable response to classify at all" from this caller's point of view --
+                          a connection failure and an incompatible peer are the same class of
+                          "nothing to work with" transport-level non-outcome, merely disambiguated
+                          in the stderr TEXT (`report_boundary_exception`/
+                          `report_protocol_mismatch` each write distinct, named messages). This
+                          four-code space is a ratified CLI contract, not a per-defect enumeration
+                          to widen casually -- a genuinely NEW class of caller-actionable outcome
+                          routes to the maintainer before it gets its own code, the same way any
+                          other exit-code-contract change would.
 Never exit 2 -- reserved, unused here, precisely because the LEGACY direct-psql tools propagate
 psql's OWN raw exit codes (which include 2 for a connection-level psql failure); keeping this
 shim's own vocabulary disjoint from that legacy range means a caller inspecting an exit code
@@ -213,7 +226,15 @@ def _http(method: str, url: str, payload: dict | None = None, timeout: float = 6
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body_bytes = resp.read()
-            body = json.loads(body_bytes) if body_bytes else None
+            try:
+                body = json.loads(body_bytes) if body_bytes else None
+            except json.JSONDecodeError:
+                # A 200 with a non-JSON body is not a kernel/boundary verdict shape either -- the
+                # SAME degraded-but-typed handling the HTTPError branch below already gives a
+                # non-JSON error body (SEVERE-4 fix: this path previously let json.loads raise
+                # straight through as an unguarded traceback instead of the typed teaching
+                # refusal every other malformed-response shape gets).
+                body = {"detail": body_bytes.decode("utf-8", errors="replace")}
             return resp.status, body
     except urllib.error.HTTPError as e:
         body_bytes = e.read()

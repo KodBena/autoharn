@@ -4,7 +4,9 @@ FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §4, ledger rows 1151-1183).
 
 SCOPE, named explicitly (this build's own honest boundary, not silently narrowed): this module
 provides the descriptor SHAPE and a write/scan pair, tested against a scratch registry directory
-(see the umbrella build's own witness fixtures). It is DELIBERATELY NOT wired into
+(seen-red/world-descriptor-registry/run_fixtures.py -- write/scan round-trip, re-write-overwrites,
+malformed-world-name refusal, malformed-registry-entry refusal, empty-registry-dir scan). It is
+DELIBERATELY NOT wired into
 `bootstrap/new-project.sh`'s own birth sequence in this build -- that script is a 1200+-line,
 heavily load-bearing scaffold every existing world/fixture depends on, and wiring a new write
 into its birth sequence is a genuinely separate, larger change than this module's own shape;

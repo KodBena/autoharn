@@ -329,6 +329,7 @@ import json
 import math
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -2311,6 +2312,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--i-understand-this-exposes-the-ledger", action="store_true",
                     help="required to bind any non-loopback address -- the ledger carries "
                          "operator-real content (spec §2, the OTel-collector localhost-only posture)")
+    p.add_argument("--pidfile", default=None,
+                    help="write THIS PROCESS's own pid to this path, but ONLY after this "
+                         "process's own listen-socket bind has genuinely succeeded (design/"
+                         "FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2, the pidfile-as-witness-of-bind "
+                         "fix for the ensure-running TOCTOU). The bind happens HERE, synchronously, "
+                         "before uvicorn/ASGI ever start (NOT via an ASGI 'startup' event -- the "
+                         "installed uvicorn runs that event BEFORE its own socket bind, which "
+                         "would make 'startup' fire for a losing racer too). Written by "
+                         "libexec/autoharn-service's own spawn; harmless and unused for a manual "
+                         "operator start that omits this flag.")
     return p.parse_args(argv)
 
 
@@ -2349,6 +2360,62 @@ def main(argv: list[str] | None = None) -> int:
             dep_limit=per_dep_limit,
         )
     app = create_app(configs)
+    if args.pidfile:
+        # BIND-AS-LOCK, DONE HERE, SYNCHRONOUSLY, BEFORE UVICORN EVER STARTS (design/
+        # FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2; round-1 review SEVERE-2 fix). An app-level
+        # ASGI 'startup' event handler is NOT a safe place to detect bind success on the
+        # installed uvicorn (0.51): reading `uvicorn.server.Server.startup`'s own source shows it
+        # runs the ASGI lifespan 'startup' event BEFORE attempting its own socket bind -- so a
+        # LOSING racer's app-level startup handler would still fire before that racer's own bind
+        # ever failed, defeating the "reaching this handler proves ownership" reasoning entirely.
+        # Binding the socket ourselves, here, sidesteps that ordering question altogether: this
+        # bind() call itself IS the lock (the OS raises OSError immediately, deterministically, if
+        # a sibling process already holds this exact host:port) -- there is no window between
+        # "bind succeeded" and "pidfile written" that any async machinery (ASGI, uvicorn, or
+        # otherwise) could ever violate, because this happens entirely before the ASGI world
+        # starts.
+        # SO_REUSEADDR IS set (needed for an honest restart shortly after real traffic: an
+        # accepted connection's own TIME_WAIT state -- e.g. from a health-check probe -- otherwise
+        # blocks rebinding the exact same listening port for a good while, live-witnessed against
+        # this exact code). BUT bind() ALONE is not the exclusivity boundary once SO_REUSEADDR is
+        # set: Linux permits a SECOND socket to bind() the same address:port successfully as long
+        # as NEITHER has called listen() yet (live-witnessed round-1 review finding: two racing
+        # bind() calls both succeeded here before this fix, because uvicorn/asyncio's own listen()
+        # call happens well after this process's Python/FastAPI import overhead -- a wide-open
+        # window). The actual lock is listen(): only ONE socket may hold the LISTEN state on a
+        # given address:port even with SO_REUSEADDR set. So listen() is called HERE, synchronously,
+        # immediately after bind() -- closing that window to zero -- and the pidfile is written
+        # only once THIS process's own listen() has ALSO succeeded (asyncio's own later listen()
+        # call on the same already-listening socket is a harmless no-op re-application of the
+        # same backlog).
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((args.host, args.port))
+            sock.listen(2048)
+        except OSError as e:
+            sock.close()
+            sys.stderr.write(
+                f"boundary_service: REFUSED -- could not bind/listen on {args.host}:{args.port} "
+                f"({e.__class__.__name__}: {e}) -- the port is genuinely held by another "
+                f"process. Nothing was touched.\n")
+            return 1
+        # Bind+listen succeeded: THIS process, right now, provably holds the port. Write the
+        # pidfile immediately and synchronously, before handing the socket to uvicorn at all --
+        # O_CREAT|O_EXCL so a residual file at this exact path (a caller reusing a stale path is
+        # its own bug) is never silently clobbered rather than surfaced.
+        try:
+            fd = os.open(args.pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(fd, "w") as f:
+                f.write(str(os.getpid()))
+        # Hand the ALREADY-BOUND socket to uvicorn (the same `sockets=` pathway uvicorn's own
+        # multi-worker/gunicorn integration uses) -- asyncio's own `create_server` calls
+        # `sock.listen()` on it; uvicorn never re-binds host/port when a socket is supplied.
+        uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port)).run(sockets=[sock])
+        return 0
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

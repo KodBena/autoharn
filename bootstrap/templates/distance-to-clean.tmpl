@@ -36,6 +36,7 @@ sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
+    import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
 except ImportError as _e:
     print(f"distance-to-clean: cannot import autoharn's serving/boundary_cli_client.py under "
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
@@ -115,7 +116,16 @@ def _load_config() -> bcc.ServedConfig:
         sys.exit(4)
     # Version handshake (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): checked here, the one
     # choke point every served call passes through (ADR-0012 P1), before any real read is issued.
-    bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    try:
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    except bcc.BoundaryUnreachable:
+        # Ensure-running (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2, round-1 review
+        # DIRECTED WORK): unreachable -> spawn per this deployment's own record, print ONE
+        # line, then proceed -- retried below ONCE; if that retry still raises, the
+        # EXISTING BoundaryUnreachable handling in this file's own top-level dispatch is
+        # the refusal shown (this call invents no new refusal shape of its own).
+        er.ensure_running_or_leave_unreachable(DEPLOYMENT_PATH, 'distance-to-clean')
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
     return cfg
 
 
