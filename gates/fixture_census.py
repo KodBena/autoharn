@@ -163,6 +163,7 @@ REGISTRY: dict[str, str] = {
     "led-garbage-statement-guard":     "seen-red/led-garbage-statement-guard/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
+    "deep-walk-recursion-guard":       "seen-red/deep-walk-recursion-guard/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",
     "boundary-read-surface":           "seen-red/boundary-read-surface/run_fixtures.py",
     "boundary-cli-rebase":             "seen-red/boundary-cli-rebase/run_fixtures.py",

@@ -1,0 +1,4 @@
+GREEN ok: serving/boundary_service.py passes -- _guard_recursion is the only except-RecursionError site
+RED  ok: synthetic fourth bypassing site refused:
+  /tmp/deep-walk-recursion-guard-red-zmivyumu.py:2437: `except ... RecursionError ...` OUTSIDE `_guard_recursion` — a deep-walk site bypassing the single guarded-traversal helper (boundary-recursion-net-single-invariant, ledger row 1628)
+ALL CASES OK -- deep-walk-recursion-guard both polarities, zero residue

@@ -327,16 +327,28 @@ by the write route itself (it reads and bounds the raw body manually, per the si
 above, rather than via an automatic pydantic body parameter).
 
 **The parse closure (A3.2).** The explicit `json.loads` call over the (already size-bounded)
-raw body is wrapped in `except (ValueError, RecursionError)` — the closure over every way that
-call can fail short of well-formed, in-bound JSON: invalid UTF-8 (`UnicodeDecodeError`, a
-`ValueError` subclass — the **encoding** axis), an integer literal past CPython's int-string
-conversion guard (`ValueError` — the **value magnitude** axis), malformed JSON
-(`json.JSONDecodeError`, also `ValueError`) or nesting too deep for the recursive-descent
-parser to complete (`RecursionError`, which subclasses `RuntimeError` — both the **structure**
-axis; the `RecursionError` case is exactly why the infra handler above is narrowed to
-`PsqlInfraFailure` rather than a bare `RuntimeError`, so it cannot be mistaken for one). Every
-leg is a typed HTTP 422 naming the failed axis, never echoing the raw body bytes back (the body
-is untrusted and, in the encoding-axis case, may not even be valid UTF-8 to echo).
+raw body is routed through `_guard_recursion(json.loads, raw_body, exceptions=(ValueError,
+RecursionError))` — the closure over every way that call can fail short of well-formed,
+in-bound JSON: invalid UTF-8 (`UnicodeDecodeError`, a `ValueError` subclass — the **encoding**
+axis), an integer literal past CPython's int-string conversion guard (`ValueError` — the
+**value** axis), malformed JSON (`json.JSONDecodeError`, also `ValueError`) or nesting too deep
+for the recursive-descent parser to complete (`RecursionError`, which subclasses
+`RuntimeError` — both the **structure** axis; the `RecursionError` case is exactly why the
+infra handler above is narrowed to `PsqlInfraFailure` rather than a bare `RuntimeError`, so it
+cannot be mistaken for one). Every leg is a typed HTTP 422 naming the failed axis, never
+echoing the raw body bytes back (the body is untrusted and, in the encoding-axis case, may not
+even be valid UTF-8 to echo).
+
+**One guarded-traversal helper, not one net per call site (ledger row 1628).** `_guard_recursion`
+is the ONE place `RecursionError` is ever caught in `serving/boundary_service.py` — the parse
+call above, `json.dumps(..., allow_nan=False)`'s A13 recursion net, and the A7
+`_representability_axis_failure`/`_iter_strings` walk all route through it rather than each
+carrying its own `except RecursionError`. `gates/deep_walk_recursion_guard.py` enforces this
+mechanically (refuses any `except ... RecursionError ...` clause outside the helper), so a
+fourth deep-walk site added later cannot silently bypass it. The same commit also unified the
+axis vocabulary: the oversized-integer-literal leg used to report `"value magnitude"` while
+every other value-ish refusal already said `"value"` (the **value axis** phrasing used
+throughout this document) — one spelling now, not two.
 
 **Write path shape (A3.1).** The write handlers are plain `def`, matching the read routes —
 FastAPI/Starlette dispatches a plain `def` path operation function to its threadpool, off the
