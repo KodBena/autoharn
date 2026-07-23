@@ -43,7 +43,15 @@ PROJECT_ROOT = DEPLOYMENT_PATH.parent
 # exited BEFORE boundary_cli_client/ensure_running/doc_attestation_presence are even imported.
 if any(a in ("--help", "-h") for a in sys.argv[1:]):
     print(
-        "usage: distance-to-clean\n"
+        # Round-4 review SEVERE fix (seen-red/umbrella-cli-dispatch-parity): this line used to
+        # read the bare "usage: distance-to-clean", byte-identical to legacy-distance-to-clean
+        # .tmpl's own usage line -- so swapping libexec/autoharn/distance-to-clean's exec target
+        # between the two sibling templates satisfied the dispatch-parity suite's identity check
+        # unnoticed. The "(served via the boundary)" suffix reuses this template's own existing
+        # self-description phrase (see the module docstring above) and is now what
+        # run_fixtures.py's _SIBLING_SERVED_MARKERS asserts is ABSENT from the legacy variant's
+        # real --help output.
+        "usage: distance-to-clean  (served via the boundary)\n"
         "\n"
         "distance-to-clean -- one-line-per-section debt count against this repo's own hygiene\n"
         "bars, served via the boundary (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md\n"

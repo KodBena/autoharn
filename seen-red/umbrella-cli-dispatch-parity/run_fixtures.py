@@ -158,13 +158,49 @@ _USAGE_MARKERS = {
     "led": "led -- read from and write to this project's decision ledger.",
     "judge": "usage: judge [--drop-record] [extra ledger_differential.py flags...]",
     "pickup": "pickup — the resume verb (",
-    "distance-to-clean": "usage: distance-to-clean",
+    # Round-4 review SEVERE fix: pinned to the LEGACY variant's own distinguishing suffix (see
+    # _SIBLING_SERVED_MARKERS below) -- legacy-distance-to-clean.tmpl is the file
+    # libexec/autoharn/distance-to-clean actually execs for this repo's own root.
+    "distance-to-clean": "usage: distance-to-clean  (LEGACY direct-psql original)",
     "attest-tags": "usage: attest-tags [--repo PATH] [--keys-dir PATH] [--json]",
     "audit": "usage: audit [--retain] [--differential]",
     "doctor": "usage: doctor",
     "migrate": "usage: migrate <deployment-dir> [--dry-run]",
     "asof-export": "usage: asof-export [-h] {read,export} ...",
     "verify-chain": "usage: verify-chain [--head]",
+}
+
+# Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates
+# under bootstrap/templates/ -- a "served via the boundary" variant and a "legacy-<verb>.tmpl"
+# direct-psql original (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5) -- of which
+# this repo's own libexec/autoharn/<verb> dispatch contractually execs the LEGACY one (existing-
+# world policy, runs-are-linear, see each dispatch script's own header comment). A sibling pair
+# whose own usage/header text happens to be byte-identical between the two variants is an escape
+# THE SAME SHAPE AS THE ROUND-3 SHARED-BOILERPLATE ESCAPE ABOVE: `_USAGE_MARKERS`' presence check
+# alone would pass even if libexec/autoharn/<verb> were swapped to exec the WRONG (served) sibling
+# -- the marker constant is fully satisfiable by BOTH files at once, so the check proves nothing
+# about WHICH one actually ran. Reproduced red for distance-to-clean this round (the served and
+# legacy templates both printed the bare "usage: distance-to-clean"); a sweep of every OTHER verb
+# with a served/legacy split found the SAME shape in asof-export (both templates' argparse
+# `prog="asof-export"` usage line is mechanically identical: "usage: asof-export [-h]
+# {read,export} ..."). Checked and found ALREADY SAFE: pickup (bootstrap/templates/pickup.tmpl
+# vs legacy-pickup.tmpl) -- legacy-pickup.tmpl's own docstring header uses an em dash ("—",
+# absent everywhere in the served pickup.tmpl, verified `grep -c` = 0) so its existing
+# `_USAGE_MARKERS["pickup"]` entry already cannot double as the served variant's marker; no
+# template edit or extra check needed there. led has no legacy sibling at all (legacy-led.tmpl is
+# deleted outright, per libexec/autoharn/led's own comment) -- not a pair.
+#
+# For each verb below, this is the SERVED sibling's own distinguishing text (verified, by hand,
+# this round, to be absent from that verb's real LEGACY --help output) -- `_assert_sibling_pair`
+# asserts it is ABSENT from combined output alongside the (legacy) `_USAGE_MARKERS` entry's
+# presence, so a wrong-target dispatch swapping in the served sibling is caught even though the
+# swapped-in file's own usage/header text would otherwise satisfy `_USAGE_MARKERS` alone.
+# A FUTURE VERB THAT GROWS A SERVED/LEGACY SPLIT SHOULD GET THE SAME TREATMENT: add its served
+# variant's distinguishing text here, or confirm (and note, as done above for pickup) that its
+# existing marker already cannot collide.
+_SIBLING_SERVED_MARKERS = {
+    "distance-to-clean": "usage: distance-to-clean  (served via the boundary)",
+    "asof-export": "Served via the boundary",
 }
 
 # The shared boilerplate that caused the round-3 SEVERE escapes: filing/deployment_record.py's
@@ -186,6 +222,26 @@ def _assert_no_shared_boilerplate(verb: str, combined: str) -> str | None:
                      f"boilerplate ({marker!r}) -- this is the exact round-3 escape (a verb's "
                      f"--help falling through to a shared refusal that happens to name other "
                      f"verbs too); combined output: {combined!r}")
+    return None
+
+
+def _assert_sibling_pair_identity(verb: str, combined: str) -> str | None:
+    """Round-4 review SEVERE fix. Returns a FAIL message, or None if clean. For a verb with a
+    served/legacy sibling split (see `_SIBLING_SERVED_MARKERS`'s own comment above), asserts the
+    SERVED sibling's own distinguishing text is ABSENT from real output -- the presence-only
+    `_USAGE_MARKERS` check cannot, by itself, distinguish "the real legacy verb ran" from "the
+    served sibling ran instead" when the two variants' usage/header text collides (the exact
+    class of escape reproduced red this round for distance-to-clean, then found again by sweep in
+    asof-export). Verbs with no sibling split, or an already-safe pair, are simply absent from
+    `_SIBLING_SERVED_MARKERS` and this is a no-op for them."""
+    served_marker = _SIBLING_SERVED_MARKERS.get(verb)
+    if served_marker is None:
+        return None
+    if served_marker in combined:
+        return (f"'{verb}' output contains its SERVED sibling template's own distinguishing text "
+                f"({served_marker!r}) -- this repo's dispatch is contracted to exec the LEGACY "
+                f"direct-psql variant for this verb, so this looks like a wrong-target dispatch "
+                f"serving the OTHER sibling template underneath; combined output: {combined!r}")
     return None
 
 
@@ -273,6 +329,10 @@ def case_c_alias_shim_still_works() -> bool:
         boilerplate_fail = _assert_no_shared_boilerplate(verb, r.stdout + r.stderr)
         if boilerplate_fail:
             print(f"c-alias-shim-still-works: FAIL -- {boilerplate_fail}")
+            ok = False
+        sibling_fail = _assert_sibling_pair_identity(verb, r.stdout + r.stderr)
+        if sibling_fail:
+            print(f"c-alias-shim-still-works: FAIL -- {sibling_fail}")
             ok = False
     if ok:
         print("c-alias-shim-still-works: PASS (all ten alias shims print their deprecation "
@@ -371,6 +431,10 @@ def case_f_real_invocation_reaches_libexec() -> bool:
         boilerplate_fail = _assert_no_shared_boilerplate(verb, combined)
         if boilerplate_fail:
             print(f"f-real-invocation-reaches-libexec: FAIL -- {boilerplate_fail}")
+            ok = False
+        sibling_fail = _assert_sibling_pair_identity(verb, combined)
+        if sibling_fail:
+            print(f"f-real-invocation-reaches-libexec: FAIL -- {sibling_fail}")
             ok = False
     if ok:
         print("f-real-invocation-reaches-libexec: PASS (every verb's real libexec/autoharn/<verb> "

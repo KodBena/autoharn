@@ -134,7 +134,15 @@ PROJECT_ROOT = DEPLOYMENT_PATH.parent
 # free usage line naming this verb, printed and exited BEFORE deployment_record is even imported.
 if any(a in ("--help", "-h") for a in sys.argv[1:]):
     print(
-        "usage: distance-to-clean\n"
+        # Round-4 review SEVERE fix (seen-red/umbrella-cli-dispatch-parity): this line used to
+        # read the bare "usage: distance-to-clean", byte-identical to this file's served sibling
+        # (distance-to-clean.tmpl)'s own usage line -- so swapping libexec/autoharn/
+        # distance-to-clean's exec target between the two templates satisfied the dispatch-
+        # parity suite's identity check unnoticed. The "(LEGACY direct-psql original)" suffix
+        # reuses this template's own existing self-description phrase (see this file's earlier
+        # comment and module docstring) and is what run_fixtures.py's _USAGE_MARKERS now pins for
+        # this verb -- this IS the variant this repo's own dispatch actually execs.
+        "usage: distance-to-clean  (LEGACY direct-psql original)\n"
         "\n"
         "distance-to-clean -- one-line-per-section debt count against this repo's own hygiene\n"
         "bars (LEGACY direct-psql original, operator recovery path when the boundary is down):\n"
