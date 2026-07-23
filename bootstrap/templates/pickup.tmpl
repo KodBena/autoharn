@@ -94,6 +94,12 @@ def standing_decisions(cfg: bcc.ServedConfig) -> None:
         print(f"(no standing decisions on record in this deployment's configured grade set: {grades})")
         return
     rendered: list[str] = []
+    # ACCOUNTING (ledger item standing-injection-budget-asymmetry): `byte_cap` bounds the ROW
+    # CONTENT only -- the `_section("STANDING-DECISIONS")` banner just printed above is fixed,
+    # tool-authored overhead, never deducted from it, same as every other `_section(...)` call in
+    # this file. hooks/sessionstart_durable_decisions.py's own `_render()` used to subtract ITS
+    # header's byte length from this same config value before this reconciliation; it no longer
+    # does, so both readers of `byte_cap` now agree on what it bounds.
     budget = byte_cap
     shown = 0
     for r in sorted(rows, key=lambda r: r["id"]):

@@ -30,7 +30,10 @@ functionally, unreachable FOR THIS QUERY.
 
 BYTE CAP, ITEM CAP, LOUD TRUNCATION (spec element 3; the no-silent-caps rule this project holds
 everywhere else a display is capped): `apparatus.json` -> `mechanisms.standing_decisions.byte_cap`
-(default 4000) bounds the TOTAL rendered size of the injected block, and `mechanisms.
+(default 4000) bounds the ROW CONTENT (the `id  grade  statement` lines below the fixed header --
+ledger item `standing-injection-budget-asymmetry` reconciled this to match `bootstrap/templates/
+pickup.tmpl`'s own accounting, which never metered its own fixed section banner against the same
+cap either -- see `_render()`'s own comment), and `mechanisms.
 standing_decisions.max_items` (default null -- no count limit, byte cap alone governs, unchanged
 from before this key existed) additionally bounds the ROW COUNT. Both apply, independently:
 whichever bites first truncates. Rows are included, oldest-first (id order), until the NEXT row
@@ -188,7 +191,18 @@ def _render(rows: list[tuple[str, str, str]], byte_cap: int, max_items: int | No
     count, which can undercount a multi-byte statement)."""
     header = "Standing decisions (durable -- survive context loss; kernel/lineage/s36-decision-grade.sql):"
     lines = [header]
-    budget = byte_cap - len(header.encode("utf-8")) - 1  # -1 for the header's own trailing newline
+    # ACCOUNTING (reconciled, ledger item standing-injection-budget-asymmetry): `byte_cap` bounds
+    # the ROW CONTENT only -- the header line above (fixed, tool-authored, never operator/ledger
+    # controlled) is NOT deducted from it. This used to subtract the header's own byte length
+    # here, while bootstrap/templates/pickup.tmpl and legacy-pickup.tmpl's own STANDING-DECISIONS
+    # section (which ALSO prints a fixed banner before its rows, via `_section("STANDING-
+    # DECISIONS")`) never did -- two readers of the identical `byte_cap` config value, silently
+    # disagreeing about what it bounds. Reconciled onto pickup's convention (established across
+    # its four byte-capped-or-not sections, never metering the banner) rather than the other way,
+    # since a fixed banner has nothing to do with what byte_cap actually exists to bound (an
+    # unbounded, ledger-controlled row count/length) -- see design/FABLE-GRADED-DECISIONS-SPEC.md
+    # element 3/5, which asks for the SAME behavior in both, not a specific header-inclusive one.
+    budget = byte_cap
     shown = 0
     for row_id, grade, statement in rows:
         if max_items is not None and shown >= max_items:
