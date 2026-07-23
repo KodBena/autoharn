@@ -78,14 +78,20 @@ CHAIN_B = bs_fixtures.CHAIN_B
 PGHOST, PGDB = bs_fixtures.PGHOST, bs_fixtures.PGDB
 check = bs_fixtures.check
 
-# The full kernel/lineage chain through s50 -- every VIEW_REGISTRY member is a genuinely present
+# The full kernel/lineage chain through s57 -- every VIEW_REGISTRY member is a genuinely present
 # relation on this chain (s44 model_attestations, s46 credited_current/model_defeated_rows, s36
-# standing_decisions -- none of which CHAIN_B alone, s43-headed, carries).
+# standing_decisions -- none of which CHAIN_B alone, s43-headed, carries; s56's
+# reservations_outstanding/review_verdicts are the two newest members, closing-batch build ledger
+# rows 1176/1178 -- s57 carries no view of its own but is included so this fixture's world
+# genuinely sits at the current lineage head, matching WR4's meta.lineage_head expectation).
 CHAIN_FULL = CHAIN_B + [
     "s44-model-identity-attestation.sql", "s45-standing-lifecycle.sql",
     "s46-credited-views.sql", "s47-claim-on-closed-refusal.sql",
     "s48-review-witness-existence.sql", "s49-journaler-overflow-guard.sql",
-    "s50-defeat-input-raw-domain.sql",
+    "s50-defeat-input-raw-domain.sql", "s51-artifact-store.sql",
+    "s52-artifact-witness-check.sql", "s53-belief-substrate.sql",
+    "s54-belief-views.sql", "s55-dispatch-grain-independence.sql",
+    "s56-reservation-residue.sql", "s57-obligation-revocation-event.sql",
 ]
 
 
