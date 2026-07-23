@@ -18,16 +18,36 @@
 # and harder for a human to verify at a glance than a second variable assignment sourced
 # alongside it).
 #
-# SHIM_VERBS: the nine verbs every scaffolding path below writes UNCONDITIONALLY, always has,
-# for a world born today.
-SHIM_VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export"
-# SHIM_VERBS_OPTIONAL: 'doctor' only -- the newest of the ten (ledger rows 1147/1148), added
-# after some already-scaffolded deployments existed. A deployment scaffolded BEFORE doctor
-# existed legitimately has no such shim; a script that DISCOVERS/converts an EXISTING deployment
-# (bootstrap/convert-to-submodule.sh) must treat it as optional rather than refusing every
-# pre-existing deployment on this one verb's account. A script that WRITES a fresh scaffold
-# (bootstrap/new-project.sh, track-work.sh, freeze-at-stamp.sh) or that only re-verifies a
-# freshly-fetched autoharn tree's own templates (bootstrap/upgrade-submodule.sh) has no such
-# excuse -- doctor is not optional for those, so they use SHIM_VERBS_ALL, never SHIM_VERBS alone.
+# CHRONOLOGY (this is why the vocabulary below has three tiers, not two):
+#   - SHIM_VERBS_ORIGINAL_EIGHT: the eight verbs every scaffold has written since before either
+#     `asof-export` or `doctor` existed. A real deployment scaffolded early (e.g. ~/ent, stamped
+#     2026-07-13) has exactly these eight and nothing more -- legitimately, not as a defect.
+#   - `asof-export` was added 2026-07-18 (commit badc51c), AFTER ~/ent and any other
+#     already-running deployment was scaffolded.
+#   - `doctor` was added later still (ledger rows 1147/1148).
+#   - SHIM_VERBS: the nine verbs every scaffolding path below writes UNCONDITIONALLY, always has,
+#     for a world born TODAY (the original eight + asof-export -- doctor is not in this set).
+#   - SHIM_VERBS_OPTIONAL: 'doctor' only.
+#   - SHIM_VERBS_ALL: all ten. Scaffold-WRITING scripts (bootstrap/new-project.sh,
+#     bootstrap/track-work.sh, bootstrap/freeze-at-stamp.sh) and template-verifying scripts
+#     (bootstrap/upgrade-submodule.sh, which only re-verifies a freshly-fetched autoharn tree's
+#     own templates, never an existing deployment's shims) use SHIM_VERBS_ALL unconditionally --
+#     a fresh scaffold or a fresh template tree has every verb today's autoharn ships, no excuse
+#     for optionality there.
+#   - SHIM_VERBS_OPTIONAL_DISCOVERY: 'asof-export' and 'doctor' together -- the two verbs a
+#     script that DISCOVERS/converts an EXISTING, possibly pre-dating deployment
+#     (bootstrap/convert-to-submodule.sh) must treat as optional rather than refusing every
+#     pre-existing deployment on either verb's account. `doctor` already had this carve-out
+#     (rows 1147/1148); `asof-export` was missed when it was added -- and because
+#     convert-to-submodule.sh's own discovery loop was hard-requiring $SHIM_VERBS (all nine,
+#     including asof-export) unconditionally, conversion of a genuinely pre-2026-07-18
+#     deployment like ~/ent started refusing with a misleading "not a live-exec scaffold this
+#     script recognizes", even though nothing about that deployment is actually wrong -- it is
+#     simply older than the verb. Fixed here: convert-to-submodule.sh's REQUIRED set is
+#     SHIM_VERBS_ORIGINAL_EIGHT; it folds in each of SHIM_VERBS_OPTIONAL_DISCOVERY's members
+#     when present, skips them when absent, same posture on both verbs, not just `doctor`.
+SHIM_VERBS_ORIGINAL_EIGHT="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc"
+SHIM_VERBS="$SHIM_VERBS_ORIGINAL_EIGHT asof-export"
 SHIM_VERBS_OPTIONAL="doctor"
+SHIM_VERBS_OPTIONAL_DISCOVERY="asof-export doctor"
 SHIM_VERBS_ALL="$SHIM_VERBS $SHIM_VERBS_OPTIONAL"
