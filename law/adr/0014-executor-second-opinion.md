@@ -1,5 +1,7 @@
 # ADR-0014: Request a Second Opinion When a Problem Resists Resolution
 
+<!-- doc-attest-exempt: 2026-07-23 recurrence-trigger amendment (maintainer-ratified, ledger rows 1143-1146) invalidated the prior attestation; fresh A:B:C re-attestation queued with the standing attestation backlog, alongside ADR-0003's. Removal condition: the recorded re-attestation. -->
+
 - **Status:** Provisional (emergency). Filed under thin executive bandwidth in
   the immediate wake of a session in which the *absence* of this guideline cost
   real work and real money — the executor locked onto one diagnosis and burned
@@ -475,3 +477,17 @@ below it, exactly as this parenthetical itself is doing) following. Nothing else
 file changed by this correction.)*
 
 *Facet (2026-07-16): second opinions are not front-loaded — [ADR-0018](0018-consults-are-not-front-loaded.md).*
+
+*(Dated amendment, 2026-07-23, per ADR-0005 Rule 8; maintainer-ratified from the
+retrospective ADR cross-check's closing synthesis — law/adr/RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md.)*
+
+**The external recurrence trigger.** A second defect report from an operator or
+ratifier against a surface already reported done fires a mandatory fresh-context
+adversarial review of that surface's architecture — mechanically, on the count, never
+by anyone's judgment that the reports "feel" related. Provenance: five successive
+specs were built on one architecture while the operator's repeated plain-words defect
+reports were each classified as new instances; the judgment version of this trigger
+existed as recorded orchestrator practice and did not survive the next decision under
+load, which is why the trigger is now law and countable: two reports, one surface,
+post-done. A false fire on genuinely independent defects costs one quick honest
+review; the alternative cost four rebuilds.
