@@ -19,6 +19,7 @@ from textual.widgets import Button, Checkbox, Input, RadioSet, Static
 
 from tools.configtree.fields import ListField, MultiChoiceField, get_field_value, set_field_value, validate_value
 from tools.configtree.item_modal import render_item_field
+from tools.configtree.layout_primitives import ContentHorizontal
 from tools.configtree.layout_split import yield_help_items
 from tools.configtree.spec import ActionSpec
 from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
@@ -102,7 +103,7 @@ class ActionPane(Vertical):
             # siblings that could starve its `1fr` share down to an unreachable sliver.
             with VerticalScroll(id=f"{self.id}-body", classes="ct-section-body"):
                 yield from _controls()
-        with Horizontal(classes="ct-section-buttons"):
+        with ContentHorizontal(classes="ct-section-buttons"):
             yield Button(self.spec.apply_label, id="ct-action-apply", variant="primary")
 
     def _find_field(self, widget_id: "str | None"):

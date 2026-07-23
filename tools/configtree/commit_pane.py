@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from textual import work
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Button, Static
 from textual.worker import Worker, get_current_worker
 
+from tools.configtree.layout_primitives import ContentHorizontal
 from tools.configtree.spec import CommitSpec, ready_for_commit, section_answers
 
 
@@ -110,7 +111,7 @@ class CommitPane(Vertical):
             if sweep_error:
                 yield Static(sweep_error, classes="ct-blocked-reason")
         ready = ready_for_commit(self.sections, self.state)
-        with Horizontal(classes="ct-section-buttons"):
+        with ContentHorizontal(classes="ct-section-buttons"):
             label = self.commit_spec.confirm_label if ready else \
                 f"{self.commit_spec.confirm_label} (blocked -- sections incomplete)"
             yield Button(label, id="ct-commit", variant="primary", disabled=not ready)

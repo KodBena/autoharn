@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """seen-red/setup-tui-purity-gate/run_fixtures.py -- both-polarity proof of the REWRITTEN
 gates/setup_tui_purity_gate.py (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2/§6, the 2026-07-22
-wholesale rebuild onto tools/configtree): its two detectors (no print/input/stdin/stdout outside
-the app package + the --from-config reporter; the core imports nothing from the app package),
-plus a real-tree GREEN leg (the actual gate, run against the actual package, is clean today).
+wholesale rebuild onto tools/configtree): its three detectors (no print/input/stdin/stdout outside
+the app package + the --from-config reporter; the core imports nothing from the app package; no
+raw fr-default layout container in a tools/configtree content path, ledger row 1139), plus a
+real-tree GREEN leg (the actual gate, run against the actual package, is clean today).
 
 Cases:
   1. `check_print_or_io` -- RED on a synthetic `steps_boundary.py`-named tree with a bare
@@ -17,6 +18,14 @@ Cases:
   4. Real-tree leg: `gates/setup_tui_purity_gate.main()` against the ACTUAL `tools/setup_tui/`
      tree exits 0 today (a negative control that the real package is clean, not just the
      synthetic cases).
+  5. `check_raw_layout_containers` (ledger row 1139, TYPE half) -- RED on a synthetic raw
+     `class Foo(Vertical)` and a raw, unclassed `Horizontal()` call inside it -- byte-for-byte the
+     SAME shape `widgets_master_detail.py`'s own pre-fix culprit had; GREEN once the same class
+     uses `layout_primitives.ContentVertical`/`ContentHorizontal` instead, and GREEN for the
+     declared `LAYOUT_EXCEPTIONS`/`LAYOUT_BASE_CLASS_EXCEPTIONS` shells (`ct-split`, the wide
+     layout's own scroll columns, `SectionPane`). PLUS a real-tree leg:
+     `gates/setup_tui_purity_gate.main()` against the ACTUAL, now-fixed `tools/configtree/` tree
+     exits 0 (the real migration is genuinely gate-clean, not just the synthetic cases).
 
 Zero residue (no filesystem writes at all -- every tree here is synthetic `ast.parse`d text).
 Lazy imports banned."""
@@ -85,10 +94,64 @@ def case_4() -> None:
     print("case 4 ok: the rewritten gate against the REAL tools/setup_tui/ tree exits 0 (clean)")
 
 
+def case_5() -> None:
+    """`check_raw_layout_containers` (ledger row 1139, TYPE half): the maintainer's own
+    reproduced hazard -- a raw `(Vertical)` base class holding a raw, unclassed `Horizontal()`
+    call, exactly `widgets_master_detail.MasterDetailFieldWidget`'s pre-fix shape -- RED; the
+    same shape migrated to the typed primitive, and every declared exception, GREEN."""
+    red_src = (
+        "from textual.containers import Vertical, Horizontal\n"
+        "class SomeContentWidget(Vertical):\n"
+        "    def compose(self):\n"
+        "        with Horizontal():\n"
+        "            yield None\n"
+    )
+    v = G.check_raw_layout_containers(_tree(red_src), "some_widget.py")
+    assert len(v) == 2, f"expected 2 violations (base class + bare call), got {v}"
+    assert any("class SomeContentWidget(Vertical)" in line for line in v), v
+    assert any("raw Horizontal(...)" in line for line in v), v
+    print(f"case 5a ok (RED, the exact reproduced class): a raw `(Vertical)` base class "
+          f"nesting a raw, unclassed `Horizontal()` call reads red -- {v}")
+
+    green_src = (
+        "from tools.configtree.layout_primitives import ContentHorizontal, ContentVertical\n"
+        "class SomeContentWidget(ContentVertical):\n"
+        "    def compose(self):\n"
+        "        with ContentHorizontal():\n"
+        "            yield None\n"
+    )
+    v_ok = G.check_raw_layout_containers(_tree(green_src), "some_widget.py")
+    assert v_ok == [], f"expected the typed-primitive shape to read clean, got {v_ok}"
+    print("case 5b ok (GREEN): the SAME shape, built from layout_primitives.ContentVertical/"
+          "ContentHorizontal instead, reads clean")
+
+    exceptions_src = (
+        "from textual.containers import Horizontal, Vertical, VerticalScroll\n"
+        "class SectionPane(Vertical):\n"
+        "    def compose(self):\n"
+        "        with Horizontal(classes='ct-split'):\n"
+        "            with VerticalScroll(classes='ct-controls-col'):\n"
+        "                pass\n"
+        "            with VerticalScroll(classes='ct-help-col'):\n"
+        "                pass\n"
+    )
+    v_exc = G.check_raw_layout_containers(_tree(exceptions_src), "panes.py")
+    assert v_exc == [], f"expected every declared LAYOUT_EXCEPTIONS shell to read clean, got {v_exc}"
+    print("case 5c ok (GREEN): every declared fr-intended shell (SectionPane's own base class, "
+          "'ct-split', 'ct-controls-col', 'ct-help-col') reads clean -- the gate does not refuse "
+          "the shells it is meant to leave alone")
+
+    code = G.main()
+    assert code == 0, f"expected the real, now-migrated tools/configtree/ tree to be clean, got {code}"
+    print("case 5d ok: the rewritten gate against the REAL, now-fixed tools/configtree/ tree "
+          "exits 0 (clean) -- the actual row-1139 migration, not just the synthetic cases")
+
+
 if __name__ == "__main__":
     case_1()
     case_2()
     case_3()
     case_4()
-    print("ALL CASES OK -- setup_tui_purity_gate.py's two rewritten detectors, both polarities, "
-          "plus a real-tree clean confirmation")
+    case_5()
+    print("ALL CASES OK -- setup_tui_purity_gate.py's three detectors, both polarities, plus a "
+          "real-tree clean confirmation")

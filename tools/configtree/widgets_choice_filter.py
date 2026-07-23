@@ -22,15 +22,15 @@ get this filter for the first time."""
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.widgets import Input, RadioButton, RadioSet, Static
 
 from tools.configtree.fields import ChoiceField
 from tools.configtree.filter_threshold import FILTER_THRESHOLD
+from tools.configtree.layout_primitives import ContentVertical
 from tools.configtree.widget_primitives import build_field_widget, field_widget_id
 
 
-class ChoiceFieldWidget(Vertical):
+class ChoiceFieldWidget(ContentVertical):
     """See this module's own docstring. `f`/`value` mirror `widgets.build_field_widget`'s own
     `ChoiceField` branch exactly -- this class is what that branch now returns once
     `len(f.options) > FILTER_THRESHOLD`, instead of a bare `RadioSet`.

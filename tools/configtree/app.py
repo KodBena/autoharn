@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.widgets import ContentSwitcher, Footer, Header, Static, Tree
 
 from tools.configtree.actions import ActionPane
@@ -134,6 +134,14 @@ class ConfigTreeApp(App):
     .ct-md-detail-label {{ text-style: italic; color: $text-muted; padding-top: 1; max-width: {MEASURE}; }}
     .ct-md-empty {{ color: $text-muted; max-width: {MEASURE}; }}
     .ct-md-remove {{ min-width: 3; }}
+    /* CYCLE-5 AUDIT finding #2 (MINOR): a master row's own Remove sat flush beside its Select
+    button with no separation, compounding finding #1's mis-click risk -- widened gutter + the
+    same $error-toned styling `ConfirmModal`'s own Remove button carries, so the destructive
+    control reads as visually distinct before the operator's cursor is anywhere near it. Applies
+    ONLY to the master row's own Remove (never a nested competence/relation/charter row's own
+    Remove, which shares `.ct-md-remove`'s sizing but not this extra margin/tone -- a dependent
+    row's own removal never cascades, so it does not carry the same mis-click weight). */
+    .ct-md-master-remove {{ margin-left: 2; }}
     /* SELECTION (cycle-3 fix round, ledger row 1136 -- this module's own `widgets_master_detail.
     py` docstring, "SELECTION"): the compact master-row list is a real, focusable `Button` per
     row, never a bare `Static` -- `.ct-md-row-select` is styled to read as a plain list row (no
@@ -236,7 +244,13 @@ class ConfigTreeApp(App):
         if self.banner:
             yield Static(self.banner, id="ct-banner")
         yield Static("", id="ct-status-line")
-        with Horizontal():
+        # `id="ct-app-split"` (row 1139's own TYPE half): a DECLARED exception on
+        # `gates/setup_tui_purity_gate.py`'s own `LAYOUT_EXCEPTIONS` enumeration -- the app's own
+        # top-level Tree|ContentSwitcher split genuinely wants Textual's default `height: 1fr`
+        # (it fills the whole screen below the header/banner/status line, always), unlike a
+        # content-path container the gate refuses raw outside `layout_primitives.
+        # ContentVertical`/`ContentHorizontal`.
+        with Horizontal(id="ct-app-split"):
             tree: Tree = Tree(self.title, id="ct-tree")
             tree.root.expand()
             yield tree

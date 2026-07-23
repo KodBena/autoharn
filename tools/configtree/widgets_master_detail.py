@@ -40,15 +40,16 @@ from __future__ import annotations
 from typing import Callable
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Static
 
+from tools.configtree.confirm_modal import ConfirmModal
 from tools.configtree.item_modal import AddItemModal
+from tools.configtree.layout_primitives import ContentHorizontal, ContentVertical
 from tools.configtree.master_detail import MasterDetailField
 from tools.configtree.widget_primitives import elucidation_widgets, field_widget_id
 
 
-class MasterDetailFieldWidget(Vertical):
+class MasterDetailFieldWidget(ContentVertical):
     """See this module's own docstring. `initial_master`/`initial_details` seed this widget's own
     in-memory rows from the CURRENT shared state (read once, at construction -- the enclosing
     `SectionPane` rebuilds this widget fresh on every recompose, so there is no staleness risk).
@@ -114,10 +115,17 @@ class MasterDetailFieldWidget(Vertical):
                 selected_row = row
             marker = "> " if is_selected else "  "
             row_classes = "ct-md-row-select -selected" if is_selected else "ct-md-row-select"
-            with Horizontal(classes="ct-md-row"):
+            with ContentHorizontal(classes="ct-md-row"):
                 yield Button(f"{marker}{self.spec.master.summarize(row)}",
                              id=f"{self.id}-master-select-{idx}", classes=row_classes)
-                yield Button("Remove", id=f"{self.id}-master-remove-{idx}", classes="ct-md-remove")
+                # WIDENED GUTTER + DESTRUCTIVE STYLING (cycle-5 audit finding #2, MINOR): this
+                # button used to sit flush beside the row-select button with no separation --
+                # `.ct-md-master-remove` (app.py's own CSS) adds a left margin and the same
+                # `variant="error"` red styling `ConfirmModal`'s own Remove button uses, so the
+                # destructive control reads as visually distinct from an ordinary row action
+                # before the operator's cursor is anywhere near it.
+                yield Button("Remove", id=f"{self.id}-master-remove-{idx}",
+                             classes="ct-md-remove ct-md-master-remove", variant="error")
         if selected_row is None:
             yield Static("(select a principal above to manage its own competences, relations, "
                          "and role charters)", classes="ct-md-empty")
@@ -125,7 +133,7 @@ class MasterDetailFieldWidget(Vertical):
         # DETAIL SECTION -- ONLY for the selected row (never repeated per row; see this module's
         # own docstring for why that was the OTHER half of the maintainer's own complaint).
         key = self.spec.master_key(selected_row)
-        with Vertical(id=f"{self.id}-detail", classes="ct-md-block"):
+        with ContentVertical(id=f"{self.id}-detail", classes="ct-md-block"):
             yield Static(f"Details for {self.spec.master.summarize(selected_row)}",
                          classes="ct-md-row-summary")
             for d in self.spec.details:
@@ -138,7 +146,18 @@ class MasterDetailFieldWidget(Vertical):
                 if not rows:
                     yield Static("(none yet)", classes="ct-md-empty")
                 for ridx, r in enumerate(rows):
-                    with Horizontal():
+                    # THE ROW-1139 CULPRIT (cycle-6 fix round, "PHANTOM VERTICAL EXPANSE"): this
+                    # was a bare, unclassed `Horizontal()` -- Textual's own default `height: 1fr`
+                    # for that widget class, nested inside this whole chain's own `height: auto`
+                    # containers, was handed a virtual height of 42 rows for what is really ONE
+                    # line of content (one Static + one Remove button), pushing every sub-list
+                    # after the first competence (and their own Add buttons) below a huge blank
+                    # region only reachable by extensive scrolling -- reproduced and measured
+                    # against the real app at the maintainer's own 251x61 wide layout; see
+                    # `layout_primitives.py`'s own module docstring for the full account.
+                    # `ContentHorizontal` fixes this BY CONSTRUCTION (`height: auto`), the same
+                    # primitive every other content-path container in this file now uses.
+                    with ContentHorizontal(classes="ct-md-detail-row"):
                         yield Static(d.list_field.summarize(r), classes="ct-info-line")
                         yield Button("Remove", id=f"{self.id}-detail-remove-{dname}-{ridx}",
                                      classes="ct-md-remove")
@@ -203,7 +222,37 @@ class MasterDetailFieldWidget(Vertical):
         return _on_result
 
     def _remove_master(self, idx: int) -> None:
+        """C10 GATE (cycle-5 audit finding #1, MAJOR): removing a master row cascades -- every
+        dependent competence/relation/charter row naming it is dropped too (see `_do_remove_
+        master`'s own docstring for the cascade itself, unchanged). Before that cascade actually
+        runs, count what it would remove; a NON-ZERO count pushes `ConfirmModal` naming the exact
+        inventory ("N competence(s), M relation(s), K charter(s)") and the cascade only proceeds
+        if the operator confirms -- a ZERO-dependent row (nothing cascades, C10's own class does
+        not bind) removes immediately, no confirm shown, matching C10's "Cooper on gratuitous vs.
+        earned confirmation" pedigree note."""
         removed_key = self.spec.master_key(self.master_rows[idx])
+        counts: dict[str, int] = {}
+        for d in self.spec.details:
+            dname = str(d.list_field.name)
+            link = str(d.link_field)
+            counts[dname] = sum(1 for r in self.detail_rows[dname] if str(r.get(link)) == removed_key)
+        if not any(counts.values()):
+            self._do_remove_master(idx, removed_key)
+            return
+        summary = self.spec.master.summarize(self.master_rows[idx])
+        inventory = ", ".join(
+            f"{counts[str(d.list_field.name)]} {str(d.list_field.label).lower()}(s)"
+            for d in self.spec.details)
+
+        def _on_confirm(confirmed: "bool | None") -> None:
+            if confirmed:
+                self._do_remove_master(idx, removed_key)
+
+        self.app.push_screen(
+            ConfirmModal(f"Remove {summary}?", (f"This also removes: {inventory}.",)),
+            _on_confirm)
+
+    def _do_remove_master(self, idx: int, removed_key: str) -> None:
         del self.master_rows[idx]
         if self._selected_key == removed_key:
             self._set_selected(None)
@@ -211,7 +260,9 @@ class MasterDetailFieldWidget(Vertical):
         # a dependent row naming a master row that no longer exists in THIS visit is dropped with
         # it -- an orphan left behind would otherwise surface only as a confusing commit-time
         # failure ("grant a competence to a principal that was never registered") instead of
-        # right here, where the operator can see and understand the removal.
+        # right here, where the operator can see and understand the removal (and, since the
+        # cycle-5 audit's own finding #1, ONLY after confirming that removal when it cascades
+        # anything -- `_remove_master`'s own docstring has the confirm gate).
         for d in self.spec.details:
             dname = str(d.list_field.name)
             link = str(d.link_field)

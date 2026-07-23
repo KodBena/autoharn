@@ -38,11 +38,12 @@ reliance on its own enclosing scroll)."""
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
 from tools.configtree.fields import ChoiceField, TextField
+from tools.configtree.layout_primitives import ContentHorizontal
 from tools.configtree.widget_primitives import FieldError, elucidation_widgets, field_widget_id, read_field_value
 from tools.configtree.widgets_choice_filter import build_choice_or_plain_widget
 
@@ -107,7 +108,16 @@ class AddItemModal(ModalScreen[dict | None]):
                 err = FieldError()
                 self._errors[str(f.name)] = err
                 yield err
-            with Horizontal(id="ct-modal-buttons"):
+            # LATENT ROW-1139 SITE #2 (cycle-6 fix round): this was a bare `Horizontal(id=
+            # "ct-modal-buttons")` with NO CSS anywhere for that id -- Textual's own default
+            # `height: 1fr` handed it the whole remaining `ct-modal-body` scroll region (measured:
+            # a 251x61 run gave it height=31, filling straight to the bottom of the screen).
+            # Harmless today only because it happens to be the LAST child (nothing renders below
+            # it to be pushed down) -- but it still inflated the modal's own scrollable virtual
+            # size well past its real content, the SAME class this round's invariant is built to
+            # catch regardless of whether a sibling was visibly pushed. `ContentHorizontal` closes
+            # it the same way as every other site.
+            with ContentHorizontal(id="ct-modal-buttons"):
                 yield Button("Save", id="ct-modal-save", variant="primary")
                 yield Button("Cancel", id="ct-modal-cancel")
 

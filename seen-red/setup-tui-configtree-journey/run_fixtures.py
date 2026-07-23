@@ -104,9 +104,14 @@ from pathlib import Path
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO)
+# `layout_invariant.py` is this fixture's own sibling module (ledger row 1139's NET half) -- its
+# directory goes on `sys.path` too so it imports as a bare top-level name, no package `__init__`
+# needed for a single-fixture-scoped helper.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.containers import VerticalScroll  # noqa: E402
+from textual.pilot import Pilot  # noqa: E402
 from textual.widgets import Button, Checkbox, ContentSwitcher, Input, RadioSet, Static, Tree  # noqa: E402
 
 from tools.configtree import CommitSpec, DuplicatedSharedFieldError, SectionResult, SectionSpec  # noqa: E402
@@ -116,6 +121,7 @@ from tools.configtree.fields import (ChoiceField, DescriptionElement, Elucidatio
                                       set_field_value)
 from tools.configtree.ids import NodeId  # noqa: E402
 from tools.configtree.item_modal import AddItemModal as CurrentAddItemModal  # noqa: E402
+from tools.configtree.master_detail import DetailListField, MasterDetailField  # noqa: E402
 from tools.configtree.measure import MEASURE  # noqa: E402
 from tools.configtree.spec import COMPLETE, INVALID, owner_of, section_status  # noqa: E402
 from tools.configtree.widgets_master_detail import MasterDetailFieldWidget  # noqa: E402
@@ -123,6 +129,15 @@ from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import config_file, content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
+
+import layout_invariant  # noqa: E402
+from layout_invariant import wire_pilot  # noqa: E402
+
+# GLOBAL POST-INTERACTION LAYOUT INVARIANT (ledger row 1139, NET half) -- wired here, ONCE, at
+# import time, so EVERY case below (existing and any added later) is checked after every single
+# `pilot.pause()`/`click()`/`press()` automatically; no case opts in, none can opt out.
+# `layout_invariant.py`'s own module docstring has the full account of what it checks and why.
+wire_pilot(Pilot)
 
 
 def _find_node(tree: Tree, slug: str):
@@ -998,8 +1013,14 @@ async def case_10() -> None:
               f"selected instead: {lines_b2}")
 
         # --- (d) removing the CURRENTLY SELECTED master row (A) clears selection AND cascades --
+        # C10 GATE (cycle-5 audit finding #1): A carries a competence AND a relation, so removing
+        # it now pushes `ConfirmModal` first (`widgets_master_detail._remove_master`'s own
+        # docstring) -- press its own "Remove" confirm button, matching a real operator's second
+        # click, before the cascade actually runs.
         await _pa_select_row(pilot, pane, 0)
         pane.query_one("#ct-field-register-master-remove-0", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#ct-confirm-yes", Button).press()
         await pilot.pause()
         remaining_selects = list(pane.query(".ct-md-row-select"))
         assert len(remaining_selects) == 1, \
@@ -1699,24 +1720,30 @@ async def case_23() -> None:
             yield Static("harness")
 
     # --- RED: the OLD AddItemModal, driven live -------------------------------------------------
+    # `layout_invariant.suspended()` (ledger row 1139, NET half's own named escape hatch): this
+    # block execs a HISTORICAL `9fe6b64` snapshot that predates row 1139's own fix entirely --
+    # its own `#ct-modal-buttons` would otherwise trip the invariant for a defect class this
+    # block is not testing (it RED/GREENs the filter/option_help defect, ledger row 1136, not
+    # this round's phantom-expanse class). See that context manager's own docstring.
     app = _HarnessApp()
     async with app.run_test(size=(150, 60)) as pilot:
-        await pilot.pause()
-        await app.push_screen(OldAddItemModal("Add synthetic", synth_fields))
-        await pilot.pause()
-        modal = app.screen
-        old_filters = list(modal.query(".ct-choice-filter"))
-        old_help = list(modal.query(".ct-choice-help"))
-        assert not old_filters, \
-            f"fixture assumption stale: the OLD AddItemModal already renders a filter Input, got {len(old_filters)}"
-        assert not old_help, \
-            f"fixture assumption stale: the OLD AddItemModal already renders option_help, got {len(old_help)}"
-        print(f"case 23a ok (RED, reproduced against 9fe6b64): the OLD AddItemModal renders a "
-              f"BARE 11-option RadioSet (0 filter Input) and ZERO option_help lines for a field "
-              f"that carries real option_help -- both of ledger row 1136's own MAJOR findings, "
-              f"reproduced live, not merely asserted from reading the diff")
-        await pilot.press("escape")
-        await pilot.pause()
+        with layout_invariant.suspended():
+            await pilot.pause()
+            await app.push_screen(OldAddItemModal("Add synthetic", synth_fields))
+            await pilot.pause()
+            modal = app.screen
+            old_filters = list(modal.query(".ct-choice-filter"))
+            old_help = list(modal.query(".ct-choice-help"))
+            assert not old_filters, \
+                f"fixture assumption stale: the OLD AddItemModal already renders a filter Input, got {len(old_filters)}"
+            assert not old_help, \
+                f"fixture assumption stale: the OLD AddItemModal already renders option_help, got {len(old_help)}"
+            print(f"case 23a ok (RED, reproduced against 9fe6b64): the OLD AddItemModal renders a "
+                  f"BARE 11-option RadioSet (0 filter Input) and ZERO option_help lines for a field "
+                  f"that carries real option_help -- both of ledger row 1136's own MAJOR findings, "
+                  f"reproduced live, not merely asserted from reading the diff")
+            await pilot.press("escape")
+            await pilot.pause()
 
     # --- GREEN: the CURRENT AddItemModal (`CurrentAddItemModal`, imported at module top), the
     # SAME synthetic fields ----------------------------------------------------------------------
@@ -1874,6 +1901,67 @@ async def case_24() -> None:
               f"rendered principal row NOW selects it (was a bare, unfocusable Static before this "
               f"fix -- a genuine no-op the maintainer's own instinct correctly caught)")
 
+        # --- (C) ROW 1139, THE MAINTAINER'S OWN EXACT CYCLE-6 REPRODUCTION: wide layout (this
+        # case's own 251x61), add a principal (alice, above), add a competence to it via the real
+        # modal (real mouse click + real character-by-character typing, matching the maintainer's
+        # OWN mechanism, not `_pa_add_row`'s `.value=` shortcut), re-observe the detail -- measure
+        # the blank gap between the competence's own detail row and the Relation sub-list's own
+        # Add button. GREEN here alone would not distinguish "never broke" from "fixed" -- the RED
+        # leg (case 26 below) drives the IDENTICAL construction through the PRE-fix `3f0e41b`
+        # widget class and proves the SAME measurement fails there.
+        add_comp_btn = pane.query_one("#ct-field-register-detail-add-competences", Button)
+        await pilot.click(add_comp_btn)
+        await pilot.pause()
+        modal = app.screen
+        for fname, value in (("activity", "orchestrate"), ("band", "x"), ("basis", "x")):
+            comp_input = modal.query_one(f"#ct-field-{fname}", Input)
+            await pilot.click(comp_input)
+            await pilot.pause()
+            for ch in value:
+                await pilot.press(ch)
+            await pilot.pause()
+        await pilot.click(modal.query_one("#ct-modal-save", Button))
+        await pilot.pause()
+
+        pane = app.query_one("#pane-principals-authority")
+        detail_row = pane.query_one(".ct-md-detail-row")
+        comp_add_btn = pane.query_one("#ct-field-register-detail-add-competences", Button)
+        relation_add = pane.query_one("#ct-field-register-detail-add-relations", Button)
+        detail_block = pane.query_one(f"#{pane.query_one(MasterDetailFieldWidget).id}-detail")
+        # The GAP right after the competence's own detail row (its immediate next sibling, the
+        # "Add Competence" button) is the direct measurement of the row-1139 hazard: pre-fix, a
+        # bare `Horizontal()` there claimed a virtual height of ~40+ rows, so THIS gap alone used
+        # to read in the dozens; every row after "Add Competence" (the Relation label, its own
+        # empty-catalog placeholder, its own Add button) is legitimate rendered CONTENT, not blank
+        # space, so a gap measured all the way down to `relation_add` is reported for narrative
+        # completeness only, never asserted against the tight blank-row budget.
+        gap_after_detail_row = comp_add_btn.region.y - (detail_row.region.y + detail_row.region.height)
+        assert gap_after_detail_row <= layout_invariant.BLANK_ROW_BUDGET, (
+            f"ROW 1139 REGRESSION -- the maintainer's own exact bench reproduction: after adding "
+            f"a competence to alice at the real 251x61 wide layout (mouse click + real typing), "
+            f"the 'Add Competence' button sits {gap_after_detail_row} blank row(s) below the "
+            f"competence's own detail row -- exceeds BLANK_ROW_BUDGET={layout_invariant.BLANK_ROW_BUDGET}")
+        # The direct, structural measurement (row 1139's own named class): the detail BLOCK's own
+        # virtual height must not exceed the sum of its children's region heights + tolerance --
+        # pre-fix this was 70 (measured against the real app during this round's own diagnosis)
+        # for what should be roughly 20-odd rows of real content; post-fix the two must match.
+        children_sum = sum(c.region.height for c in detail_block.children if c.display)
+        assert detail_block.virtual_size.height <= children_sum + layout_invariant.CONTAINER_HEIGHT_TOLERANCE, (
+            f"ROW 1139 REGRESSION: the detail block's own virtual height "
+            f"({detail_block.virtual_size.height}) exceeds the sum of its children's region "
+            f"heights ({children_sum}) -- PHANTOM VERTICAL EXPANSE")
+        print(f"case 24e ok (ROW 1139, the maintainer's own EXACT bench reproduction, GREEN): "
+              f"after adding a competence to alice via a real mouse click + real "
+              f"character-by-character typing at the real 251x61 wide layout, the 'Add "
+              f"Competence' button sits {gap_after_detail_row} blank row(s) below the "
+              f"competence's own detail row (no phantom vertical expanse there), and the whole "
+              f"detail block's own virtual height ({detail_block.virtual_size.height}) matches "
+              f"the sum of its real children's region heights ({children_sum}) -- the Relation "
+              f"Add button ({relation_add.region}) is reached by real content, not a blank gap; "
+              f"the global invariant (`layout_invariant.check_all`, wired into every Pilot "
+              f"interaction in this whole fixture via `wire_pilot`) was ALREADY checking every "
+              f"step above and would have failed loudly the instant this regressed")
+
         # --- (B) a SECOND mouse+typed add, with no manual scroll required in between -----------
         await _mouse_add("bob")
         pane = app.query_one("#pane-principals-authority")
@@ -1959,6 +2047,130 @@ async def case_25() -> None:
               f"genuinely lands: {md.master_rows}")
 
 
+def _load_old_master_detail_widget_class():
+    """Fetches `MasterDetailFieldWidget` exactly as it stood at `3f0e41b` (cycle-6's own starting
+    commit -- the tree the maintainer's row-1139 screenshots were taken against): the PRE-fix
+    version whose detail-row loop wraps each row in a bare, unclassed `Horizontal()` -- row
+    1139's own convicted culprit. Via `git show`, executed in an isolated namespace -- the SAME
+    idiom `_load_old_add_item_modal_class` (case_23) already established for this file."""
+    src = subprocess.run(
+        ["git", "show", "3f0e41b:tools/configtree/widgets_master_detail.py"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout
+    ns: dict = {"__name__": "tools.configtree._old_widgets_master_detail_for_case26"}
+    exec(compile(src, "<git show 3f0e41b:tools/configtree/widgets_master_detail.py>", "exec"), ns)
+    return ns["MasterDetailFieldWidget"]
+
+
+def _synth_master_detail_spec() -> MasterDetailField:
+    """A minimal, domain-free master-detail spec (this module's own `master_detail.py` sibling
+    docstring: "ZERO domain knowledge") -- one master ('register') plus THREE dependents, the
+    SAME shape (competences/relations/charters) the real principals-authority section declares,
+    so the reproduction below is structurally identical to the maintainer's own, not merely
+    similarly-shaped."""
+    register = ListField(name="register", label="Principal",
+                          item_fields=(TextField(name="name", label="Name"),),
+                          summarize=lambda r: str(r["name"]))
+    competences = ListField(name="competences", label="Competence",
+                             item_fields=(TextField(name="activity", label="Activity"),),
+                             summarize=lambda r: str(r["activity"]))
+    relations = ListField(name="relations", label="Relation",
+                           item_fields=(TextField(name="object", label="Object"),),
+                           summarize=lambda r: str(r["object"]))
+    charters = ListField(name="charters", label="Role charter",
+                          item_fields=(TextField(name="path", label="Path"),),
+                          summarize=lambda r: str(r["path"]))
+    return MasterDetailField(
+        master=register,
+        details=(DetailListField(list_field=competences, link_field="name"),
+                  DetailListField(list_field=relations, link_field="name"),
+                  DetailListField(list_field=charters, link_field="name")),
+        master_key=lambda r: r["name"])
+
+
+async def _drive_synth_master_detail(pilot, app, widget_cls) -> None:
+    """Add one master row ('alice') then one competence to it -- the maintainer's own EXACT
+    reproduction recipe, driven against WHICHEVER `widget_cls` the caller mounted."""
+    add_btn = app.query_one(f"#ct-field-register-master-add", Button)
+    await pilot.click(add_btn)
+    await pilot.pause()
+    modal = app.screen
+    modal.query_one("#ct-field-name", Input).value = "alice"
+    await pilot.pause()
+    await pilot.click(modal.query_one("#ct-modal-save", Button))
+    await pilot.pause()
+    md = app.query_one(widget_cls)
+    comp_add = md.query_one(f"#{md.id}-detail-add-competences", Button)
+    await pilot.click(comp_add)
+    await pilot.pause()
+    modal2 = app.screen
+    modal2.query_one("#ct-field-activity", Input).value = "orchestrate"
+    await pilot.pause()
+    await pilot.click(modal2.query_one("#ct-modal-save", Button))
+    await pilot.pause()
+
+
+async def case_26() -> None:
+    """RED-then-GREEN, ISOLATED (ledger row 1139): drives the IDENTICAL synthetic master-detail
+    construction (`_synth_master_detail_spec`, structurally the same shape as the real
+    principals-authority section: one master, three dependents) through the PRE-fix `3f0e41b`
+    `MasterDetailFieldWidget` (RED -- reproduces the phantom vertical expanse as a
+    `layout_invariant` failure, isolated from any real section/dest/dry-run scaffolding) and the
+    CURRENT one (GREEN, and already checked live by the wired `Pilot` throughout its own drive).
+    `case_24`'s own step (C) is the SAME reproduction against the REAL app/registry/271x61
+    terminal; this case is the isolated, minimal-construction twin that makes the RED leg
+    possible without needing to also rebuild the whole real registry against historical code."""
+    spec = _synth_master_detail_spec()
+    OldMasterDetailFieldWidget = _load_old_master_detail_widget_class()
+
+    class _HarnessApp(App):
+        # Reuses the REAL app's own CSS verbatim (`.ct-field-group`/`.ct-md-block`/`.ct-md-row`'s
+        # own hand-added `height: auto` overrides live there) -- a bare `App` with no CSS at all
+        # would make the OLD widget's OWN partial local patches not even apply, over-reproducing
+        # the hazard rather than reproducing it exactly as the maintainer saw it.
+        CSS = ConfigTreeApp.CSS
+
+        def __init__(self, widget_cls) -> None:
+            super().__init__()
+            self._widget_cls = widget_cls
+
+        def compose(self) -> ComposeResult:
+            yield self._widget_cls(spec)
+
+    # --- RED: the PRE-fix (3f0e41b) widget class --------------------------------------------
+    app = _HarnessApp(OldMasterDetailFieldWidget)
+    async with app.run_test(size=(251, 61)) as pilot:
+        with layout_invariant.suspended():
+            # Suspended for the DRIVE itself (an intermediate frame mid-add is not the claim);
+            # the invariant is asserted explicitly, once, against the settled post-add state --
+            # the actual RED leg, below.
+            await pilot.pause()
+            await _drive_synth_master_detail(pilot, app, OldMasterDetailFieldWidget)
+        violations = layout_invariant.check_all(app.screen)
+    assert violations, \
+        "expected the PRE-fix (3f0e41b) MasterDetailFieldWidget to reproduce the phantom-expanse invariant failure, got none"
+    assert any("PHANTOM VERTICAL EXPANSE" in v for v in violations), violations
+    print(f"case 26a ok (RED, isolated, against 3f0e41b -- ledger row 1139): the PRE-fix "
+          f"MasterDetailFieldWidget, driven through the IDENTICAL synthetic master-detail "
+          f"construction (add a principal, add a competence), trips the layout invariant -- "
+          f"{violations}")
+
+    # --- GREEN: the CURRENT widget class -----------------------------------------------------
+    app2 = _HarnessApp(MasterDetailFieldWidget)
+    async with app2.run_test(size=(251, 61)) as pilot:
+        await pilot.pause()
+        await _drive_synth_master_detail(pilot, app2, MasterDetailFieldWidget)
+        # Every `pilot.pause()`/`click()` inside `_drive_synth_master_detail` already ran the
+        # invariant (wired globally, `wire_pilot` at this module's own top) -- if the CURRENT
+        # widget had regressed, THAT call would already have raised. This final explicit check
+        # is the same assertion made visible in this case's own witness, not a new code path.
+        violations2 = layout_invariant.check_all(app2.screen)
+    assert not violations2, f"expected the CURRENT MasterDetailFieldWidget to read clean, got {violations2}"
+    print("case 26b ok (GREEN, isolated): the CURRENT MasterDetailFieldWidget, the IDENTICAL "
+          "synthetic construction, passes the layout invariant clean -- both the explicit "
+          "post-drive check above AND every wired pilot.pause()/click() during the drive itself")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -1986,6 +2198,7 @@ async def _main() -> None:
     await case_23()
     await case_24()
     await case_25()
+    await case_26()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "

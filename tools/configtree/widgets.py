@@ -15,12 +15,12 @@ from __future__ import annotations
 from typing import Callable
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Checkbox, Input, Label, ListItem, ListView, Static
 
 from tools.configtree.fields import ListField, MultiChoiceField
 from tools.configtree.filter_threshold import FILTER_THRESHOLD
 from tools.configtree.item_modal import AddItemModal
+from tools.configtree.layout_primitives import ContentHorizontal, ContentVertical
 # `FieldError`/`build_field_widget`/`read_field_value` are RE-EXPORTED here (not used by this
 # file's own two widget classes) -- same "historical alias" discipline as `MULTICHOICE_FILTER_
 # THRESHOLD` below: `tools.configtree.widgets` was these primitives' home before the cycle-3 fix
@@ -33,7 +33,7 @@ from tools.configtree.widget_primitives import (FieldError, build_field_widget,
                                                  read_field_value)
 
 
-class ListFieldWidget(Vertical):
+class ListFieldWidget(ContentVertical):
     """The `ListField` renderer: an already-added-rows `ListView` plus Add/Remove buttons -- the
     repeatable-row equivalent of a Qt list-editor's own +/- controls, not a save/apply ceremony
     (there is nothing to "save": each Add/Remove writes `self.rows` immediately, live, and
@@ -52,7 +52,12 @@ class ListFieldWidget(Vertical):
         yield Label(str(self.spec.label), classes="ct-field-label")
         yield from elucidation_widgets(self.spec.help, "ct-field-help")
         yield ListView(id=f"{self.id}-list")
-        with Horizontal():
+        # LATENT ROW-1139 SITE #1 (cycle-6 fix round -- this was another bare, unclassed
+        # `Horizontal()`, the SAME shape `widgets_master_detail.py`'s own culprit had before this
+        # round; caught by running the always-on layout invariant across the full journey
+        # fixture, never by a maintainer bench sighting this time). `ContentHorizontal` closes it
+        # the same way.
+        with ContentHorizontal():
             yield Button(f"Add {self.spec.label}", id=f"{self.id}-add")
             yield Button("Remove selected", id=f"{self.id}-remove")
 
@@ -108,7 +113,7 @@ class ListFieldWidget(Vertical):
 MULTICHOICE_FILTER_THRESHOLD = FILTER_THRESHOLD
 
 
-class MultiChoiceFieldWidget(Vertical):
+class MultiChoiceFieldWidget(ContentVertical):
     """The `MultiChoiceField` renderer -- a checkbox GROUP, one `Checkbox` per catalog option,
     each option's own `option_help` (if any) rendered as its own capped `.ct-choice-help` line
     directly under it (the "juxtaposed text" tooltip-equivalent this terminal offers, maintainer
