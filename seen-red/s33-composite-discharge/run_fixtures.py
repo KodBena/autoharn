@@ -8,11 +8,14 @@ allowlist detect, re-scoped to s33's CHAIN) + the engine companion (work_review.
 w_composite/w_composite_with_children extension; engine/ledger_floor.py's matching
 work_review_floor_atoms extension; engine/ledger_edb.py's export_work w_composite emission).
 
-Real infra, no mocks: a CLASSIC-mode scaffold (explicit --schema/--kern/--role, no automatic
-kernel apply -- s30/s31/s32's own scaffold_classic idiom) followed by a MANUAL s15..s33 apply, in
-the TOY db, torn down before AND after so re-running leaves no residue. s33 is deliberately NOT in
-new-project.sh's LINEAGE_CHAIN (this commission's own instruction: "Do NOT wire LINEAGE_CHAIN"),
-so classic+manual is the honest wiring for this witness.
+Real infra, no mocks: a `bootstrap/new-project.sh --new-world` scaffold in the TOY db, torn down
+before AND after so re-running leaves no residue. cli-rebase-fixture-repairs (ledger row 1170):
+this used to be a CLASSIC-mode scaffold + a manual s15..s33 apply (this commission's own original
+instruction was "Do NOT wire LINEAGE_CHAIN" for s33) -- that instruction has since been
+superseded (s33 IS wired into new-project.sh's LINEAGE_CHAIN now), and classic+manual was never
+an isolated-delta requirement in this file (no before/after two-chain comparison exists here), so
+it moved onto `--new-world` for the working s43 boundary the served `led` this fixture drives
+throughout now unconditionally requires.
 
 Cases (the ratified spec's sec-5 acceptance list, every polarity):
   a-zero-children-open              -- a composite with ZERO children never vacuously discharges;
@@ -62,6 +65,7 @@ Usage: python3 seen-red/s33-composite-discharge/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -73,6 +77,16 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 LINEAGE = REPO / "kernel" / "lineage"
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 ENGINE = REPO / "engine"
 GATE = REPO / "gates" / "ledger_reader_allowlist.py"
 sys.path.insert(0, str(ENGINE))
@@ -130,39 +144,25 @@ def psql_tuples(sql: str) -> str:
     return cp.stdout.strip()
 
 
-def scaffold_classic_s33(world: str) -> Path:
-    """CLASSIC MODE + manual s15..s33 apply (s30/s31/s32's own scaffold_classic idiom)."""
+def scaffold_classic_s33(world: str) -> tuple[Path, subprocess.Popen]:
+    """cli-rebase-fixture-repairs (ledger row 1170): moved off CLASSIC MODE + a manual s15..s33
+    apply onto `--new-world`. This fixture's own docstring note ("s33 is deliberately NOT in
+    new-project.sh's LINEAGE_CHAIN") is stale -- s33 has since been wired into that chain (no
+    before/after two-chain comparison exists in this file; classic+manual was only ever a
+    lighter-weight scaffold choice, same situation as s31's identical stale note) -- switched to
+    `--new-world` for the working s43 boundary the served `led` this fixture drives now requires."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
-    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
-    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
-            "--db", PGDB, "--host", PGHOST,
-            "--schema", schema, "--kern", kern, "--role", role])
+    r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
+            "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
-        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+        raise RuntimeError(f"SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
     for verb in ("led", "judge", "pickup"):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
-    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
-    for name in CHAIN:
-        args += ["-f", str(LINEAGE / name)]
-    ra = sh(args)
-    if ra.returncode != 0:
-        raise RuntimeError(f"CLASSIC s15..s33 APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
-    secret_dir = world_dir / ".claude" / "secrets"
-    secret_dir.mkdir(parents=True, exist_ok=True)
-    hexsecret = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    (secret_dir / "stamp_secret.hex").write_text(hexsecret + "\n", encoding="utf-8")
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"TRUNCATE {kern}.stamp_secret;",
-        "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"])
-    genesis_hex = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
-              f"ON CONFLICT (only_one) DO NOTHING;"])
-    return world_dir
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+    return world_dir, proc
 
 
 def eff_state(schema: str, slug: str) -> str:
@@ -182,8 +182,8 @@ def main() -> int:
     failures: list[str] = []
     tmps: list[Path] = []
     try:
-        print(f"== scaffolding classic world {WORLD} + manual s15..s33 apply ==")
-        world_dir = scaffold_classic_s33(WORLD)
+        print(f"== scaffolding --new-world {WORLD} ==")
+        world_dir, proc = scaffold_classic_s33(WORLD)
         tmps.append(world_dir.parent)
         schema = WORLD
         print(f"  scaffold OK (schema={schema}).\n")
@@ -363,6 +363,10 @@ def main() -> int:
               "replay, defeat-past-hand-close all present).", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
