@@ -38,6 +38,7 @@ GREEN (must ACCEPT, a real row lands, round-trip verified):
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -63,10 +64,16 @@ def _run_led(*args: str) -> tuple[int, str, str]:
 
 
 def _current_max_id() -> int:
+    # cli-rebase-fixture-repairs (ledger row 1170): `led --recent`'s own output shape changed
+    # from a pipe-delimited row to "[<id>] <kind>: <statement>" during the CLI rebase -- parsed
+    # with a leading-bracket regex now instead of a stale pipe-split.
     rc, out, _ = _run_led("--recent", "1")
     if rc != 0 or not out.strip():
         return -1
-    return int(out.split("|", 1)[0].strip())
+    m = re.match(r"^\[(\d+)\]", out.strip().splitlines()[0])
+    if not m:
+        raise RuntimeError(f"could not parse a row id from `led --recent 1` output: {out!r}")
+    return int(m.group(1))
 
 
 def red_dead_evidence_path() -> None:
