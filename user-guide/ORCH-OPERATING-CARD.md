@@ -75,6 +75,15 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](../GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
+> **Forward note (2026-07-23):** the per-verb executables below are the shipping
+> surface today, and everything on this card is accurate to it. A ratified commission
+> (ledger rows 1151/1152) replaces this shape with a single `./autoharn` entry point
+> with git-style subcommands (`autoharn led …`, `autoharn doctor`) and moves the
+> per-verb implementations out of the repo root; the verbs, their semantics, and their
+> refusals carry over unchanged — only the invocation spelling changes. This card will
+> be updated when that lands; if you are scripting against autoharn today, expect the
+> `./verb` spellings to survive one deprecation window as aliases.
+
 ## The verbs (run inside a world directory)
 
 These are the operator verbs, invoked from inside a scaffolded world directory (see
