@@ -13,6 +13,7 @@ import re
 import shutil
 import socket
 import subprocess
+import time
 import urllib.error
 import urllib.request
 
@@ -175,6 +176,32 @@ def http_get_json(url: str, timeout: float = 5.0) -> tuple[bool, int, object]:
     except (json.JSONDecodeError, ValueError):
         parsed = body
     return (200 <= status < 300), status, parsed
+
+
+def wait_for_health(url: str, *, timeout_s: float = 10.0, interval_s: float = 0.3
+                     ) -> tuple[bool, object]:
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (ledger row 1158/1159, item
+    2 -- birth's own failure honesty): polls `http_get_json(url)` every `interval_s` until it
+    reports `ok` or `timeout_s` elapses -- the AUTOMATED sibling of `screens.py`'s existing
+    `_verify_boundary_started` (which waits on an operator keypress before a SINGLE probe; this
+    function is for the commit-time act that starts the boundary itself and cannot pause for
+    one). A background-started process that immediately dies (the concrete case this closes: a
+    port already occupied -- `uvicorn`/the OS refuses the bind and the child exits within
+    milliseconds) never becomes reachable, so this returns `(False, <last probe's own
+    ok/status/body>)` once the deadline passes -- never raises, never hangs past `timeout_s`
+    (mirrors every OTHER probe in this module's own no-raise convention). Returns `(True, body)`
+    on the first successful probe, as soon as it happens -- never waits out the full timeout on
+    a service that came up quickly."""
+    deadline = time.monotonic() + timeout_s
+    last: object = None
+    while True:
+        ok, status, body = http_get_json(url, timeout=min(2.0, timeout_s))
+        last = {"status": status, "body": body}
+        if ok:
+            return True, last
+        if time.monotonic() >= deadline:
+            return False, last
+        time.sleep(interval_s)
 
 
 def process_running(pattern: str) -> tuple[bool, str]:

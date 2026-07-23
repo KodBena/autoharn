@@ -175,7 +175,15 @@ BASELINE: dict[str, int] = {
     # "screen entered, nothing selected" from "screen skipped outright" -- a fact `state`/the
     # plan cannot otherwise recover. Genuinely new decision/effect-boundary logic, not padding.
     # Written plain, no golfing (ADR-0007's no-go clause); witnessed growth.
-    "tools/setup_tui/screens.py":                    1717,
+    # Reconciled +69 to 1786 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion,
+    # row 1158/1159): the SCREENS reorder (boundary ahead of principals-authority/signed-genesis)
+    # plus a new commit-time CallableAct (`_boundary_health_gate`, the failure-honesty gate that
+    # halts the commit if the auto-started boundary never answers its own health probe --
+    # BackgroundAct's own `ok` was true the instant Popen() succeeded regardless of whether the
+    # child immediately died) plus three `led`-resolution sites choosing served vs legacy from
+    # `state["boundary_url"]`. Genuinely new decision logic and a real defect fix, not padding.
+    # +5 to 1791, same pass: register-principal usage defect found live + two scope-gap notes.
+    "tools/setup_tui/screens.py":                    1791,
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
@@ -241,12 +249,21 @@ BASELINE: dict[str, int] = {
     # a DECLARED raw/history reader by design -- the general review-legibility surface must show
     # a superseded review too). Genuinely new classification content, not padding. Written plain,
     # no golfing.
-    "gates/ledger_reader_allowlist.py":                 525,
+    # Reconciled +1 to 526 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A, ledger row 1150,
+    # kernel/lineage/s57-obligation-revocation-event.sql): CHAIN += s57 -- exercises review_gap's
+    # own third, narrowing-only anti-join, an already-allowlisted entry whose reason text is
+    # UPDATED in place (no new row). One genuinely load-bearing line, not padding.
+    "gates/ledger_reader_allowlist.py":                 526,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
     # trusted). Genuinely new decision logic, not padding. Written plain, no golfing.
-    "tools/setup_tui/signed_genesis.py":                525,
+    # Reconciled +7 to 532 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger
+    # row 1158/1159): `write_commission_act` gained the `led` parameter (the caller now resolves
+    # served-vs-legacy from `state["boundary_url"]` rather than this module hardcoding
+    # legacy/led unconditionally) plus the docstring update explaining the re-sequencing. Genuinely
+    # new decision-boundary logic, not padding. Written plain, no golfing.
+    "tools/setup_tui/signed_genesis.py":                532,
     "gates/interpreter_boundary_lint.py":               498,
     "hooks/stamp_intercept.py":                         482,
     # NEW to BASELINE, 461 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):

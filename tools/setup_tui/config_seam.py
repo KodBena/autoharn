@@ -119,6 +119,21 @@ def synthesize_scripted_lines(doc: config_file.ConfigDoc, *, world: str, dest: s
         lines.append(world)
         lines.append(str(g("birth.project_name", "") or "-"))
 
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
+    # moved to run BEFORE "principals-authority"/"signed-genesis" in screens.py's own SCREENS
+    # list ("ORDER IS LOAD-BEARING") -- this synthesis MIRRORS that same order (this function's
+    # own docstring: "mirrors screens.py's own prompt sequence, screen by screen"), so the
+    # boundary block moves here too, matching exactly. The block's own internal logic is
+    # UNCHANGED, only its position in `lines`.
+    b_run = bool(g("boundary.configure", False))
+    lines.append(_yn(b_run))
+    if b_run:
+        if not birth_run:
+            lines.append("y")  # override: proceed without a confirmed successful birth
+            lines.append(world)  # "World/deployment name" -- only unasked when birth set it
+        _host_db_lines()
+        lines.append(_yn(bool(g("boundary.start_now", False))))
+
     pa_run = bool(g("principals_authority.run", False))
     lines.append(_yn(pa_run))
     if pa_run:
@@ -142,15 +157,6 @@ def synthesize_scripted_lines(doc: config_file.ConfigDoc, *, world: str, dest: s
     if sg_run:
         lines.append(str(g("signed_genesis.commission_statement", "")))
         lines += ["-", "-"]  # scripted/fixture keygen identity -- accept the fixture defaults
-
-    b_run = bool(g("boundary.configure", False))
-    lines.append(_yn(b_run))
-    if b_run:
-        if not birth_run:
-            lines.append("y")  # override: proceed without a confirmed successful birth
-            lines.append(world)  # "World/deployment name" -- only unasked when birth set it
-        _host_db_lines()
-        lines.append(_yn(bool(g("boundary.start_now", False))))
 
     o_run = bool(g("observability.run", False))
     lines.append(_yn(o_run))

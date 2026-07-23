@@ -1,0 +1,156 @@
+== scaffolding WORLD (chain ends s56-reservation-residue.sql, s57 NOT yet applied) ==
+=== detect-negative-pre-s57 ===
+  [ok] s57 .detect.sql reads f on the s56-headed (pre-s57) chain
+
+=== wa2-setup-obligate-accepted ===
+  [ok] {'row_id': None, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa2-raw-delete-refused-pre-s57 ===
+  [ok] exit=3 stderr='ERROR:  permission denied for table countersign_obligation\n' -- expected a permission-denied failure (s20 never granted DELETE to the role at all)
+
+== applying s57 in place ==
+=== detect-positive-post-s57 ===
+  [ok] s57 .detect.sql reads t once s57 is applied on top of s56
+
+=== wa2-raw-delete-refused-post-s57 ===
+  [ok] exit=3 stderr='ERROR:  permission denied for table countersign_obligation\n'
+
+=== wa2-row-still-present ===
+  [ok] count=1
+
+== WA1: obligate -> un-countersigned row appears in review_gap; revoke -> it leaves ==
+=== wa1-obligate-accepted ===
+  [ok] {'row_id': None, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa1-candidate-row-accepted ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa1-row-in-gap-before-revoke ===
+  [ok] count=1
+
+=== wa1-content-free-review-accepted ===
+  [ok] {'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa1-pre-revoke-discharges-present ===
+  [ok] floor atoms=['discharges(6,5)', 'flagged(6)']
+
+=== wa1-pre-revoke-flagged-present ===
+  [ok] floor atoms=['discharges(6,5)', 'flagged(6)']
+
+=== wa1-pre-revoke-asp-obliged-fact-present ===
+  [ok] asp facts=['obliged(3).', 'obliged(2).', 'row_actor(1,2).', 'row_actor(2,2).', 'row_actor(3,2).', 'row_actor(4,2).', 'row_actor(5,2).', 'row_actor(6,3).', 'review_row(6).', 'review_regards(6,5).', 'review_attest(6).', 'content_free(6).']
+
+=== wa1-pre-revoke-differential-green ===
+  [ok] stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fx'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fx        AGREE              asp=2 sql=2 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+
+=== wa1-revoke-accepted ===
+  [ok] {'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa1-event-shape ===
+  [ok] row='obligation_revoked|wa1-scope|WA1 fixture revocation'
+
+=== wa1-row-out-of-gap-after-revoke ===
+  [ok] count=0
+
+=== wa1-obligation-row-never-deleted ===
+  [ok] count=1 -- the countersign_obligation row must stand forever; revocation is an ADDITIVE event, never a DELETE
+
+=== wa1-post-revoke-discharges-absent ===
+  [ok] floor atoms=[]
+
+=== wa1-post-revoke-flagged-absent ===
+  [ok] floor atoms=[]
+
+=== wa1-post-revoke-asp-obliged-fact-absent ===
+  [ok] asp facts=['obliged(3).', 'row_actor(1,2).', 'row_actor(2,2).', 'row_actor(3,2).', 'row_actor(4,2).', 'row_actor(5,2).', 'row_actor(6,3).', 'row_actor(7,3).', 'review_row(6).', 'review_regards(6,5).', 'review_attest(6).', 'content_free(6).']
+
+=== wa1-post-revoke-differential-green ===
+  [ok] stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fx'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fx        AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+
+== WA3: a second, un-revoked obligation stays in review_gap ==
+=== wa3-obligate-accepted ===
+  [ok] {'row_id': None, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa3-candidate-row-accepted ===
+  [ok] {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== wa3-unrevoked-still-in-gap ===
+  [ok] count=1
+
+== WA4: revoking an unknown scope -> refused ==
+=== wa4-refused ===
+  [ok] {'row_id': None, 'message': "write boundary: obligation-revocation names scope 'no-such-scope-ever' -- no countersign_obligation row exists with that scope (kernel/lineage/s57-obligation-revocation-event.sql). Nothing was recorded.", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+=== wa4-message-names-unknown-scope ===
+  [ok] message="write boundary: obligation-revocation names scope 'no-such-scope-ever' -- no countersign_obligation row exists with that scope (kernel/lineage/s57-obligation-revocation-event.sql). Nothing was recorded."
+
+== WA5: revoking wa1-scope a SECOND time -> refused (duplicate) ==
+=== wa5-refused ===
+  [ok] {'row_id': None, 'message': "write boundary: obligation-revocation names scope 'wa1-scope' -- ALREADY revoked (an earlier obligation_revoked event for this scope stands, un-superseded); revocation is a one-time fact about a scope in v1, and a second event would be a duplicate, not a new fact (kernel/lineage/s57-obligation-revocation-event.sql). Nothing was recorded.", 'sqlstate': 'P0001', 'refusal_id': 10, 'disposition': 'refused'}
+
+=== wa5-message-names-already-revoked ===
+  [ok] message="write boundary: obligation-revocation names scope 'wa1-scope' -- ALREADY revoked (an earlier obligation_revoked event for this scope stands, un-superseded); revocation is a one-time fact about a scope in v1, and a second event would be a duplicate, not a new fact (kernel/lineage/s57-obligation-revocation-event.sql). Nothing was recorded."
+
+=== wa5-still-only-one-revocation-event ===
+  [ok] count=1
+
+== WA7a: SQL/ASP differential AGREE on the post-revocation state ==
+=== wa7a-differential-exit0 ===
+  [ok] exit=0
+stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fx'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fx        AGREE              asp=2 sql=2 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+stderr_tail=
+
+=== wa7a-differential-green ===
+  [ok] stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fx'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fx        AGREE              asp=2 sql=2 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+
+== WA7b: SQL/ASP differential AGREE on a world that never revokes anything (s56-headed) ==
+=== wa7b-differential-exit0 ===
+  [ok] exit=0
+stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fxnorv'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fxnorv    AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+
+=== wa7b-differential-green ===
+  [ok] stdout_tail=# review-gap-audit marriage differential -- ASP (engine/lp/review_gap_audit.lp) vs SQL floor (engine/review_gap_floor.py)
+#   target='s57fxnorv'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] s57fxnorv    AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- SQL floor bit-identical to the ASP verdict program
+
+
+all s57-obligation-revocation-event cases WITNESSED clean.

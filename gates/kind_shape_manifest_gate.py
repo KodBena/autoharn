@@ -168,9 +168,11 @@ CHAIN = [
     "s53-belief-substrate.sql",
     "s54-belief-views.sql",
     "s55-dispatch-grain-independence.sql",
+    "s56-reservation-residue.sql",
+    "s57-obligation-revocation-event.sql",
 ]
-# s50-52: no MANIFEST change. s53 (v2 B1): nine `belief` columns below; five coupling CHECKs are
-# off belief_polarity/basis VALUES not `kind`, no coupling-manifest entry owed. s54/s55: no change.
+# s50-52/s54/s55/s56: no MANIFEST change. s53 (v2 B1): nine `belief` columns below; five coupling
+# CHECKs are off VALUES not `kind`, no entry owed. s57 (row 1150): two columns below.
 # s46/s47/s48/s49 each extend this SAME gate's scratch CHAIN and each ship ZERO new columns/kinds
 # -- s46's two views, s47's re-issued validate_work_item_claim, s48's new validate_review_witness_
 # existence trigger, and s49's local-exception-handler edit to kernel.journal_write_refusal all
@@ -603,6 +605,11 @@ _BELIEF_COLS = (
 for _col, _arity, _reason in _BELIEF_COLS:
     MANIFEST.append(dict(column=_col, kinds=("belief",), arity=_arity, mechanism="CHECK",
                          constraint=f"{_col}_kind_shape", defining_delta="s53-belief-substrate.sql", reason=_reason))
+# s56: view-only, no MANIFEST row. s57 (row 1150): two new obligation_revoked-only columns.
+for _col in ("obligation_revoked_scope", "obligation_revoke_reason"):
+    MANIFEST.append(dict(column=_col, kinds=("obligation_revoked",), arity="two-way", mechanism="CHECK",
+                         constraint=f"{_col}_kind_shape", defining_delta="s57-obligation-revocation-event.sql",
+                         reason="mandatory, non-empty (s57)."))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 

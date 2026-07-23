@@ -26,7 +26,11 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s52
+||| AS-OF: kernel chain through s52 -- LAGGING: s53-s57 (belief substrate, belief views,
+||| dispatch-grain independence, reservation residue, obligation-revocation-as-event) are NOT
+||| yet transcribed here (gates/idris_model_freshness.py, report-only). Disclosed rather than
+||| silently stale -- a future pass pays this down in one transcription sweep across all five,
+||| not incrementally per delta (this file's own AS-OF discipline: never bump on faith).
 ||| (s50, 2026-07-18, landed WHILE the s44-s49 parity pass below was in flight and absorbed
 |||   by it before landing: the defeat-input exclusion fork this pass had rendered as an
 |||   unadjudicated PARAMETER was adjudicated by the maintainer (row 1647,

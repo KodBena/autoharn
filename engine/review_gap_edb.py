@@ -153,8 +153,29 @@ def export(target_name: str) -> ReviewGapEdbExport:
     rel = t.rel()
 
     # ---- obliged/1 -- countersign_obligation.obliges_actor, one fact per DISTINCT obliged actor
+    # WHOSE OWN SCOPE IS NOT REVOKED (kernel/lineage/s57-obligation-revocation-event.sql, design/
+    # FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A): revocation is now a typed ledger event
+    # (kind='obligation_revoked', obligation_revoked_scope=<scope>) rather than a DELETE of the
+    # countersign_obligation row -- the row stands forever, so "in force" is a derivation over
+    # events, mirrored HERE independently of kernel/lineage/s32-edge-views-single-home.sql's
+    # review_gap view (which s57 re-issues with the SAME exclusion) exactly the way this whole
+    # module's docstring already states for the other three families (I6/ADR-0000 INDEP): a
+    # SEPARATELY AUTHORED SQL query reaching the same judgment, not an import of the kernel view.
+    # GATED on the ledger carrying obligation_revoked_scope AT ALL (not merely on there being zero
+    # rows of that kind): a pre-s57 schema has NO such column, so referencing it unconditionally
+    # would be a bare "column does not exist" SQL error, not an empty result -- this capability
+    # check is what keeps the extension behavior-preserving on every schema this module ran
+    # against before s57 existed, rather than merely assuming the column's absence is harmless.
+    has_revocation = t.has_col("obligation_revoked_scope")
+    obliged_sql = f"SELECT DISTINCT o.obliges_actor FROM {t.schema}.countersign_obligation o"
+    if has_revocation:
+        obliged_sql += (
+            f" WHERE NOT EXISTS (SELECT 1 FROM {rel} rv WHERE rv.kind = 'obligation_revoked' "
+            f"AND rv.obligation_revoked_scope = o.scope "
+            f"AND NOT EXISTS (SELECT 1 FROM {rel} s2 WHERE s2.supersedes = rv.id))"
+        )
     n = 0
-    for (actor,) in t.rows(f"SELECT DISTINCT obliges_actor FROM {t.schema}.countersign_obligation;"):
+    for (actor,) in t.rows(obliged_sql + ";"):
         exp.facts.append(f"obliged({int(actor)}).")
         n += 1
     exp.counts["obliged"] = n

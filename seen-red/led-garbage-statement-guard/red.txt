@@ -1,0 +1,49 @@
+=== server-healthy ===
+  [ok] boundary service up at http://127.0.0.1:50445
+
+== R1: a bare --help token -- REFUSED, nothing written ==
+=== r1-refused ===
+  [ok] exit=1 stderr="led: REFUSED -- this statement contains a bare '--help' token -- it pattern-matches CAPTURED CLI usage/help output, not authored prose (garbage-statement guard, ledger row 1159: the maintainer's own testimony that fumbled agent invocations have written CLI usage text into the ledger as permanent rows). NOTHING was written.\n  If this statement genuinely, deliberately needs to quote CLI usage/help text (e.g. reporting a real bug in that text), re-run with --statement-really-contains-cli-text to override.\n"
+
+=== r1-names-row-1159 ===
+  [ok] stderr="led: REFUSED -- this statement contains a bare '--help' token -- it pattern-matches CAPTURED CLI usage/help output, not authored prose (garbage-statement guard, ledger row 1159: the maintainer's own testimony that fumbled agent invocations have written CLI usage text into the ledger as permanent rows). NOTHING was written.\n  If this statement genuinely, deliberately needs to quote CLI usage/help text (e.g. reporting a real bug in that text), re-run with --statement-really-contains-cli-text to override.\n"
+
+=== r1-names-override-flag ===
+  [ok] stderr="led: REFUSED -- this statement contains a bare '--help' token -- it pattern-matches CAPTURED CLI usage/help output, not authored prose (garbage-statement guard, ledger row 1159: the maintainer's own testimony that fumbled agent invocations have written CLI usage text into the ledger as permanent rows). NOTHING was written.\n  If this statement genuinely, deliberately needs to quote CLI usage/help text (e.g. reporting a real bug in that text), re-run with --statement-really-contains-cli-text to override.\n"
+
+=== r1-nothing-written ===
+  [ok] before=2 after=2
+
+== R2: a 'usage:' line -- REFUSED, nothing written ==
+=== r2-refused ===
+  [ok] exit=1 stderr="led: REFUSED -- this statement contains a 'usage:' line -- it pattern-matches CAPTURED CLI usage/help output, not authored prose (garbage-statement guard, ledger row 1159: the maintainer's own testimony that fumbled agent invocations have written CLI usage text into the ledger as permanent rows). NOTHING was written.\n  If this statement genuinely, deliberately needs to quote CLI usage/help text (e.g. reporting a real bug in that text), re-run with --statement-really-contains-cli-text to override.\n"
+
+=== r2-nothing-written ===
+  [ok] before=2 after=2
+
+== R3: a run of 3+ option-flag tokens -- REFUSED, nothing written ==
+=== r3-refused ===
+  [ok] exit=1 stderr="led: REFUSED -- this statement contains a run of 4 option-flag-shaped tokens (--amends, --answers, --refs, --supersedes, ...) -- it pattern-matches CAPTURED CLI usage/help output, not authored prose (garbage-statement guard, ledger row 1159: the maintainer's own testimony that fumbled agent invocations have written CLI usage text into the ledger as permanent rows). NOTHING was written.\n  If this statement genuinely, deliberately needs to quote CLI usage/help text (e.g. reporting a real bug in that text), re-run with --statement-really-contains-cli-text to override.\n"
+
+=== r3-nothing-written ===
+  [ok] before=2 after=2
+
+== R4: --statement-really-contains-cli-text overrides -- WRITES ==
+=== r4-accepted ===
+  [ok] exit=0 stdout='led: row 3 written.\n' stderr=''
+
+=== r4-one-row-written ===
+  [ok] before=2 after=3
+
+== R5: ordinary statements, including a single --flag mention, are UNAFFECTED ==
+=== r5a-accepted ===
+  [ok] exit=0 stderr=''
+
+=== r5b-accepted ===
+  [ok] exit=0 stderr=''
+
+== R6: led work open's typed-field path does NOT run this guard (by design) ==
+=== r6-accepted ===
+  [ok] exit=0 stderr=''
+
+all led-garbage-statement-guard cases WITNESSED clean.

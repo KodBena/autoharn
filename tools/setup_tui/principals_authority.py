@@ -9,14 +9,16 @@ checklist rows), this module carries the driver logic and the propaedeutic lesso
 through `runner.run_command` (rule 1's exact-argv discipline + the `--dry-run` choke point), same
 as every other screens.py helper module.
 
-SCREEN POSITION AND VERB CHOICE (spec §1, the signed-genesis builder's own finding, cited
-verbatim in this build's commission): this screen sits BETWEEN Birth and Signed genesis -- the
-boundary service is not configured yet at this point in the flow (`screen_boundary` runs later).
-Every write in this module therefore drives `<dest>/legacy/led` (this world's own direct-psql
-recovery shim, bootstrap/templates/legacy-led.tmpl) exactly as
-`tools/setup_tui/signed_genesis.py` already does for the SAME reason -- see that module's own
-docstring for the two-verbs-two-moments explanation. The rebased `<dest>/led` (the SERVED path)
-is never used here.
+SCREEN POSITION AND VERB CHOICE (RE-SEQUENCED, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
+completion, ledger row 1158/1159): this screen USED TO sit between Birth and Signed genesis with
+the boundary service not yet configured (`screen_boundary` ran later) -- every write in this
+module therefore drove `<dest>/legacy/led`. The re-sequencing moved "boundary" to run BEFORE this
+screen (screens.py's own `SCREENS` list, "ORDER IS LOAD-BEARING"): by the time this module's own
+acts actually EXECUTE at commit time (screens only QUEUE at decision time), the world's boundary
+is already configured and live, so every write in this module now drives `<dest>/led` (the
+SERVED path, `_served_led` below) -- exactly the same re-sequencing
+`tools/setup_tui/signed_genesis.py` already applies, for the same reason; see that module's own
+docstring for the two-verbs-two-moments explanation, now updated in step with this one.
 
 RULE 1, NEVER A SECOND IMPLEMENTATION: this module never re-derives kernel semantics. Class
 vocabulary (`CLASS_CHOICES`) and relation vocabulary (`RELATION_CHOICES`) below are MIRRORS,
@@ -60,7 +62,7 @@ from tools.setup_tui.content.principals_authority_data import (
     RELATION_CHOICES,
     SCAFFOLD_BASE_PRINCIPALS,
 )
-from tools.setup_tui.runner import legacy_led_path, parse_row_id
+from tools.setup_tui.runner import legacy_led_path, parse_row_id, served_led_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
@@ -284,11 +286,16 @@ def lineage_chain_note(dest: str) -> str:
 # -- an unused `produces` binding costs nothing (commit_executor.py records it regardless).
 # ---------------------------------------------------------------------------------------------
 
-def _legacy_led(dest: str) -> str:
-    """Thin pass-through to `runner.legacy_led_path` (ADR-0012 P1, the ONE home for this path
-    string) -- kept as a private wrapper so every call site in this module already named
-    `_legacy_led(dest)` needs no further edit."""
-    return legacy_led_path(dest)
+def _served_led(dest: str) -> str:
+    """Thin pass-through to `runner.served_led_path` (ADR-0012 P1, the ONE home for this path
+    string). RENAMED from `_legacy_led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
+    completion, ledger row 1158/1159): this module's own acts used to drive `<dest>/legacy/led`
+    because "the boundary service is not configured yet at this point in the flow" (this
+    module's own former docstring, verbatim) -- the re-sequencing (screens.py's `SCREENS` list,
+    "boundary" moved ahead of "principals-authority") means that reason no longer holds by the
+    time these acts actually EXECUTE at commit time; every call site that was named
+    `_legacy_led(dest)` is renamed to `_served_led(dest)` in this same pass."""
+    return served_led_path(dest)
 
 
 def _extract_row_id(output: str) -> str:
@@ -303,41 +310,65 @@ def _extract_row_id(output: str) -> str:
 _COMMISSIONER_ENV: tuple[tuple[str, str], ...] = (("LED_ACTOR", "commissioner"),)
 
 
-def register_principal_act(dest: str, name: str, agent_class: str, purpose: str) -> tuple[CommandAct, str]:
-    """`LED_ACTOR=commissioner <dest>/legacy/led register-principal <name> <class> --purpose
-    "<purpose>"` -- the s40 registration ceremony (kernel/lineage/s40-principal-identity-
-    events.sql §3.7), as a plan act. `LED_ACTOR=commissioner` mirrors signed_genesis.py's own
-    choice: at this point in the flow the connection principal has no standing declaration of its
-    own yet, and `commissioner` is one of the three principals the scaffold's own birth sequence
-    already registers and declares standing for."""
-    argv = (_legacy_led(dest), "register-principal", name, agent_class, "--purpose", purpose)
+def register_principal_act(dest: str, name: str, agent_class: str, purpose: str,
+                            led: str | None = None) -> tuple[CommandAct, str]:
+    """`LED_ACTOR=commissioner <led> register-principal <name> <class> --purpose "<purpose>"` --
+    the s40 registration ceremony (kernel/lineage/s40-principal-identity-events.sql §3.7), as a
+    plan act. `LED_ACTOR=commissioner` mirrors signed_genesis.py's own choice: at this point in
+    the flow the connection principal has no standing declaration of its own yet, and
+    `commissioner` is one of the three principals the scaffold's own birth sequence already
+    registers and declares standing for. `led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
+    completion, ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served
+    when this run's own boundary was configured (the normal, re-sequenced case), legacy/led when
+    it was explicitly declined (Case 14's own `boundary.configure = false` shape, ledger row
+    1942) -- `screens.py`'s own `screen_principals_authority` is the ONE place that decision is
+    made, from `state["boundary_url"]`; `None` (unwired callers, e.g. this module's own tests)
+    falls back to `_served_led(dest)`, the ordinary post-re-sequencing default."""
+    led = led if led is not None else _served_led(dest)
+    argv = (led, "register-principal", name, agent_class, "--purpose", purpose)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"principal-row:{name}"
 
 
 def grant_competence_act(dest: str, name: str, activity: str, band: str,
                           basis: str) -> tuple[CommandAct, str]:
-    """`<dest>/legacy/led principal grant-competence <name> --activity "<a>" --band "<b>"
-    --basis "<c>"` (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan
-    act."""
-    argv = (_legacy_led(dest), "principal", "grant-competence", name,
+    """`legacy/led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>"`
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan act.
+
+    ALWAYS drives `legacy_led_path(dest)`, unconditionally, unlike `register_principal_act`/
+    `write_commission_act`/`charter_register_act` above (which take an optional `led=` and drive
+    served led.tmpl when this run's boundary was configured) -- found live while re-verifying
+    the Part C completion re-sequencing (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
+    1158/1159): `led principal grant-competence` is NOT among the boundary-rebased verbs at all
+    -- served led.tmpl has no `principal` sub-dispatch whatsoever (witnessed live: `./led
+    principal grant-competence ...` exits 4, `unrecognized arguments`). A real, PRE-EXISTING
+    scope gap (never rebased), not something this re-sequencing pass introduced or is scoped to
+    close -- deliberately no `led=` parameter here at all, so a future caller cannot assume this
+    verb follows the same served/legacy split its three siblings above do."""
+    argv = (legacy_led_path(dest), "principal", "grant-competence", name,
             "--activity", activity, "--band", band, "--basis", basis)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"competence-row:{name}:{activity}"
 
 
 def relate_act(dest: str, subject: str, relation: str, obj: str) -> tuple[CommandAct, str]:
-    """`<dest>/legacy/led principal relate <subject> <relation> <object>`
-    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act."""
-    argv = (_legacy_led(dest), "principal", "relate", subject, relation, obj)
+    """`legacy/led principal relate <subject> <relation> <object>`
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act.
+
+    ALWAYS drives `legacy_led_path(dest)` -- see `grant_competence_act`'s own docstring, same
+    reasoning, same verb family (`principal relate`, not among served led.tmpl's rebased
+    verbs)."""
+    argv = (legacy_led_path(dest), "principal", "relate", subject, relation, obj)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"relation-row:{subject}:{relation}:{obj}"
 
 
-def charter_register_act(dest: str, role: str, path: str) -> tuple[CommandAct, str]:
-    """`python3 tools/role_charter.py register <role> <path> --led <dest>/legacy/led` -- the SAME
-    verb `screen_hydration`'s own role-charter item drives, pointed at `legacy/led` instead of the
-    (not-yet-configured) served `led` (module docstring: this screen sits before
-    `screen_boundary`), as a plan act."""
+def charter_register_act(dest: str, role: str, path: str,
+                          led: str | None = None) -> tuple[CommandAct, str]:
+    """`python3 tools/role_charter.py register <role> <path> --led <led>` -- the SAME verb
+    `screen_hydration`'s own role-charter item drives, as a plan act. `led`: see
+    `register_principal_act`'s own docstring (served when this run's boundary was configured,
+    legacy/led when explicitly declined)."""
+    led = led if led is not None else _served_led(dest)
     argv = ("python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
-            role, path, "--led", _legacy_led(dest))
+            role, path, "--led", led)
     return CommandAct(argv=argv), f"charter-row:{role}"
 
 

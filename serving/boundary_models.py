@@ -266,3 +266,23 @@ class ObligationWriteIntFields(BaseModel):
 
     assigned_by: int | None = None
     obliges_actor: int | None = None
+
+
+class ObligationRevokeWriteIntFields(BaseModel):
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A's enumeration authority for
+    `POST /write/obligation_revoke` (`kernel.obligation_revoke`,
+    kernel/lineage/s57-obligation-revocation-event.sql): its closed contract's ONE bigint-typed
+    key (`actor`, optional -- absent falls to the same set_actor standing-declaration default
+    every ledger write does); `scope`/`reason` are text, out of this model's scope."""
+
+    actor: int | None = None
+
+
+class ArtifactWriteIntFields(BaseModel):
+    """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B's enumeration authority for
+    `POST /d/{deployment}/artifacts` (`kernel.artifact_write`, kernel/lineage/
+    s51-artifact-store.sql): its closed contract's ONE bigint-typed key (`actor`, optional);
+    `bytes` (base64 text), `media_type`, and the optional asserted `hash` are text, out of this
+    model's scope."""
+
+    actor: int | None = None
