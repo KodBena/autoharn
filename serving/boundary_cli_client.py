@@ -39,6 +39,19 @@ A4's exit-code-fidelity ruling extended to this shim layer). Four codes, named O
   4  BOUNDARY UNREACHABLE -- the HTTP request to the boundary itself failed (connection refused,
                           DNS failure, timeout) -- this shim never had a response to classify.
                           Distinct from 3 (which DID get a response, just a refusing one).
+                          `ProtocolVersionMismatch` (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
+                          §3's version handshake) is DELIBERATELY mapped to this SAME code 4, not
+                          a fifth code of its own (round-1 review finding, decided and recorded
+                          here rather than left implicit): both cases mean "this shim never got a
+                          usable response to classify at all" from this caller's point of view --
+                          a connection failure and an incompatible peer are the same class of
+                          "nothing to work with" transport-level non-outcome, merely disambiguated
+                          in the stderr TEXT (`report_boundary_exception`/
+                          `report_protocol_mismatch` each write distinct, named messages). This
+                          four-code space is a ratified CLI contract, not a per-defect enumeration
+                          to widen casually -- a genuinely NEW class of caller-actionable outcome
+                          routes to the maintainer before it gets its own code, the same way any
+                          other exit-code-contract change would.
 Never exit 2 -- reserved, unused here, precisely because the LEGACY direct-psql tools propagate
 psql's OWN raw exit codes (which include 2 for a connection-level psql failure); keeping this
 shim's own vocabulary disjoint from that legacy range means a caller inspecting an exit code
@@ -60,6 +73,15 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # noqa: E402
+
+# WIRE_PROTOCOL_VERSION (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): a DELIBERATE, disclosed
+# duplication of `boundary_models.WIRE_PROTOCOL_VERSION` -- the same convention this module's own
+# _SLUG_FIELD_OVERRIDE/_ID_FIELD_OVERRIDE dicts already use for VIEW_REGISTRY's key-column
+# choices (see their own comment above): `boundary_models` pulls in `pydantic`, a dependency this
+# thin urllib-only CLI client has no business requiring just to compare two version strings.
+# Kept in sync by hand; the version-handshake witness fixture (seen-red/umbrella-cli-version-
+# handshake-skew) is the tripwire if the two ever drift.
+_CLIENT_WIRE_PROTOCOL_VERSION = "1"
 
 
 class BoundaryClientError(Exception):
@@ -91,6 +113,71 @@ class BoundaryRefusal(Exception):
         super().__init__(f"HTTP {status}: {body}")
         self.status = status
         self.body = body
+
+
+# PER-PROCESS handshake cache (spec §3: "checks compatibility on first contact per session
+# (cached thereafter)"). A rebased CLI shim is a short-lived process making a handful of calls
+# per invocation -- there is no longer-lived "session" object to hang a cross-invocation cache
+# off without plumbing a new on-disk cache file through every deployment.json (a genuinely
+# separate, larger change deferred here, named rather than silently done -- see the umbrella
+# build's own report). This dict makes the check idempotent WITHIN one process's lifetime (a
+# caller that calls `check_protocol_version` more than once against the same base URL in one
+# invocation pays the HTTP round trip only once), keyed by base URL.
+_HANDSHAKE_CHECKED: dict[str, str] = {}
+
+
+class ProtocolVersionMismatch(Exception):
+    """Exit code 4 (transport-level -- there was no kernel or boundary-refusal response to
+    classify, just an incompatible peer): the boundary's own advertised `protocol_version` does
+    not match this client's `_CLIENT_WIRE_PROTOCOL_VERSION`. Teaches BOTH versions and the
+    remedy, never a silent misparse (spec §3, verbatim)."""
+
+    def __init__(self, client_version: str, server_version: str, boundary_url: str) -> None:
+        self.client_version = client_version
+        self.server_version = server_version
+        self.boundary_url = boundary_url
+        super().__init__(
+            f"protocol version mismatch: this client speaks wire protocol {client_version!r}, "
+            f"the boundary at {boundary_url} answers {server_version!r}")
+
+
+def check_protocol_version(base: str, boundary_url: str) -> None:
+    """The ONE place a rebased shim's dispatch checks wire-protocol compatibility before issuing
+    its real call (spec §3) -- GETs `/health` (every deployment answers it, cheapest route in
+    the table) and compares `protocol_version` against this client's own
+    `_CLIENT_WIRE_PROTOCOL_VERSION`. Raises `ProtocolVersionMismatch` (never a silent misparse)
+    on a mismatch, naming BOTH versions and the remedy. Cached per `base` for the remainder of
+    this process (see `_HANDSHAKE_CHECKED`'s own comment) -- a caller that has already checked
+    this exact `base` this invocation is a no-op. `BoundaryUnreachable`/`BoundaryRefusal` propagate
+    unchanged (this function is not the place a transport failure is reworded)."""
+    if base in _HANDSHAKE_CHECKED:
+        return
+    health = get_json(base, "/health")
+    server_version = health.get("protocol_version") if isinstance(health, dict) else None
+    if server_version is None:
+        # A boundary predating this handshake field (pre-umbrella-CLI build) answers /health with
+        # no protocol_version key at all -- honestly distinct from a version STRING mismatch, but
+        # still a compatibility gap the client must not silently paper over (spec §3: "a mismatch
+        # refuses with teaching naming BOTH versions and the remedy").
+        raise ProtocolVersionMismatch(_CLIENT_WIRE_PROTOCOL_VERSION, "(absent -- pre-handshake boundary)", boundary_url)
+    if server_version != _CLIENT_WIRE_PROTOCOL_VERSION:
+        raise ProtocolVersionMismatch(_CLIENT_WIRE_PROTOCOL_VERSION, server_version, boundary_url)
+    _HANDSHAKE_CHECKED[base] = server_version
+
+
+def report_protocol_mismatch(prog: str, exc: ProtocolVersionMismatch) -> int:
+    """The ONE place a `ProtocolVersionMismatch` becomes stderr text + an exit code (ADR-0012
+    P1) -- exit 4 (transport-level, same code `BoundaryUnreachable` uses: there was no kernel or
+    boundary-refusal response to classify, just an incompatible peer). Names both versions and
+    the remedy (spec §3, verbatim): upgrade this checkout to match the boundary, or point at a
+    boundary running the matching checkout."""
+    sys.stderr.write(
+        f"{prog}: REFUSED -- wire protocol version mismatch talking to {exc.boundary_url}. "
+        f"This client speaks protocol {exc.client_version!r}; the boundary answers "
+        f"{exc.server_version!r}. Nothing was read or written. Remedy: upgrade this checkout to "
+        f"match the boundary's running version, or point {prog} at a boundary running the "
+        f"matching checkout (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3).\n")
+    return 4
 
 
 class ServedConfig:
@@ -139,7 +226,15 @@ def _http(method: str, url: str, payload: dict | None = None, timeout: float = 6
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body_bytes = resp.read()
-            body = json.loads(body_bytes) if body_bytes else None
+            try:
+                body = json.loads(body_bytes) if body_bytes else None
+            except json.JSONDecodeError:
+                # A 200 with a non-JSON body is not a kernel/boundary verdict shape either -- the
+                # SAME degraded-but-typed handling the HTTPError branch below already gives a
+                # non-JSON error body (SEVERE-4 fix: this path previously let json.loads raise
+                # straight through as an unguarded traceback instead of the typed teaching
+                # refusal every other malformed-response shape gets).
+                body = {"detail": body_bytes.decode("utf-8", errors="replace")}
             return resp.status, body
     except urllib.error.HTTPError as e:
         body_bytes = e.read()

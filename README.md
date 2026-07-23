@@ -40,6 +40,16 @@ autoharn repo itself, that content lives in
 [`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) — not here. One exception,
 worth knowing before you deploy: the pointer immediately below.
 
+> **Note on invocation spelling (2026-07-23):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
+> introduced `./autoharn <verb>` (`autoharn --help` for the generated, self-updating roster) as
+> the primary way to run a command **inside THIS autoharn checkout's own root** — the tree you
+> clone to build from, not the project you deploy it to. It does NOT change anything this page
+> describes: everything below scaffolds a SEPARATE project directory, which still receives the
+> ten bare per-verb shims (`led`, `judge`, `pickup`, …) this page names, unchanged, until a
+> follow-on build migrates `bootstrap/new-project.sh`'s own scaffold (see CLAUDE.md's
+> operator-surface sentence, or `user-guide/ORCH-OPERATING-CARD.md`'s forward note, for the
+> current, honestly-scoped status of that migration).
+
 ### Architecture at a glance
 
 Autoharn's "kernel" — the Postgres schema this whole guide deploys and migrates (the `schema`/

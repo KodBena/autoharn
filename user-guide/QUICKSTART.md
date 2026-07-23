@@ -17,6 +17,15 @@ If you have no Postgres database yet, `USER-CONFIGURATION.md`'s ["FAQ: provision
 autoharn"](USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) is a copy-paste
 walkthrough for that first step.
 
+> **Note on invocation spelling (2026-07-23):** every `./led`/`./judge`/etc. command below runs
+> against the disposable SCAFFOLDED demo world §1 stands up at `/tmp/qs-demo` — a separate
+> project directory, not this autoharn checkout's own root. That distinction matters because
+> design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md introduced `./autoharn <verb>` (`autoharn --help`
+> for the roster) as THIS checkout's own root invocation form; it changes nothing this page
+> walks through, since a scaffolded world still gets the ten bare per-verb shims this page uses
+> until a follow-on build migrates the scaffold itself (see CLAUDE.md's operator-surface
+> sentence for the current status).
+
 ## 0. Bootstrap
 
 ```sh

@@ -1,0 +1,9 @@
+#!/bin/sh
+# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
+# (runs are linear, dust-and-settled), it keeps the direct originals. There is
+# no legacy- variant of verify-chain: the template itself is the direct-psql
+# original (one read-only query, PICKUP_DEPLOYMENT-resolved like its siblings).
+# Relocated under libexec/autoharn/ by the umbrella-CLI build (ledger rows 1151-1183): semantics
+# unchanged, HERE now climbs two directories to the repo root.
+HERE="$(cd "$(dirname "$0")/../.." && pwd)"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/verify-chain.tmpl" "$@"

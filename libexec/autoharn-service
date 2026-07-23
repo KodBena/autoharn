@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""autoharn-service -- ensure-running control plane (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
+§2, ledger rows 1151-1183). Invoked as `autoharn service status|start|stop` by the ./autoharn
+dispatcher (never invoked directly by a caller -- there is no `./service` alias, this is not one
+of the ten relocated verbs).
+
+WHAT THIS DOES, per the spec's own words:
+  - PROBE: every invocation that needs the boundary resolves it -- reachable, use it, regardless
+    of who started it. "Reachable" means a version-COMPATIBLE autoharn boundary answers its own
+    /d/{boundary_deployment}/health shape -- not merely "some HTTP server responded" (round-1
+    review finding SEVERE-4: any 200/404/etc used to count as reachable, which would silently
+    ADOPT a squatting non-autoharn process). A squatter or a version-skewed peer refuses loudly
+    by name; neither is ever adopted nor spawned over.
+  - SPAWN-AS-DETACHED-CHILD: unreachable -> consult this world's own deployment record and
+    boundary-multiplex.toml, spawn `python3 -m serving.boundary_service` as an ordinary detached
+    child process (plain subprocess, its own log file under this world's own directory; no
+    systemd, no D-Bus -- row 1154), print ONE line saying so, then proceed.
+  - BIND-AS-LOCK RACE, STRUCTURAL (round-1 review finding SEVERE-2): the port bind IS the lock,
+    and ownership of the win is now decided STRUCTURALLY, not by a timing grace-sleep. Every
+    spawned child is launched with `--pidfile <this world's pidfile path>`; `serving/
+    boundary_service.py`'s own `--pidfile` handling binds its OWN listen socket itself,
+    synchronously, BEFORE uvicorn/ASGI ever starts, and writes the pidfile immediately after that
+    bind call succeeds (deliberately NOT an ASGI 'startup' event hook -- the installed uvicorn
+    runs that event BEFORE its own socket bind, which would make it fire for a losing racer too;
+    see that module's own `--pidfile` help text for why). So: the pidfile appearing, naming OUR
+    OWN child's pid, is structural proof this invocation's spawn won; the pidfile naming a
+    DIFFERENT pid (or our own child exiting without ever writing it) is structural proof it lost
+    -- ADOPT, per row 1165 ("someone-else-started-it is a success case"). No sleep-then-trust-
+    poll() anywhere in this file.
+  - LOUD REFUSAL: a service that genuinely cannot start (the port is held by something that does
+    NOT answer this deployment's own /health shape, or answers it with an incompatible protocol
+    version, or the config is invalid) refuses loudly with the diagnosis -- never a silent hang,
+    never a guessed alternate port, never an adopt of a non-autoharn responder.
+  - EXPLICIT STOP: `autoharn service stop` never fights a start ensure-running performed within
+    the SAME invocation's scope (there is no such overlap here -- stop is its own separate
+    invocation) but DOES refuse, rather than silently no-op, when this world has no record of
+    having started the service itself (no pidfile) -- killing a process this tool never started
+    is exactly the kind of action-at-a-distance ADR-0002 forbids. It also refuses (round-1 review
+    finding SEVERE-3) when the pidfile's own pid is no longer a `serving.boundary_service`
+    process at all (checked via `/proc/<pid>/cmdline`) -- PID REUSE means a stale pidfile can
+    name an unrelated, unlucky process; signaling it on trust would kill a bystander while
+    reporting success. The stale pidfile is removed either way (it no longer describes anything
+    this tool should trust), but nothing is ever signaled without the identity check passing.
+
+PIDFILE: `<world-dir>/.autoharn-service.pid`, written ONLY by the spawned child ITSELF,
+immediately after its own listen-socket bind succeeds (never by this script's parent process, and
+never by an adopt) -- the one piece of state `stop` needs to act only on what it started, and the
+one piece of state `start`'s own race resolution reads back to tell "mine" from "someone else's".
+Absence is honest, not an error: an operator-started or hand-launched service has no pidfile, and
+`stop` says so rather than guessing a pid.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file. No bare types in
+new Python (ledger row 1105): every function signature below carries its return-type annotation.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+HERE = Path(__file__).resolve().parent          # libexec/autoharn/ is the SIBLING dir this file
+                                                  # lives beside (libexec/autoharn-service is
+                                                  # itself directly under libexec/, one level up
+                                                  # from libexec/autoharn/); AUTOHARN_ROOT climbs
+                                                  # one parent from THIS file's own directory.
+AUTOHARN_ROOT = HERE.parent
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(AUTOHARN_ROOT / "deployment.json")))
+
+# serving/ensure_running.py is THE shared home for probe/spawn/race-resolution logic (round-1
+# review DIRECTED WORK: factored out so BOTH this explicit control-plane verb AND every served
+# CLI shim's own ensure-running-on-demand policy call the SAME structurally-correct code, ADR-0012
+# P1 -- one home, not two drifting copies). serving/boundary_cli_client.py remains the home for
+# "how does a caller talk to the boundary and classify what came back"
+# (BoundaryUnreachable/BoundaryRefusal/ProtocolVersionMismatch); ensure_running.py imports it.
+sys.path.insert(0, str(AUTOHARN_ROOT))
+from serving import ensure_running as er  # noqa: E402
+
+
+def _load_deployment() -> dict:
+    if not DEPLOYMENT_PATH.is_file():
+        print(f"autoharn service: REFUSED -- no deployment record at {DEPLOYMENT_PATH}. "
+              f"There is nothing to ensure-running without a deployment.json naming "
+              f"boundary_url/boundary_deployment. Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+    try:
+        return json.loads(DEPLOYMENT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"autoharn service: REFUSED -- {DEPLOYMENT_PATH} could not be read as JSON "
+              f"({e.__class__.__name__}: {e}). Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _boundary_url_and_port(dep: dict) -> tuple[str, int]:
+    url = dep.get("boundary_url")
+    if not url:
+        print("autoharn service: REFUSED -- this deployment.json has no 'boundary_url' -- "
+              "there is no boundary for this world to ensure-running (design/"
+              "FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5: both boundary_url and "
+              "boundary_deployment are refused-if-absent, never guessed). Run the setup wizard "
+              "against this world to configure one. Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+    parsed = urlparse(url)
+    if not parsed.port:
+        print(f"autoharn service: REFUSED -- boundary_url {url!r} names no port. Nothing was "
+              f"touched.", file=sys.stderr)
+        sys.exit(1)
+    return url, parsed.port
+
+
+def _boundary_deployment(dep: dict) -> str:
+    name = dep.get("boundary_deployment")
+    if not name:
+        print("autoharn service: REFUSED -- this deployment.json has no 'boundary_deployment' -- "
+              "ensure-running cannot probe this world's own /health shape without it (design/"
+              "FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5: both boundary_url and "
+              "boundary_deployment are refused-if-absent, never guessed). Nothing was touched.",
+              file=sys.stderr)
+        sys.exit(1)
+    return name
+
+
+def _pidfile_path() -> Path:
+    return DEPLOYMENT_PATH.parent / ".autoharn-service.pid"
+
+
+def cmd_status(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    boundary_deployment = _boundary_deployment(dep)
+    outcome, detail = er.probe(url, boundary_deployment)
+    if outcome == er.OK:
+        print(f"autoharn service: REACHABLE at {url} (port {port}, deployment "
+              f"{boundary_deployment!r}, protocol-compatible).")
+        return 0
+    if outcome == er.REFUSED:
+        print(f"autoharn service: {detail}", file=sys.stderr)
+        return 1
+    print(f"autoharn service: UNREACHABLE at {url} (port {port}). Run 'autoharn service start' "
+          f"to spawn it, or 'autoharn <verb>' will ensure-run it automatically.", file=sys.stderr)
+    return 1
+
+
+def cmd_start(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    boundary_deployment = _boundary_deployment(dep)
+    outcome, detail = er.probe(url, boundary_deployment)
+    if outcome == er.REFUSED:
+        print(f"autoharn service: {detail}", file=sys.stderr)
+        return 1
+    if outcome == er.OK:
+        print(f"autoharn service: already running at {url} -- nothing to do.")
+        return 0
+    world_dir = DEPLOYMENT_PATH.parent
+    print(f"autoharn: service not running at {url} -- spawning it.", file=sys.stderr)
+    result = er.spawn_and_wait(world_dir, url, port, boundary_deployment)
+    if result.status == "own":
+        print(f"autoharn service: reachable at {url} (this invocation's own spawn, "
+              f"pid {result.proc_pid}, logs at {result.log_path}).")
+        return 0
+    if result.status == "adopted":
+        if result.winner_pid is not None:
+            print(f"autoharn service: reachable at {url} -- this invocation's own spawn "
+                  f"(pid {result.proc_pid}) lost the bind race to a concurrent invocation's spawn "
+                  f"(pid {result.winner_pid}) and is exiting (see {result.log_path}). ADOPTING "
+                  f"the winner (row 1165: someone-else-started-it is a success case). No pidfile "
+                  f"written by this invocation -- it does not own the winning process.")
+        else:
+            print(f"autoharn service: reachable at {url} -- this invocation's own spawn "
+                  f"(pid {result.proc_pid}) lost the bind race and exited (see {result.log_path}); "
+                  f"ADOPTING whichever process won the port (row 1165: someone-else-"
+                  f"started-it is a success case). No pidfile written -- this invocation "
+                  f"does not own the winning process.")
+        return 0
+    print(f"autoharn service: {result.detail}", file=sys.stderr)
+    return 1
+
+
+def cmd_stop(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    boundary_deployment = _boundary_deployment(dep)
+    world_dir = DEPLOYMENT_PATH.parent
+    toml_path = world_dir / "boundary-multiplex.toml"
+    pidfile = _pidfile_path()
+    if not pidfile.is_file():
+        print(f"autoharn service: REFUSED -- no pidfile at {pidfile}. This tool has no record "
+              f"of having started the service at {url} itself (it may be running under an "
+              f"operator's own manual start, or under a different tool) -- stopping a process "
+              f"this tool never started is refused rather than guessed. Stop it by hand if you "
+              f"started it that way.", file=sys.stderr)
+        return 1
+    try:
+        pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError) as e:
+        print(f"autoharn service: REFUSED -- {pidfile} does not contain a readable pid "
+              f"({e.__class__.__name__}: {e}). Nothing was touched.", file=sys.stderr)
+        return 1
+    if not er.pid_is_boundary_service(pid, toml_path):
+        pidfile.unlink(missing_ok=True)
+        # ROUND-4 REVIEW SEVERE-B FIX (item 3): the pidfile pid failing this identity check
+        # (dead, unparseable, or an unrelated process -- PID REUSE can produce any of these) does
+        # NOT mean nothing is serving at `url` right now -- the stale-pidfile-squat trap this
+        # round's review named means a REAL, UNRECORDED winner can be answering this exact URL at
+        # this exact moment while this pidfile named something else entirely. The pre-fix message
+        # here was clean-success-shaped ("stale pidfile was removed; nothing was signaled") with
+        # no hint that the operator's actual boundary might still be up and simply untracked --
+        # probe it, and if it answers, TEACH the recovery instead of leaving the operator to
+        # rediscover it by hand.
+        unrecorded_note = ""
+        outcome, _detail = er.probe(url, boundary_deployment)
+        if outcome == er.OK:
+            unrecorded_note = (
+                f" NOTE: {url} still answers as a healthy, protocol-compatible boundary right "
+                f"now -- this looks like an UNRECORDED winner (e.g. a stale pidfile squat this "
+                f"tool's own spawn lost to, or an operator-started process this tool never "
+                f"tracked). This tool has no record of that pid and will not guess it. Check "
+                f"{world_dir / 'service.log'} for which pid actually bound the port, or run `ss "
+                f"-ltnp | grep :{port}` directly to find it, then stop that pid by hand.")
+        print(f"autoharn service: REFUSED -- pidfile named pid {pid}, which is not a "
+              f"serving.boundary_service process for this world's own boundary-multiplex.toml "
+              f"({toml_path}) -- PID REUSE can make a stale pidfile name an unrelated process; "
+              f"signaling it on trust risks killing a bystander while reporting success. The "
+              f"stale pidfile was removed; nothing was signaled.{unrecorded_note}", file=sys.stderr)
+        return 1
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"autoharn service: pid {pid} (from {pidfile}) is already gone -- removing the "
+              f"stale pidfile.", file=sys.stderr)
+        pidfile.unlink(missing_ok=True)
+        return 0
+    except OSError as e:
+        print(f"autoharn service: REFUSED -- could not signal pid {pid} ({e.__class__.__name__}: "
+              f"{e}). Nothing was touched.", file=sys.stderr)
+        return 1
+    pidfile.unlink(missing_ok=True)
+    print(f"autoharn service: sent SIGTERM to pid {pid} (was serving {url}); pidfile removed.")
+    return 0
+
+
+_SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("--help", "-h"):
+        print("usage: autoharn service status|start|stop\n\n"
+              "  status   probe the boundary this world's deployment.json names; never writes\n"
+              "  start    ensure-running: spawn a detached child if unreachable, or adopt\n"
+              "           whichever process wins the bind race; a no-op if already reachable\n"
+              "  stop     explicit stop -- only for a service THIS tool's own 'start' spawned\n"
+              "           (tracked via a pidfile, and re-checked against /proc at stop time);\n"
+              "           refuses, never guesses, otherwise")
+        return 0
+    verb = argv[0]
+    if verb not in _SUBCOMMANDS:
+        print(f"autoharn service: REFUSED -- unrecognized subcommand '{verb}' (known: "
+              f"status, start, stop). Nothing was touched.", file=sys.stderr)
+        return 2
+    return _SUBCOMMANDS[verb](argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

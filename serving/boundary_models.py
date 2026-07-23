@@ -43,6 +43,23 @@ from pydantic import BaseModel, Field
 # a second check later without a very deliberate reason.
 WritePayload = dict[str, Any]
 
+# WIRE PROTOCOL VERSION (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): versions the
+# request/response SHAPE contract between a client and this service -- distinct from
+# `BOUNDARY_SERVICE_VERSION` (serving/boundary_service.py's own build/route-table version,
+# reported separately as `MetaResponse.boundary_version`). Bumped ONLY when an existing client
+# would misparse a new response shape (a field removed, renamed, or retyped) -- an additive
+# field, a new route, or a new capability flag does NOT bump this. Every client checks this on
+# first contact per session (cached thereafter) and refuses with teaching, naming BOTH versions,
+# on a mismatch -- never a silent misparse.
+WIRE_PROTOCOL_VERSION = "1"
+
+# AUTHN_MODE (same spec, same section): the row-1162 named-empty-slot discipline -- v1's only
+# value is "single-operator" (no per-principal authentication at the boundary yet). Naming this
+# field now, with its one honest value, means the descriptor/handshake SCHEMA already carries
+# world identity including the trust tier -- nothing here designs or forecloses a future
+# multi-principal tier, it is simply not built yet (spec's own words, verbatim).
+AUTHN_MODE = "single-operator"
+
 
 class CapabilityManifest(BaseModel):
     """Which lineage capabilities THIS world was detected to carry, at THIS request (spec §3
@@ -63,6 +80,19 @@ class HealthResponse(BaseModel):
     world: str = Field(description="this deployment's world/schema name")
     service_principal: str | None = Field(description="the registered `tool`-class principal this service writes as, when the operator has completed the s40 registration step (README); null if not yet registered -- named, not hidden")
     capabilities: CapabilityManifest
+    protocol_version: str = Field(
+        default=WIRE_PROTOCOL_VERSION,
+        description="the boundary WIRE protocol version (design/FABLE-AUTOHARN-UMBRELLA-CLI-"
+                    "SPEC.md §3) -- distinct from `boundary_version` (the service BUILD's own "
+                    "version string, /meta only): this is the request/response SHAPE contract a "
+                    "client checks compatibility against on first contact per session. Bumped "
+                    "only when an existing client would misparse a new response, never on an "
+                    "additive field.")
+    authn_mode: str = Field(
+        default=AUTHN_MODE,
+        description="the trust-tier this deployment answers under (spec §3's named-empty-slot "
+                    "discipline: v1's only value is 'single-operator' -- nothing here designs or "
+                    "forecloses a future multi-principal trust tier, it is simply not built yet).")
 
 
 class CapabilityAbsent(BaseModel):
@@ -213,6 +243,8 @@ class MetaResponse(BaseModel):
     known_views: list[str] = Field(description="VIEW_REGISTRY's full key set, sorted -- identical to what a GET /views/{view} 404 would report")
     lineage_head: str | None = Field(description="the highest kernel/lineage/*.sql manifest entry (basename, minus .sql) this deployment's own .detect.sql siblings confirm applied, walked in the SAME order bootstrap/migrate_core.py's own `_current_head_and_missing` uses -- null if even the first manifest entry's detect fails (a pre-birth-chain world, or a manifest/detect defect)")
     boundary_version: str = Field(description="this boundary_service.py build's own declared version string -- a service-owned fact, never a kernel fact")
+    protocol_version: str = Field(default=WIRE_PROTOCOL_VERSION, description="see HealthResponse.protocol_version -- the same wire-shape contract, repeated here so a client that only calls /meta still gets the handshake fact")
+    authn_mode: str = Field(default=AUTHN_MODE, description="see HealthResponse.authn_mode")
 
 
 class LedgerWriteIntFields(BaseModel):

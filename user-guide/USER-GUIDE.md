@@ -161,7 +161,20 @@ this deployment and add its
 `boundary_url`/`boundary_deployment` to `deployment.json` by hand, the un-prefixed `./led`/
 `./pickup` start working too — see
 [USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18)
-for what those two keys are and the exit-code split the served shims use.) For the full detail —
+for what those two keys are and the exit-code split the served shims use.)
+
+**A served shim's version check is per-invocation, not per-restart.** Each `./led`/`./pickup`/
+`./asof-export`/`./distance-to-clean` call checks the boundary's own wire-protocol version once,
+the first time it talks to a given boundary URL in that process, and trusts the answer for the
+rest of that SAME invocation (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3). Most invocations
+are short (one command, one exit) so this is invisible in practice — but a long-running
+invocation that spans an actual restart of the boundary service to a new, incompatible version
+(rare — an operator upgrading the boundary mid-session) will keep talking to the version it
+checked at its own start, unchecked, for the remainder of that one call. There is no cross-
+invocation cache to go stale here (a fresh process re-checks from scratch); the remedy, if you
+ever suspect this, is simply to re-run the verb.
+
+For the full detail —
 the exact command shape, and how this option differs from §3b's below — read
 [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md)
 and [USER-CONFIGURATION.md's own
@@ -255,6 +268,15 @@ such as study-design tooling or an analysis layer — read
 offering's sibling (the work tracker from §3a) for contrast.
 
 ## 4. Operate: the verbs
+
+> **Note on invocation spelling (2026-07-23):** the ten verbs below are what a SCAFFOLDED
+> project (yours, per §3) gets, and that has not changed. Separately, design/
+> FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md introduced `./autoharn <verb>` (`autoharn --help` for the
+> generated, self-updating roster) as the primary invocation form for THIS autoharn checkout's
+> OWN root — not for a project scaffolded from it. A freshly scaffolded project still receives
+> the ten bare per-verb shims this section describes, unchanged, until a follow-on build
+> migrates `bootstrap/new-project.sh`'s own scaffold (see CLAUDE.md's operator-surface sentence,
+> or `ORCH-OPERATING-CARD.md`'s own forward note, for the current, honestly-scoped status).
 
 Once a project is scaffolded (either §3a or §3b), you interact with it through small commands —
 ten of them, derived from `bootstrap/new-project.sh`'s own shim-writing loop (never hand-counted

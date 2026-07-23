@@ -1,0 +1,8 @@
+#!/bin/sh
+# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
+# (runs are linear, dust-and-settled), it keeps the direct-psql original
+# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
+# Relocated under libexec/autoharn/ by the umbrella-CLI build (ledger rows 1151-1183): semantics
+# unchanged, HERE now climbs two directories to the repo root.
+HERE="$(cd "$(dirname "$0")/../.." && pwd)"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-pickup.tmpl" "$@"

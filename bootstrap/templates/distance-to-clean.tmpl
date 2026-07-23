@@ -32,10 +32,41 @@ AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
 PROJECT_ROOT = DEPLOYMENT_PATH.parent
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2): intercept --help/-h HERE, before deployment.json is
+# ever touched. Without this, main() called _load_config() unconditionally -- argv was never
+# consulted at all -- so a deployment-less checkout's `--help` produced the SAME shared
+# "deployment record not found ... pickup, judge, and led alike" refusal every OTHER
+# deployment-resolving verb produces, with no marker naming 'distance-to-clean' anywhere (a
+# dispatch-parity hazard: a wrong-target dispatch landing on this verb would look identical to
+# the real one). This is a real, side-effect-free usage line naming this verb, printed and
+# exited BEFORE boundary_cli_client/ensure_running/doc_attestation_presence are even imported.
+if any(a in ("--help", "-h") for a in sys.argv[1:]):
+    print(
+        # Round-4 review SEVERE fix (seen-red/umbrella-cli-dispatch-parity): this line used to
+        # read the bare "usage: distance-to-clean", byte-identical to legacy-distance-to-clean
+        # .tmpl's own usage line -- so swapping libexec/autoharn/distance-to-clean's exec target
+        # between the two sibling templates satisfied the dispatch-parity suite's identity check
+        # unnoticed. The "(served via the boundary)" suffix reuses this template's own existing
+        # self-description phrase (see the module docstring above) and is now what
+        # run_fixtures.py's _SIBLING_SERVED_MARKERS asserts is ABSENT from the legacy variant's
+        # real --help output.
+        "usage: distance-to-clean  (served via the boundary)\n"
+        "\n"
+        "distance-to-clean -- one-line-per-section debt count against this repo's own hygiene\n"
+        "bars, served via the boundary (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md\n"
+        "§5): review-gap, question-status, work-violations, work-items (open+claimed),\n"
+        "work-review-gap, doc-attestation. Prints TOTAL debt; exits 0 iff TOTAL is 0 and no\n"
+        "dimension was blocked/errored, 1 otherwise. Read-only; takes no arguments beyond\n"
+        "--help/-h."
+    )
+    sys.exit(0)
+
 sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
+    import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
 except ImportError as _e:
     print(f"distance-to-clean: cannot import autoharn's serving/boundary_cli_client.py under "
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
@@ -109,10 +140,23 @@ def doc_attestation_debt(project_root: Path) -> tuple[int, dict[str, int], list[
 
 def _load_config() -> bcc.ServedConfig:
     try:
-        return bcc.load_served_config(DEPLOYMENT_PATH)
+        cfg = bcc.load_served_config(DEPLOYMENT_PATH)
     except bcc.BoundaryClientError as e:
         print(f"distance-to-clean: {e}", file=sys.stderr)
         sys.exit(4)
+    # Version handshake (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): checked here, the one
+    # choke point every served call passes through (ADR-0012 P1), before any real read is issued.
+    try:
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    except bcc.BoundaryUnreachable:
+        # Ensure-running (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2, round-1 review
+        # DIRECTED WORK): unreachable -> spawn per this deployment's own record, print ONE
+        # line, then proceed -- retried below ONCE; if that retry still raises, the
+        # EXISTING BoundaryUnreachable handling in this file's own top-level dispatch is
+        # the refusal shown (this call invents no new refusal shape of its own).
+        er.ensure_running_or_leave_unreachable(DEPLOYMENT_PATH, 'distance-to-clean')
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    return cfg
 
 
 def _view_debt(cfg: bcc.ServedConfig, view: str, cursor: str,
@@ -255,5 +299,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except bcc.ProtocolVersionMismatch as e:
+        sys.exit(bcc.report_protocol_mismatch("distance-to-clean", e))
     except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
         sys.exit(bcc.report_boundary_exception("distance-to-clean", e))

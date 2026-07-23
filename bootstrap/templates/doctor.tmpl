@@ -49,12 +49,43 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deploymen
 # distance-to-clean.tmpl and attest-doc.tmpl both use.
 PROJECT_ROOT = DEPLOYMENT_PATH.parent
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2): intercept --help/-h HERE, before deployment.json is
+# ever touched. Without this, main() called check_deployment() unconditionally -- argv was never
+# consulted at all -- so a deployment-less checkout's `--help` produced the SAME shared
+# "deployment record not found ... pickup, judge, and led alike" refusal every OTHER
+# deployment-resolving verb produces, with no marker naming 'doctor' anywhere (a dispatch-parity
+# hazard: a wrong-target dispatch landing on this verb would look identical to the real one).
+# This is a real, side-effect-free usage line naming this verb, printed and exited BEFORE
+# deployment_record is even imported.
+if any(a in ("--help", "-h") for a in sys.argv[1:]):
+    print(
+        "usage: doctor\n"
+        "\n"
+        "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
+        "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
+        "high-water/epoch, ./led answers a read query, boundary URL, principals registered.\n"
+        "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
+        "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
+        "least one FAIL line. Takes no arguments beyond --help/-h."
+    )
+    sys.exit(0)
+
 sys.path.insert(0, str(AUTOHARN / "filing"))
+sys.path.insert(0, str(AUTOHARN / "serving"))
 try:
     import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+    # serving/ensure_running.py's own `pid_is_boundary_service` -- round-4 review SEVERE-B item 4:
+    # the boundary URL answering is not, by itself, proof this world's own pidfile/`autoharn
+    # service stop` bookkeeping is consistent with it (an unrecorded winner, see that module's own
+    # stale-pidfile-squat fix, can serve correctly while this world's tooling has no record of the
+    # pid actually doing so) -- reused here rather than a second, drifting copy of the same
+    # /proc/<pid>/cmdline identity check (ADR-0012 P1).
+    import ensure_running  # noqa: E402
 except ImportError as _e:
-    print(f"doctor: cannot import autoharn's filing/deployment_record.py under "
-          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print(f"doctor: cannot import autoharn's filing/deployment_record.py or "
+          f"serving/ensure_running.py under AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})",
+          file=sys.stderr)
     print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
     sys.exit(2)
 
@@ -192,6 +223,34 @@ def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     return _line("./led answers a read query", PASS, f"./led --recent 1 exited 0"), PASS
 
 
+def _boundary_pidfile_consistency_note(dep: deployment_record.DeploymentRecord) -> str:
+    """Round-4 review SEVERE-B item 4: the boundary URL answering does not, by itself, prove this
+    world's own pidfile bookkeeping (the thing `autoharn service stop` relies on) names the
+    process actually serving it -- an unrecorded winner (a stale-pidfile squat this tool's own
+    spawn lost to, or an operator-started process this tool never tracked) can serve correctly
+    while remaining unstoppable via the tracked path. PASS-worthy consistency (pidfile pid alive,
+    IS a serving.boundary_service for this world's own toml) gets a quiet confirmation clause;
+    everything else (pidfile missing, dead, or naming an unrelated process) gets the taught
+    recovery, never a silent gap."""
+    toml_path = PROJECT_ROOT / "boundary-multiplex.toml"
+    pidfile = PROJECT_ROOT / ".autoharn-service.pid"
+    pid: int | None = None
+    if pidfile.is_file():
+        try:
+            pid = int(pidfile.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            pid = None
+    if pid is not None and ensure_running.pid_is_boundary_service(pid, toml_path):
+        return f"; pidfile ({pidfile}) names live pid {pid}, consistent"
+    return (f" -- WARNING: {pidfile} does not name a live serving.boundary_service process for "
+            f"this world's own {toml_path} (missing, dead pid, or PID REUSE handed that pid to an "
+            f"unrelated process) -- this may be an UNRECORDED winner (a stale-pidfile squat, or a "
+            f"process started outside this tool's own tracking). 'autoharn service stop' has no "
+            f"record of it and will refuse rather than guess. Find the real pid via "
+            f"{PROJECT_ROOT / 'service.log'} or `ss -ltnp | grep :<port>` (the port "
+            f"{dep.boundary_url!r} names) before assuming it can be stopped through this tool")
+
+
 def check_boundary(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     if not dep.boundary_url:
         return _line("boundary URL", SKIP,
@@ -201,11 +260,15 @@ def check_boundary(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     try:
         req = urllib.request.Request(dep.boundary_url, method="GET")
         with urllib.request.urlopen(req, timeout=3) as resp:
-            return _line("boundary URL", PASS, f"{dep.boundary_url} responded HTTP {resp.status}"), PASS
+            return _line("boundary URL", PASS,
+                         f"{dep.boundary_url} responded HTTP {resp.status}"
+                         f"{_boundary_pidfile_consistency_note(dep)}"), PASS
     except urllib.error.HTTPError as e:
         # Any HTTP response at all -- even a 4xx/5xx -- means something is actually listening;
         # honest and not the same failure mode as "nothing answered".
-        return _line("boundary URL", PASS, f"{dep.boundary_url} responded HTTP {e.code}"), PASS
+        return _line("boundary URL", PASS,
+                     f"{dep.boundary_url} responded HTTP {e.code}"
+                     f"{_boundary_pidfile_consistency_note(dep)}"), PASS
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         return _line("boundary URL", FAIL,
                      f"{dep.boundary_url} unreachable ({e.__class__.__name__}: {e})"), FAIL

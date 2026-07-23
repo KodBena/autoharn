@@ -78,6 +78,41 @@ if [ ! -f "$CONTEMP_AUDIT" ]; then
   exit 2
 fi
 
+# Round-2 review AXIS 1 fix: intercept --help/-h HERE, before ANY of "$@" reaches
+# engine/contemp_audit.py. Without this, --help was silently swallowed by contemp_audit.py's own
+# module-import-time PGHOST resolution (engine/contemp_edb.py -> engine/ledger_edb.py's eager,
+# top-level `PGHOST = resolve_pghost(...)`, which runs at import time, before argparse ever sees
+# argv) -- so a bare, deployment-less checkout's `audit --help` produced the SAME generic
+# "REFUSED: no Postgres host resolved" text every OTHER PGHOST-needing verb produces, with no
+# self-identifying marker naming 'audit' anywhere in it (a dispatch-parity hazard: a wrong-target
+# dispatch bug landing on this verb would look identical to the real one). This is a real, side-
+# effect-free usage line naming this verb, printed and exited BEFORE any Python/DB-resolution
+# code runs at all.
+for a in "$@"; do
+  case "$a" in
+    --help|-h)
+      cat <<'USAGE'
+usage: audit [--retain] [--differential] [extra engine/contemp_audit.py flags...]
+
+audit -- the contemporaneity-correlation verb (vestigial_documentation/design/
+ORCH-CONTEMPORANEITY-AUDIT.md Part 2): joins this world's ledger against its own
+.claude/logs/*.jsonl hook journals and reports the closed verdict (CONTEMPORANEOUS |
+BATCHED_DECLARED | LATE_DECLARED | BACKFILL_SUSPECT), or an explicit typed capability
+refusal -- never a guessed verdict, never silence.
+
+  --retain        additionally bank the EDB + report under engine's own
+                  docs/contemporaneity-audit/runs/<target>/
+  --differential  additionally run the SQL-floor marriage differential and print its own
+                  AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED verdict
+
+Remaining flags pass through to engine/contemp_audit.py unchanged; see that module's own
+--help for the full flag roster (requires a resolvable Postgres host, unlike this summary).
+USAGE
+      exit 0
+      ;;
+  esac
+done
+
 # Strip --differential out of "$@" before it reaches engine/contemp_audit.py (which does not
 # know that flag) -- everything else passes through unchanged, exactly as it always has.
 DIFFERENTIAL=0

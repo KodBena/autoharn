@@ -63,6 +63,40 @@ if [ ! -f "$DIFFERENTIAL" ]; then
   exit 2
 fi
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2 -- see that file's own header for the full rationale):
+# intercept --help/-h HERE, before the deployment.json resolution block below. Without this,
+# --help fell all the way through to the python heredoc's `dr.load_deployment(dep_path)` call,
+# which on a deployment-less checkout raises the SAME shared refusal every deployment-resolving
+# verb produces (filing/deployment_record.py's own missing-file message, which literally contains
+# the substring "pickup, judge, and led" -- a dispatch-parity hazard: a wrong-target dispatch
+# landing on this verb would print text that still names "judge", indistinguishable from this
+# verb's own real identity). This is a real, side-effect-free usage line naming this verb
+# specifically, printed and exited BEFORE any Python/DB-resolution code runs at all.
+for a in "$@"; do
+  case "$a" in
+    --help|-h)
+      cat <<'USAGE'
+usage: judge [--drop-record] [extra ledger_differential.py flags...]
+
+judge -- the engine differential verdict for this project's own ledger: compares the SQL and ASP
+polarities and prints the closed verdict vocabulary (AGREE | DIVERGE_BY_DESIGN | DIVERGE_DEFECT |
+QUARANTINED). THEN additionally reports kernel/lineage/s22-work-item-ledger.sql's
+work_item_violations (duplicate_open, shipped_without_witness, depends_on_unknown_slug,
+dependency_cycle), named individually so a red run tells the reader which kind and which slug.
+
+  --drop-record   negative control: drop the ASP witness, see the consumer refuse
+
+Every ordinary run banks a DerivationRecord pair under autoharn's own
+engine/docs/ledger-marriage/derivations/<name>/ and requires a resolvable deployment.json and a
+reachable Postgres host -- this summary needs neither; see this file's own top-of-file comment
+for target-resolution and exit-code detail.
+USAGE
+      exit 0
+      ;;
+  esac
+done
+
 # One live read of deployment.json (mirrors led.tmpl's own resolution block -- ADR-0012 P1, one
 # mechanism, not a second hand-copied JSON parser): TARGET NAME for the differential (unchanged
 # behavior) PLUS db/host/schema for the work_item_violations check below (new). BACKLOG maintainer

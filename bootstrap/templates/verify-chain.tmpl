@@ -145,6 +145,39 @@ HERE = Path(__file__).resolve().parent
 AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
 DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
 
+# Round-3 review ROOT CAUSE fix (discharges the standing row-1159 residual for this verb, the
+# same treatment audit.tmpl got in round 2): intercept --help/-h HERE, before deployment.json is
+# ever touched. Without this, main() called _load_deployment() unconditionally -- argv was only
+# inspected for `--head` mode, never for --help -- so a deployment-less checkout's `--help`
+# produced the SAME shared "deployment record not found ... pickup, judge, and led alike"
+# refusal every OTHER deployment-resolving verb produces, with no marker naming 'verify-chain'
+# anywhere (a dispatch-parity hazard: a wrong-target dispatch landing on this verb would look
+# identical to the real one). This is a real, side-effect-free usage line naming this verb,
+# printed and exited BEFORE deployment_record is even imported.
+if any(a in ("--help", "-h") for a in sys.argv[1:]):
+    print(
+        "usage: verify-chain [--head]\n"
+        "\n"
+        "verify-chain -- Rung 3 of design/MAINT-GPG-TRUST-LAYER.md §4: walks this world's\n"
+        "row_hash chain (kernel/lineage/s26-row-hash-chain.sql) end to end and reports the\n"
+        "first row (if any) whose stored row_hash disagrees with a fresh recomputation, cross-\n"
+        "checked against the s27 chain_high_water tail-deletion witness and the s43\n"
+        "refusal-record completeness oracle.\n"
+        "\n"
+        "  (no args)   walk the chain; print INTACT/EMPTY/UNAVAILABLE/CANNOT-VERIFY/BROKEN plus\n"
+        "              the witness/oracle lines. Exit 0 intact+witnesses-agree, 1 BROKEN,\n"
+        "              3 TAIL-DELETION-SUSPECT, 4 WITNESS-BEHIND-LEDGER, 5 CANNOT-VERIFY (a\n"
+        "              capability-check query itself failed to execute), 6\n"
+        "              REFUSAL-ORACLE-FORGERY-SUSPECT\n"
+        "  --head      print {world, max_id, head_hash, utc, apparatus_hash} as JSON on stdout\n"
+        "              ONLY (the signed-head ceremony's input) -- refuses (exit 1, stdout\n"
+        "              empty) unless the chain and both witnesses are clean\n"
+        "\n"
+        "Read-only throughout; this summary itself needs neither a reachable Postgres host nor\n"
+        "a parsed deployment.json -- see this file's own top-of-file comment for full detail."
+    )
+    sys.exit(0)
+
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)

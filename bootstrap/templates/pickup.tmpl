@@ -38,6 +38,7 @@ sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
+    import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
     import standing_decisions_config  # noqa: E402  (filing/standing_decisions_config.py, the ONE
                                        # home for the grades/byte_cap defaulting logic -- shared
                                        # with hooks/sessionstart_durable_decisions.py AND the
@@ -52,10 +53,23 @@ except ImportError as _e:
 
 def _load_config() -> bcc.ServedConfig:
     try:
-        return bcc.load_served_config(DEPLOYMENT_PATH)
+        cfg = bcc.load_served_config(DEPLOYMENT_PATH)
     except bcc.BoundaryClientError as e:
         print(f"pickup: {e}", file=sys.stderr)
         sys.exit(4)
+    # Version handshake (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): checked here, the one
+    # choke point every served call passes through (ADR-0012 P1), before any real read is issued.
+    try:
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    except bcc.BoundaryUnreachable:
+        # Ensure-running (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2, round-1 review
+        # DIRECTED WORK): unreachable -> spawn per this deployment's own record, print ONE
+        # line, then proceed -- retried below ONCE; if that retry still raises, the
+        # EXISTING BoundaryUnreachable handling in this file's own top-level dispatch is
+        # the refusal shown (this call invents no new refusal shape of its own).
+        er.ensure_running_or_leave_unreachable(DEPLOYMENT_PATH, 'pickup')
+        bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    return cfg
 
 
 def _section(name: str) -> None:
@@ -193,5 +207,7 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except bcc.ProtocolVersionMismatch as e:
+        sys.exit(bcc.report_protocol_mismatch("pickup", e))
     except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
         sys.exit(bcc.report_boundary_exception("pickup", e))

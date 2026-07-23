@@ -1,0 +1,5 @@
+#!/bin/sh
+# Relocated under libexec/autoharn/ by the umbrella-CLI build (ledger rows 1151-1183): semantics
+# unchanged, HERE now climbs two directories to the repo root.
+HERE="$(cd "$(dirname "$0")/../.." && pwd)"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/judge.tmpl" "$@"

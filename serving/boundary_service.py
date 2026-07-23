@@ -329,6 +329,7 @@ import json
 import math
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -351,6 +352,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bootstrap"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
+# serving/ensure_running.py's own `pid_is_boundary_service` -- the ONE identity check `autoharn
+# service stop` and ensure_running.py's own pre-spawn pidfile check both already use (ADR-0012
+# P1) -- reused here (round-4 review SEVERE-B item 1) so this module's own stale-pidfile-squat
+# reclaim asks the exact SAME question, never a second, drifting copy of the same logic. No
+# import cycle: ensure_running.py imports boundary_cli_client, never this module.
+import ensure_running  # noqa: E402
 
 import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3)
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
@@ -2311,6 +2318,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--i-understand-this-exposes-the-ledger", action="store_true",
                     help="required to bind any non-loopback address -- the ledger carries "
                          "operator-real content (spec §2, the OTel-collector localhost-only posture)")
+    p.add_argument("--pidfile", default=None,
+                    help="write THIS PROCESS's own pid to this path, but ONLY after this "
+                         "process's own listen-socket bind has genuinely succeeded (design/"
+                         "FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2, the pidfile-as-witness-of-bind "
+                         "fix for the ensure-running TOCTOU). The bind happens HERE, synchronously, "
+                         "before uvicorn/ASGI ever start (NOT via an ASGI 'startup' event -- the "
+                         "installed uvicorn runs that event BEFORE its own socket bind, which "
+                         "would make 'startup' fire for a losing racer too). Written by "
+                         "libexec/autoharn-service's own spawn; harmless and unused for a manual "
+                         "operator start that omits this flag.")
     return p.parse_args(argv)
 
 
@@ -2349,6 +2366,138 @@ def main(argv: list[str] | None = None) -> int:
             dep_limit=per_dep_limit,
         )
     app = create_app(configs)
+    if args.pidfile:
+        # BIND-AS-LOCK, DONE HERE, SYNCHRONOUSLY, BEFORE UVICORN EVER STARTS (design/
+        # FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2; round-1 review SEVERE-2 fix). An app-level
+        # ASGI 'startup' event handler is NOT a safe place to detect bind success on the
+        # installed uvicorn (0.51): reading `uvicorn.server.Server.startup`'s own source shows it
+        # runs the ASGI lifespan 'startup' event BEFORE attempting its own socket bind -- so a
+        # LOSING racer's app-level startup handler would still fire before that racer's own bind
+        # ever failed, defeating the "reaching this handler proves ownership" reasoning entirely.
+        # Binding the socket ourselves, here, sidesteps that ordering question altogether: this
+        # bind() call itself IS the lock (the OS raises OSError immediately, deterministically, if
+        # a sibling process already holds this exact host:port) -- there is no window between
+        # "bind succeeded" and "pidfile written" that any async machinery (ASGI, uvicorn, or
+        # otherwise) could ever violate, because this happens entirely before the ASGI world
+        # starts.
+        # SO_REUSEADDR IS set (needed for an honest restart shortly after real traffic: an
+        # accepted connection's own TIME_WAIT state -- e.g. from a health-check probe -- otherwise
+        # blocks rebinding the exact same listening port for a good while, live-witnessed against
+        # this exact code). BUT bind() ALONE is not the exclusivity boundary once SO_REUSEADDR is
+        # set: Linux permits a SECOND socket to bind() the same address:port successfully as long
+        # as NEITHER has called listen() yet (live-witnessed round-1 review finding: two racing
+        # bind() calls both succeeded here before this fix, because uvicorn/asyncio's own listen()
+        # call happens well after this process's Python/FastAPI import overhead -- a wide-open
+        # window). The actual lock is listen(): only ONE socket may hold the LISTEN state on a
+        # given address:port even with SO_REUSEADDR set. So listen() is called HERE, synchronously,
+        # immediately after bind() -- closing that window to zero -- and the pidfile is written
+        # only once THIS process's own listen() has ALSO succeeded. Round-2 review MINOR fix:
+        # asyncio's own later `create_server()` call on this already-listening socket is NOT a
+        # harmless no-op re-application of the same backlog -- measured directly with `ss -ltn`
+        # against a scratch service spawned via this exact code path, the requested backlog of
+        # 2048 here reads back as 512 once uvicorn/asyncio has taken the socket over (asyncio's
+        # `loop.create_server` calls `sock.listen()` again with its own default backlog, silently
+        # overriding whatever this process asked for). Harmless for THIS module's purposes (this
+        # backlog only bounds a burst of near-simultaneous inbound connections, and 512 is still
+        # generous for a local single-boundary service), but it is a real, measured override, not
+        # a no-op -- do not rely on the 2048 figure surviving past this point.
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((args.host, args.port))
+            sock.listen(2048)
+        except OSError as e:
+            sock.close()
+            sys.stderr.write(
+                f"boundary_service: REFUSED -- could not bind/listen on {args.host}:{args.port} "
+                f"({e.__class__.__name__}: {e}) -- the port is genuinely held by another "
+                f"process. Nothing was touched.\n")
+            return 1
+        # Bind+listen succeeded: THIS process, right now, provably holds the port. Write the
+        # pidfile immediately and synchronously, before handing the socket to uvicorn at all --
+        # O_CREAT|O_EXCL so a residual file at this exact path (a caller reusing a stale path is
+        # its own bug) is never silently clobbered rather than surfaced.
+        try:
+            fd = os.open(args.pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            # Round-2 review MODERATE-silent fix, ROUND-4 REVIEW SEVERE-B (item 1) EXTENSION:
+            # this branch means THIS process just won a real bind()+listen() -- it IS the
+            # boundary, right now -- but a pidfile already sat at this exact path (an unrelated
+            # leftover, a caller reusing a stale path, or a lost race against ensure_running.py's
+            # own pre-unlink identity check). The round-2 fix only ever WARNED and left the stale
+            # file untouched, unconditionally -- which is exactly the "stale-pidfile squat trap"
+            # round-4 review's SEVERE-B finding named: `autoharn service stop` would act (or,
+            # correctly, refuse to act) on whatever stale content sat there, while the REAL winner
+            # -- this process -- served unrecorded, and the only truthful diagnostic was buried in
+            # this stderr line, never reaching the pidfile itself.
+            #
+            # Fix: read the squatting content and ask the SAME identity question `stop` and
+            # ensure_running.py's own pre-clear already ask -- is it a LIVE serving.boundary_
+            # service process for THIS world's own --config? If the squatter is dead, unparseable,
+            # or simply not a boundary_service at all, this pidfile is provably stale: reclaim it
+            # ATOMICALLY (a tempfile in the SAME directory + os.replace, never a bare truncate-in-
+            # place, so a reader never observes a half-written file) so `stop` targets the TRUE,
+            # live winner instead of dead/wrong content. Only when the squatter IS a live
+            # serving.boundary_service for this same toml -- a genuinely surprising case (this
+            # process's own successful bind()+listen() proves nothing else holds THIS port, but
+            # says nothing about a live sibling using the same toml against a different one) -- is
+            # the file left untouched, warning exactly as the round-2 fix always did.
+            try:
+                squatting_content = Path(args.pidfile).read_text(encoding="utf-8")
+            except OSError as read_err:
+                squatting_content = f"<unreadable: {read_err.__class__.__name__}: {read_err}>"
+            squatting_pid: int | None = None
+            try:
+                squatting_pid = int(squatting_content.strip())
+            except ValueError:
+                squatting_pid = None
+            squatter_is_live_boundary_service = (
+                squatting_pid is not None
+                and ensure_running.pid_is_boundary_service(squatting_pid, Path(args.config))
+            )
+            if squatter_is_live_boundary_service:
+                sys.stderr.write(
+                    f"boundary_service: WARNING -- pidfile {args.pidfile} already existed "
+                    f"(content: {squatting_content!r}) when this process (pid {os.getpid()}) won "
+                    f"the bind()+listen() on {args.host}:{args.port}. The service IS up and "
+                    f"correctly serving under pid {os.getpid()}, but that pid was NOT recorded -- "
+                    f"the existing pidfile names pid {squatting_pid}, which IS a live "
+                    f"serving.boundary_service process for this same --config, so it was left "
+                    f"untouched rather than overwritten (never reclaim a pidfile that may "
+                    f"legitimately belong to a live sibling). 'autoharn service stop' will act on "
+                    f"the pidfile's OLD content, which is very likely wrong now for THIS process. "
+                    f"Remedy: remove {args.pidfile} by hand and re-run with --pidfile once this "
+                    f"process is confirmed healthy, or stop this pid ({os.getpid()}) directly.\n")
+            else:
+                tmp_fd, tmp_path = tempfile.mkstemp(
+                    dir=str(Path(args.pidfile).parent), prefix=".autoharn-service.pid.")
+                try:
+                    with os.fdopen(tmp_fd, "w") as f:
+                        f.write(str(os.getpid()))
+                    os.replace(tmp_path, args.pidfile)
+                except OSError:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+                sys.stderr.write(
+                    f"boundary_service: RECLAIMED stale pidfile {args.pidfile} -- its previous "
+                    f"content ({squatting_content!r}) was not a live serving.boundary_service "
+                    f"process for this world's own --config {args.config} (dead pid, unparseable "
+                    f"content, or an unrelated process -- PID REUSE can produce any of these). "
+                    f"Rewrote it, atomically (tempfile + rename, never a bare truncate), to this "
+                    f"process's own pid {os.getpid()}, which just won the real bind()+listen() on "
+                    f"{args.host}:{args.port}. 'autoharn service stop' now targets the real "
+                    f"winner.\n")
+        else:
+            with os.fdopen(fd, "w") as f:
+                f.write(str(os.getpid()))
+        # Hand the ALREADY-BOUND socket to uvicorn (the same `sockets=` pathway uvicorn's own
+        # multi-worker/gunicorn integration uses) -- asyncio's own `create_server` calls
+        # `sock.listen()` on it; uvicorn never re-binds host/port when a socket is supplied.
+        uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port)).run(sockets=[sock])
+        return 0
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

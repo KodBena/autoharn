@@ -1,0 +1,26 @@
+Witnessed 2026-07-23 (round-1 review, minor-a): filing/world_descriptor.py's own module docstring
+claimed "tested against a scratch registry directory (see the umbrella build's own witness
+fixtures)" while NO such fixture existed anywhere in the repository -- an unsupported claim, the
+same class ADR-0011 exists to catch. This is that fixture, added this round; the docstring's claim
+is now true.
+
+Reproduction: `_WORLD_NAME_RE` (the closed alphabet `^[a-z0-9-]{1,64}$` every world name is
+validated against at `WorldDescriptor.__post_init__`) was temporarily replaced with `.*` (accept
+anything), and the fixture re-run:
+
+$ python3 seen-red/world-descriptor-registry/run_fixtures.py
+a-write-then-scan-roundtrips: PASS (two worlds written, scanned back byte-identical, sorted by name)
+b-rewrite-same-world-overwrites: PASS (re-write of the same world name overwrote, no merge with the stale prior epoch)
+c-malformed-world-name-refuses: FAIL -- world='UPPERCASE-NOT-ALLOWED' was accepted, never refused
+c-malformed-world-name-refuses: FAIL -- world='' was accepted, never refused
+c-malformed-world-name-refuses: FAIL -- world='has a space' was accepted, never refused
+c-malformed-world-name-refuses: FAIL -- world='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' was accepted, never refused
+d-malformed-registry-entry-refuses: PASS (RED case: invalid JSON, a non-object, and an unrecognized shape all refuse, each naming the offending file)
+e-empty-registry-dir-scans-empty: PASS (a not-yet-created registry dir scans empty, never raises)
+
+AT LEAST ONE CASE FAILED
+
+Every one of the four malformed-name probes (uppercase, empty, embedded space, over-length) was
+silently accepted with the alphabet check disabled -- exactly the class case c exists to catch.
+`_WORLD_NAME_RE` was restored to its committed value (`^[a-z0-9-]{1,64}$`) immediately after this
+capture; the full five-case fixture passes reliably (verified across multiple runs).
