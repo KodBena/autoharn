@@ -195,10 +195,15 @@ generalized from) without linking to its definition on first use, even though
 [`GLOSSARY.md`'s own Stand-Alone Principle](../../GLOSSARY.md#stand-alone-principle) already
 mandates exactly that for every coined term. As part of this pass (usability review, ledger row
 1180, finding 16), the first plain-text mention of "chocofarm" in each of ADR-0000, 0002, 0003,
-0004, 0005, 0006, 0007, 0008, 0009, 0011, 0013, and 0014 was linked to
+0004, 0005, 0006, 0007, 0008, 0013, and 0014 was linked to
 [`GLOSSARY.md#omega-and-chocofarm`](../../GLOSSARY.md#omega-and-chocofarm) — noted here as the
 pattern for a later pass over the rest of the corpus (`briefs/`, `history/`, and any other coined
 term besides chocofarm that meets an ADR reader unlinked), not claimed as a complete sweep.
+ADR-0009 and ADR-0011 are the two exceptions among the 12: in both, every "chocofarm" mention
+is inside a filename (`history/00NN-chocofarm-*.md`) or a verbatim-quoted, "not retro-edited"
+extracted-history block — this pass left both untouched rather than either mangling a filename
+inside its own link text (a real defect an earlier, mechanical pass of this fix introduced and
+this build caught before commit) or retro-editing declared-verbatim history.
 
 <!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this file is new, written this
      session (usability review, ledger row 1180, 2026-07-23, finding 16: the LAW corpus had no
