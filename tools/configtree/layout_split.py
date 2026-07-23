@@ -27,9 +27,17 @@ operator's real resize/Pilot `size=(w, h)` actually varies, and what the maintai
 named acceptance widths -- 251 and 120 -- are given in) at which BOTH columns can be genuinely
 usable at once, summed from its own named parts so there is exactly one number to revisit if any
 part of it changes:
-    TREE_WIDTH (40, `app.py`'s own CSS `Tree { width: 40; }`) + TREE_BORDER (1, `border-right:
-    solid` in that same rule) -- the sidebar's own footprint, present at every width, computed
-    here rather than re-guessed
+    TREE_WIDTH (40, `app.py`'s own CSS `Tree { width: 40; }`) -- the sidebar's own CONTENT
+    footprint. `border-right: solid` in that same rule draws INSIDE the declared `width: 40`
+    (Textual's border-box model, confirmed empirically: the Tree's content region measures 39,
+    not 40, at any terminal width), so the border itself adds no column beyond the 40 already
+    counted here -- TREE_BORDER (1) is NOT a second border-width term stacked on top of it (an
+    earlier draft of this comment read that way, a one-column bookkeeping slip this cycle's
+    audit caught, ledger row 1140's own m1); it is one column of DELIBERATE margin between the
+    sidebar and the control column, kept because 127 is the maintainer-witnessed, field-
+    validated boundary (his own 251/120 acceptance pair below) -- dropping it would shave the
+    threshold to 126 and move that already-verified boundary for a cosmetic naming fix, not a
+    real one
   + CONTROL_COL_WIDTH (44 -- comfortable for a field label, an `Input`, and an "Add ..." button
     side by side without wrapping every label; close to the sidebar Tree's own 40, since a
     control column carries similar content -- short labels and buttons, not paragraphs)
@@ -54,7 +62,7 @@ from __future__ import annotations
 from tools.configtree.widget_primitives import elucidation_widgets
 
 TREE_WIDTH = 40
-TREE_BORDER = 1
+TREE_BORDER = 1  # margin, not a second border-width -- the border draws INSIDE TREE_WIDTH (module docstring, ledger row 1140 m1)
 CONTROL_COL_WIDTH = 44
 LAYOUT_GUTTER = 2
 HELP_COL_MIN = 40

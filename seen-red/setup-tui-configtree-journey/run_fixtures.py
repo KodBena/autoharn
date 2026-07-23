@@ -128,7 +128,7 @@ from tools.configtree.widgets_master_detail import MasterDetailFieldWidget  # no
 from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui import config_file, content, durable_decisions, feature_facts, steps, tui_app  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
-from tools.setup_tui.plan import Plan  # noqa: E402
+from tools.setup_tui.plan import CallableAct, Plan, PlanEntry  # noqa: E402
 
 import layout_invariant  # noqa: E402
 from layout_invariant import wire_pilot  # noqa: E402
@@ -2171,6 +2171,112 @@ async def case_26() -> None:
           "post-drive check above AND every wired pilot.pause()/click() during the drive itself")
 
 
+async def case_27() -> None:
+    """SYNTHETIC FAILING COMMIT -- honest commit-outcome contract (ledger row 1140, cycle-8 fix
+    round, ADR-0012 P1, cycle-7 AUDIT.md MAJOR M1/C5). `tools.setup_tui.steps.commit()` used to
+    compute the REAL outcome (`ok = result.completed`, correctly writing `COMMIT HALTED` into
+    the checklist text and `state["commit_halted"] = True` on a failed act) but then return a
+    HARDCODED `SectionResult(ok=True, ...)` regardless of `ok` -- so `CommitPane._finish_committed`
+    always read `result.ok is True`, the mounted Finish button was always `variant="success"`,
+    and `ConfigTreeApp.on_button_pressed` always exited 0, even against a checklist that itself
+    read REFUSED/COMMIT HALTED. Isolated harness (case_26's own precedent for a synthetic,
+    non-registry construction when driving the REAL ten-section registry live would have real
+    side effects -- exactly the residue AUDIT.md's own hazard section describes): a synthetic,
+    field-less `SectionSpec` (always ready -- no fields, so nothing can ever block or invalidate
+    it) paired with the REAL `tools.setup_tui.steps.commit` function under test (imported, not
+    reimplemented), seeded via `CommitSpec.reset` with ONE real, deterministic, side-effect-free
+    `CallableAct` -- executed for real through `commit_executor.execute`'s own `CallableAct`
+    dispatch (`_run_entry`'s `ok, detail = act.fn()` branch), no monkeypatching of the executor
+    or of `steps.commit` itself. Both polarities, same harness: a failing act (RED-was-lying, now
+    GREEN-honest) and a second, succeeding run (the passing path must still exit 0, unchanged --
+    case_3's own claim already covers the real registry; this is the SAME code path's other
+    polarity, driven back-to-back so the contrast is in one witness)."""
+    def _seed(state: dict, *, fail: bool) -> None:
+        state["_plan"] = Plan()
+        state["_checklist"] = ck.Checklist()
+        act = CallableAct(
+            fn=(lambda: (False, "synthetic failure injected by case_27 fixture")) if fail
+               else (lambda: (True, "synthetic success (case_27 fixture)")),
+            label="synthetic act (case_27)")
+        state["_plan"].append(PlanEntry(screen="fixture", item="synthetic act",
+                                         lesson="fixture-injected act (case_27)", act=act))
+
+    dummy_section = SectionSpec(slug="only", title="Only", group="Fixture",
+                                 fields=lambda state: (),
+                                 submit=lambda state, answers: SectionResult(ok=True))
+
+    def _build(*, fail: bool) -> ConfigTreeApp:
+        commit_spec = CommitSpec(render_summary=lambda state: "synthetic plan (case_27)",
+                                  commit=steps.commit, confirm_label="Commit this plan",
+                                  reset=lambda state: _seed(state, fail=fail))
+        state: dict = {"_checklist": ck.Checklist(), "_plan": Plan(), "_repo_root": steps.REPO_ROOT,
+                       "dry_run": False, "dest": tempfile.mkdtemp(prefix="ctj-case27-")}
+        return ConfigTreeApp((dummy_section,), commit_spec, initial_state=state,
+                              title="case-27 fixture")
+
+    # --- RED-was-lying, now GREEN-honest: the failing act -----------------------------------
+    app = _build(fail=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        tree.select_node(_find_node(tree, "commit"))
+        await pilot.pause()
+        commit_btn = app.query_one("#pane-commit #ct-commit", Button)
+        assert not commit_btn.disabled, \
+            "the dummy, field-less section has nothing to block or invalidate it -- commit should read ready immediately"
+        await pilot.click(commit_btn)
+        await pilot.pause()
+        await _wait_commit_settled(app)
+        info_lines = [str(w.render()) for w in app.query_one("#ct-commit-body").query(".ct-info-line")]
+        halted_lines = [ln for ln in info_lines if "REFUSED" in ln or "COMMIT HALTED" in ln]
+        assert halted_lines, f"expected the REAL checklist to read REFUSED/COMMIT HALTED, got {info_lines}"
+        finish_btn = app.query_one("#ct-finish", Button)
+        assert finish_btn.variant == "error", \
+            f"expected the Finish button to read the failure honestly (variant='error'), got {finish_btn.variant!r}"
+        assert "commit halted" in str(finish_btn.label).lower(), \
+            f"expected the Finish button's own label to say so, got {finish_btn.label!r}"
+        assert app.state.get("_commit_ok") is False, \
+            f"expected state['_commit_ok'] is False, got {app.state.get('_commit_ok')!r}"
+        assert app.state.get("commit_halted") is True, \
+            f"expected state['commit_halted'] is True, got {app.state.get('commit_halted')!r}"
+        finish_btn.press()
+        await pilot.pause()
+        assert app.return_code == 2, \
+            f"expected exit code 2 on a genuinely halted commit, got {app.return_code}"
+        print(f"case 27a ok (RED-was-lying, now GREEN-honest): a synthetic failing commit act "
+              f"-- checklist reads {halted_lines} -- Finish button variant={finish_btn.variant!r} "
+              f"label={str(finish_btn.label)!r}, App.exit return_code == {app.return_code} "
+              f"(before this fix: return_code 0 and a green 'Finish' button, despite this exact "
+              f"REFUSED/COMMIT HALTED checklist)")
+
+    # --- same harness, succeeding act: the passing path still exits 0 (both polarities) -----
+    app2 = _build(fail=False)
+    async with app2.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree2 = app2.query_one("#ct-tree", Tree)
+        tree2.select_node(_find_node(tree2, "commit"))
+        await pilot.pause()
+        await pilot.click(app2.query_one("#pane-commit #ct-commit", Button))
+        await pilot.pause()
+        await _wait_commit_settled(app2)
+        finish_btn2 = app2.query_one("#ct-finish", Button)
+        assert finish_btn2.variant == "success", \
+            f"expected the passing path's Finish button to stay variant='success', got {finish_btn2.variant!r}"
+        assert str(finish_btn2.label) == "Finish", \
+            f"expected the plain 'Finish' label on a clean pass, got {finish_btn2.label!r}"
+        finish_btn2.press()
+        await pilot.pause()
+        assert app2.return_code == 0, \
+            f"expected exit code 0 on a genuinely successful commit, got {app2.return_code}"
+        assert app2.state.get("_commit_ok") is True, \
+            f"expected state['_commit_ok'] is True, got {app2.state.get('_commit_ok')!r}"
+        assert "commit_halted" not in app2.state, \
+            f"a clean commit must never set commit_halted, got {app2.state.get('commit_halted')!r}"
+    print("case 27b ok: the SAME harness/code path, a succeeding synthetic act, still exits 0 "
+          "with a green 'Finish' button and no commit_halted -- both polarities on the ONE fixed "
+          "fact (steps.commit's own real `ok`), no drift between the two")
+
+
 async def _main() -> None:
     await case_0()
     await case_1()
@@ -2199,6 +2305,7 @@ async def _main() -> None:
     await case_24()
     await case_25()
     await case_26()
+    await case_27()
     print("ALL CASES OK -- tools.configtree.app.ConfigTreeApp driven end-to-end through the "
           "REAL tools.setup_tui.steps.SECTIONS registry via Pilot, LIVE-MODEL semantics "
           "throughout (no per-section save exists): a state-aliasing reproduction and structural "

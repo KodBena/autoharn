@@ -123,7 +123,8 @@ def commit(state: dict) -> SectionResult:
         if not dest:
             for entry in plan.entries:
                 cl.add(entry.screen, entry.item, ck.REFUSED, "no destination directory")
-            return SectionResult(ok=True, info_lines=("REFUSED: no destination directory known.",))
+            state["commit_halted"] = True
+            return SectionResult(ok=False, info_lines=("REFUSED: no destination directory known.",))
 
         def _on_step(i, entry):
             lines.append(f"[{i + 1}] {entry.screen}: {entry.item} -- {entry.lesson}")
@@ -153,7 +154,7 @@ def commit(state: dict) -> SectionResult:
     if dest_reachable:
         path = cl.save(dest, dry_run=dry_run)
         lines.append(f"{'would save' if dry_run else 'saved'} checklist: {path}")
-    return SectionResult(ok=True, info_lines=tuple(lines))
+    return SectionResult(ok=ok, info_lines=tuple(lines))
 
 
 def _dispatch_result(state: dict, entry, result, proc, lines: list) -> None:

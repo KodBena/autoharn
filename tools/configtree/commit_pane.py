@@ -287,6 +287,13 @@ class CommitPane(Vertical):
         await self.recompose()
 
     async def _finish_committed(self, result) -> None:
+        """`result.ok` is the ONE fact this whole terminal node turns on -- set here into
+        `state["_commit_ok"]` (the SAME slot `ConfigTreeApp.on_button_pressed` reads to pick the
+        exit code) and read right back here for the Finish button's own honesty (variant/label).
+        Two readers, one writer, one source value -- no second, drifting copy of "did the commit
+        actually succeed" (the defect this fixes: `steps.commit` used to compute the real outcome
+        and then hand back a HARDCODED `ok=True` regardless, so this button always looked green
+        and the app always exited 0 even against a checklist reading REFUSED/COMMIT HALTED)."""
         self.state.pop("_commit_sweep_error", None)
         self._committed = True
         self._set_busy(False)
@@ -295,5 +302,9 @@ class CommitPane(Vertical):
         body = self.query_one("#ct-commit-body", VerticalScroll)
         for line in result.info_lines:
             await body.mount(Static(line, classes="ct-info-line"))
-        await body.mount(Button("Finish", id="ct-finish", variant="success"))
         self.state["_commit_ok"] = result.ok
+        if result.ok:
+            finish_button = Button("Finish", id="ct-finish", variant="success")
+        else:
+            finish_button = Button("Finish (commit halted)", id="ct-finish", variant="error")
+        await body.mount(finish_button)
