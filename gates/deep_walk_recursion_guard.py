@@ -191,9 +191,11 @@ def _read_staged_bytes(path: Path) -> str | None:
     relative to `-C`'s cwd, so this finds the RIGHT repository for `path` (whichever one it
     actually lives in) rather than assuming it is always this gate's own repo -- load-bearing
     for the fixture below, which stages its reproduction in a throwaway git repo, not this one.
-    Returns None (never raises) when `path`'s directory is not inside a git work tree at all, the
-    path is not tracked/staged there, or `git` itself is unavailable -- callers fall back to the
-    working-tree file in every such case."""
+    Returns None (never raises) when `path`'s directory is not inside a git work tree at all or
+    the path is not tracked/staged there -- callers fall back to the working-tree file in those
+    cases. (If the `git` executable itself is absent from PATH, subprocess.run raises
+    FileNotFoundError and the gate crashes loudly -- unreachable in the pre-commit context,
+    which only ever runs under git, and deliberately not papered over here.)"""
     result = subprocess.run(
         ["git", "-C", str(path.parent), "show", f":./{path.name}"],
         capture_output=True, text=True,

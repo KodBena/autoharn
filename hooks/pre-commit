@@ -82,7 +82,12 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # 2026-07-23 (review finding against commit d5f809e: the gate existed, seen-red both polarities,
 # but was invoked by NOTHING here -- a fourth deep-walk site reintroducing the defect landed
 # clean through git commit; the commit message's "mechanically enforces" claim was false as
-# delivered until this stanza). Same house shape as no_lazy_imports/fixture_census above.
+# delivered until this stanza). Same house INVOCATION shape as no_lazy_imports/fixture_census
+# above, but DIFFERENT read semantics, deliberately: this gate judges the STAGED bytes
+# (git show :./path) -- what the commit will actually embed -- while its neighbors read the
+# working tree. Do not "harmonize" it back to tree-reads for uniformity: the staged/tree gap
+# is a witnessed silent false-success (stage a violation, restore the tree, neighbors pass).
+# The rest of the chain's staged-vs-tree census is tracked as its own ledger work item.
 "$PY" "$REPO_ROOT/gates/deep_walk_recursion_guard.py" || {
     echo "" >&2
     echo "pre-commit: deep-walk recursion guard FAILED — commit refused (a RecursionError catch" >&2
