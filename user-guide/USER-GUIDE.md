@@ -20,7 +20,7 @@ handful of guardrails refuse an action that would break that guarantee — but r
 explanation*, not a bare error, so the refusal itself tells you what to do next (the
 "refuse-and-teach" idea [§6](#6-when-something-refuses) covers in full). Day to day, you touch
 this through a small number of commands — this guide calls them **verbs** because each one does
-one clear thing, [§4](#4-operate-the-seven-verbs) names all seven.
+one clear thing, [§4](#4-operate-the-eight-verbs) names all eight.
 
 ## 2. Before you start
 
@@ -123,7 +123,7 @@ so a project's ledger can be reached from more than one process without each one
 `psql` directly
 ([design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md](../design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md)
 §5, ratified row 1631; the full recipe is in
-[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18),
+[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18),
 linked again below). **This scaffold runs no boundary service of its own** — a standing work
 tracker is a perpetual, hookless store for a project's whole lifetime, never a run-scoped,
 hook-wired session (`bootstrap/track-work.sh`'s own header comment states this contrast under the
@@ -152,7 +152,7 @@ retired; the read side, `./pickup`, is unaffected). (If you later stand up a bou
 this deployment and add its
 `boundary_url`/`boundary_deployment` to `deployment.json` by hand, the un-prefixed `./led`/
 `./pickup` start working too — see
-[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
+[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18)
 for what those two keys are and the exit-code split the served shims use.) For the full detail —
 the exact command shape, and how this option differs from §3b's below — read
 [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md)
@@ -192,7 +192,7 @@ Running `./judge` right after scaffolding printed `AGREE` in this page's own ver
 two independent ways the harness (autoharn's own tooling; this page uses the two names
 interchangeably from here on) computes "what is currently true" (a rule engine and a plain SQL
 query) agreeing on a brand-new, still-empty project. That is the expected result for a fresh
-[world](../GLOSSARY.md#world); [§4](#4-operate-the-seven-verbs) explains what `./judge` checks and
+[world](../GLOSSARY.md#world); [§4](#4-operate-the-eight-verbs) explains what `./judge` checks and
 what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
@@ -359,7 +359,7 @@ its own mechanism:
   recorded as a new entry that supersedes the old one, and the old one stays exactly as it was.
   [USER-WALKTHROUGH.md's "File a decision, read it back"](USER-WALKTHROUGH.md#2-file-a-decision-read-it-back)
   shows this live, including the refusal you get if you try to `UPDATE` or `DELETE` a row.
-- **Contemporaneity** — the [`./audit`](#4-operate-the-seven-verbs) verb checks every entry for
+- **Contemporaneity** — the [`./audit`](#4-operate-the-eight-verbs) verb checks every entry for
   whether it was recorded at the time of the event it describes, or added after the fact, and
   reports the honest answer rather than assuming good faith.
 - **The signing layer is** an optional further step where a real person, using a key outside the
@@ -417,7 +417,7 @@ a page is meant for you:
 
 - **`USER-`** pages are for you: an adopter using autoharn in your own project. This guide is one.
 - **`ORCH-`** pages are for whoever is actually running or orchestrating a session day to day
-  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-seven-verbs) above, is the main one). They are
+  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-eight-verbs) above, is the main one). They are
   useful once you're past adoption and into regular use.
 - **`MAINT-`** pages are for autoharn's own maintainer: decisions about autoharn's law and
   infrastructure, not things an adopter's project needs to act on.

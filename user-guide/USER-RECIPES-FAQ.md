@@ -20,9 +20,9 @@ question-and-recipe entries.
 - [Workflow patterns](#workflow-patterns)
 - [Getting started: the guided setup TUI (`python3 -m tools.setup_tui`)](#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)
 - [Declaring things on the ledger](#declaring-things-on-the-ledger)
-- [Principal identity (s40/s41)](#principal-identity-s40s41)
-- [Typed verdicts and refusal recording (s42/s43)](#typed-verdicts-and-refusal-recording-s42s43)
-- [Standing lifecycle (s45)](#standing-lifecycle-s45)
+- [Granting and revoking a principal's authority (s40/s41)](#granting-and-revoking-a-principals-authority-s40s41)
+- [Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)](#recording-verdicts-and-refusals-as-typed-queryable-ledger-entries-s42s43)
+- [Suspending, reviving, and revoking a principal's standing (s45)](#suspending-reviving-and-revoking-a-principals-standing-s45)
 - [Model identity: watchdog, attestation, defeat](#model-identity-watchdog-attestation-defeat)
 - [Trust ceremonies](#trust-ceremonies)
 - [Review discipline](#review-discipline)
@@ -34,7 +34,7 @@ question-and-recipe entries.
 - [Your review queue](#your-review-queue)
 - [Correcting the record — supersession, and what to do about its fallout](#correcting-the-record--supersession-and-what-to-do-about-its-fallout)
 - [The ledger boundary service (`serving/`)](#the-ledger-boundary-service-serving)
-- [Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)](#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
+- [Reaching the ledger through a shared boundary service, and compiling workflow units (2026-07-18)](#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18)
 - [Role charters and briefs (`tools/role_charter.py`, `tools/role_brief.py`)](#role-charters-and-briefs-toolsrole_charterpy-toolsrole_briefpy)
 - [CLI quality-of-life: row-id echo and `judge` auto-layer detection](#cli-quality-of-life-row-id-echo-and-judge-auto-layer-detection)
 - [`led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)](#led-help-tokens---json-payload-mode-and-work-lists-default-filter-ledtmpl-trio)
@@ -153,30 +153,32 @@ mid-flow you can finish by hand from what was already printed. Full spec:
 ("so much to remember ... too much when you want to *just get started but still have a
 seriously robust experience*").
 
-**The interactive face is a real Textual application**
-([design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md) —
-that build was itself later deleted wholesale and replaced by the configtree rebuild, see
-[design/FABLE-SETUP-TUI-REBUILD-SPEC.md](../design/FABLE-SETUP-TUI-REBUILD-SPEC.md); this
-whole paragraph is now stale history, flagged not rewritten by the 2026-07-23 doc sweep,
-commission ledger row 1818), superseding [FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md)'s
-original v1 "library ONLY if already installed" clause. The maintainer's own words commissioning this: "I tried to run the setup TUI
-after installing
-'textual' into a venv and I'm not really happy with how it looks -- in fact, textual is not
-used, at all, it is not a TUI, it is just a collection of prompts no matter how clean the code
-is... Could we make it into a real 'textual' app?" It now is: Header (with the derived "N/11
-Screen" ordinal), a sidebar of the eleven screens with pending/current/done state, a scrolling
-transcript pane carrying everything the flow says (banners, `$ argv` echoes, streamed real
-command output), a docked prompt area for the active question, and a Footer — the SAME eleven
-`screen_*` functions and the SAME `Ui` call sites (`tools/setup_tui/ui.py`) drive it, running
-unchanged in a Textual worker thread while `tools/setup_tui/ui_textual.py`'s `TextualUi`/
-`SetupWizardApp` render it. Selection is automatic: interactive runs get the real Textual face
-when `textual` is importable; otherwise ONE teaching line naming the exact venv/pip command,
-then the zero-dependency numbered-menu fallback proceeds ("degraded-but-possible beats
-frozen"). `--plain` forces the numbered-menu interface explicitly, even with `textual`
-installed. `--scripted` NEVER touches `textual` — headless witnessing stays dependency-free, as
-it always has. `textual` itself remains a declared external cost of THIS TOOL's interactive
-face only — never of the harness, a born world, or the witnessing path — install it into a venv
-if you don't already have it:
+**The interactive face is a real Textual application — a hierarchical configuration tree, not a
+sequence of numbered prompts.** The pre-2026-07-22 build described in
+[design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)
+(a linear "N/11 Screen" flow, one screen at a time) was deleted wholesale and replaced by the
+configtree rebuild,
+[design/FABLE-SETUP-TUI-REBUILD-SPEC.md](../design/FABLE-SETUP-TUI-REBUILD-SPEC.md) — this
+paragraph describes the CURRENT rebuild, corrected 2026-07-23 (usability review, ledger row
+1180, the "teletype-as-current" hazard the 2026-07-23 doc sweep flagged but did not fix). The
+maintainer's own words commissioning the rebuild: *"I tried to run the setup TUI after
+installing 'textual' into a venv and I'm not really happy with how it looks -- in fact, textual
+is not used, at all, it is not a TUI, it is just a collection of prompts no matter how clean the
+code is... Could we make it into a real 'textual' app?"* It now is: a generic library,
+`tools/configtree` (`ConfigTreeApp`), driving a **sidebar `Tree` of every configuration
+section** (not a linear sequence — the operator opens and fills sections in any order the tree
+allows), a form pane per section, a docked prompt area, dependency-as-data blocking (a section
+that needs another section's answer first is shown but not enterable until that dependency is
+met), and one terminal **commit node** that renders the full plan and asks for one explicit
+confirmation before anything is applied. `tools/setup_tui/tui_app.py` — genuinely thin, the
+package's only `import textual` — builds a `ConfigTreeApp` from `tools/setup_tui/steps.py`'s
+`SECTIONS` tuple and `COMMIT` spec; all Tree/pane rendering lives in the `tools/configtree`
+library itself, not in autoharn-specific code. `textual` not being importable is a hard REFUSAL
+naming the install command (`tools/setup_tui/app.py`'s own docstring: *"there is no fallback UI
+to maintain"*) — there is no numbered-menu or zero-dependency fallback mode left; `--from-config`
+is the one no-TUI path, for scripted/CI use, not an interactive substitute. `textual` itself
+remains a declared external cost of THIS TOOL's interactive face only — never of the harness, a
+born world, or the witnessing path — install it into a venv if you don't already have it:
 ```
 python3 -m venv .venv && .venv/bin/pip install textual
 .venv/bin/python -m tools.setup_tui.app
@@ -190,56 +192,71 @@ Signed genesis) reaching the real `App.suspend()` (WX4), abnormal-exit cleanup u
 SIGTERM (WX5), and `--dry-run` under the shell (WX6) — see
 seen-red/setup-tui-textual-shell (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild).
 
-**The eleven screens, in order** (every screen skippable, the skip recorded — never silent;
-`--start-at <slug>` below jumps straight to any one of them — the slug, never a hand-typed
-number, is the only stable pointer: screen numbering is derived from
-`tools/setup_tui/screens.py`'s own `SCREENS` list order, one home, precisely so a doc pointer
-never drifts the way a hardcoded ordinal would the moment a screen is inserted):
+**The ten sections, plus the commit checklist** (every section skippable where the section
+itself allows it, the skip recorded — never silent; `--start-at <slug>` below jumps straight to
+any one of them — the slug, never a hand-typed number, is the only stable pointer: section
+identity is derived from `tools/setup_tui/steps.py`'s own `SECTIONS` tuple, one home, precisely
+so a doc pointer never drifts the way a hardcoded ordinal would the moment a section is
+inserted). `SECTIONS` is a plain tuple with **no implied visiting order** — the sidebar tree
+lets you open any section any time its own dependencies are met; the list below is `SECTIONS`'
+registration order, which doubles as the commit-time execution order (`commit_pane.py`'s own
+`_run_submit_sweep` runs every section's `submit` "exactly once, in registry order"), grouped by
+the sidebar's own groups (`Substrate & target`, `World lifecycle`, `Runtime`, `Authority &
+trust`):
 
-1. **Preflight** (`--start-at preflight`) — repo commit, submodules populated,
-   `idris2`/`clingo`/`python3`/`psql` found (clingo non-fatal, matching
+1. **Preflight** (`--start-at preflight`, group *Substrate & target*) — repo commit, submodules
+   populated, `idris2`/`clingo`/`python3`/`psql` found (clingo non-fatal, matching
    `bootstrap/bootstrap.sh`'s own posture), whether `HARNESS_PGHOST`/`EPISTEMIC_PGHOST`
    resolves to a reachable host; each check green/red with a fix command.
-2. **Substrate** (`--start-at substrate`) — pick an existing database (zero manual steps) or
-   a dedicated one (generates the confined `pg_hba` block in your *actual* file's own idiom,
-   plus the createdb/copy/reload block, then probes until the connection genuinely works).
-3. **Fork/target** (`--start-at fork-target`) — destination directory: a fresh directory, or
-   a fork-copy of an existing project (with the `CLAUDE.md` → `CLAUDE.project.md`
-   preservation move, so a fork's own governance prose survives the scaffold's unconditional
-   `CLAUDE.md` write) — plus the governed-files pattern prompt described below.
-4. **Rehearsal** (`--start-at rehearsal`) — a scratch-name birth + teardown + zero-residue
-   check, streamed; the real birth is gated on a green rehearsal (a ratified discipline, not
-   a suggestion — the Birth screen refuses without one unless you explicitly override).
-5. **Birth** (`--start-at birth`) — `new-project.sh --new-world`, streamed; the maintainer
-   copy-paste signing line is surfaced prominently at the end, delimited by `BEGIN`/`END`
-   markers.
-6. **Principals & authority** (`--start-at principals-authority`) — registers additional
-   principals, grants [s41](#principal-identity-s40s41) competences (recorded beliefs about who
-   is trusted to do what, at what confidence band, on what basis) and typed relations (e.g.
-   acts-for, dispatched-by), and registers role charters (a written statement of what a role is
-   for and what it may do, filed against a registered principal via `tools/role_charter.py`)
-   in-flow; skipping it
-   is legitimate (the scaffold's own three principals already make a complete world).
-7. **Signed genesis** (`--start-at signed-genesis`) — the GPG-signing ceremony for the
-   world's founding commission, on by default; full operator walkthrough (four visible
-   commands, the VERIFIED gate, the skip path, rotation) in
+2. **Substrate** (`--start-at substrate`, group *Substrate & target*) — pick an existing
+   database (zero manual steps) or a dedicated one (generates the confined `pg_hba` block in
+   your *actual* file's own idiom, plus the createdb/copy/reload block, then probes until the
+   connection genuinely works).
+3. **Fork/target** (`--start-at fork-target`, group *Substrate & target*) — destination
+   directory: a fresh directory, or a fork-copy of an existing project (with the `CLAUDE.md` →
+   `CLAUDE.project.md` preservation move, so a fork's own governance prose survives the
+   scaffold's unconditional `CLAUDE.md` write) — plus the governed-files pattern prompt
+   described below.
+4. **Rehearsal** (`--start-at rehearsal`, group *World lifecycle*) — a scratch-name birth +
+   teardown + zero-residue check, streamed; the real birth is gated on a green rehearsal (a
+   ratified discipline, not a suggestion — the Birth section refuses without one unless you
+   explicitly override).
+5. **Birth** (`--start-at birth`, group *World lifecycle*) — `new-project.sh --new-world`,
+   streamed; the maintainer copy-paste signing line is surfaced prominently at the end,
+   delimited by `BEGIN`/`END` markers.
+6. **Boundary** (`--start-at boundary`, group *Runtime*) — writes the multiplex TOML (the
+   config file letting one boundary service process serve several deployments/worlds side by
+   side) and the two `deployment.json` boundary keys, picks a free port, starts the service (or
+   emits the systemd-style unit text as a copy-paste block when this process doesn't keep it
+   alive itself), probes `/health` and `/meta`. Runs BEFORE Principals & authority / Signed
+   genesis below (moved ahead of them, legacy-led-retirement Part C completion, ledger row
+   1158/1159) so those two sections' own writes already go through the served `led`, never the
+   retired direct-psql shim.
+7. **Principals & authority** (`--start-at principals-authority`, group *Authority & trust*) —
+   registers additional principals, grants [s41](#granting-and-revoking-a-principals-authority-s40s41) competences
+   (recorded beliefs about who is trusted to do what, at what confidence band, on what basis)
+   and typed relations (e.g. acts-for, dispatched-by), and registers role charters (a written
+   statement of what a role is for and what it may do, filed against a registered principal via
+   `tools/role_charter.py`) in-flow; skipping it is legitimate (the scaffold's own three
+   principals already make a complete world).
+8. **Signed genesis** (`--start-at signed-genesis`, group *Authority & trust*) — the
+   GPG-signing ceremony for the world's founding commission, on by default; full operator
+   walkthrough (four visible commands, the VERIFIED gate, the skip path, rotation) in
    [USER-GPG-TRUST-LAYER-FAQ.md §5a](USER-GPG-TRUST-LAYER-FAQ.md#5a-the-setup-tuis-own-signed-genesis-screen--the-same-ceremony-automated).
-8. **Boundary** (`--start-at boundary`) — writes the multiplex TOML (the config file letting
-   one boundary service process serve several deployments/worlds side by side) and the two
-   `deployment.json` boundary keys, picks a free port, starts the service (or emits the
-   systemd-style unit text as a copy-paste block when this process doesn't keep it alive
-   itself), probes `/health` and `/meta`.
-9. **Observability** (`--start-at observability`) — the `otelcol` start line
+9. **Observability** (`--start-at observability`, group *Runtime*) — the `otelcol` start line
    (localhost-only), the OTel model-provenance watchdog start line (`./otel-watch --daemon`,
    a background process that checks the OTel telemetry stream for the model-identity/
    provenance fields this project's OTel-attestation discipline requires and flags gaps loudly),
    and the Claude launch line with the right env vars, as copy-paste blocks with a
    what-you-should-see line each.
-10. **Hydration** (`--start-at hydration`) — free-text prompts for fork provenance and role
-    charters to register, plus two curated catalogs described below (feature-facts,
-    durable-decisions), and an ADR-adoption submenu derived from `law/adr/*.md` at runtime
-    (never a hand list).
-11. **Checklist** (`--start-at checklist`) — a per-item WITNESSED/SKIPPED/REFUSED/PREPARED
+10. **Hydration** (`--start-at hydration`, group *Runtime*) — free-text prompts for fork
+    provenance and role charters to register, plus two curated catalogs described below
+    (feature-facts, durable-decisions), and an ADR-adoption submenu derived from `law/adr/*.md`
+    at runtime (never a hand list).
+
+**Checklist / commit** (`--start-at checklist`) is not one of the ten sections above — it is the
+separate terminal **commit node** (`steps.py`'s `COMMIT`, a `CommitSpec`) the tree's sidebar
+shows alongside them: a per-item WITNESSED/SKIPPED/REFUSED/PREPARED
     table of everything the flow touched, offered for saving into the new world as a dated
     file.
 
@@ -288,7 +305,8 @@ autoharn-panel deployment started `.claude/governed_files.json` at `*.py`-only a
 `.ts`/`.vue`/`.html` added by hand) adds a governed-files prompt to the Fork/target screen,
 surfacing the default pattern set plus that teaching specimen and letting the operator confirm
 or extend it for their project's real languages. `tools/setup_tui/governed_files.py` carries
-the driver logic; `screens.py`'s `_governed_files_step` wires it into Fork/target. WITNESSED
+the driver logic; `tools/setup_tui/steps_fork_target.py` wires it into the Fork/target section.
+WITNESSED
 this session (`python3 -m tools.setup_tui.app --dry-run --scripted <answers>
 --start-at fork-target`, declining the extension):
 ```
@@ -326,8 +344,8 @@ competences, asserts typed relations, and registers role charters in-flow, showi
 teaching line before each act explaining what it does and why, binding on every act, not
 merely offered as optional help text (`tools/setup_tui/principals_authority.py` carries the
 driver logic). Declining is legitimate and legible — every world already has
-`author`/`reviewer`/`commissioner` from the scaffold (see ["Principal identity
-(s40/s41)"](#principal-identity-s40s41) below), so skipping this screen leaves a complete
+`author`/`reviewer`/`commissioner` from the scaffold (see ["Granting and revoking a
+principal's authority (s40/s41)"](#granting-and-revoking-a-principals-authority-s40s41) below), so skipping this screen leaves a complete
 world; the screen's own value is propaedeutic, walking the ceremony once rather than a
 prerequisite for a working world.
 
@@ -499,7 +517,7 @@ derived from what mechanisms actually exist — a criterion never claims more en
 than is built. Design and criteria table:
 [ORCH-SPEC-DECOMPOSITION-POLICY.md](../design/ORCH-SPEC-DECOMPOSITION-POLICY.md) §3.
 
-## Principal identity (s40/s41)
+## Granting and revoking a principal's authority (s40/s41)
 
 These two entries deviate from this page's usual point-elsewhere convention (full command
 sequences with quoted witnessed output, not a one-liner plus a pointer) because the surface is
@@ -715,7 +733,7 @@ fingerprint belong to"), and answers it only once someone actually signs somethi
 verifier checks that signature — which nothing in this project does yet for a role or a
 principal binding. Signature-*verified* acts are a future rung, not this one.
 
-## Typed verdicts and refusal recording (s42/s43)
+## Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)
 
 Like the principal-identity entries above, these three entries deviate from this page's usual
 point-elsewhere convention (full witnessed output, not a one-liner plus a pointer) because the
@@ -854,7 +872,7 @@ guidance, stated plainly where the header gives no further operator action:
   and journaled — it is not a state `verify-chain` needs a separate disposition for, because it
   cannot succeed in the first place.
 
-## Standing lifecycle (s45)
+## Suspending, reviving, and revoking a principal's standing (s45)
 
 Like the two sections above, this one deviates from the page's usual point-elsewhere
 convention because the surface is new: kernel delta s45 gives two governance states — a
@@ -1035,7 +1053,7 @@ birth chain carries s41 or later will derive real `credited`/`model_defeated` re
 instead of this refusal.
 
 **Does suspending or revoking the attesting principal change what it already defeated?** No —
-see "Standing lifecycle (s45)" above: standing never conditions defeat, by ratified rule. A
+see "Suspending, reviving, and revoking a principal's standing (s45)" above: standing never conditions defeat, by ratified rule. A
 suspended or revoked principal's past mismatch attestations, under a still-in-force competence
 grant, keep defeating exactly as before; only superseding the grant or the attestation itself
 changes what is credited.
@@ -1462,7 +1480,8 @@ is each one's owning page):
   observability/hydration screen entry.
 - [seen-red/setup-tui-feature-facts-drift](../seen-red/setup-tui-feature-facts-drift/run_fixtures.py)
   — `tools/setup_tui/feature_facts.py`'s own registry vs. the live preflight-binary/substrate-
-  choice/hydration-catalog set `screens.py` and `durable_decisions.py` actually expose,
+  choice/hydration-catalog set `tools/setup_tui/steps.py` (the post-rebuild `SECTIONS` registry,
+  `screens.py`'s successor) and `durable_decisions.py` actually expose,
   compared both directions (the class this whole section describes, applied to the feature-
   facts column itself — this spec's own first deliberate consumer of the method,
   design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §1).
@@ -1853,7 +1872,7 @@ tolerated, nothing is silently broken). That marking is panel-repo work, out of 
 autoharn checkout and UNEXERCISED from here — the spec is explicit that the panel-side session
 runs it, citing this spec, never a session running against a live panel checkout from here.
 
-## Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)
+## Reaching the ledger through a shared boundary service, and compiling workflow units (2026-07-18)
 
 The four recipes below cover the same day's landed work: the operator verbs `led`/`pickup`/
 `asof-export`/`distance-to-clean` became HTTP clients of the boundary service above rather than
@@ -2072,7 +2091,7 @@ role actually knows what it is and what it faces." Full spec:
 **When would I actually reach for these, as opposed to just talking to an agent?** When you
 want a role's context to be a derived, auditable fact rather than whatever prose happened to
 be pasted into a prompt — most concretely, the workflow-unit compiler's dispatch step
-(["Boundary multiplex ... workflow-unit compiler" above](#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18))
+(["Reaching the ledger through a shared boundary service ..." above](#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18))
 hands a driven phase's agent `charter + brief` for its role via `--role-map <toml-role>=<
 principal>`, refusing (with teaching) a mapping to an uncharted principal unless
 `--allow-uncharted` is passed explicitly (a loud escape hatch, not a silent default). Outside
@@ -2861,3 +2880,25 @@ mechanism carries witnessed output or an honest UNWITNESSED mark), it is not a s
 ([USER-GUIDE.md](USER-GUIDE.md)), and it is not a promise that a recipe listed here is
 enforced — where an entry says "declaration only," the enforcement genuinely does not
 exist yet, and the cited spec names the stage that would build it.
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this session touched a scoped
+     set of spans in this file (usability review, ledger row 1180, 2026-07-23): the Contents
+     TOC retitled by operator intent with (sNN)/date tags kept parenthetical (finding 8: four
+     headings -- "Principal identity (s40/s41)", "Typed verdicts and refusal recording
+     (s42/s43)", "Standing lifecycle (s45)", "Boundary multiplex, CLI rebase, and the
+     workflow-unit compiler (2026-07-18)" -- were indexed by generation number/build date, not
+     reader intent; retitled, with every cross-reference and anchor in this file and
+     USER-GUIDE.md updated to match); and the setup-TUI section's stale "teletype" paragraph
+     corrected to describe the actual current Tree-based UI (the in-reach hazard named in this
+     round's brief), plus its immediately-adjacent stale `screens.py` references (that module no
+     longer exists post-rebuild) and mis-ordered/miscounted section list. This file already
+     carries an unrelated, narrowly-scoped exempt marker higher up (a single Q&A entry) -- ADR-
+     0020 keeps that one, unaltered; this is a second, separate disclosure for the spans this
+     round touched. Neither this touch nor the file's pre-existing marker constitutes a genuine
+     fresh-context A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session
+     had no Agent/Task-dispatch tool available to spawn a truly separate B invocation, the same
+     disclosed gap USER-CONFIGURATION.md's own marker names. Waived here only to unblock this
+     commit, flagged loudly per CLAUDE.md's engineering-responsibility standard -- the
+     commissioning brief for this round states a cold-read pass follows the build; the
+     orchestrator/maintainer should run it (or confirm one already ran) and replace this marker
+     with an actual attestation record. -->
