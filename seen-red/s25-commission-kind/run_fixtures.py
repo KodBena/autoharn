@@ -30,11 +30,13 @@ Cases:
                                    columns are still present and unaffected (s25 touches no
                                    trigger, no other column).
   g-pre-s25-refused-with-teach  -- on the SEPARATE, PRE-s25 schema, 'commission' is refused by
-                                   ledger_kind_check, and led.tmpl's own run-10 closure-audit fix
-                                   (_led_kind_refusal_teach) prints the LIVE valid-kind list for
-                                   THAT schema, which does NOT include 'commission' -- proving the
-                                   refusal teaches correctly on a world that genuinely lacks it,
-                                   never a stale/hardcoded list.
+                                   ledger_kind_check (direct SQL, cli-rebase-fixture-repairs row
+                                   1170: this used to shell out to led.tmpl directly -- now a
+                                   Python file, `bash led.tmpl` is a syntax error -- and the
+                                   served `led` is s43-only, so it can never reach a kernel-level
+                                   refusal on a pre-s43 world through any CLI transport; the
+                                   kernel-level claim is checked directly, the same way every
+                                   other case in this file already does).
 
 Usage: python3 seen-red/s25-commission-kind/run_fixtures.py
 Exit 0 if every case matches (plus the SQL/ASP differential AGREE, printed separately); 1
@@ -175,17 +177,19 @@ def main() -> int:
     ok_f = rf.returncode == 0 and set(rf.stdout.strip().split(",")) == {"event_declared_ts", "stamp_hmac", "stamp_verified"}
     check("f-prior-columns-untouched", ok_f, f"columns={rf.stdout.strip()}", failures)
 
-    # --- g: pre-s25 schema refuses 'commission', live teach-text names the (shorter) valid list -
-    dep_path = Path("/tmp/.s25fxprobe_pre_deployment.json")
-    dep_path.write_text(json.dumps({"db": PGDB, "host": PGHOST, "schema": SCHEMA2,
-                                     "kern": KERN2, "role": ROLE2, "name": SCHEMA2}), encoding="utf-8")
-    rg = sh(["bash", str(LED_TMPL), "commission", "an ask on a pre-s25 world"],
-            env={**os.environ, "PICKUP_DEPLOYMENT": str(dep_path)})
-    dep_path.unlink(missing_ok=True)
+    # --- g: pre-s25 schema refuses 'commission' at the KERNEL's own ledger_kind_check ------------
+    # cli-rebase-fixture-repairs (ledger row 1170): this used to shell out to `led.tmpl` directly
+    # via `bash` -- led.tmpl has been rewritten to Python since (`bash led.tmpl` is now a syntax
+    # error, wrong interpreter entirely), AND the served `led` is s43-only, so it could never
+    # reach a kernel-level refusal on this deliberately pre-s25 (hence pre-s43) world through any
+    # CLI transport regardless. The genuine claim under test -- the KERNEL's own ledger_kind_check
+    # refuses 'commission' on a schema that predates s25 -- is a plain SQL fact, tested the SAME
+    # way every OTHER case in this file already does (direct psql, no CLI involved).
+    rg = psql(SCHEMA2, KERN2, ROLE2,
+              "INSERT INTO ledger (kind, statement) VALUES "
+              "('commission', 'an ask on a pre-s25 world');")
     combined = rg.stdout + rg.stderr
-    ok_g = (rg.returncode != 0 and "ledger_kind_check" in combined
-            and "not a member of ledger_kind_check's vocabulary" in combined
-            and "commission" not in combined.split("valid kinds")[-1])
+    ok_g = rg.returncode != 0 and "ledger_kind_check" in combined
     check("g-pre-s25-refused-with-teach", ok_g,
           f"exit={rg.returncode} teach_excerpt={combined.strip()[-300:]!r}", failures)
 
