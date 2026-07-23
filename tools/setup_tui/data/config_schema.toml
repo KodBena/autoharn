@@ -1,0 +1,152 @@
+# tools/setup_tui/data/config_schema.toml -- the --from-config/--initial-config closed
+# schema (ADR-0012 P10). Loaded by tools/setup_tui/config_file.py.
+
+header_keys = ["config_format", "produced_by", "source"]
+
+[[key]]
+path = "substrate.run"
+type = "bool"
+
+[[key]]
+path = "substrate.path"
+type = "str"
+
+[[key]]
+path = "substrate.host"
+type = "str"
+
+[[key]]
+path = "substrate.db"
+type = "str"
+
+[[key]]
+path = "substrate.role"
+type = "str"
+
+[[key]]
+path = "substrate.subnets"
+type = "str"
+
+[[key]]
+path = "fork_target.governed_extend"
+type = "bool"
+
+[[key]]
+path = "fork_target.governed_extensions"
+type = "str"
+
+[[key]]
+path = "rehearsal.run"
+type = "bool"
+
+[[key]]
+path = "birth.run"
+type = "bool"
+
+[[key]]
+path = "birth.project_name"
+type = "str"
+
+[[key]]
+path = "principals_authority.run"
+type = "bool"
+
+[[key]]
+path = "principals_authority.register"
+type = "list_table"
+
+[[key]]
+path = "principals_authority.competences"
+type = "list_table"
+
+[[key]]
+path = "principals_authority.relations"
+type = "list_table"
+
+[[key]]
+path = "signed_genesis.run"
+type = "bool"
+
+[[key]]
+path = "signed_genesis.commission_statement"
+type = "str"
+
+[[key]]
+path = "boundary.configure"
+type = "bool"
+
+[[key]]
+path = "boundary.start_now"
+type = "bool"
+
+[[key]]
+path = "observability.run"
+type = "bool"
+
+[[key]]
+path = "observability.otelcol"
+type = "bool"
+
+[[key]]
+path = "observability.otel_watch"
+type = "bool"
+
+[[key]]
+path = "hydration.run"
+type = "bool"
+
+[[key]]
+path = "hydration.fork_provenance"
+type = "bool"
+
+[[key]]
+path = "hydration.fork_provenance_statement"
+type = "str"
+
+[[key]]
+path = "hydration.role_charters"
+type = "bool"
+
+[[key]]
+path = "hydration.durable_decisions"
+type = "list_str"
+
+[[key]]
+path = "hydration.adopt_adrs"
+type = "list_str"
+
+[[section_gate]]
+section = "substrate"
+gate = "substrate.run"
+
+[[section_gate]]
+section = "fork_target"
+gate = ""
+
+[[section_gate]]
+section = "rehearsal"
+gate = "rehearsal.run"
+
+[[section_gate]]
+section = "birth"
+gate = "birth.run"
+
+[[section_gate]]
+section = "principals_authority"
+gate = "principals_authority.run"
+
+[[section_gate]]
+section = "signed_genesis"
+gate = "signed_genesis.run"
+
+[[section_gate]]
+section = "boundary"
+gate = "boundary.configure"
+
+[[section_gate]]
+section = "observability"
+gate = "observability.run"
+
+[[section_gate]]
+section = "hydration"
+gate = "hydration.run"

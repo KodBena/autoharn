@@ -1,0 +1,28 @@
+seen-red/setup-tui-rehearsal-mid-cancel -- banked RED evidence (both-polarity proof, fixture-census)
+
+Audit finding (cycle-4 audit finding 1, /home/bork/autoharn_series/cycle-4/AUDIT.md, ledger rows
+1124/1133): Cancel is enabled and clickable the WHOLE time a commit sweep runs, but
+`tools/configtree/commit_pane.py`'s own sweep loop only checked `Worker.is_cancelled` BETWEEN
+sections -- the one section that reaches a real, slow subprocess mid-flow
+(`tools/setup_tui/steps_rehearsal_birth.py`'s `rehearsal_submit`, witnessed at ~61s for one real
+rehearsal run) left Cancel structurally inert for that whole window: pressing it set a flag
+nothing checked again until the already-running child exited on its own.
+
+Case 2 (Pilot leg) loads `CommitPane` straight from commit 1e6fb5f (the last commit before this
+fix, via `git show`, executed in an isolated namespace) and drives it against a synthetic
+rehearsal-shaped section (a real, killable Python subprocess standing in for
+`bootstrap/new-project.sh`) at 120x40: Cancel is pressed ~0.3s after the child starts, and the
+child is STILL ALIVE 3.0s later -- reproducing the exact hazard, live, not merely asserted from
+reading the diff.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1a ok (REAL cancellation, not a wait-it-out): rehearsal_submit returned in 0.44s against a 8.0s synthetic birth sleep, cancelled ~0.3s in
+case 1b ok (honest disposition): checklist rows read {'scratch birth': 'CANCELLED', 'scratch teardown': 'WITNESSED', 'scratch scaffold dir removed': 'WITNESSED', 'rehearsal overall': 'CANCELLED'} -- CANCELLED is its own dedicated status, distinct from REFUSED/WITNESSED
+case 1c ok (residue safety): teardown ran to completion and removed the scratch directory EVEN THOUGH the birth subprocess was cancelled mid-run -- zero residue
+case 2 ok (RED, reproduced against 1e6fb5f): pid <PID> is STILL ALIVE 3.0s after Cancel was pressed -- the OLD CommitPane never threaded a cancellation token into the subprocess layer, so the Cancel press was structurally inert for this section
+case 3a ok (GREEN, real termination): pid <PID> was actually gone 0.10s after Cancel was pressed -- well under the 8.0s the child would otherwise have slept, and well under the 3.0s bound (SIGTERM, bounded wait, then SIGKILL)
+case 3b ok (honest disposition): the pane settles NOT committed, Commit button re-enabled for a retry -- no silent freeze, no false success
+case 3c ok (residue safety, Pilot-driven): teardown ran to completion and the scratch directory is gone even though Cancel fired mid-birth
+case 3d ok (retry after cancel): a second, uncancelled press runs the full sweep (this time letting the birth child sleep out its own duration naturally) and completes -- the cancelled attempt left no residue behind
+ALL CASES OK -- the mid-section cancellation token (cycle-4 audit finding 1, ledger rows 1124/1133): a direct-call witness of the REAL rehearsal_submit (a real OS child actually terminated, teardown honoring the residue-safety contract, honest CANCELLED checklist rows), RED-first against the OLD CommitPane (1e6fb5f, Cancel structurally inert mid-section), and GREEN against the CURRENT CommitPane (the same Cancel press now actually kills the in-flight child, an honest not-committed disposition, and a clean uncancelled retry afterward).

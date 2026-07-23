@@ -45,12 +45,14 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import here is top of fil
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.setup_tui.content.durable_decisions_data import RAW_CATALOG
+from tools.configtree import DescriptionElement, PROVENANCE_LABEL
+from tools.setup_tui import content
 from tools.setup_tui.plan import Hole, WriteAct
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -62,11 +64,31 @@ END_MARKER = "<!-- END COMPILED DURABLE DECISIONS (setup_tui) -->"
 
 @dataclass(frozen=True)
 class DurableDecision:
+    """`why`/`provenance`/`maintainer_refs` SCHEMA (round 6, ledger row 1117 -- companion rule
+    C13; round 7 audience-boundary split, ledger row 1119, defect D2): `why` is ONE short,
+    citation-free sentence; `provenance` lists citations a FOUNDING OPERATOR could actually open
+    and read (this repo's own user-guide/*, law/adr/*, or a public external link), rendered
+    demoted, LAST, one `PROVENANCE_LABEL` element per path; `maintainer_refs` lists
+    INTERNAL-ONLY citations (bare ledger-row numbers, autoharn-panel prior art) -- NEVER rendered
+    by any widget, kept only for the maintainer's own audit trail. `rule`/`hydrates`/`claude_md`
+    are unchanged: literal artifact TEXT (a ledger-decision statement, a CLAUDE.md fragment), not
+    interactive elucidation."""
     slug: str
     rule: str
     why: str
     hydrates: str      # the exact `led decision` statement this selection writes
     claude_md: str      # the fragment compiled into the new world's CLAUDE.md
+    provenance: tuple[str, ...] = ()
+    maintainer_refs: tuple[str, ...] = ()
+
+    def elements(self) -> "tuple[DescriptionElement, ...]":
+        """The interactive elucidation rendering: `why` first (unlabeled connective prose, D7/
+        D8), then each OPERATOR-relevant `provenance` path, demoted, LAST -- `maintainer_refs`
+        is never read here at all. `steps_hydration.py`'s own MultiChoiceField `option_help`
+        uses this instead of a bare `decision.why` string."""
+        out = [self.why]
+        out.extend(DescriptionElement(PROVENANCE_LABEL, p) for p in self.provenance)
+        return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -101,7 +123,11 @@ class DurableDecision:
 # after this construction) -- inside the 7-15 range, 15 is a hard ceiling not approached.
 # ---------------------------------------------------------------------------------------------
 
-CATALOG: list[DurableDecision] = [DurableDecision(**entry) for entry in RAW_CATALOG]
+CATALOG: list[DurableDecision] = [
+    DurableDecision(**{**entry, "provenance": tuple(entry.get("provenance", ())),
+                       "maintainer_refs": tuple(entry.get("maintainer_refs", ()))})
+    for entry in content.DURABLE_DECISIONS
+]
 
 # The non-catalog hydration items that remain as-is (spec §3, "Relation to the existing screen-8
 # items"): per-world facts, not durable decisions -- named here only so feature_facts.py and the
@@ -127,6 +153,15 @@ def list_adrs() -> list[tuple[str, str, str]]:
     first, so that comment never gets mistaken for the title)."""
     out: list[tuple[str, str, str]] = []
     for path in sorted(ADR_DIR.glob("*.md")):
+        if "-appendix-" in path.stem:
+            # A provisional appendix (e.g. 0019-appendix-provisional-ui-proscriptions.md) is NOT
+            # itself an adoptable ADR -- it shares its parent ADR's own number in its title line
+            # (both start "# ADR-0019 ..."), which would otherwise mint a SECOND catalog entry
+            # under the SAME ADR number (a live crash: two options claiming one identity --
+            # `tools.configtree.fields.MultiChoiceField`'s own construction-time duplicate-value
+            # refusal is what caught this). The maintainer adopts an appendix by adopting its
+            # parent ADR; excluding it here is a named, reviewable choice, not a silent drop.
+            continue
         title = None
         number = None
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -145,6 +180,91 @@ def list_adrs() -> list[tuple[str, str, str]]:
         out.append((number, title, str(path.relative_to(REPO_ROOT))))
     out.sort(key=lambda t: t[0])
     return out
+
+
+@dataclass(frozen=True)
+class AdrSynopsisDrift:
+    """One STALE synopsis -- its own `source_sha256` (recorded at authoring time) no longer
+    matches the ADR file's CURRENT bytes. Named, not a bare tuple (the maintainer's standing "no
+    bare types" rule, ledger row 1105) -- a stale synopsis is one distinct, checkable fact, not
+    three loose strings a caller has to remember the order of."""
+    number: str
+    declared_sha256: str
+    actual_sha256: str
+
+
+class AdrSynopsisMissingError(RuntimeError):
+    """A cataloged ADR (one `list_adrs()` names) has NO synopsis entry in `adr_synopses.toml` at
+    all -- a construction-time refusal (ADR-0002 rule 1), never a silent gap an operator
+    discovers only by noticing an unusually-terse hydration checkbox."""
+
+
+def check_adr_synopsis_freshness(
+    *, adrs: "list[tuple[str, str, str]] | None" = None,
+    hashes: "dict[str, str] | None" = None,
+    read_bytes: "object | None" = None,
+) -> "tuple[list[str], list[AdrSynopsisDrift]]":
+    """DRIFTABILITY (maintainer question, 2026-07-22: "the ADR-adoption catalog derives live
+    from law/adr/*.md ... but adr_synopses.toml is static and already stale twice today").
+    Returns `(missing, stale)`: `missing` -- ADR numbers `list_adrs()` (or an injected
+    equivalent) names that have NO synopsis hash recorded at all; `stale` -- one
+    `AdrSynopsisDrift` per synopsis whose OWN declared `source_sha256` no longer matches the ADR
+    file's CURRENT bytes. INJECTABLE (the SAME house idiom `feature_facts.check_registry` already
+    uses, seen-red/setup-tui-feature-facts-drift's own fixture: a fixture feeds a SYNTHETIC
+    `adrs`/`hashes`/`read_bytes` without mutating this module's real globals, so a red leg never
+    corrupts the real catalog) -- called with no arguments, it checks the REAL catalog against
+    the REAL recorded hashes. NEVER RAISES itself -- the caller decides what MISSING vs STALE
+    means for its own run (see `validate_adr_synopsis_freshness`, the real wired case: a
+    construction-time refusal for MISSING, a loud but non-fatal warning for STALE)."""
+    adrs = adrs if adrs is not None else list_adrs()
+    hashes = hashes if hashes is not None else content.ADR_SYNOPSIS_HASHES
+    read_bytes = read_bytes or (lambda relpath: (REPO_ROOT / relpath).read_bytes())
+    missing: list[str] = []
+    stale: list[AdrSynopsisDrift] = []
+    for number, _title, relpath in adrs:
+        declared = hashes.get(number)
+        if declared is None:
+            missing.append(number)
+            continue
+        actual = hashlib.sha256(read_bytes(relpath)).hexdigest()
+        if actual != declared:
+            stale.append(AdrSynopsisDrift(number=number, declared_sha256=declared,
+                                           actual_sha256=actual))
+    return missing, stale
+
+
+def validate_adr_synopsis_freshness() -> "tuple[AdrSynopsisDrift, ...]":
+    """The REAL, wired check (called once at TUI start, `tools.setup_tui.app.main`): REFUSES
+    loudly (`AdrSynopsisMissingError`, naming every missing number at once, never a first-one-
+    wins early exit) if any cataloged ADR has no synopsis hash recorded at all; otherwise
+    returns every STALE entry for the caller to render as a loud, NON-FATAL warning naming both
+    hashes -- a stale synopsis awaits a human re-derivation pass, it must not brick setup while
+    that pass is pending (the maintainer's own ruling, this fix's commission)."""
+    missing, stale = check_adr_synopsis_freshness()
+    if missing:
+        raise AdrSynopsisMissingError(
+            f"tools/setup_tui/durable_decisions.py: {len(missing)} cataloged ADR(s) have NO "
+            f"synopsis entry in adr_synopses.toml at all: {sorted(missing)} -- every adoptable "
+            f"ADR needs an authored synopsis row (even a '(synopsis pending maintainer review)' "
+            f"placeholder, stamped with its own source_sha256) before the hydration screen can "
+            f"start.")
+    return tuple(stale)
+
+
+_ADR_SYNOPSIS_PENDING = "(synopsis pending maintainer review)"
+
+
+def adr_synopsis_elements(number: str, relpath: str) -> "tuple[DescriptionElement, ...]":
+    """The ADR-adoption submenu's own per-entry elucidation (maintainer round-6 addendum: "a
+    pointer is not an elucidation ... helpful only to someone who already knows every ADR").
+    ORIENTATION, NOT THE LAW (content.py's own `adr_synopses.toml` header note): a 1-3 sentence
+    digest of what the ADR binds you to if adopted, authored by lifting/lightly trimming the
+    ADR's own words -- `content.ADR_SYNOPSES` is the one home for that text (data, never
+    hardcoded here). A number with no authored synopsis reads the honest pending-review marker,
+    never a fabricated one. The file-path pointer is a SEPARATE, final element -- it follows the
+    synopsis, it does not replace it."""
+    synopsis = content.ADR_SYNOPSES.get(number, _ADR_SYNOPSIS_PENDING)
+    return (DescriptionElement("Synopsis", synopsis), DescriptionElement("File", relpath))
 
 
 def adr_decision_statement(number: str, title: str, relpath: str) -> str:

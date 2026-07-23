@@ -1,0 +1,26 @@
+seen-red/setup-tui-multichoice-filter -- banked RED evidence (both-polarity proof, fixture-census)
+
+MEDIUM audit finding (ledger row 1130's own sibling audit): hydration's own durable-decisions +
+ADR-adoption `MultiChoiceField` checkbox groups (33 options today, more as either catalog grows)
+rendered as one unbroken ~218-row scroll with no visual structure and no way to narrow it. Case
+RED loads the OLD `MultiChoiceFieldWidget` straight from commit 3cc769d (the last commit before
+this fix, via `git show`, executed in an isolated namespace) against a synthetic 20-option
+catalog carrying a `groups` mapping the CURRENT `MultiChoiceField` dataclass accepts -- proving
+the OLD widget renders ZERO sub-headings (ignores `groups` entirely) and NO filter Input
+regardless of catalog size. Cases GREEN 2-5 prove the fixed widget: real sub-headings render in
+catalog order (one per contiguous run sharing a heading), a filter Input appears once the
+catalog exceeds MULTICHOICE_FILTER_THRESHOLD and narrows the visible rows live, clearing it
+restores every option (with an honest "no option matches" line rather than a silent blank when
+nothing matches), a selection made before filtering survives being filtered out of view and
+reappears checked once the filter no longer excludes it, and a catalog AT (not over) the
+threshold renders no filter Input at all.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok (RED, reproduced against 3cc769d): a 20-option catalog with a `groups` mapping rendered ZERO sub-headings and NO filter Input -- one unbroken 20-checkbox scroll, exactly the audited defect
+case 2 ok (GREEN): 4 distinct sub-headings render for a 20-option grouped catalog: ['Group 0', 'Group 1', 'Group 2', 'Group 3']
+case 3 ok (GREEN): typing 'opt-00' narrowed the catalog from 20 to 1 visible checkbox(es)
+case 4 ok (GREEN): a non-matching filter hides every option (with an honest 'no match' line, not a silent blank), clearing it restores all 20
+case 5 ok (GREEN): a selection made before filtering survives being filtered out of view and reappears checked once the filter clears
+case 5b ok (GREEN): a 9-option catalog (AT threshold) renders NO filter Input -- the gate only fires once the catalog is genuinely large
+ALL CASES OK -- MultiChoiceFieldWidget's sub-heading (spec.groups) + live-filter (above MULTICHOICE_FILTER_THRESHOLD) fix: RED-first against the OLD widget (zero headings, no filter, whatever the data said), GREEN against the CURRENT widget (real sub-headings in catalog order, a filter that narrows/restores/keeps an honest no-match line, and selections that survive being filtered out of view).

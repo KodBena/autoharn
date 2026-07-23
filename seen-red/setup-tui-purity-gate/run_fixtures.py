@@ -1,297 +1,157 @@
 #!/usr/bin/env python3
-"""seen-red/setup-tui-purity-gate/run_fixtures.py -- both-polarity proof of
-gates/setup_tui_purity_gate.py (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8, commission ledger
-rows 1823 point 2 / 1825 / 1835), census-registered in gates/fixture_census.py.
+"""seen-red/setup-tui-purity-gate/run_fixtures.py -- both-polarity proof of the REWRITTEN
+gates/setup_tui_purity_gate.py (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2/§6, the 2026-07-22
+wholesale rebuild onto tools/configtree): its three detectors (no print/input/stdin/stdout outside
+the app package + the --from-config reporter; the core imports nothing from the app package; no
+raw fr-default layout container in a tools/configtree content path, ledger row 1139), plus a
+real-tree GREEN leg (the actual gate, run against the actual package, is clean today).
 
 Cases:
-  1. GREEN, real tree -- the gate reports zero violations against the ACTUAL
-     tools/setup_tui/*.py files (`gates/setup_tui_purity_gate.scan_package()`), proving the
-     Phase-2 rewire genuinely confined every runner choke-point call to commit_executor.py /
-     screen_rehearsal, not merely that the gate script runs.
-  2. RED, negative self-check (a synthetic violation must fail red -- spec §2.8's own standing
-     requirement) -- three synthetic ast.Module trees, checked via `check_tree` under a chosen
-     filename, each proving the gate actually CATCHES the shape it claims to forbid:
-       2a. a bare `run_command(...)` call inside an ordinary function of a synthetic
-           "screens.py" -- caught, not exempt.
-       2b. a `runner.write_file(...)` attribute call at MODULE LEVEL (no enclosing function) of a
-           synthetic "screens.py" -- caught (the "always a violation, never exempt" module-level
-           case named in the gate's own docstring).
-       2c. the SAME `run_command(...)` call, but placed inside `screen_rehearsal` -- NOT caught
-           (the declared exception working correctly is also a claim this gate could get wrong in
-           either direction; proving the exception fires only where it should is as load-bearing
-           as proving the forbidden call is caught elsewhere).
-  3. GREEN -- `commit_executor.py`'s own real, load-bearing choke-point calls (three of them,
-     verified present) are correctly exempted (module-level '*' entry), never mistaken for a
-     violation.
-  4. RED, negative self-check for DETECTION 2 (CLASS FIX, fresh-context review of b565db1) --
-     five synthetic shapes, each proving `check_extra_effects` catches what it claims to:
-       4a. a bare `open(path, "w")` inside an ordinary function of a synthetic "screens.py" --
-           caught (the EXACT shape the review's own instruction named: "a synthetic bare
-           open-for-write in a screen must fail red").
-       4b. `os.mkdir(...)` inside an ordinary function -- caught.
-       4c. `tempfile.mkdtemp(...)` inside an ordinary function -- caught.
-       4d. `subprocess.run(...)` inside an ordinary function of a synthetic "screens.py" --
-           caught.
-       4e. the negative control: a READ-mode `open(path)` (no mode arg at all) and
-           `open(path, "r")` (explicit read mode) inside an ordinary function -- NOT caught
-           (proving the detector discriminates read from write, never over-catching).
-  5. GREEN -- DETECTION 2's exemption table applied correctly: a synthetic "probes.py" (whole-
-     file exempt) with a `subprocess.run(...)` call is NOT caught; the SAME call in a synthetic
-     "screens.py" (no exemption) IS caught -- proving the exemption is table-driven, not a
-     blanket "subprocess is fine" rule.
+  1. `check_print_or_io` -- RED on a synthetic `steps_boundary.py`-named tree with a bare
+     `print(...)` inside a function; GREEN once the same call sits in an exempted file
+     (`runner.py`).
+  2. `check_print_or_io` -- RED on `sys.stdout`/`sys.stdin` attribute access in a non-exempt file.
+  3. `check_core_imports_app` -- RED on a synthetic `steps.py`-named tree importing
+     `tools.configtree.app`; GREEN for the library's top-level types (`SectionSpec`/`TextField`,
+     every `steps_*.py` module's own real import shape); GREEN for the same textual-dependent
+     import inside `tui_app.py` (the one legitimate importer).
+  4. Real-tree leg: `gates/setup_tui_purity_gate.main()` against the ACTUAL `tools/setup_tui/`
+     tree exits 0 today (a negative control that the real package is clean, not just the
+     synthetic cases).
+  5. `check_raw_layout_containers` (ledger row 1139, TYPE half) -- RED on a synthetic raw
+     `class Foo(Vertical)` and a raw, unclassed `Horizontal()` call inside it -- byte-for-byte the
+     SAME shape `widgets_master_detail.py`'s own pre-fix culprit had; GREEN once the same class
+     uses `layout_primitives.ContentVertical`/`ContentHorizontal` instead, and GREEN for the
+     declared `LAYOUT_EXCEPTIONS`/`LAYOUT_BASE_CLASS_EXCEPTIONS` shells (`ct-split`, the wide
+     layout's own scroll columns, `SectionPane`). PLUS a real-tree leg:
+     `gates/setup_tui_purity_gate.main()` against the ACTUAL, now-fixed `tools/configtree/` tree
+     exits 0 (the real migration is genuinely gate-clean, not just the synthetic cases).
 
-Zero residue: everything is synthetic AST text, nothing touches disk beyond the real files this
-fixture reads. Lazy imports banned.
-
-Usage: python3 seen-red/setup-tui-purity-gate/run_fixtures.py
-Exit 0 if every case matches; 1 otherwise."""
+Zero residue (no filesystem writes at all -- every tree here is synthetic `ast.parse`d text).
+Lazy imports banned."""
 from __future__ import annotations
 
 import ast
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
-sys.path.insert(0, REPO)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, REPO_ROOT)
 
 from gates import setup_tui_purity_gate as G  # noqa: E402
 
-FAILURES: list[str] = []
+
+def _tree(src: str) -> ast.AST:
+    return ast.parse(src)
 
 
-def check(label: str, cond: bool, detail: str = "") -> None:
-    if cond:
-        print(f"  OK   {label}")
-    else:
-        msg = f"FAIL {label}" + (f" -- {detail}" if detail else "")
-        print(f"  {msg}")
-        FAILURES.append(msg)
-
-
-def case_1_real_tree_clean() -> None:
-    print("case 1: GREEN -- the real tools/setup_tui/*.py tree has zero purity violations")
-    violations = G.scan_package()
-    check("zero violations against the real tree", violations == [], violations)
-
-
-SYNTH_BARE_IN_FUNCTION = """
-from tools.setup_tui.runner import run_command
-
-def screen_boundary(ui, cl, state):
-    res = run_command(["echo", "hi"])
-    return state
-"""
-
-SYNTH_ATTR_MODULE_LEVEL = """
-from tools.setup_tui import runner
-
-runner.write_file("/tmp/x", "content")
-"""
-
-SYNTH_BARE_IN_REHEARSAL = """
-from tools.setup_tui.runner import run_command
-
-def screen_rehearsal(ui, cl, state):
-    res = run_command(["echo", "hi"])
-    return state
-"""
-
-
-def case_2_negative_self_check() -> None:
-    print("case 2: RED -- the negative self-check, three synthetic violations")
-
-    tree_a = ast.parse(SYNTH_BARE_IN_FUNCTION, filename="screens.py")
-    v_a = G.check_tree(tree_a, "screens.py")
-    check("2a: a bare run_command() inside an ordinary function IS caught",
-          len(v_a) == 1 and "screen_boundary" in v_a[0], v_a)
-
-    tree_b = ast.parse(SYNTH_ATTR_MODULE_LEVEL, filename="screens.py")
-    v_b = G.check_tree(tree_b, "screens.py")
-    check("2b: a module-level runner.write_file() call IS caught (never exempt)",
-          len(v_b) == 1 and "<module level>" in v_b[0], v_b)
-
-    tree_c = ast.parse(SYNTH_BARE_IN_REHEARSAL, filename="screens.py")
-    v_c = G.check_tree(tree_c, "screens.py")
-    check("2c: the SAME call, inside screen_rehearsal, is NOT caught (declared exception works)",
-          v_c == [], v_c)
-
-
-def case_3_commit_executor_exempt() -> None:
-    print("case 3: GREEN -- commit_executor.py's real choke-point calls are correctly exempted")
-    path = os.path.join(REPO, "tools", "setup_tui", "commit_executor.py")
-    with open(path, encoding="utf-8") as f:
-        source = f.read()
-    real_call_count = sum(
-        1 for node in ast.walk(ast.parse(source, filename="commit_executor.py"))
-        if isinstance(node, ast.Call) and G._call_name(node) in G.FORBIDDEN_NAMES
+def case_1() -> None:
+    red_src = (
+        "def submit(state, answers):\n"
+        "    print('leaking straight to stdout')\n"
     )
-    check("commit_executor.py really DOES call all three choke points (>= 3 real call sites)",
-          real_call_count >= 3, real_call_count)
-    v = G.scan_file(path)
-    check("but the gate reports zero violations for it (module-level '*' exemption)", v == [], v)
+    v = G.check_print_or_io(_tree(red_src), "steps_boundary.py")
+    assert v and "print" in v[0], f"expected a print violation, got {v}"
+    print("case 1a ok: bare print() inside a non-exempt module reads red")
+
+    green_src = "def run_command(argv):\n    print(f'$ {argv}')\n"
+    v2 = G.check_print_or_io(_tree(green_src), "runner.py")
+    assert v2 == [], f"expected runner.py exempt, got {v2}"
+    print("case 1b ok: the same shape inside runner.py (the exempted choke point) reads green")
 
 
-SYNTH_OPEN_WRITE_IN_FUNCTION = """
-def screen_boundary(ui, cl, state):
-    with open("/tmp/x", "w") as f:
-        f.write("hi")
-    return state
-"""
-
-SYNTH_OS_MKDIR_IN_FUNCTION = """
-import os
-
-def screen_boundary(ui, cl, state):
-    os.mkdir("/tmp/scratch-dir")
-    return state
-"""
-
-SYNTH_TEMPFILE_MKDTEMP_IN_FUNCTION = """
-import tempfile
-
-def screen_signed_genesis(ui, cl, state):
-    gnupghome = tempfile.mkdtemp(prefix="x-")
-    return state
-"""
-
-SYNTH_SUBPROCESS_RUN_IN_FUNCTION = """
-import subprocess
-
-def screen_birth(ui, cl, state):
-    subprocess.run(["echo", "hi"])
-    return state
-"""
-
-SYNTH_OPEN_READ_IN_FUNCTION = """
-def screen_hydration(ui, cl, state):
-    with open("/tmp/x") as f:
-        a = f.read()
-    with open("/tmp/y", "r") as f:
-        b = f.read()
-    return state
-"""
-
-SYNTH_SUBPROCESS_IN_PROBES = """
-import subprocess
-
-def pg_reachable(host):
-    return subprocess.run(["pg_isready", "-h", host])
-"""
+def case_2() -> None:
+    src = "def f():\n    line = sys.stdin.readline()\n    sys.stdout.write(line)\n"
+    v = G.check_print_or_io(_tree(src), "steps_preflight.py")
+    assert len(v) == 2, f"expected two IO violations (stdin+stdout), got {v}"
+    print("case 2 ok: sys.stdin/sys.stdout attribute access in a non-exempt module reads red "
+          f"({len(v)} hit(s))")
 
 
-def case_4_extra_effects_negative_self_check() -> None:
-    print("case 4: RED -- the negative self-check for DETECTION 2 (CLASS FIX), five shapes")
+def case_3() -> None:
+    red_src = "from tools.configtree.app import ConfigTreeApp\n"
+    v = G.check_core_imports_app(_tree(red_src), "steps.py")
+    assert v, "expected a core-imports-app violation"
+    print("case 3a ok: steps.py importing tools.configtree.app (the textual-dependent submodule) "
+          "reads red")
 
-    tree_a = ast.parse(SYNTH_OPEN_WRITE_IN_FUNCTION, filename="screens.py")
-    v_a = G.check_extra_effects(tree_a, "screens.py")
-    check("4a: a bare open(path, 'w') inside an ordinary function IS caught",
-          len(v_a) == 1 and "screen_boundary" in v_a[0], v_a)
+    ok_src = "from tools.configtree import SectionSpec, TextField\n"
+    v_ok = G.check_core_imports_app(_tree(ok_src), "steps.py")
+    assert v_ok == [], f"expected the library's TOP-LEVEL types to be importable from core, got {v_ok}"
+    print("case 3b ok: steps.py importing the library's top-level types (SectionSpec/TextField) "
+          "reads green -- every section module needs these to declare its data")
 
-    tree_b = ast.parse(SYNTH_OS_MKDIR_IN_FUNCTION, filename="screens.py")
-    v_b = G.check_extra_effects(tree_b, "screens.py")
-    check("4b: os.mkdir(...) inside an ordinary function IS caught",
-          len(v_b) == 1 and "screen_boundary" in v_b[0], v_b)
-
-    tree_c = ast.parse(SYNTH_TEMPFILE_MKDTEMP_IN_FUNCTION, filename="screens.py")
-    v_c = G.check_extra_effects(tree_c, "screens.py")
-    check("4c: tempfile.mkdtemp(...) inside an ordinary function IS caught",
-          len(v_c) == 1 and "screen_signed_genesis" in v_c[0], v_c)
-
-    tree_d = ast.parse(SYNTH_SUBPROCESS_RUN_IN_FUNCTION, filename="screens.py")
-    v_d = G.check_extra_effects(tree_d, "screens.py")
-    check("4d: subprocess.run(...) inside an ordinary function IS caught",
-          len(v_d) == 1 and "screen_birth" in v_d[0], v_d)
-
-    tree_e = ast.parse(SYNTH_OPEN_READ_IN_FUNCTION, filename="screens.py")
-    v_e = G.check_extra_effects(tree_e, "screens.py")
-    check("4e: a READ-mode open() (no mode arg, or explicit 'r') is NOT caught "
-          "(read vs write discrimination, never over-catching)", v_e == [], v_e)
+    green_src = "from tools.configtree.app import ConfigTreeApp\n"
+    v2 = G.check_core_imports_app(_tree(green_src), "tui_app.py")
+    assert v2 == [], f"expected tui_app.py exempt, got {v2}"
+    print("case 3c ok: the same textual-dependent import inside tui_app.py (the one "
+          "legitimate importer) reads green")
 
 
-def case_5_extra_effects_exemption_table_driven() -> None:
-    print("case 5: GREEN -- DETECTION 2's exemption table is applied correctly, per file")
-
-    tree_probes = ast.parse(SYNTH_SUBPROCESS_IN_PROBES, filename="probes.py")
-    v_probes = G.check_extra_effects(tree_probes, "probes.py")
-    check("the SAME subprocess.run(...) shape in a synthetic 'probes.py' (whole-file exempt) "
-          "is NOT caught", v_probes == [], v_probes)
-
-    tree_screens = ast.parse(SYNTH_SUBPROCESS_IN_PROBES.replace("pg_reachable", "screen_x"),
-                              filename="screens.py")
-    v_screens = G.check_extra_effects(tree_screens, "screens.py")
-    check("the IDENTICAL call shape in a synthetic 'screens.py' (no exemption) IS caught -- "
-          "the exemption is table-driven, not a blanket subprocess allowance",
-          len(v_screens) == 1, v_screens)
+def case_4() -> None:
+    code = G.main()
+    assert code == 0, f"expected the real tree to be clean (exit 0), got {code}"
+    print("case 4 ok: the rewritten gate against the REAL tools/setup_tui/ tree exits 0 (clean)")
 
 
-# DETECTION 3 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md §1's closure statement): the planted-
-# violation negative control the spec's own build requires -- "an unknown element type passed to
-# emit raises a typed error (negative control: the fixture proves it)... the purity-gate print/say
-# check goes red on a planted violation".
-SYNTH_BARE_PRINT_IN_FUNCTION = """
-def screen_boundary(ui, cl, state):
-    print("this should have been ui.emit(...)")
-    return state
-"""
+def case_5() -> None:
+    """`check_raw_layout_containers` (ledger row 1139, TYPE half): the maintainer's own
+    reproduced hazard -- a raw `(Vertical)` base class holding a raw, unclassed `Horizontal()`
+    call, exactly `widgets_master_detail.MasterDetailFieldWidget`'s pre-fix shape -- RED; the
+    same shape migrated to the typed primitive, and every declared exception, GREEN."""
+    red_src = (
+        "from textual.containers import Vertical, Horizontal\n"
+        "class SomeContentWidget(Vertical):\n"
+        "    def compose(self):\n"
+        "        with Horizontal():\n"
+        "            yield None\n"
+    )
+    v = G.check_raw_layout_containers(_tree(red_src), "some_widget.py")
+    assert len(v) == 2, f"expected 2 violations (base class + bare call), got {v}"
+    assert any("class SomeContentWidget(Vertical)" in line for line in v), v
+    assert any("raw Horizontal(...)" in line for line in v), v
+    print(f"case 5a ok (RED, the exact reproduced class): a raw `(Vertical)` base class "
+          f"nesting a raw, unclassed `Horizontal()` call reads red -- {v}")
 
-SYNTH_DOT_SAY_IN_FUNCTION = """
-def screen_boundary(ui, cl, state):
-    ui.say("a reintroduced compatibility shim call, still caught")
-    return state
-"""
+    green_src = (
+        "from tools.configtree.layout_primitives import ContentHorizontal, ContentVertical\n"
+        "class SomeContentWidget(ContentVertical):\n"
+        "    def compose(self):\n"
+        "        with ContentHorizontal():\n"
+        "            yield None\n"
+    )
+    v_ok = G.check_raw_layout_containers(_tree(green_src), "some_widget.py")
+    assert v_ok == [], f"expected the typed-primitive shape to read clean, got {v_ok}"
+    print("case 5b ok (GREEN): the SAME shape, built from layout_primitives.ContentVertical/"
+          "ContentHorizontal instead, reads clean")
 
-SYNTH_PRINT_IN_UI_MODULE = """
-def emit(self, element):
-    print("this is the rendering seam itself -- exempt")
-"""
+    exceptions_src = (
+        "from textual.containers import Horizontal, Vertical, VerticalScroll\n"
+        "class SectionPane(Vertical):\n"
+        "    def compose(self):\n"
+        "        with Horizontal(classes='ct-split'):\n"
+        "            with VerticalScroll(classes='ct-controls-col'):\n"
+        "                pass\n"
+        "            with VerticalScroll(classes='ct-help-col'):\n"
+        "                pass\n"
+    )
+    v_exc = G.check_raw_layout_containers(_tree(exceptions_src), "panes.py")
+    assert v_exc == [], f"expected every declared LAYOUT_EXCEPTIONS shell to read clean, got {v_exc}"
+    print("case 5c ok (GREEN): every declared fr-intended shell (SectionPane's own base class, "
+          "'ct-split', 'ct-controls-col', 'ct-help-col') reads clean -- the gate does not refuse "
+          "the shells it is meant to leave alone")
 
-
-def case_6_print_say_negative_self_check() -> None:
-    print("case 6: RED -- DETECTION 3's negative self-check (the print(/.say( planted violation)")
-
-    tree_a = ast.parse(SYNTH_BARE_PRINT_IN_FUNCTION, filename="screens.py")
-    v_a = G.check_print_say(tree_a, "screens.py")
-    check("6a: a bare print(...) inside an ordinary function of a synthetic 'screens.py' IS "
-          "caught (the planted violation)", len(v_a) == 1 and "screen_boundary" in v_a[0], v_a)
-
-    tree_b = ast.parse(SYNTH_DOT_SAY_IN_FUNCTION, filename="screens.py")
-    v_b = G.check_print_say(tree_b, "screens.py")
-    check("6b: a reintroduced ui.say(...) shape IS caught (the old, removed Ui.say -- still "
-          "detected, spec §1: no compatibility shim)",
-          len(v_b) == 1 and "screen_boundary" in v_b[0], v_b)
-
-    tree_c = ast.parse(SYNTH_PRINT_IN_UI_MODULE, filename="ui.py")
-    v_c = G.check_print_say(tree_c, "ui.py")
-    check("6c: the IDENTICAL bare print(...) shape in a synthetic 'ui.py' (the declared "
-          "rendering-seam exemption) is NOT caught", v_c == [], v_c)
-
-    tree_d = ast.parse(SYNTH_PRINT_IN_UI_MODULE.replace("def emit", "def _run"), filename="runner.py")
-    v_d = G.check_print_say(tree_d, "runner.py")
-    check("6d: the IDENTICAL bare print(...) shape in a synthetic 'runner.py' (the spec's own "
-          "'subprocess passthrough of child output' exemption) is NOT caught", v_d == [], v_d)
-
-    real_v = G.scan_package()
-    check("6e: GREEN -- the real tree still has zero DETECTION-3 violations after the negative "
-          "controls above (the exemption tables above are additive, not accidentally widened)",
-          real_v == [], real_v)
-
-
-def main() -> int:
-    case_1_real_tree_clean()
-    case_2_negative_self_check()
-    case_3_commit_executor_exempt()
-    case_4_extra_effects_negative_self_check()
-    case_5_extra_effects_exemption_table_driven()
-    case_6_print_say_negative_self_check()
-    if FAILURES:
-        print(f"\n{len(FAILURES)} FAILURE(S):")
-        for f in FAILURES:
-            print(f"  - {f}")
-        return 1
-    print("\nall cases GREEN")
-    return 0
+    code = G.main()
+    assert code == 0, f"expected the real, now-migrated tools/configtree/ tree to be clean, got {code}"
+    print("case 5d ok: the rewritten gate against the REAL, now-fixed tools/configtree/ tree "
+          "exits 0 (clean) -- the actual row-1139 migration, not just the synthetic cases")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    case_1()
+    case_2()
+    case_3()
+    case_4()
+    case_5()
+    print("ALL CASES OK -- setup_tui_purity_gate.py's three detectors, both polarities, plus a "
+          "real-tree clean confirmation")
