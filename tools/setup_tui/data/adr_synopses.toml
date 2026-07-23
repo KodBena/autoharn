@@ -32,7 +32,11 @@ source_sha256 = "291ccad81335837933d66bacd9694a5a1272758719ce775e782a3c15d71efb8
 [[synopsis]]
 number = "0003"
 text = "Domain-specific instance facts and domain-general problem-class machinery get named, separated coupling bands. Two questions govern every new module: what would change if the domain instance were different but the problem class the same, and what would change if the problem class were different but the machinery the same -- the answers locate the seam, and the seam is designed deliberately either way. Adopters derive their own band map from their own codebase; the ADR hands none down."
-source_sha256 = "335803f7ce4cbdb17b650e00692062613fe3d120693858613299108102c44576"
+# source_sha256 re-stamped 2026-07-23 (integration-merge reconciliation task B): base commit
+# d23dfb0's own A:B:C pass (ledger row 1143-1146 family) trimmed a stale doc-attest-exempt
+# comment and lightly restructured a section heading -- neither touches the rule content this
+# synopsis digests, so only the hash moves, the text does not.
+source_sha256 = "c5c3cc750149fd9430386141e7c9272def6c5a8e5dc083c24180dd8e015bfa62"
 
 [[synopsis]]
 number = "0004"
@@ -87,7 +91,10 @@ source_sha256 = "488ce2f9fa6eea4771c8a1c1e47dae6fe779c82a40ca4fe47f0c5aa5a4e01ec
 [[synopsis]]
 number = "0014"
 text = "When the executor's own line of reasoning has demonstrably stalled -- an observable recurrence of mis-targeted attempts, not a passing feeling -- fetching an independent, deliberately un-led second opinion is the professional move; it is judiciously applied, never a mandate to spawn-and-offload, and the executor still owns the result."
-source_sha256 = "e3983d46530e5905f68a71db9674d09b98b579cbce5b53c17a093bbd5b43c2b3"
+# source_sha256 re-stamped 2026-07-23 (integration-merge reconciliation task B): base commit
+# d23dfb0's own A:B:C pass trimmed a stale doc-attest-exempt comment only -- the rule content
+# this synopsis digests is untouched, so only the hash moves, the text does not.
+source_sha256 = "1429cd8a9ad94f56259be8298bc484c7cd681c1e790d0f264cfb4709b27c640e"
 
 [[synopsis]]
 number = "0015"
@@ -113,3 +120,8 @@ source_sha256 = "b692f0375e768f48e8d3aabb5551a40c0cf0015a671ea995c0b628f92aca884
 number = "0019"
 text = "In an established UI genre, the genre's convergent idiom is the default spec; any structure the reference exemplars do not exhibit is presumptively wrong, the burden of proof on the deviation, never the convention. Every fact has exactly one placement in the navigation hierarchy -- rendering it under two headings, or as a mirror, is refused as a type error naming the fact and every claimant. For relationally-structured data, the data's own topology (entities, dependents, associations) is the mandatory default information architecture: a dependent entity is created and edited master-detail within its parent's context, never rendered as a sibling flat list."
 source_sha256 = "935f1dd9bcf2d397c1aa03afd7dd427e1ea041170d61c28f67467c1667fd3b5e"
+
+[[synopsis]]
+number = "0020"
+text = "Any operation that migrates, schematizes, summarizes, or re-renders authored content carries a cold-read meaning-preservation witness alongside its mechanical invariants: a fresh-context reader who did not perform the transformation reads the output against the source and attests the output asserts no more and no less than the source asserted (qualifiers, hedges, aspiration markers, honest ceilings, named exclusions, and recommendation polarity all intact), serving its declared reader. Mechanical invariants -- token, element, line, or format counts -- cannot discharge this witness, since passing every one is compatible with a strengthened claim or a dropped hedge; and a pass finding a severe meaning change (truth value, coverage, referent, binding commitment, or recommendation direction) proves the class is present, not that the last instance was caught, so a fresh, blind reader reads again after repair until a pass finds none."
+source_sha256 = "4c836b1c6a1cae238283bc66bdae6b23760a37a42574958019c139d8552446a4"
