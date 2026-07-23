@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""tools/setup_tui/config_seam.py -- the SCREEN-SEAM half of the config-file feature
+"""tools/setup_tui/config_seam.py -- the SECTION-SEAM half of the config-file feature
 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md, ledger row 1944): wires a validated
-`config_file.ConfigDoc` into the flow's own two existing prompt seams, and captures a run's
-resolved decisions back OUT into `config_file`'s save shape. `tools/setup_tui/config_file.py`
-never imports this module (parse/validate stays screen-blind, ADR-0012 P1) -- this is the one
+`config_file.ConfigDoc` into the tree flow's own two config-driven entry points, and captures a
+run's resolved decisions back OUT into `config_file`'s save shape. `tools/setup_tui/config_file.py`
+never imports this module (parse/validate stays section-blind, ADR-0012 P1) -- this is the one
 direction of dependency.
 
-FOUR JOBS:
-  1. `synthesize_scripted_lines` -- spec §2's `--from-config`: compiles a validated, COMPLETE
-     config into the exact positional answer sequence the eleven-screen flow consumes, mirroring
-     `screens.py`'s own prompt order. `app.py` feeds the result through the EXISTING
-     `ScriptedUi` machinery (a real answers-file, reused -- not a second interactive driver),
-     which is also why a `--from-config` run gets the SAME `is_scripted` scratch-GNUPGHOME
-     treatment a `--scripted` witnessing run gets in `screen_signed_genesis` (correct: neither
-     backend has a human at the keyboard for a live gpg pinentry).
-  2. `build_initial_prior_answers` -- spec §2's `--initial-config`: a dotted-key -> (screen,
-     prompt-text) table (`PROMPT_MAP`) turned into the SAME `FlowPosition.last_answers` shape
-     the navigation seam (design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md) already uses to re-offer a
-     revisited screen's own prior answers as defaults -- reused wholesale, not reimplemented
-     (spec §2: "works with navigation").
+CORRECTED 2026-07-23 (usability review, ledger row 1180, flagged hazard: this docstring still
+described the pre-rebuild "eleven-screen" flow, a deleted `screens.py`, and a `FlowPosition`
+class that no longer exists anywhere in this tree -- design/FABLE-SETUP-TUI-REBUILD-SPEC.md's
+2026-07-22 wholesale rebuild replaced that linear flow with `tools/configtree`'s sidebar-Tree
+model; this file's own functions were already updated for the rebuild, only the docstring above
+them had not been). FOUR JOBS, against the CURRENT `SECTIONS` tuple
+(`tools/setup_tui/steps.py`):
+  1. `answers_for_from_config` -- spec §2's `--from-config`: compiles a validated, COMPLETE
+     config into a per-section `{slug: {field: value}}` answers dict, the shape
+     `tools/setup_tui/app.py`'s headless `_run_from_config` driver hands straight to each
+     section's own `submit` -- zero Textual involved, no answers-file/fake-terminal indirection
+     (the pre-rebuild `ScriptedUi` machinery this job used to feed is deleted along with
+     `--scripted`, same rebuild spec §2/§6).
+  2. `build_live_field_overrides` / `build_initial_state_overrides` -- spec §2's
+     `--initial-config`: seeds the SAME live-field/state overrides `steps_load_config.apply`'s
+     in-UI "Load a configuration" action produces, so a `--initial-config` run and a live load of
+     the same file get identical seeding, never a second, independently drifting behavior.
   3. `check_world_and_dest` -- spec §3's world-name/destination rejection, run once, before any
      act.
   4. `capture_resolved_config` / `save_world_config` -- spec §4's self-application: reads the
