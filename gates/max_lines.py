@@ -175,7 +175,12 @@ BASELINE: dict[str, int] = {
     # legacy-led-retirement Part C re-sequencing/health-gate/served-led changes that would have
     # bumped this file's count on the pre-rebuild line (row 1158/1159) are ported into the
     # steps_*.py successors instead (merge of worktree-agent-a17ac09f50b3745c0, integration
-    # branch) -- there is no longer a screens.py path for this row to describe.
+    # branch) -- there is no longer a screens.py path for this row to describe. The round1-fixes
+    # branch (worktree-agent-a92e28a30da8e8dea) separately bumped this row +7 to 1798 for a
+    # comment-only erratum fix (row 1173, the false "row 1942" citation) landed on the
+    # since-deleted screens.py; that erratum text is ported forward into
+    # tools/setup_tui/steps_boundary.py's own surviving copy of the same comment instead (this
+    # merge, 2026-07-23) -- there is no baseline row left to carry the +7.
     "gates/kind_shape_manifest_gate.py":              1152,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,

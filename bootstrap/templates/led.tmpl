@@ -56,7 +56,14 @@ docstring for the full token-by-token enumeration this pass produced.
         permanent, unretractable rows. `--statement-really-contains-cli-text` overrides,
         honestly named. Runs ONLY on this generic path -- `led review`/`led work *` build their
         statements from typed fields, never raw captured terminal text.
-    led register-principal <name> <class>      (write, registration_write)
+    led register-principal <name> <class>      (write, registration_write; DISCLOSED MINOR
+        DIVERGENCE, row 1173 round-2 faithfulness re-check, grammar axis verdict, no behavior
+        change: a malformed invocation (missing <class>, an unrecognized flag) exits 4 here
+        (this file's own argparse-SystemExit convention, `boundary_cli_client.py`'s documented
+        "3 boundary-refused, 4 boundary-unreachable/client error" scheme) where legacy exits 1
+        for the same bad-argument shape -- an accepted, disclosed CLI-convention difference
+        of the served rebase generally, not special-cased to this one verb, and not a
+        silent-vs-taught difference (both refuse, both teach; only the exit code differs))
     led obligate <scope> <assigned-by> <obliged-actor>                 (write, obligation_write)
     led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>  (write)
     led decomposition-review-status     (read-only; mode from <world-root>/.claude/apparatus.json,
@@ -151,8 +158,10 @@ docstring for the full token-by-token enumeration this pass produced.
         led-retirement INVENTORY pass, ledger row 1149: an exhaustive dispatch-token diff of
         `bootstrap/templates/legacy-led.tmpl` against this file found exactly ONE uncovered
         family, `led principal *` -- never wired into this rebase's `main()` at all before this
-        pass. Ported off legacy's own shared `_principal_binding_insert` shape (see
-        `_principal_write` below, one writer/many callers, ADR-0012 P1); duplicate-active and
+        pass. Ported off legacy's own shared `_principal_binding_insert` shape (see the typed
+        payload classes and `_write_principal` below, one writer/many callers, ADR-0012 P1;
+        row 1173 finding 4 replaced the original single bag-of-optionals `_principal_write` with
+        six typed dataclasses, one per write shape); duplicate-active and
         value-continuity guards read GET /rows/current client-side filtered by kind (mirrors
         `_current_row` below `cmd_work_startable`), never a raw SQL lookup. s41/s45 gating is a
         NEW client-side capability probe, GET /health's `capabilities` dict, extended this same
@@ -167,7 +176,17 @@ docstring for the full token-by-token enumeration this pass produced.
         gates on via /health). DISCLOSED NARROWING: an s40-only-not-yet-s41 kernel gets this
         file's own generic-shaped bespoke refusal (same wording as legacy) for the 8 s41 verbs;
         the 5 standing-lifecycle verbs (declare-standing/undeclare-standing/suspend/
-        lift-suspension/revoke) need only s40 and work on such a kernel exactly as legacy does.)
+        lift-suspension/revoke) need only s40 and work on such a kernel exactly as legacy does.
+        DISCLOSED IMPROVEMENT, not a narrowing (row 1173 round-2 faithfulness re-check, SEVERE):
+        a recognized flag given with a MISSING or EMPTY value (e.g. `--db-role` as the trailing
+        token) is REFUSED here (`_parse_principal_flags`/`_parse_principal_flags_strict`'s own
+        `flag '<tok>' requires a non-empty value` teach-text) -- legacy's own behavior on the
+        identical input was an accidental `shift 2`-past-end crash under `set -euo pipefail`
+        (exit 1, nothing written, no teach-text); this closes a REAL defect the crash used to
+        mask (`declare-standing`/`undeclare-standing`'s own `db_role = flags.get(...) or
+        cfg.record.role` fallback silently wrote a real standing row for the DEFAULT role, not a
+        refusal) with the SAME observable contract legacy's crash had -- nonzero exit, zero
+        writes -- plus teaching where legacy had a bare stack trace.)
   SCOPE, THE COVERAGE TABLE (legacy dispatch token -> served status; the universe below is every
   token `bootstrap/templates/legacy-led.tmpl` dispatches on ITS OWN top-level `if [ "${1:-}" = ...`
   chain plus every named sub-verb `case` inside it -- mechanically enumerated, ledger row 1149's
@@ -202,6 +221,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import datetime
 import hashlib
 import json
@@ -224,6 +244,20 @@ except ImportError as _e:
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
     print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
     sys.exit(4)
+
+# design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: the artifact store's own content-addressed
+# key shape (kernel/lineage/s51-artifact-store.sql's `artifact_hash_shape` CHECK), minted here at
+# MODULE SCOPE (row 1173 finding 3, P1: one home, not one literal per call site -- this file's
+# own hand-typed inline `re.match(r'^[0-9a-f]{64}$', ...)` at both `cmd_artifact_get` and
+# `cmd_artifact_stat` collapses to this ONE compiled pattern) -- mirrors `serving/
+# boundary_service.py`'s OWN `_ARTIFACT_HASH_RE` (same name, same pattern, same citation).
+_ARTIFACT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# `led work close --review-bookkeeping`'s own commit-witness shape, `commit:<7-40 hex>` -- named
+# at MODULE SCOPE (row 1173 finding 3, the same P1 the artifact-hash regex above closes) rather
+# than inline at its one call site in `cmd_work_close`, so the shape has one visible home instead
+# of living unnamed inside an `if`.
+_COMMIT_WITNESS_RE = re.compile(r"^commit:[0-9a-f]{7,40}$")
 
 
 def _load_config() -> bcc.ServedConfig:
@@ -297,39 +331,213 @@ def _latest_current(cfg: bcc.ServedConfig, kind: str, **filters) -> dict | None:
 # lacks the needed lineage delta gets the SAME bespoke text here (both read the SAME single
 # capability fact); a verb this file does NOT bespoke-gate (there is none left un-gated) would
 # instead surface the kernel's own generic refusal -- named, not reached, in this port.
-def _principal_write(cfg: bcc.ServedConfig, kind: str, statement: str, actor: int | None,
-                      subject: int, active: bool | None = None, supersedes: str | int | None = None,
-                      obj: int | None = None, relation: str | None = None,
-                      role_name: str | None = None, fingerprint: str | None = None,
-                      activity: str | None = None, band: str | None = None,
-                      basis: str | None = None, event_time: str | None = None) -> int:
+# --- typed per-sub-verb payload constructors (row 1173 finding 4, ledger row 1105 "no bare
+# types" rule) -- REPLACES the former bag-of-16-bare-optional-parameters `_principal_write`.
+# Mirrors serving/boundary_models.py's own pattern (one typed class per write surface, its own
+# docstring naming the exact kernel CHECK/contract it enforces) adapted client-side via stdlib
+# `dataclasses` (this file carries no pydantic dependency, and none is warranted for a CLI shim).
+# Each class's `__post_init__` enforces ONLY what legacy actually enforced (relation closed
+# vocabulary s41 D-2, role/activity non-empty, competence band/basis mandatory-on-grant/
+# forbidden-on-withdrawal s41 D-1a) plus one ADDITIVE fail-safe check mirrored off a kernel CHECK
+# the same way `_ARTIFACT_HASH_RE` already mirrors `artifact_hash_shape` (the key-fingerprint
+# shape, s41's own `principal_key_fingerprint_shape` CHECK -- legacy left this to the kernel
+# alone; catching the identical rule one hop earlier client-side is never looser, never
+# stricter, the same regex). Every caller in `cmd_principal` below ALSO still runs its own
+# inline REFUSED checks in legacy's own message order/text (message-precedence fidelity, e.g.
+# "not a relation" before "not registered") -- the typed constructor's own contract is defense
+# in depth, the single enforcing home a caller cannot route around, not a replacement for that
+# ordering.
+def _binding_base_fields(subject: int, active: bool | None, supersedes: int | str | None,
+                          event_time: str | None) -> dict:
+    """The field set every s40/s41 principal-family write shares (subject plus the optional
+    active/supersedes/event_time triple) -- ONE home, reused by every typed payload class below
+    (ADR-0012 P1)."""
+    out: dict = {"principal_subject": subject}
+    if active is not None:
+        out["principal_binding_active"] = active
+    if supersedes:
+        out["supersedes"] = int(supersedes)
+    if event_time:
+        out["event_declared_ts"] = event_time
+    return out
+
+
+@dataclasses.dataclass(frozen=True)
+class StandingDeclaredPayload:
+    """declare-standing/undeclare-standing's own typed row shape. Contract: `db_role` must be
+    non-empty (the one value this row exists to carry)."""
+    subject: int
+    db_role: str
+    active: bool | None = None
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.db_role:
+            raise ValueError("a standing declaration needs a non-empty database role name")
+
+    def fields(self) -> dict:
+        out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+        out["principal_db_role"] = self.db_role
+        return out
+
+
+@dataclasses.dataclass(frozen=True)
+class StandingLifecyclePayload:
+    """suspend/lift-suspension/revoke's own shape -- subject plus the shared active/supersedes/
+    event_time triple; no value fields of its own (the row's further content beyond that is
+    free-text folded into `statement` by the caller, legacy's own `$reason` convention)."""
+    subject: int
+    active: bool | None = None
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def fields(self) -> dict:
+        return _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+
+
+_RELATION_VOCAB = ("acts-for", "dispatched-by", "same-natural-person", "succeeds")
+
+
+@dataclasses.dataclass(frozen=True)
+class RelationPayload:
+    """relate/unrelate's own typed row shape (kernel/lineage/s41-principal-bindings-and-
+    relations.sql D-2/D-3): a CLOSED relation vocabulary and a self-edge refusal, both enforced
+    HERE at construction, so this shape cannot be built with an out-of-vocabulary relation or a
+    self-referencing pair even by a future caller that forgets `cmd_principal`'s own inline
+    checks."""
+    subject: int
+    relation: str
+    obj: int
+    active: bool
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.relation not in _RELATION_VOCAB:
+            raise ValueError(f"'{self.relation}' is not a relation (closed vocabulary: "
+                              f"{', '.join(_RELATION_VOCAB)} -- s41 D-2)")
+        if self.subject == self.obj:
+            raise ValueError(f"a principal cannot stand in relation '{self.relation}' to "
+                              f"itself (s41 D-3's self-edge refusal)")
+
+    def fields(self) -> dict:
+        out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+        out["principal_object"] = self.obj
+        out["principal_relation"] = self.relation
+        return out
+
+
+@dataclasses.dataclass(frozen=True)
+class RoleBindingPayload:
+    """bind-role/release-role's own typed shape. Contract: `role_name` must be non-empty (the
+    value this row exists to carry)."""
+    subject: int
+    role_name: str
+    active: bool
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.role_name:
+            raise ValueError("a role binding needs a non-empty --role name")
+
+    def fields(self) -> dict:
+        out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+        out["principal_role_name"] = self.role_name
+        return out
+
+
+# The OpenPGP v4 fingerprint shape, mirrored off the kernel's OWN CHECK (kernel/lineage/
+# s41-principal-bindings-and-relations.sql's `principal_key_fingerprint_shape`,
+# `^[0-9A-F]{40}$`) -- the SAME idiom `_ARTIFACT_HASH_RE` already establishes for the artifact
+# store's own hash shape (module scope, one compiled pattern, one citation). Legacy never
+# checked this client-side (it left the shape to the kernel alone); catching the IDENTICAL rule
+# one hop earlier is an additive fail-safe refusal, never looser, never stricter.
+_KEY_FINGERPRINT_RE = re.compile(r"^[0-9A-F]{40}$")
+
+
+@dataclasses.dataclass(frozen=True)
+class KeyBindingPayload:
+    """bind-key/revoke-key's own typed shape. Contract: `fingerprint` must match the kernel's
+    own `principal_key_fingerprint_shape` CHECK -- see `_KEY_FINGERPRINT_RE` above."""
+    subject: int
+    fingerprint: str
+    active: bool
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if not _KEY_FINGERPRINT_RE.match(self.fingerprint):
+            raise ValueError(f"fingerprint {self.fingerprint!r} is not a 40-uppercase-hex "
+                              f"OpenPGP v4 fingerprint (kernel/lineage/s41-principal-bindings-"
+                              f"and-relations.sql's own principal_key_fingerprint_shape CHECK)")
+
+    def fields(self) -> dict:
+        out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+        out["principal_key_fingerprint"] = self.fingerprint
+        return out
+
+
+@dataclasses.dataclass(frozen=True)
+class CompetencePayload:
+    """grant-competence/withdraw-competence's own typed shape (s41 D-1a, the identity/value
+    split): on a GRANT (`active=True`) `band`/`basis` are MANDATORY value fields; on a
+    WITHDRAWAL (`active=False`) both are FORBIDDEN (the row's further content beyond the
+    activity identity alone)."""
+    subject: int
+    activity: str
+    active: bool
+    band: str | None = None
+    basis: str | None = None
+    supersedes: int | str | None = None
+    event_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.activity:
+            raise ValueError("a competence row needs a non-empty --activity")
+        if self.active:
+            if not self.band or not self.basis:
+                raise ValueError("--band and --basis are mandatory on a grant (G13's value "
+                                  "fields; forbidden only on a withdrawal)")
+        elif self.band or self.basis:
+            raise ValueError("--band/--basis are VALUE fields, forbidden on a withdrawal (the "
+                              "identity/value split, s41 D-1a)")
+
+    def fields(self) -> dict:
+        out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
+        out["principal_competence_activity"] = self.activity
+        if self.band:
+            out["principal_competence_band"] = self.band
+        if self.basis:
+            out["principal_competence_basis"] = self.basis
+        return out
+
+
+def _build_or_refuse(verb: str, ctor, **kw):
+    """Constructs one of the typed payload dataclasses above, translating a `__post_init__`
+    contract violation into this file's own REFUSED convention (nothing written) instead of an
+    uncaught traceback. Returns the constructed payload, or None having already printed the
+    REFUSED line."""
+    try:
+        return ctor(**kw)
+    except ValueError as e:
+        print(f"led principal {verb}: REFUSED -- {e}.", file=sys.stderr)
+        return None
+
+
+def _write_principal(cfg: bcc.ServedConfig, kind: str, statement: str, actor: int | None,
+                      payload) -> int:
     """The ONE shared write point for all 13 principal verbs (mirrors legacy-led.tmpl's own
     `_principal_binding_insert`, one writer/many callers, ADR-0012 P1) -- POSTs to /write/ledger,
-    the SAME generic surface `led work open`/the generic `<kind> <statement>` path already use."""
-    payload: dict = {"kind": kind, "statement": statement, "principal_subject": subject}
+    the SAME generic surface `led work open`/the generic `<kind> <statement>` path already use.
+    `payload` is one of the typed dataclasses above; its own `.fields()` is the only place that
+    knows its own column names (row 1173 finding 4 -- replaces the former bag-of-bare-optionals
+    `_principal_write`)."""
+    body: dict = {"kind": kind, "statement": statement, **payload.fields()}
     if actor is not None:
-        payload["actor"] = actor
-    if active is not None:
-        payload["principal_binding_active"] = active
-    if supersedes:
-        payload["supersedes"] = int(supersedes)
-    if obj is not None:
-        payload["principal_object"] = obj
-    if relation:
-        payload["principal_relation"] = relation
-    if role_name:
-        payload["principal_role_name"] = role_name
-    if fingerprint:
-        payload["principal_key_fingerprint"] = fingerprint
-    if activity:
-        payload["principal_competence_activity"] = activity
-    if band:
-        payload["principal_competence_band"] = band
-    if basis:
-        payload["principal_competence_basis"] = basis
-    if event_time:
-        payload["event_declared_ts"] = event_time
-    return bcc.write_and_report(cfg.base, "ledger", payload)
+        body["actor"] = actor
+    return bcc.write_and_report(cfg.base, "ledger", body)
 
 
 def _principal_usage() -> None:
@@ -354,29 +562,127 @@ def _principal_usage() -> None:
           file=sys.stderr)
 
 
-def _parse_principal_flags(argv: list[str], flag_names: set[str]) -> tuple[list[str], dict[str, str]]:
+_MISSING = object()  # sentinel distinguishing "flag was the last token" from "flag's value was
+                     # itself an empty string" -- both are refused identically below (row 1173
+                     # round-2 faithfulness finding), but the sentinel keeps that refusal's own
+                     # condition (`not val`) honest about which case it is: `next(it, "")` could
+                     # not tell the two apart at all (both silently read as "").
+
+
+def _parse_principal_flags(argv: list[str], flag_names: set[str],
+                            verb: str) -> tuple[list[str], dict[str, str]] | None:
     """A tiny shared flag/positional splitter (every `led principal *` sub-verb's own grammar:
     `--flag value` pairs from `flag_names`, everything else positional, in any order -- mirrors
     legacy-led.tmpl's own per-verb `while [ $# -gt 0 ]; case "$1" in --xxx) ...` loops). An
     unrecognized `--*` token is left in the RETURNED positionals (the caller decides -- some
-    verbs, e.g. suspend/revoke, fold unrecognized non-flag words into a free-text reason)."""
+    verbs, e.g. suspend/revoke, fold unrecognized non-flag words into a free-text reason).
+
+    ROW 1173 ROUND-2 FAITHFULNESS FINDING (SEVERE): a recognized flag with a MISSING or EMPTY
+    value is now REFUSED here, at the class (both parsers), not left to each call site to
+    notice. Before this fix, `flags[tok] = next(it, "")` silently produced `""` for BOTH "the
+    flag was the last token" and "the flag's value was itself an empty string" -- and at least
+    one call site (`declare-standing`/`undeclare-standing`'s own `db_role = flags.get(...) or
+    cfg.record.role`) treated that `""` as "value omitted, use the default", so `led principal
+    declare-standing <name> --db-role` (trailing, no value) SILENTLY WROTE a real standing row
+    for the DEFAULT role -- not a refusal, not even the value the operator (mis)typed, a
+    DIFFERENT one, live-witnessed on a scratch world before this fix. DISCLOSED, not a
+    regression: legacy's own behavior on the identical input was an accidental `shift 2`-past-
+    end crash under `set -euo pipefail` (exit 1, nothing written, no teach-text) -- this fix
+    trades that accidental crash for a DELIBERATE refusal with the SAME observable contract
+    (nonzero exit, zero writes) plus teaching where legacy had a bare stack trace. A wrong
+    write beats a crash for badness; this closes the gap without reopening it as some OTHER
+    silent substitution."""
     pos: list[str] = []
     flags: dict[str, str] = {}
     it = iter(argv)
     for tok in it:
         if tok in flag_names:
-            flags[tok] = next(it, "")
+            val = next(it, _MISSING)
+            if val is _MISSING or val == "":
+                print(f"led principal {verb}: REFUSED -- flag '{tok}' requires a non-empty "
+                      f"value.", file=sys.stderr)
+                return None
+            flags[tok] = val
         else:
             pos.append(tok)
     return pos, flags
 
 
-def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
+def _parse_principal_flags_strict(argv: list[str], flag_names: set[str], n_positional: int,
+                                   verb: str) -> tuple[list[str], dict[str, str]] | None:
+    """STRICT variant (row 1173 finding 5, the leftover-token refusal): takes exactly
+    `n_positional` leading tokens as positionals VERBATIM (mirrors legacy-led.tmpl's own fixed
+    `shift N` ahead of each per-verb flag loop), then walks the remainder recognizing ONLY
+    `flag_names` -- ANY other token (an unrecognized flag OR a stray extra positional) is
+    REFUSED immediately, byte-similar to legacy's own catch-all
+    `*) echo REFUSED -- unrecognized argument '$1'.; exit 1 ;;`. Used by the TEN `led principal
+    *` sub-verbs whose payload is built from a fixed positional shape (declare-standing/
+    undeclare-standing/relate/unrelate/bind-role/release-role/bind-key/revoke-key/grant-
+    competence/withdraw-competence) -- contrast suspend/revoke/lift-suspension, which fold any
+    non-flag remainder into a free-text reason and stay on the permissive `_parse_principal_
+    flags` above (legacy's own grammar: those three verbs never refuse on a stray word, they
+    absorb it into `$reason`). Returns None (having printed REFUSED) on a violation.
+
+    Also refuses a recognized flag's MISSING/EMPTY value -- see `_parse_principal_flags`'s own
+    docstring above (row 1173 round-2 SEVERE finding); this strict variant is where the finding
+    was actually caught (`declare-standing`/`undeclare-standing` both parse `--db-role` here)."""
+    pos = list(argv[:n_positional])
+    rest = argv[n_positional:]
+    flags: dict[str, str] = {}
+    it = iter(rest)
+    for tok in it:
+        if tok in flag_names:
+            val = next(it, _MISSING)
+            if val is _MISSING or val == "":
+                print(f"led principal {verb}: REFUSED -- flag '{tok}' requires a non-empty "
+                      f"value.", file=sys.stderr)
+                return None
+            flags[tok] = val
+        else:
+            print(f"led principal {verb}: REFUSED -- unrecognized argument '{tok}'.",
+                  file=sys.stderr)
+            return None
+    return pos, flags
+
+
+def _refuse_other_shared_flags(verb_label: str, shared: dict[str, str]) -> int | None:
+    """Mirrors legacy-led.tmpl's own `refuse_shared_flags_for_principal_verb` (row 1173 finding
+    1, the flag-before-verb grammar, ported faithfully): `register-principal` and every `led
+    principal *` sub-verb HONOR --event-time (the s24 late-entry declaration, the one shared
+    channel legacy threads through to these verbs) and REFUSE every OTHER shared channel
+    (-f/-e/--supersedes/--amends/--amends-scope/--answers/--refs/--concern/--evidence/
+    --confidence) BY NAME -- these verbs' row content is built entirely from typed arguments,
+    and a supersession, where one of them needs it, is that verb's OWN trailing --supersedes
+    flag (placed AFTER the subcommand words), never the shared, front-anchored one -- two parse
+    points for one column would be exactly the silently-diverging duplicate this file's actor
+    resolution already exists to foreclose. Returns 1 (having printed REFUSED) on a violation,
+    None when the combination is clean."""
+    bad = sorted(f for f in shared if f != "--event-time")
+    if bad:
+        print(f"led {verb_label}: REFUSED -- the shared flag(s) {' '.join(bad)} are not "
+              f"honored by this verb and would otherwise be silently dropped (mirrors legacy-"
+              f"led.tmpl's own refuse_shared_flags_for_principal_verb -- the same silent-drop "
+              f"shape that once swallowed LED_ACTOR). This verb's row content is built from its "
+              f"own typed arguments; only --event-time (the s24 late-entry declaration) rides "
+              f"through. Where a supersession is needed, it is that verb's OWN trailing "
+              f"--supersedes flag, placed AFTER the subcommand words -- not the shared one.",
+              file=sys.stderr)
+        return 1
+    return None
+
+
+def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]) -> int:
     sub = argv[0] if argv else ""
     rest = argv[1:]
+    # row 1173 finding 1 (flag-before-verb grammar): --event-time is now parsed ONCE, front-
+    # anchored, by main()'s own shared-flag strip -- passed down here, never re-parsed per-verb.
+    # Every OTHER shared channel is refused by name here (legacy's own
+    # refuse_shared_flags_for_principal_verb), before any capability probe or write.
+    rc = _refuse_other_shared_flags(f"principal {sub}".rstrip(), shared)
+    if rc is not None:
+        return rc
+    event_time = shared.get("--event-time")
     actor = _resolve_actor(cfg)
-    event_time = None  # --event-time is parsed per-verb below (the one shared channel legacy's
-                        # refuse_shared_flags_for_principal_verb still honors)
 
     def refuse_unregistered(verb: str, name: str) -> int:
         print(f"led principal {verb}: REFUSED -- '{name}' is not a registered principal.",
@@ -400,13 +706,15 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         by_name = _principals_by_name(cfg)
 
         if sub == "declare-standing":
-            pos, flags = _parse_principal_flags(rest, {"--db-role", "--event-time"})
+            parsed = _parse_principal_flags_strict(rest, {"--db-role"}, 1, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos:
                 _principal_usage()
                 return 1
             name = pos[0]
             db_role = flags.get("--db-role") or cfg.record.role
-            event_time = flags.get("--event-time")
             pid = by_name.get(name)
             if pid is None:
                 return refuse_unregistered(sub, name)
@@ -418,14 +726,19 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       f"declaration row {old_id} for role '{db_role}'.")
             stmt = (f"database role '{db_role}' speaks for principal '{name}' by default "
                     f"(standing declaration)")
-            return _principal_write(cfg, "principal_standing_declared", stmt, actor, pid,
-                                     active=(True if has_s45 else None), supersedes=old_id,
-                                     event_time=event_time)
+            payload = _build_or_refuse(sub, StandingDeclaredPayload, subject=pid, db_role=db_role,
+                                        active=(True if has_s45 else None), supersedes=old_id,
+                                        event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(cfg, "principal_standing_declared", stmt, actor, payload)
 
         if sub == "undeclare-standing":
-            pos, flags = _parse_principal_flags(rest, {"--db-role", "--event-time"})
+            parsed = _parse_principal_flags_strict(rest, {"--db-role"}, 0, sub)
+            if parsed is None:
+                return 1
+            _pos, flags = parsed
             db_role = flags.get("--db-role") or cfg.record.role
-            event_time = flags.get("--event-time")
             if not has_s45:
                 print("led principal undeclare-standing: REFUSED -- this world's kernel "
                       "predates s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle."
@@ -440,9 +753,12 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                 return 1
             stmt = (f"database role '{db_role}' unbound -- standing declaration retracted "
                     f"(role reverts to undeclared)")
-            rc = _principal_write(cfg, "principal_standing_declared", stmt, actor,
-                                   gov["principal_subject"], active=False,
-                                   supersedes=gov["id"], event_time=event_time)
+            payload = _build_or_refuse(sub, StandingDeclaredPayload, subject=gov["principal_subject"],
+                                        db_role=db_role, active=False, supersedes=gov["id"],
+                                        event_time=event_time)
+            if payload is None:
+                return 1
+            rc = _write_principal(cfg, "principal_standing_declared", stmt, actor, payload)
             if rc == 0:
                 print(f"led principal undeclare-standing: role '{db_role}' unbound "
                       f"(superseded declaration row {gov['id']}).")
@@ -452,13 +768,15 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             return rc
 
         if sub == "suspend":
-            pos, flags = _parse_principal_flags(rest, {"--supersedes", "--event-time"})
+            parsed = _parse_principal_flags(rest, {"--supersedes"}, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos or pos[0].startswith("--"):
                 _principal_usage()
                 return 1
             name, reason = pos[0], " ".join(pos[1:])
             sup_id = flags.get("--supersedes")
-            event_time = flags.get("--event-time")
             if name == "write-boundary":
                 return refuse_write_boundary("suspend")
             if sup_id and not has_s45:
@@ -488,18 +806,23 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             stmt = f"principal '{name}' suspended -- standing withdrawn"
             if reason:
                 stmt += f": {reason}"
-            return _principal_write(cfg, "principal_suspended", stmt, actor, pid,
-                                     active=(True if has_s45 else None),
-                                     supersedes=(sup_id if has_s45 else None),
-                                     event_time=event_time)
+            payload = _build_or_refuse(sub, StandingLifecyclePayload, subject=pid,
+                                        active=(True if has_s45 else None),
+                                        supersedes=(sup_id if has_s45 else None),
+                                        event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(cfg, "principal_suspended", stmt, actor, payload)
 
         if sub == "lift-suspension":
-            pos, flags = _parse_principal_flags(rest, {"--event-time"})
+            parsed = _parse_principal_flags(rest, set(), sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos:
                 print("usage: led principal lift-suspension <name> [reason...]", file=sys.stderr)
                 return 1
             name, reason = pos[0], " ".join(pos[1:])
-            event_time = flags.get("--event-time")
             if not has_s45:
                 print("led principal lift-suspension: REFUSED -- this world's kernel predates "
                       "s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle.sql): "
@@ -519,8 +842,11 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             stmt = f"principal '{name}' suspension lifted"
             if reason:
                 stmt += f": {reason}"
-            rc = _principal_write(cfg, "principal_suspended", stmt, actor, pid, active=False,
-                                   supersedes=cur["id"], event_time=event_time)
+            payload = _build_or_refuse(sub, StandingLifecyclePayload, subject=pid, active=False,
+                                        supersedes=cur["id"], event_time=event_time)
+            if payload is None:
+                return 1
+            rc = _write_principal(cfg, "principal_suspended", stmt, actor, payload)
             if rc == 0 and is_revoked:
                 print(f"led principal lift-suspension: note -- '{name}' is ALSO revoked; "
                       f"standing remains 'revoked' (revoked dominates suspended, s40 §3.4).",
@@ -528,12 +854,14 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             return rc
 
         if sub == "revoke":
-            pos, flags = _parse_principal_flags(rest, {"--event-time"})
+            parsed = _parse_principal_flags(rest, set(), sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos or pos[0].startswith("--"):
                 _principal_usage()
                 return 1
             name, reason = pos[0], " ".join(pos[1:])
-            event_time = flags.get("--event-time")
             if name == "write-boundary":
                 return refuse_write_boundary("revoke")
             pid = by_name.get(name)
@@ -542,8 +870,11 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             stmt = f"principal '{name}' revoked -- standing withdrawn"
             if reason:
                 stmt += f": {reason}"
-            return _principal_write(cfg, "principal_revoked", stmt, actor, pid,
-                                     event_time=event_time)
+            payload = _build_or_refuse(sub, StandingLifecyclePayload, subject=pid,
+                                        event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(cfg, "principal_revoked", stmt, actor, payload)
 
     if sub in ("relate", "unrelate", "bind-role", "release-role", "bind-key", "revoke-key",
                "grant-competence", "withdraw-competence"):
@@ -558,9 +889,11 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         by_name = _principals_by_name(cfg)
 
         if sub in ("relate", "unrelate"):
-            pos, flags = _parse_principal_flags(rest, {"--supersedes", "--event-time"})
+            parsed = _parse_principal_flags_strict(rest, {"--supersedes"}, 3, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             sup_id = flags.get("--supersedes")
-            event_time = flags.get("--event-time")
             if len(pos) < 3:
                 _principal_usage()
                 return 1
@@ -597,9 +930,11 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                           f"{rel} {obj_name} --supersedes {cur_id}", file=sys.stderr)
                     return 1
                 stmt = f"principal '{subj_name}' {rel} principal '{obj_name}' (relation asserted)"
-                return _principal_write(cfg, "principal_relation_asserted", stmt, actor, subj_id,
-                                         active=True, obj=obj_id, relation=rel,
-                                         event_time=event_time)
+                payload = _build_or_refuse(sub, RelationPayload, subject=subj_id, relation=rel,
+                                            obj=obj_id, active=True, event_time=event_time)
+                if payload is None:
+                    return 1
+                return _write_principal(cfg, "principal_relation_asserted", stmt, actor, payload)
             if not sup_id:
                 print("led principal unrelate: REFUSED -- --supersedes <old-row-id> is "
                       "mandatory.", file=sys.stderr)
@@ -610,15 +945,20 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       f"{cur_id or 'none'}).", file=sys.stderr)
                 return 1
             stmt = f"relation retracted: principal '{subj_name}' no longer {rel} principal '{obj_name}'"
-            return _principal_write(cfg, "principal_relation_asserted", stmt, actor, subj_id,
-                                     active=False, supersedes=sup_id, obj=obj_id, relation=rel,
-                                     event_time=event_time)
+            payload = _build_or_refuse(sub, RelationPayload, subject=subj_id, relation=rel,
+                                        obj=obj_id, active=False, supersedes=sup_id,
+                                        event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(cfg, "principal_relation_asserted", stmt, actor, payload)
 
         if sub in ("bind-role", "release-role"):
-            pos, flags = _parse_principal_flags(rest, {"--role", "--supersedes", "--event-time"})
+            parsed = _parse_principal_flags_strict(rest, {"--role", "--supersedes"}, 1, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             role_name = flags.get("--role", "")
             sup_id = flags.get("--supersedes")
-            event_time = flags.get("--event-time")
             if not pos or not role_name:
                 print(f"usage: led principal bind-role <name> --role \"<role-name>\"",
                       file=sys.stderr)
@@ -643,10 +983,14 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                           f"active '{role_name}' binding (row {cur_id}); no duplicate active "
                           f"truth.", file=sys.stderr)
                     return 1
-                return _principal_write(cfg, "principal_role_bound",
+                payload = _build_or_refuse(sub, RoleBindingPayload, subject=pid,
+                                            role_name=role_name, active=True,
+                                            event_time=event_time)
+                if payload is None:
+                    return 1
+                return _write_principal(cfg, "principal_role_bound",
                                          f"principal '{name}' bound to role '{role_name}'",
-                                         actor, pid, active=True, role_name=role_name,
-                                         event_time=event_time)
+                                         actor, payload)
             if not sup_id:
                 print("led principal release-role: REFUSED -- --supersedes <old-row-id> is "
                       "mandatory.", file=sys.stderr)
@@ -656,18 +1000,23 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       f"active '{role_name}' binding for '{name}' (the view shows "
                       f"{cur_id or 'none'}).", file=sys.stderr)
                 return 1
-            return _principal_write(
+            payload = _build_or_refuse(sub, RoleBindingPayload, subject=pid, role_name=role_name,
+                                        active=False, supersedes=sup_id, event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(
                 cfg, "principal_role_bound",
                 f"role binding released: principal '{name}' no longer bound to role '{role_name}'",
-                actor, pid, active=False, supersedes=sup_id, role_name=role_name,
-                event_time=event_time)
+                actor, payload)
 
         if sub in ("bind-key", "revoke-key"):
-            pos, flags = _parse_principal_flags(
-                rest, {"--fingerprint", "--supersedes", "--event-time"})
+            parsed = _parse_principal_flags_strict(
+                rest, {"--fingerprint", "--supersedes"}, 1, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             fp = flags.get("--fingerprint", "")
             sup_id = flags.get("--supersedes")
-            event_time = flags.get("--event-time")
             if not pos or not fp:
                 print("usage: led principal bind-key <name> --fingerprint \"<fp>\"",
                       file=sys.stderr)
@@ -687,10 +1036,13 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                           f"already actively bound to '{name}' (row {cur_id}); no duplicate "
                           f"active truth.", file=sys.stderr)
                     return 1
-                return _principal_write(cfg, "principal_key_bound",
+                payload = _build_or_refuse(sub, KeyBindingPayload, subject=pid, fingerprint=fp,
+                                            active=True, event_time=event_time)
+                if payload is None:
+                    return 1
+                return _write_principal(cfg, "principal_key_bound",
                                          f"OpenPGP key {fp} bound to principal '{name}'",
-                                         actor, pid, active=True, fingerprint=fp,
-                                         event_time=event_time)
+                                         actor, payload)
             if not sup_id:
                 print("led principal revoke-key: REFUSED -- --supersedes <old-row-id> is "
                       "mandatory.", file=sys.stderr)
@@ -700,20 +1052,25 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       f"binding of this exact fingerprint for '{name}' (the view shows "
                       f"{cur_id or 'none'}).", file=sys.stderr)
                 return 1
-            return _principal_write(
+            payload = _build_or_refuse(sub, KeyBindingPayload, subject=pid, fingerprint=fp,
+                                        active=False, supersedes=sup_id, event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(
                 cfg, "principal_key_bound",
                 f"key binding revoked: OpenPGP key {fp} no longer bound to principal '{name}'",
-                actor, pid, active=False, supersedes=sup_id, fingerprint=fp,
-                event_time=event_time)
+                actor, payload)
 
         if sub in ("grant-competence", "withdraw-competence"):
-            pos, flags = _parse_principal_flags(
-                rest, {"--activity", "--band", "--basis", "--supersedes", "--event-time"})
+            parsed = _parse_principal_flags_strict(
+                rest, {"--activity", "--band", "--basis", "--supersedes"}, 1, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             activity = flags.get("--activity", "")
             band = flags.get("--band", "")
             basis = flags.get("--basis", "")
             sup_id = flags.get("--supersedes")
-            event_time = flags.get("--event-time")
             if not pos or not activity:
                 print("usage: led principal grant-competence <name> --activity \"<a>\" "
                       "--band \"<b>\" --basis \"<c>\" [--supersedes <old-row-id>]",
@@ -748,11 +1105,15 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                           f"'{sup_id}' is not the active grant for '{name}' / activity "
                           f"'{activity}' (the view shows {cur_id or 'none'}).", file=sys.stderr)
                     return 1
-                return _principal_write(
+                payload = _build_or_refuse(sub, CompetencePayload, subject=pid, activity=activity,
+                                            active=True, band=band, basis=basis,
+                                            supersedes=sup_id, event_time=event_time)
+                if payload is None:
+                    return 1
+                return _write_principal(
                     cfg, "principal_competence_granted",
                     f"competence granted: principal '{name}' held competent for '{activity}' "
-                    f"at band '{band}'", actor, pid, active=True, supersedes=sup_id,
-                    activity=activity, band=band, basis=basis, event_time=event_time)
+                    f"at band '{band}'", actor, payload)
             if band or basis:
                 print("led principal withdraw-competence: REFUSED -- --band/--basis are VALUE "
                       "fields, forbidden on a withdrawal (the identity/value split, s41 D-1a).",
@@ -767,11 +1128,14 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       f"the active grant for '{name}' / activity '{activity}' (the view shows "
                       f"{cur_id or 'none'}).", file=sys.stderr)
                 return 1
-            return _principal_write(
+            payload = _build_or_refuse(sub, CompetencePayload, subject=pid, activity=activity,
+                                        active=False, supersedes=sup_id, event_time=event_time)
+            if payload is None:
+                return 1
+            return _write_principal(
                 cfg, "principal_competence_granted",
                 f"competence withdrawn: principal '{name}' no longer held competent for "
-                f"'{activity}'", actor, pid, active=False, supersedes=sup_id, activity=activity,
-                event_time=event_time)
+                f"'{activity}'", actor, payload)
 
     _principal_usage()
     return 1
@@ -1226,12 +1590,19 @@ def cmd_view(cfg: bcc.ServedConfig, view: str, cursor: str) -> int:
 
 
 def cmd_register_principal(cfg: bcc.ServedConfig, name: str, agent_class: str,
-                            purpose: str | None = None) -> int:
+                            purpose: str | None = None, event_time: str | None = None) -> int:
+    """`event_time` (row 1173 finding 1): legacy's own register-principal INSERT threads
+    `$event_time` too (the SAME shared channel `refuse_shared_flags_for_principal_verb`
+    honors for this verb) -- main() now parses --event-time front-anchored and passes it here,
+    rather than register-principal misrouting into the generic write path the way it used to
+    when --event-time preceded it on the command line."""
     actor = _resolve_actor(cfg)
     payload: dict = {"name": name, "agent_class": agent_class,
                       "purpose": purpose or "registered via ./led register-principal"}
     if actor is not None:
         payload["actor"] = actor
+    if event_time:
+        payload["event_declared_ts"] = event_time
     return bcc.write_and_report(cfg.base, "registration", payload)
 
 
@@ -1272,7 +1643,13 @@ def cmd_artifact_put(cfg: bcc.ServedConfig, path: str, media_type: str | None) -
     file's own `artifact put` case) -- the size cap is enforced by the kernel alone (P1: no
     second size limit; the boundary route imposes no artifact-specific bound of its own, see
     serving/boundary_service.py's MAX_ARTIFACT_BODY_BYTES docstring for the buffering-only bound
-    that DOES exist)."""
+    that DOES exist). NOTED, not changed (row 1173 review round 1, minor 4): legacy's own
+    `artifact put` built its payload through a `psql -v` bind and a shell heredoc, where a
+    filename/media-type containing a quote character was a live quoting hazard this file's
+    reviewers checked for here too. This port carries no such hazard BY CONSTRUCTION, not by a
+    quoting fix: `path`/`media_type` never touch a shell command line or a SQL literal at all --
+    the file's bytes are base64-encoded straight into a JSON POST body (`bcc.post_artifact`),
+    and `path` itself is only ever a Python `Path` argument. Confirmed fine as-is."""
     p = Path(path)
     if not p.is_file():
         print(f"led artifact put: REFUSED -- {path!r} does not exist or is not a regular file "
@@ -1302,7 +1679,7 @@ def cmd_artifact_get(cfg: bcc.ServedConfig, hash_: str, out: str | None) -> int:
     preserving legacy-led.tmpl's own WA6 corruption-drill teach-text byte-for-byte (a corrupt
     store must fail loud here too, never serve silently-wrong bytes, even if the server-side
     check somehow regressed)."""
-    if not re.match(r'^[0-9a-f]{64}$', hash_):
+    if not _ARTIFACT_HASH_RE.match(hash_):
         print(f"usage: led artifact get <64-hex-char-sha256-hash> [--out <path>]", file=sys.stderr)
         return 4
     try:
@@ -1336,7 +1713,7 @@ def cmd_artifact_get(cfg: bcc.ServedConfig, hash_: str, out: str | None) -> int:
 
 def cmd_artifact_stat(cfg: bcc.ServedConfig, hash_: str) -> int:
     """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: GET /artifacts/{hash}/stat."""
-    if not re.match(r'^[0-9a-f]{64}$', hash_):
+    if not _ARTIFACT_HASH_RE.match(hash_):
         print(f"usage: led artifact stat <64-hex-char-sha256-hash>", file=sys.stderr)
         return 4
     try:
@@ -1524,6 +1901,14 @@ def cmd_work_open(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         elif tok == "--supersedes":
             supersedes = next(it, None)
         elif tok.startswith("--"):
+            # row 1173 review round 1, minor 2: legacy's own refusal here also carries a
+            # forensic sentence ("ledger item led-work-open-refs-swallowed: 27/27 work_opened
+            # rows in an adopting deployment had NULL refs because '--refs row:N' landed in
+            # work_title") -- a historical incident citation, not a behavioral difference.
+            # DELIBERATELY left out of this port: it names an incident specific to legacy's own
+            # deployment history, adds nothing an operator needs to fix THIS refusal, and this
+            # file already has its own SCOPE-section citation trail for provenance. Noted here
+            # as a disclosed, considered omission, not a silent drop.
             print(f"led work open: REFUSED -- unrecognized flag '{tok}'.", file=sys.stderr)
             print("  led work open <slug> <title...> accepts only: --parent <parent-slug>,", file=sys.stderr)
             print("  --discharge composite, --refs <ref>, --supersedes <id>.", file=sys.stderr)
@@ -1731,7 +2116,7 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
             print("led work close: REFUSED -- --review-bookkeeping requires --witness "
                   "commit:<sha> -- no --witness was given.", file=sys.stderr)
             return 1
-        if not re.match(r"^commit:[0-9a-f]{7,40}$", witness):
+        if not _COMMIT_WITNESS_RE.match(witness):
             print(f"led work close: REFUSED -- --review-bookkeeping's --witness {witness!r} "
                   f"failed the COMMIT-SHAPE check (must match ^commit:[0-9a-f]{{7,40}}$).",
                   file=sys.stderr)
@@ -2177,11 +2562,16 @@ def cmd_work_supersede_cascade(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     return 0
 
 
-def cmd_generic(cfg: bcc.ServedConfig, args: argparse.Namespace) -> int:
-    statement = " ".join(args.statement)
+def cmd_generic(cfg: bcc.ServedConfig, kind: str, statement: str, shared: dict[str, str],
+                grade: str | None, allow_cli_text: bool) -> int:
+    """The generic `<kind> <statement...>` write path. `shared` is main()'s own front-anchored
+    shared-flag strip (row 1173 finding 1) -- -f/-e/--supersedes/--amends/--amends-scope/
+    --answers/--refs/--concern/--evidence/--confidence/--event-time, exactly legacy's own
+    vocabulary, all of which this path (and only this path, plus register-principal/principal)
+    honors."""
     if not _preflight_grammar(statement):
         return 1
-    if not getattr(args, "statement_really_contains_cli_text", False):
+    if not allow_cli_text:
         violation = _cli_usage_guard_violation(statement)
         if violation is not None:
             print(f"led: REFUSED -- this statement {violation} -- it pattern-matches CAPTURED "
@@ -2193,35 +2583,83 @@ def cmd_generic(cfg: bcc.ServedConfig, args: argparse.Namespace) -> int:
                   f"text (e.g. reporting a real bug in that text), re-run with "
                   f"--statement-really-contains-cli-text to override.", file=sys.stderr)
             return 1
-    payload: dict = {"kind": args.kind, "statement": statement}
-    if args.files:
-        payload["rationale"] = f"files: {args.files}"
-    if args.enacts:
-        payload["enacts"] = [int(x) for x in args.enacts.split(",") if x]
-    if args.supersedes is not None:
-        payload["supersedes"] = args.supersedes
-    if args.amends is not None:
-        payload["amends"] = args.amends
-    if args.amends_scope is not None:
-        payload["amends_scope"] = args.amends_scope
-    if args.answers is not None:
-        payload["answers"] = args.answers
-    if args.refs is not None:
-        payload["refs"] = args.refs
-    if args.concern is not None:
-        payload["concern"] = args.concern
-    if args.evidence is not None:
-        payload["evidence"] = args.evidence
-    if args.confidence is not None:
-        payload["confidence"] = args.confidence
-    if args.event_time is not None:
-        payload["event_declared_ts"] = args.event_time
-    if args.kind == "decision" and args.grade is not None:
-        payload["decision_grade"] = args.grade
+    payload: dict = {"kind": kind, "statement": statement}
+    if shared.get("-f"):
+        payload["rationale"] = f"files: {shared['-f']}"
+    if shared.get("-e"):
+        payload["enacts"] = [int(x) for x in shared["-e"].split(",") if x]
+    if shared.get("--supersedes"):
+        payload["supersedes"] = int(shared["--supersedes"])
+    if shared.get("--amends"):
+        payload["amends"] = int(shared["--amends"])
+    if shared.get("--amends-scope"):
+        payload["amends_scope"] = shared["--amends-scope"]
+    if shared.get("--answers"):
+        payload["answers"] = int(shared["--answers"])
+    if shared.get("--refs"):
+        payload["refs"] = shared["--refs"]
+    if shared.get("--concern"):
+        payload["concern"] = shared["--concern"]
+    if shared.get("--evidence"):
+        payload["evidence"] = shared["--evidence"]
+    if shared.get("--confidence"):
+        payload["confidence"] = shared["--confidence"]
+    if shared.get("--event-time"):
+        payload["event_declared_ts"] = shared["--event-time"]
+    if kind == "decision" and grade is not None:
+        payload["decision_grade"] = grade
     actor = _resolve_actor(cfg)
     if actor is not None:
         payload["actor"] = actor
     return bcc.write_and_report(cfg.base, "ledger", payload)
+
+
+# --- FLAG-BEFORE-VERB GRAMMAR (row 1173 finding 1) --------------------------------------------
+# legacy-led.tmpl's own top-of-file shared flag loop (recovered source ~lines 584-612) parses
+# these ELEVEN shared flags FRONT-ANCHORED -- in any order among themselves, but strictly BEFORE
+# the verb word -- before dispatching on $1 at all. This served rebase used to dispatch on
+# argv[0] FIRST and only parse shared flags inside the generic path's own argparse call, so
+# `led --event-time <ts> work open x "y"` never reached `work`'s own dispatch branch at all: argv[0]
+# was "--event-time", which matched none of the verb checks, so control fell all the way through
+# to the generic path, which then (mis)treated "work" as a `<kind>` and "open"/"x"/"y" as the
+# statement -- a silent misroute into an unrelated write, not a refusal. `_strip_shared_flags`
+# below restores legacy's own front-anchored grammar: consume the leading run of recognized
+# shared flags, stop at the first token that is not one, and dispatch on THAT (post-strip) token.
+_SHARED_FLAG_NAMES = {"-f", "-e", "--supersedes", "--amends", "--amends-scope", "--answers",
+                      "--refs", "--concern", "--evidence", "--confidence", "--event-time"}
+
+
+def _strip_shared_flags(argv: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Consumes a FRONT-ANCHORED run of `_SHARED_FLAG_NAMES` (each takes exactly one following
+    token as its value, legacy's own `shift 2` convention -- a flag with nothing after it gets
+    an empty-string value, never an IndexError) and returns (parsed flags, remaining argv). Once
+    a token that is not a recognized shared flag is seen, the loop stops -- exactly legacy's own
+    `while true; do case "${1:-}" in -f) ...; *) break ;; esac; done`: a shared flag can only
+    appear BEFORE the verb, never interspersed after it."""
+    flags: dict[str, str] = {}
+    i = 0
+    while i < len(argv) and argv[i] in _SHARED_FLAG_NAMES:
+        flags[argv[i]] = argv[i + 1] if i + 1 < len(argv) else ""
+        i += 2
+    return flags, argv[i:]
+
+
+# legacy's own --event-time COVERAGE GUARD (recovered source ~lines 753-777): every verb below
+# has its OWN INSERT that does not carry `event_declared_ts` -- REFUSE loudly here rather than
+# silently dropping a value the operator explicitly asked to be recorded. `register-principal`
+# and the 13 `led principal *` sub-verbs are DELIBERATELY ABSENT from this set (they honor
+# --event-time, see `_refuse_other_shared_flags`/`cmd_register_principal`'s own `event_time`
+# parameter) -- as is the generic `<kind> <statement...>` path (its whole reason to exist).
+# `artifact` is an ADDITIVE entry beyond legacy's own list: legacy predates the artifact-store
+# routes entirely (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, this build), so legacy
+# never had occasion to name it -- but `cmd_artifact_put`'s own payload carries no
+# `event_declared_ts` slot either, the SAME silent-drop hazard this guard exists to foreclose,
+# noticed in reach of this exact fix (CLAUDE.md's hazard-fixing duty) and closed here rather
+# than left for the next caller to trip.
+_EVENT_TIME_UNSUPPORTED_VERBS = {
+    "--recent", "current", "question-status", "review-gap", "stamp-distinctness", "standing",
+    "obligate", "review", "work", "decomposition-review-status", "briefing", "artifact",
+}
 
 
 def main(argv: list[str]) -> int:
@@ -2229,6 +2667,17 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 0
     cfg = _load_config()
+    shared, argv = _strip_shared_flags(argv)
+    event_time = shared.get("--event-time")
+    if event_time and argv and argv[0] in _EVENT_TIME_UNSUPPORTED_VERBS:
+        print(f"led: REFUSED -- --event-time is only supported on the generic <kind> "
+              f"<statement...> path today (e.g. './led --event-time <ts> finding \"...\"'), "
+              f"plus register-principal and 'led principal <sub-verb>' (kernel/lineage/"
+              f"s40-principal-identity-events.sql); '{argv[0]}' has its own INSERT that does "
+              f"not carry event_declared_ts, so the value would otherwise be silently dropped. "
+              f"Omit --event-time for this verb, or route the declaration through the generic "
+              f"path instead.", file=sys.stderr)
+        return 1
 
     if argv and argv[0] == "--json":
         if len(argv) != 3:
@@ -2264,6 +2713,9 @@ def main(argv: list[str]) -> int:
         # treats it (a caller that omits it gets this CLI's own placeholder text, unchanged
         # behavior for every existing caller); `cmd_register_principal` now threads whatever is
         # given straight to the kernel's own registration_write payload.
+        rc = _refuse_other_shared_flags("register-principal", shared)
+        if rc is not None:
+            return rc
         p = argparse.ArgumentParser(prog="led register-principal", add_help=False)
         p.add_argument("name")
         p.add_argument("agent_class")
@@ -2273,7 +2725,7 @@ def main(argv: list[str]) -> int:
         except SystemExit:
             print("usage: led register-principal <name> <class> [--purpose \"<why>\"]", file=sys.stderr)
             return 4
-        return cmd_register_principal(cfg, ns.name, ns.agent_class, ns.purpose)
+        return cmd_register_principal(cfg, ns.name, ns.agent_class, ns.purpose, event_time)
     if argv and argv[0] == "obligate":
         if len(argv) >= 2 and argv[1] == "revoke":
             p = argparse.ArgumentParser(prog="led obligate revoke", add_help=False)
@@ -2309,13 +2761,17 @@ def main(argv: list[str]) -> int:
         if len(argv) != 1:
             print(f"led decomposition-review-status: REFUSED -- unrecognized argument "
                   f"'{argv[1]}'.", file=sys.stderr)
-            print("  This verb takes NO flags or arguments.", file=sys.stderr)
+            # row 1173 review round 1, minor 1: legacy's own trailing clause (recovered source,
+            # both this verb's and `briefing`'s refusal), dropped in the earlier port -- restored.
+            print("  This verb takes NO flags or arguments -- see top-of-file comment.",
+                  file=sys.stderr)
             return 1
         return cmd_decomposition_review_status(cfg)
     if argv and argv[0] == "briefing":
         if len(argv) != 1:
             print(f"led briefing: REFUSED -- unrecognized argument '{argv[1]}'.", file=sys.stderr)
-            print("  This verb takes NO flags or arguments.", file=sys.stderr)
+            print("  This verb takes NO flags or arguments -- see top-of-file comment.",
+                  file=sys.stderr)
             return 1
         return cmd_briefing()
     if argv and argv[0] == "work":
@@ -2388,21 +2844,15 @@ def main(argv: list[str]) -> int:
               f"| get <hash> [--out <path>] | stat <hash>", file=sys.stderr)
         return 4
     if argv and argv[0] == "principal":
-        return cmd_principal(cfg, argv[1:])
+        return cmd_principal(cfg, argv[1:], shared)
 
-    # The generic <kind> <statement...> write path, flags consumed before the positional kind.
+    # The generic <kind> <statement...> write path -- the shared flags (-f/-e/--supersedes/
+    # --amends/--amends-scope/--answers/--refs/--concern/--evidence/--confidence/--event-time)
+    # are ALREADY stripped, front-anchored, into `shared` above; only `--grade` (decision's own
+    # value flag) and `--statement-really-contains-cli-text` (the garbage-statement guard's
+    # override, row 1159 -- NOT part of legacy's shared vocabulary at all, a new flag) remain for
+    # this path's own argparse to recognize, alongside `kind`/`statement`.
     p = argparse.ArgumentParser(prog="led", add_help=False)
-    p.add_argument("-f", dest="files", default=None)
-    p.add_argument("-e", dest="enacts", default=None)
-    p.add_argument("--supersedes", type=int, default=None)
-    p.add_argument("--amends", type=int, default=None)
-    p.add_argument("--amends-scope", dest="amends_scope", default=None)
-    p.add_argument("--answers", type=int, default=None)
-    p.add_argument("--refs", default=None)
-    p.add_argument("--concern", default=None)
-    p.add_argument("--evidence", default=None)
-    p.add_argument("--confidence", default=None)
-    p.add_argument("--event-time", dest="event_time", default=None)
     p.add_argument("--grade", default=None)
     p.add_argument("--statement-really-contains-cli-text",
                     dest="statement_really_contains_cli_text", action="store_true")
@@ -2412,7 +2862,8 @@ def main(argv: list[str]) -> int:
         ns = p.parse_args(argv)
     except SystemExit:
         return 4
-    return cmd_generic(cfg, ns)
+    return cmd_generic(cfg, ns.kind, " ".join(ns.statement), shared, ns.grade,
+                        ns.statement_really_contains_cli_text)
 
 
 if __name__ == "__main__":

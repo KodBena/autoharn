@@ -29,11 +29,18 @@ def fields(state: dict) -> tuple:
     # every birth per the ratified coupling (row 1150) now that legacy-led.tmpl is retired:
     # declining used to fall back to `legacy/led`, now a one-line teaching-refusal stub, never a
     # working CLI -- "decline" would brick the rest of this run's commit. Configuration CHOICES
-    # (host/db/port/auto-start-now-vs-later) are unchanged; only the existence gate is gone. Row
-    # 1942 (autoharn1's own ledger) is NOT a ratification of decline's continued existence -- it
-    # is a DEFECT-FIX WITNESS (Case 14, runner.resolve_led) that a declining run correctly fell
-    # back to a working legacy/led; that target no longer working is the reason this option
-    # retires now, not a conflict with that earlier witness.
+    # (host/db/port/auto-start-now-vs-later) are unchanged; only the existence gate is gone.
+    # BASIS (corrected, retirement review round 1, ledger row 1173): the decision rests on the
+    # ratified boundary coupling alone -- ledger row 1150 ("the boundary becomes every world's
+    # standing service per the spec's stated coupling") -- plus the plain operational fact stated
+    # above: post-retirement, declining now falls through to a one-line refusal stub (legacy/led
+    # is no longer a working CLI at all), which bricks the rest of this run's commit. ERRATUM:
+    # this comment previously cited "row 1942 (autoharn1's own ledger)" as a DEFECT-FIX WITNESS
+    # for Case 14 (runner.resolve_led) supporting this removal. That citation was independently
+    # verified FALSE -- autoharn1 row 1942 is autoharn1's OWN succession commission (the
+    # maintainer-commissioned rebirth to autoharn2), not a witness of any decline-mode fallback
+    # defect. The removal decision above does not need, and never needed, that citation; it
+    # stands on row 1150 and the operational fact alone.
     return (
         ConfirmField(name="override", label="Override and proceed WITHOUT a confirmed successful "
                      "birth? (only used if birth was not confirmed)"),

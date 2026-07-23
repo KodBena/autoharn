@@ -1,0 +1,106 @@
+RED evidence for seen-red/legacy-led-retirement-round1-fixes, banked before the fix (ledger row
+1173's combined fix round). Captured live against a real scratch boundary world running the
+PRE-FIX bootstrap/templates/led.tmpl (git HEAD at commit a943d46, the tip this fix round started
+from) -- the same lineage chain (through s57) and the same served-CLI-as-subprocess harness
+run_fixtures.py uses, transcribed verbatim from the terminal.
+
+=== finding 1 (flag-before-verb grammar): --event-time ahead of 'work open' MISROUTES ===
+$ LED_ACTOR=author-fixture python3 led-OLD.tmpl --event-time 2020-01-01T00:00:00 work open probe-slug "probe title"
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 11):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+exit=1
+
+-- The CLI never reached cmd_work_open at all: argv[0] was "--event-time", which matched none of
+main()'s verb checks, so control fell through to the generic <kind> <statement...> path, which
+(mis)treated "work" as a bare <kind> value and "open"/"probe-slug"/"probe title" as free statement
+text -- the kernel's own ledger_kind_check (kind='work' is not a member of the closed kind
+vocabulary) is what actually stopped this, not any led-side refusal. A misroute, not a refusal.
+
+=== finding 1 (the honored side): --event-time ahead of 'principal declare-standing' ALSO MISROUTES ===
+$ LED_ACTOR=author-fixture python3 led-OLD.tmpl --event-time 2020-01-01T00:00:00 principal declare-standing probe-subj
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 13):
+  new row for relation "ledger" violates check constraint "ledger_kind_check"
+exit=1
+
+-- Same misroute shape: "principal" read as <kind>, "declare-standing"/"probe-subj" as the
+statement -- never reached cmd_principal, so the standing declaration this call was actually
+asking for never happened, silently.
+
+=== finding 5 (leftover-token refusal): four reviewer-demonstrated swallow cases ===
+$ python3 led-OLD.tmpl principal declare-standing probe-a stray-garbage-token
+led: REFUSED by the kernel write boundary (... "this write names '<NULL>'" ...)
+led principal declare-standing: rotating -- superseding standing declaration row 15 for role 'row1173w_rw'.
+exit=1
+-- the stray positional "stray-garbage-token" is silently DROPPED (never read, never refused);
+this particular attempt happened to fail for an UNRELATED kernel-side reason (a role-restatement
+mismatch), proving the CLI itself printed no "unrecognized argument" diagnostic at all for the
+extra token -- exactly the swallow the fix closes.
+
+$ python3 led-OLD.tmpl principal undeclare-standing stray-garbage-token
+led: REFUSED by the kernel write boundary (... "this write names '<NULL>'" ...)
+exit=1
+-- same: "stray-garbage-token" silently dropped, no unrecognized-argument diagnostic.
+
+$ python3 led-OLD.tmpl principal relate probe-a acts-for probe-b stray-fourth
+led: row 28 written.
+exit=0
+-- the fourth positional "stray-fourth" is silently dropped and the relation write SUCCEEDS
+unrefused -- the row-1173 finding's own words: "a typod flag now writes a wrong fact with no
+error."
+
+$ python3 led-OLD.tmpl principal bind-role probe-a --role tester stray-token
+led: row 29 written.
+exit=0
+-- same: the stray token after --role tester is silently dropped and the bind-role write
+SUCCEEDS unrefused.
+
+The GREEN side (this fixture's own run_fixtures.py, against the FIXED code) re-proves all six
+transcripts above now REFUSE cleanly (flag-before-verb) or REFUSE with "unrecognized argument"
+(leftover-token), nothing written in every case -- see run_fixtures.py's own W1/W4 sections.
+
+=== ROUND 2 (ledger row 1174, faithfulness re-check): missing/empty flag-value silently
+=== substitutes the WRONG default and WRITES A REAL ROW for it ===
+Captured live against a real scratch boundary world running the pre-round-2 led.tmpl (git HEAD
+at commit 9d665aa, this fix round's own starting tip -- already carries round 1's fixes above,
+not yet this one).
+
+$ LED_ACTOR=author-fixture python3 led-OLD.tmpl principal declare-standing probe-a --db-role
+led principal declare-standing: rotating -- superseding standing declaration row 2 for role 'row1174w_rw'.
+led: row 5 written.
+exit=0
+-- `--db-role` is the LAST token (no value follows): `flags[tok] = next(it, "")` silently reads
+this as "" (empty), and `db_role = flags.get("--db-role") or cfg.record.role` then substitutes
+cfg.record.role ('row1174w_rw', the world's OWN connecting role) -- NOT the value the operator
+gave (there wasn't one), and NOT a refusal. `led show 5` confirms `principal_db_role:
+row1174w_rw` -- a REAL row was written under the DEFAULT role, superseding row 2 (author-
+fixture's own standing declaration for that same role).
+
+$ LED_ACTOR=author-fixture python3 led-OLD.tmpl principal declare-standing probe-a --db-role ""
+led principal declare-standing: rotating -- superseding standing declaration row 5 for role 'row1174w_rw'.
+led: row 6 written.
+exit=0
+-- same shape with an EXPLICIT empty-string value (`--db-role ""`): identical silent
+substitution, identical wrong write.
+
+$ LED_ACTOR=author-fixture python3 led-OLD.tmpl principal undeclare-standing --db-role
+  This unbind is FORWARD-ONLY: rows already written under the outgoing declaration stay attributed to their outgoing principal forever.
+led: row 7 written.
+led principal undeclare-standing: role 'row1174w_rw' unbound (superseded declaration row 6).
+exit=0
+-- undeclare-standing exhibits the identical bug in the DESTRUCTIVE direction: it unbinds the
+world's own connecting role's standing declaration, not whatever role the operator meant (there
+was no value at all).
+
+Legacy's own behavior on the identical input (recovered source, the shared top-of-file flag
+loop's `--db-role) db_role="${2:-}"; shift 2 ;;`): the `${2:-}` assignment succeeds silently
+(bash's own safe-default), but the immediately following `shift 2` FAILS when only the flag
+itself remains unconsumed (shift count 2 > 1 remaining positional) -- under `set -euo pipefail`
+this aborts the script: exit 1, nothing written, no teach-text. A wrong write beats a crash for
+badness; this is the defect the crash was accidentally masking.
+
+The GREEN side (this fixture's own run_fixtures.py, against the FIXED code): all three cases
+above now REFUSE with "led principal <verb>: REFUSED -- flag '--db-role' requires a non-empty
+value.", exit 1, nothing written (row count unchanged) -- see run_fixtures.py's own W8 section.
+Also re-confirmed: `principal suspend probe-a "reason words" --supersedes` (trailing, no value)
+refuses identically on the permissive parser, and ordinary suspend/declare-standing usage is
+unaffected (regression-checked live).
