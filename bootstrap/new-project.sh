@@ -307,6 +307,11 @@ fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) --
+# THIS script's own scaffold loop below is the authority every other bootstrap script that
+# writes or discovers these shims now sources instead of re-listing them by hand.
+. "$AUTOHARN_ROOT/bootstrap/shim-verbs.sh"
+
 # AUTOHARN_COMMIT -- the autoharn checkout's own commit hash at scaffold time, so a world's
 # evidence can be tied to the INSTRUMENT VERSION that produced it (prior regulator-panel
 # assessment's Tier-1 item 4: "no record ties a historical DENY to the hook bytes that produced
@@ -1056,8 +1061,8 @@ mkdir -p "$PROJECT_ROOT/roles"
 sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
 echo "wrote roles/README.md"
 
-echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain): thin shims exec'ing autoharn's live templates --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor; do
+echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain -- SHIM_VERBS_ALL, bootstrap/shim-verbs.sh): thin shims exec'ing autoharn's live templates --"
+for verb in $SHIM_VERBS_ALL; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -1129,7 +1134,7 @@ echo "wrote orchlog (wrapper -> $EXEC_ROOT/orchlog --repo $EXEC_ROOT)"
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor orchlog \
+        $SHIM_VERBS_ALL orchlog \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"

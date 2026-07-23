@@ -13,14 +13,14 @@
 # the pinned shape (design/ORCH-DEPLOYMENT-PINNING.md's "submodule-as-default"): adds autoharn as
 # a git submodule at <deployment>/.autoharn pinned to the EXACT commit the deployment was already
 # running (never autoharn's current tip -- conversion is not conflated with an upgrade), repoints
-# the 8 operator-verb shims AND the hook wiring in .claude/settings.json at that pinned copy,
+# the operator-verb shims (SHIM_VERBS_ALL, bootstrap/shim-verbs.sh) AND the hook wiring in .claude/settings.json at that pinned copy,
 # verifies every verb still answers, and records the act.
 #
 # Usage:
 #   bootstrap/convert-to-submodule.sh <deployment-dir> [--pin-url <url>] [--yes]
 #
 #   <deployment-dir>  the existing scaffolded deployment to convert (must already have a
-#                     deployment.json and the 8 operator-verb shims, live-exec today).
+#                     deployment.json and the operator-verb shims, live-exec today).
 #   --pin-url <url>   the submodule remote (default: THIS autoharn checkout's own on-disk path --
 #                     works with no network access, portable on this machine only; pass a real git
 #                     remote for a submodule another machine can also fetch).
@@ -30,7 +30,7 @@
 #
 # REFUSES LOUDLY, and touches NOTHING, on any of:
 #   - <deployment-dir> missing deployment.json, or it fails to parse (filing/deployment_record.py).
-#   - the 8 operator-verb shims are missing, malformed, already pinned (already has .autoharn), or
+#   - the required operator-verb shims (SHIM_VERBS) are missing, malformed, already pinned (already has .autoharn), or
 #     DISAGREE with each other about which autoharn checkout they exec (a pre-existing hazard this
 #     script will not paper over by picking one arbitrarily).
 #   - the discovered autoharn checkout is dirty or its commit cannot be determined (nothing
@@ -68,6 +68,12 @@ SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
 
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) --
+# this script used to hand-maintain its own 8-verb list (9 with doctor conditionalized),
+# independently drifted from new-project.sh's own scaffold loop (the authority) and silently
+# missing asof-export entirely. Sourced here instead.
+. "$SELF_ROOT/bootstrap/shim-verbs.sh"
+
 if [ ! -d "$DEST" ]; then
     echo "convert-to-submodule.sh: $DEST is not a directory" >&2
     exit 1
@@ -104,14 +110,16 @@ if [ -e "$DEST/.autoharn" ]; then
     exit 1
 fi
 
-# --- 3. discover the CURRENT live-exec AUTOHARN_ROOT from the 8 shims, and confirm agreement ---
-# `doctor` (added after this script's original 8) is deliberately OPTIONAL here, never REQUIRED:
-# a deployment scaffolded before `./doctor` existed legitimately has no such shim, and hard-
-# requiring it would refuse conversion for every pre-existing deployment on this fix's account.
-# When present, it is folded into $VERBS below so it gets discovered/repointed/committed exactly
-# like the other 8 -- absent, it is silently skipped, same posture as everywhere else in this
-# repo that treats `doctor` as additive-and-optional to already-scaffolded worlds.
-VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc"
+# --- 3. discover the CURRENT live-exec AUTOHARN_ROOT from the shims, and confirm agreement ---
+# `doctor` (SHIM_VERBS_OPTIONAL, bootstrap/shim-verbs.sh -- added after this script's original
+# nine) is deliberately OPTIONAL here, never REQUIRED: a deployment scaffolded before `./doctor`
+# existed legitimately has no such shim, and hard-requiring it would refuse conversion for every
+# pre-existing deployment on this fix's account. When present, it is folded into $VERBS below so
+# it gets discovered/repointed/committed exactly like the required set -- absent, it is silently
+# skipped, same posture as everywhere else in this repo that treats `doctor` as
+# additive-and-optional to already-scaffolded worlds. Every OTHER verb in SHIM_VERBS is required
+# (unlike before this fix, this now includes asof-export -- see bootstrap/shim-verbs.sh's header).
+VERBS="$SHIM_VERBS"
 [ -f "$DEST/doctor" ] && VERBS="$VERBS doctor"
 DISCOVERED=""
 for v in $VERBS; do
@@ -134,7 +142,7 @@ for v in $VERBS; do
     if [ -z "$DISCOVERED" ]; then
         DISCOVERED="$root"
     elif [ "$root" != "$DISCOVERED" ]; then
-        echo "convert-to-submodule.sh: the 8 operator-verb shims DISAGREE about which autoharn" >&2
+        echo "convert-to-submodule.sh: the operator-verb shims DISAGREE about which autoharn" >&2
         echo "                         checkout they exec -- '$v' points at '$root' but an earlier" >&2
         echo "                         verb pointed at '$DISCOVERED'. This is a pre-existing hazard" >&2
         echo "                         in $DEST that predates this script; fix it by hand (make" >&2
@@ -222,7 +230,7 @@ echo "-- adding submodule --"
 (cd "$DEST/.autoharn" && git checkout --quiet "$DISCOVERED_SHA")
 echo "   .autoharn added, pinned to $DISCOVERED_SHA"
 
-echo "-- repointing the 8 operator-verb shims --"
+echo "-- repointing the operator-verb shims --"
 for v in $VERBS; do
     shim="$DEST/$v"
     cat > "$shim" <<SHIM

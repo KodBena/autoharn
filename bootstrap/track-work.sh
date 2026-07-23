@@ -149,6 +149,11 @@ done
 unset _name
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) --
+# new-project.sh's own scaffold loop is the authority; this script sources the same list rather
+# than keeping its own hand-maintained copy.
+. "$AUTOHARN_ROOT/bootstrap/shim-verbs.sh"
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
@@ -292,7 +297,7 @@ echo "   distance-to-clean, attest-doc, asof-export, doctor, plus the signing to
 echo "   verify-commission and verify-chain): thin shims exec'ing autoharn's live templates,"
 echo "   identical mechanism to new-project.sh's own (a template fix in bootstrap/templates/"
 echo "   reaches this deployment instantly, same as every governed world) --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor; do
+for verb in $SHIM_VERBS_ALL; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"

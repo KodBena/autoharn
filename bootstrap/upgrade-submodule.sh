@@ -55,6 +55,15 @@ SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
 
+# The single-home shim verb set (tracker item submodule-shim-set-drift, ledger row 1182) --
+# this script used to hand-maintain its own 9-verb list, independently drifted from
+# new-project.sh's own scaffold loop (the authority) and silently missing asof-export. This
+# loop only verifies that the FRESHLY-FETCHED pin's own templates exist (never a per-deployment
+# doctor-optional question -- the pin's template tree either has all ten today's autoharn ships,
+# or it doesn't), so SHIM_VERBS_ALL is used unconditionally, unlike convert-to-submodule.sh's
+# discovery loop.
+. "$SELF_ROOT/bootstrap/shim-verbs.sh"
+
 if [ ! -d "$DEST" ]; then
     echo "upgrade-submodule.sh: $DEST is not a directory" >&2
     exit 1
@@ -128,7 +137,7 @@ echo "-- pin bumped and committed: $(cd "$DEST" && git log -1 --oneline) --"
 
 # --- 6. verify every verb still answers ------------------------------------------------------
 echo "-- verifying every operator verb resolves into the new pin --"
-VERBS="led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc doctor"
+VERBS="$SHIM_VERBS_ALL"
 FAIL=0
 for v in $VERBS; do
     if [ ! -x "$DEST/.autoharn/bootstrap/templates/$v.tmpl" ]; then
