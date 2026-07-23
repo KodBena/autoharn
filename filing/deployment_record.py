@@ -164,9 +164,12 @@ def load_deployment(path: str | Path) -> DeploymentRecord:
     if not p.is_file():
         raise DeploymentError(
             f"deployment record not found at {p} -- a project with no deployment record is refused, "
-            f"never silently un-resolved. Write one (deployment_record.write_deployment) or point "
-            f"this caller's deployment-path setting at the right path (e.g. engine/targets.py's "
-            f"LEDGER_DEPLOYMENT, or PICKUP_DEPLOYMENT -- used by pickup, judge, and led alike).")
+            f"never silently un-resolved. Fix it by running `python3 -m tools.setup_tui` against "
+            f"this project (writes deployment.json for you), or by copying deployment.json.example "
+            f"to deployment.json and filling in your own db/host/schema/kern/role -- or, if a "
+            f"deployment.json already exists elsewhere, point this command's deployment-path "
+            f"setting at it: set the LEDGER_DEPLOYMENT or PICKUP_DEPLOYMENT environment variable "
+            f"(used by pickup, judge, and led alike) to that file's path.")
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as e:
