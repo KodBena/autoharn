@@ -79,10 +79,16 @@ _COMMIT_WITNESS_RE = re.compile(r"^commit:[0-9a-f]{7,40}$")
 
 def _load_config() -> bcc.ServedConfig:
     try:
-        return bcc.load_served_config(DEPLOYMENT_PATH)
+        cfg = bcc.load_served_config(DEPLOYMENT_PATH)
     except bcc.BoundaryClientError as e:
         print(f"led: {e}", file=sys.stderr)
         sys.exit(4)
+    # Version handshake (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): checked ONCE here, the
+    # single choke point every served call already passes through (ADR-0012 P1), before any real
+    # read/write is issued. `ProtocolVersionMismatch` propagates to `main`'s own top-level
+    # exception mapping (mirrors BoundaryRefusal/BoundaryUnreachable there).
+    bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    return cfg
 
 
 def _resolve_actor(cfg: bcc.ServedConfig) -> int | None:
@@ -2686,6 +2692,8 @@ def main(argv: list[str]) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
+    except bcc.ProtocolVersionMismatch as e:
+        sys.exit(bcc.report_protocol_mismatch("led", e))
     except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
         # Part C completion item 5 (ledger row 1158/1159): best-effort re-read of this
         # deployment's own boundary_url for the restart teach-text -- wrapped so a SECOND

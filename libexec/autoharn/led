@@ -1,0 +1,18 @@
+#!/bin/sh
+# Part C completion (ledger rows 1158/1159, maintainer-approved plan, 2026-07-23): this repo's
+# own world now has its own standing boundary service (boundary-multiplex.toml, deployment.json's
+# boundary_url/boundary_deployment keys) -- ./led is the served shim, the SAME shape
+# bootstrap/new-project.sh scaffolds for every new world.
+#
+# legacy-led-retirement (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row 1149/1150):
+# `bootstrap/templates/legacy-led.tmpl` is DELETED from this repository outright -- the boundary
+# is now mandatory at every birth (no decline path left that needed a working direct-psql `led`),
+# and `led principal *` closed the one verb family the served path was ever missing. `./legacy/led`
+# (once scaffolded) is now a one-line teaching refusal, never a working CLI -- use ./led for
+# everything.
+# Relocated under libexec/autoharn/ by the umbrella-CLI build (design/
+# FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §1/§6, ledger rows 1151-1183): semantics, refusal texts
+# and exit codes carry over unchanged; only HERE's arithmetic changed, two directories up
+# instead of the old repo-root sibling relationship.
+HERE="$(cd "$(dirname "$0")/../.." && pwd)"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/led.tmpl" "$@"

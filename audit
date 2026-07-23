@@ -1,3 +1,6 @@
 #!/bin/sh
-HERE="$(cd "$(dirname "$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/audit.tmpl" "$@"
+# DEPRECATED alias (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6, ledger rows 1151-1183):
+# ./audit is now a one-line shim over `autoharn audit` -- removed at the first post-2.0.0 minor.
+# Semantics, refusal texts and exit codes are unchanged; only the invocation spelling moved.
+echo "audit: DEPRECATED spelling -- use 'autoharn audit' instead (this alias is removed at the first post-2.0.0 minor, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6)." >&2
+exec "$(cd "$(dirname "$0")" && pwd)/autoharn" audit "$@"

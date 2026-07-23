@@ -107,6 +107,9 @@ REGISTRY: dict[str, str] = {
     "no-conflict-markers":            "seen-red/no-conflict-markers/run_fixtures.py",
     "rename-doc":                     "seen-red/rename-doc/red-specimen.py",
     "scaffold-governed-and-gitignore": "seen-red/scaffold-governed-and-gitignore/run_fixtures.py",
+    "umbrella-cli-dispatch-parity":   "seen-red/umbrella-cli-dispatch-parity/run_fixtures.py",
+    "umbrella-cli-ensure-running":    "seen-red/umbrella-cli-ensure-running/run_fixtures.py",
+    "umbrella-cli-version-handshake": "seen-red/umbrella-cli-version-handshake/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
     # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
     # registry in memory to force the breach.

@@ -142,6 +142,14 @@ ROOT_FILES = {
     # vestigial_documentation/ by the doc-tree relocation (row 1620, 2026-07-18) as
     # IMPLEMENTED-LEGACY (a self-declared point-in-time correspondence record); deregistered
     # here, see VESTIGIAL-INDEX.md.
+    #
+    # autoharn — the umbrella entry point (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger
+    # rows 1151-1183): the ONE root executable now, dispatching to libexec/autoharn/<verb>. The
+    # ten pre-umbrella root verb shims above (led, judge, pickup, ...) stay registered here too --
+    # they survive as one-line deprecation-warning alias shims for one deprecation window (spec
+    # §6), not yet removed. Registered on landing, not left an unregistered breach for the next
+    # run (CLAUDE.md hazard-flagging duty).
+    "autoharn",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
@@ -213,6 +221,11 @@ ROOT_DIRS = {
     # orchlog.d/README.md's "Why the directory is named orchlog.d/" section for the full
     # reasoning). Registered on landing rather than left for the next census run.
     "orchlog.d",
+    # libexec/ — where the umbrella build's ten relocated verb implementations live
+    # (libexec/autoharn/<verb>) plus the ensure-running control plane (libexec/autoharn-service),
+    # design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §1/§2, ledger rows 1151-1183. Registered on
+    # landing, not left an unregistered breach for the next run (CLAUDE.md hazard-flagging duty).
+    "libexec",
 }
 
 # (2) per-directory currency patterns: a directory -> the regex(es) its basenames MUST match.

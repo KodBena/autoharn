@@ -37,7 +37,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-ATTEST_TAGS = REPO / "attest-tags"
+# Relocated under libexec/autoharn/ by the umbrella-CLI build (design/
+# FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows 1151-1183): the ROOT `attest-tags` is now a
+# one-line shell alias shim (`exec ... autoharn attest-tags "$@"`), not the Python script this
+# fixture invokes directly via `sys.executable` -- pointing at the real relocated implementation
+# instead (the alias shim itself is exercised separately by
+# seen-red/umbrella-cli-dispatch-parity/run_fixtures.py's own case c).
+ATTEST_TAGS = REPO / "libexec" / "autoharn" / "attest-tags"
 
 KEYGEN_BATCH_TEMPLATE = """%no-protection
 Key-Type: eddsa

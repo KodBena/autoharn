@@ -1,0 +1,40 @@
+Witnessed 2026-07-23: seen-red/umbrella-cli-ensure-running/run_fixtures.py caught a REAL
+TOCTOU race in the first draft of libexec/autoharn-service's bind-as-lock adoption logic (design/
+FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2's "the port bind IS the lock ... a loser detects the lost
+bind ... and ADOPTS the winner").
+
+THE DEFECT: the first draft declared ownership of a spawned child as soon as `_probe(url)`
+succeeded AND `proc.poll() is None` -- but a LOSING child can still be alive (mid-import,
+mid-startup, about to crash on its own failed `bind()`) at the exact instant a WINNING sibling's
+bind makes the boundary reachable. `proc.poll() is None` at that instant does not yet prove this
+invocation's own child is the one actually holding the port.
+
+REPRODUCTION (case d, two concurrent `autoharn service start` invocations against the same down
+scratch port, before the fix):
+
+$ python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
+a-status-unreachable: PASS (RED case: exit 1, UNREACHABLE)
+b-cold-spawn: PASS (one stderr notice, reachable after spawn, pidfile written)
+c-warm-adopt-silent: PASS (no new spawn, exit 0)
+d-race-two-invocations: FAIL -- a(exit=0, out="autoharn service: reachable at
+http://127.0.0.1:56321 (this invocation's own spawn, pid 438251).\n") b(exit=0, out="autoharn
+service: reachable at http://127.0.0.1:56321 (this invocation's own spawn, pid 438252).\n")
+e-explicit-stop: FAIL -- exit 0, stdout=''
+f-stop-without-pidfile-refuses: PASS (RED case: exit 1, teaches, never guesses)
+
+AT LEAST ONE CASE FAILED
+
+BOTH invocations claimed ownership of the winning spawn (only one, pid 438251, was actually
+alive per `ps`/`ss` -- the other, 438252, had lost the real OS-level bind race and was in the
+process of exiting when B's own poll() ran). The pidfile was overwritten by whichever invocation
+wrote it last, which could be the LOSER's own (already-dying) pid -- exactly the "claim a pid we
+do not actually own" hazard case f's own explicit-stop machinery depends on never happening.
+
+THE FIX: a 0.5s grace-delay re-check of `proc.poll()` after the reachability probe succeeds,
+before declaring ownership and writing the pidfile (libexec/autoharn-service, the
+`# TOCTOU guard` comment). A false negative (this invocation actually won but reports "adopted")
+is harmless per row 1165 ("someone-else-started-it is a success case" regardless of who it truly
+was); a false positive (claiming a pid this invocation does not own) is the hazard closed here.
+
+Post-fix, the same case (and the full six-case run) passes reliably across repeated runs -- see
+the umbrella-CLI build's completion report for the green transcript.

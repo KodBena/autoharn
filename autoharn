@@ -1,0 +1,91 @@
+#!/bin/sh
+# autoharn -- the umbrella entry point (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows
+# 1151-1183). Dispatch is git's own architecture: `autoharn <verb> [args...]` execs
+# `libexec/autoharn/<verb>` unchanged -- this is a re-plumbing, not a rewrite. Every verb's
+# semantics, refusal texts, and exit codes carry over byte-for-byte from the pre-umbrella root
+# executables (spec §1); only the invocation spelling changed.
+#
+# `autoharn --help` (or no args, or an unrecognized first arg starting with `-`) is GENERATED
+# from the dispatch table below -- one line per verb, its one-sentence description -- so the
+# help output is the authoritative, drift-proof verb roster (spec §1: "the count-drift class the
+# doorway round just paid for dies at the root"). `autoharn <unknown-verb>` refuses loudly,
+# teaching the same roster, rather than a bare shell "not found".
+#
+# --help NEVER writes and NEVER requires a reachable boundary (spec §5, row 1159) -- this
+# dispatcher's own --help path below runs before HERE/LIBEXEC touch anything beyond argv, and
+# every relocated verb's own --help path is unchanged from before this build (verified per-verb,
+# see the umbrella build's witness fixtures under seen-red/).
+set -eu
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+LIBEXEC="$HERE/libexec/autoharn"
+
+# DISPATCH TABLE -- the ONE roster (ADR-0012 P1: one home, not re-derived per caller). Format:
+# verb<TAB>one-sentence description. Both `autoharn --help` and the unknown-verb refusal below
+# read this SAME block, and the parity fixture (seen-red/umbrella-cli-dispatch-parity) greps it
+# directly against `ls libexec/autoharn/` -- add a verb here AND drop its implementation at
+# libexec/autoharn/<verb>, nowhere else, or the parity fixture goes red.
+_dispatch_table() {
+    cat <<'EOF'
+led	write to or read from the append-only governance ledger (decisions, work items, obligations, principals, ...)
+judge	compare the SQL and ASP polarities against the ledger and report AGREE/DIVERGE/QUARANTINED
+pickup	resume-context read: hydrate an orchestrator from the ledger instead of session replay
+distance-to-clean	one-line-per-section debt count against this repo's own hygiene bars
+attest-tags	verify this repo's ratified/* git tags against the committed public key(s)
+audit	run the standing audit surface against a served deployment
+doctor	is this world set up right? one witnessed PASS/FAIL/SKIP report, read-only
+migrate	apply this repo's own migration steps (autoharn-repo-specific, not scaffolded into worlds)
+asof-export	export a point-in-time snapshot of the ledger
+verify-chain	reconcile the row-hash chain and the refusal_seq completeness oracle
+service	ensure-running control: status|start|stop the boundary service this world depends on
+EOF
+}
+
+_print_help() {
+    echo "usage: autoharn <verb> [args...]"
+    echo
+    echo "Every verb below is a thin dispatch to libexec/autoharn/<verb> (or, for 'service',"
+    echo "handled directly by this dispatcher) -- semantics, refusal texts and exit codes are"
+    echo "unchanged from the pre-umbrella per-verb executables. Nested subcommands compose as"
+    echo "before (e.g. 'autoharn led work open ...')."
+    echo
+    echo "verbs:"
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", $1, $2}'
+    echo
+    echo "The ten-verb-plus-service roster above is generated from this dispatcher's own dispatch"
+    echo "table -- it cannot drift from what actually runs (design/FABLE-AUTOHARN-UMBRELLA-CLI-"
+    echo "SPEC.md §1). For a verb's own full usage, run 'autoharn <verb> --help'."
+}
+
+# --help / -h / no-args / bare `help`: generated help, never writes, never touches the network
+# (row 1159) -- this branch returns before LIBEXEC or any subprocess is ever touched.
+if [ $# -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+    _print_help
+    exit 0
+fi
+
+VERB="$1"; shift
+
+# 'service' is handled by this dispatcher directly (ensure-running control plane, spec §2) --
+# not a libexec/autoharn/<verb> file, since it manages the boundary process THIS repo's verbs
+# talk to rather than being one more thin CLI shim over bootstrap/templates/*.tmpl.
+if [ "$VERB" = "service" ]; then
+    exec "$HERE/libexec/autoharn-service" "$@"
+fi
+
+if [ ! -x "$LIBEXEC/$VERB" ]; then
+    echo "autoharn: REFUSED -- unrecognized verb '$VERB'." >&2
+    echo >&2
+    echo "Known verbs:" >&2
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", $1, $2}' >&2
+    echo >&2
+    echo "Run 'autoharn --help' for the full generated roster. Nothing was touched." >&2
+    exit 2
+fi
+
+# Shared env resolution (spec §1): AUTOHARN names this checkout for any relocated verb that
+# wants it (bootstrap/templates/doctor.tmpl already reads this exact variable) -- computed once,
+# here, rather than re-derived per verb.
+AUTOHARN="$HERE"
+export AUTOHARN
+exec "$LIBEXEC/$VERB" "$@"

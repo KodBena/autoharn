@@ -1,5 +1,15 @@
 # CLAUDE.md
 
+<!-- doc-attest-exempt: umbrella-CLI operator-surface sentence update (design/
+FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows 1151-1183, 2026-07-23) -- the one-bullet
+operator-surface swap quotes the spec's own §6 replacement text ("the operator surface is
+./autoharn and its subcommands; autoharn --help is the authoritative self-updating list")
+near-verbatim, a factual-status update (which verbs exist, where) rather than an authored prose
+argument, and the spec itself is still pre-ratification ("awaits maintainer ratification," its
+own status line). No genuine fresh-context second reviewer was available inside this build
+session to run ADR-0017's real A:B:C loop. Removal condition: strike this marker and run the
+real A:B:C loop at (or before) this spec's own maintainer ratification pass. -->
+
 This file is autoharn's standing instruction document for AI collaborators: Claude Code
 loads it automatically at session start, and its rules override default agent behavior.
 It carries the tone register, the engineering-responsibility standard, the pointer to the
@@ -47,10 +57,13 @@ it; the key restates the reading posture the bullet above mandates):
   quantification universe:
   [ADR-0000's 2026-07-02 Rule 2(a) amendment](law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)). Sonnet executes; Opus authors only here, and only
   with this full ceremony. Degraded-but-possible beats frozen — that is the ratified choice.
-- **The operator surface is the repo-root executable verbs** (currently led, judge, pickup,
-  distance-to-clean, attest-tags, audit — the executable files at the repo root are
-  the authoritative, self-updating list; scaffolding lives under bootstrap/) plus refusals
-  that teach. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
+- **The operator surface is `./autoharn` and its subcommands; `autoharn --help` is the
+  authoritative self-updating list** (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows
+  1151-1183: one root executable, dispatching to `libexec/autoharn/<verb>`; the ten pre-umbrella
+  root executables — led, judge, pickup, distance-to-clean, attest-tags, audit, doctor, migrate,
+  asof-export, verify-chain — survive one deprecation window as one-line `./verb` alias shims,
+  removed at the first post-2.0.0 minor) plus refusals that teach. Operational truth lives in
+  ORCH-CAPABILITIES.md + those verbs; judgment/ and
   design/ archives are history unless a current spec cites them.
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule

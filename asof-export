@@ -1,6 +1,7 @@
 #!/bin/sh
-# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
-# (runs are linear, dust-and-settled), it keeps the direct-psql original
-# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
-HERE="$(cd "$(dirname "$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-asof-export.tmpl" "$@"
+# DEPRECATED alias (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6, ledger rows 1151-1183):
+# ./asof-export is now a one-line shim over `autoharn asof-export` -- removed at the first
+# post-2.0.0 minor. Semantics, refusal texts and exit codes are unchanged; only the invocation
+# spelling moved.
+echo "asof-export: DEPRECATED spelling -- use 'autoharn asof-export' instead (this alias is removed at the first post-2.0.0 minor, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6)." >&2
+exec "$(cd "$(dirname "$0")" && pwd)/autoharn" asof-export "$@"

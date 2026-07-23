@@ -1,0 +1,21 @@
+Witnessed 2026-07-23: seen-red/umbrella-cli-dispatch-parity/run_fixtures.py genuinely goes RED
+when the dispatch table drifts from the libexec/autoharn/ roster (design/FABLE-AUTOHARN-
+UMBRELLA-CLI-SPEC.md §1/§7 "generated help matches the dispatch table mechanically").
+
+Reproduction: renamed the `led` entry in ./autoharn's dispatch table to `ledXXX` (simulating a
+dispatch-table edit that forgot to keep the verb name in sync with libexec/autoharn/led's actual
+on-disk name), then re-ran the fixture:
+
+$ python3 seen-red/umbrella-cli-dispatch-parity/run_fixtures.py
+a-libexec-roster-matches-dispatch-table: FAIL -- on disk but not in --help: ['led']
+a-libexec-roster-matches-dispatch-table: FAIL -- in --help but not on disk: ['ledXXX']
+b-help-mentions-every-verb: PASS
+c-alias-shim-still-works: PASS (all ten alias shims print their deprecation notice)
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+
+AT LEAST ONE CASE FAILED
+
+The dispatch table was restored to its correct state (byte-identical to the committed ./autoharn)
+immediately after this capture; case a then reports PASS again (see the fixture's own green run
+in the umbrella-CLI build's completion report).

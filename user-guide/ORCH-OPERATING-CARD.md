@@ -1,6 +1,15 @@
 # OPERATING CARD — read this first, operate from here
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+<!-- doc-attest-exempt: SUPERSEDES the prior 2026-07-18 doc-tree-relocation marker -- this file's
+own forward note WAS touched for content this time (2026-07-23, design/FABLE-AUTOHARN-UMBRELLA-
+CLI-SPEC.md, ledger rows 1151-1183): the note is updated to disclose that the umbrella build
+landed for THIS repo's own root deployment while bootstrap/new-project.sh's scaffold (what a
+freshly-born world actually gets) is explicitly NOT yet migrated -- a factual status update
+(what exists, what does not, named honestly) rather than an authored argument, and the umbrella
+spec itself is still pre-ratification. No genuine fresh-context second reviewer was available
+inside this build session to run ADR-0017's real A:B:C loop. Removal condition: strike this
+marker and run the real A:B:C loop once the umbrella spec is ratified and/or this file's forward
+note is next touched for content. -->
 
 
 Audience: orchestrator
@@ -75,14 +84,20 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](../GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-> **Forward note (2026-07-23):** the per-verb executables below are the shipping
-> surface today, and everything on this card is accurate to it. A ratified commission
-> (ledger rows 1151/1152) replaces this shape with a single `./autoharn` entry point
-> with git-style subcommands (`autoharn led …`, `autoharn doctor`) and moves the
-> per-verb implementations out of the repo root; the verbs, their semantics, and their
-> refusals carry over unchanged — only the invocation spelling changes. This card will
-> be updated when that lands; if you are scripting against autoharn today, expect the
-> `./verb` spellings to survive one deprecation window as aliases.
+> **Forward note (2026-07-23, UPDATED):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md has landed
+> for THIS repository's OWN root deployment: `./autoharn` (`autoharn led …`, `autoharn doctor`,
+> `autoharn --help` for the generated, self-updating roster) is now the primary spelling here,
+> and the ten `./verb` names below survive as one-line deprecation-warning alias shims (removed
+> at the first post-2.0.0 minor) — semantics, refusals and exit codes unchanged, only the
+> invocation spelling moved. **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN
+> world actually gets — is NOT yet updated to this build's shape**: a freshly scaffolded world
+> still receives the ten bare per-verb shims this card describes below, not `./autoharn` +
+> `libexec/`. That migration is a genuinely separate, larger change to a load-bearing 1200+ line
+> script and is deliberately left to a follow-on rather than rushed here (named, not silently
+> skipped). Until it lands, this card's per-verb descriptions below remain the accurate,
+> shipping-current reference for what a scaffolded world actually runs; only the invocation
+> spelling for THIS repo's own operator surface has changed (see CLAUDE.md's operator-surface
+> sentence).
 
 ## The verbs (run inside a world directory)
 

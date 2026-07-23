@@ -1,0 +1,24 @@
+Witnessed 2026-07-23: seen-red/umbrella-cli-version-handshake/run_fixtures.py genuinely goes RED
+(case b) when the client and boundary disagree on wire protocol version (design/FABLE-AUTOHARN-
+UMBRELLA-CLI-SPEC.md §3: "a mismatch refuses with teaching naming BOTH versions and the remedy").
+
+Reproduction: a real `serving.boundary_service` process spun up against a scratch
+boundary-multiplex.toml, then the client's own `_CLIENT_WIRE_PROTOCOL_VERSION` overridden to
+'999-skewed' (simulating an out-of-date/mismatched checkout) before calling
+`check_protocol_version`:
+
+$ python3 seen-red/umbrella-cli-version-handshake/run_fixtures.py
+fixture: REFUSED -- wire protocol version mismatch talking to http://127.0.0.1:33589. This
+client speaks protocol '999-skewed'; the boundary answers '1'. Nothing was read or written.
+Remedy: upgrade this checkout to match the boundary's running version, or point fixture at a
+boundary running the matching checkout (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3).
+a-server-carries-protocol-version: PASS ('1', 'single-operator')
+b-skewed-client-refuses: PASS (RED case: exit 4, names both versions)
+c-matching-client-proceeds: PASS (GREEN case: cached, no second HTTP call)
+
+ALL CASES PASS
+
+(Case b's own PASS line above IS the red-case witness: `ProtocolVersionMismatch` was raised,
+carried both version strings, and `report_protocol_mismatch` mapped it to exit 4 with teaching
+text -- exactly the spec's own words. The client version was restored to its real value and the
+handshake cache cleared immediately after, so case c's GREEN run is genuinely independent.)

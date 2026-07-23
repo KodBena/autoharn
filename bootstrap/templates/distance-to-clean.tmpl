@@ -109,10 +109,14 @@ def doc_attestation_debt(project_root: Path) -> tuple[int, dict[str, int], list[
 
 def _load_config() -> bcc.ServedConfig:
     try:
-        return bcc.load_served_config(DEPLOYMENT_PATH)
+        cfg = bcc.load_served_config(DEPLOYMENT_PATH)
     except bcc.BoundaryClientError as e:
         print(f"distance-to-clean: {e}", file=sys.stderr)
         sys.exit(4)
+    # Version handshake (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3): checked here, the one
+    # choke point every served call passes through (ADR-0012 P1), before any real read is issued.
+    bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
+    return cfg
 
 
 def _view_debt(cfg: bcc.ServedConfig, view: str, cursor: str,
@@ -255,5 +259,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
+    except bcc.ProtocolVersionMismatch as e:
+        sys.exit(bcc.report_protocol_mismatch("distance-to-clean", e))
     except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
         sys.exit(bcc.report_boundary_exception("distance-to-clean", e))

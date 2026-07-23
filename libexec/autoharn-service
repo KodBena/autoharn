@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""autoharn-service -- ensure-running control plane (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
+§2, ledger rows 1151-1183). Invoked as `autoharn service status|start|stop` by the ./autoharn
+dispatcher (never invoked directly by a caller -- there is no `./service` alias, this is not one
+of the ten relocated verbs).
+
+WHAT THIS DOES, per the spec's own words:
+  - PROBE: every invocation that needs the boundary resolves it -- reachable, use it, regardless
+    of who started it.
+  - SPAWN-AS-DETACHED-CHILD: unreachable -> consult this world's own deployment record and
+    boundary-multiplex.toml, spawn `python3 -m serving.boundary_service` as an ordinary detached
+    child process (plain subprocess, its own log file under this world's own directory; no
+    systemd, no D-Bus -- row 1154), print ONE line saying so, then proceed.
+  - BIND-AS-LOCK RACE: the port bind IS the lock. If this process's own spawn attempt loses the
+    race (uvicorn.run's own OSError on an already-bound port), that is not a failure -- a
+    concurrent invocation's spawn (or an operator's own manual start) won it. Re-probe; if the
+    boundary now answers, ADOPT the winner and exit 0 (row 1165: "someone-else-started-it is a
+    success case").
+  - LOUD REFUSAL: a service that genuinely cannot start (the port is held by something that does
+    NOT answer this deployment's own /health shape, or the config is invalid) refuses loudly with
+    the diagnosis -- never a silent hang, never a guessed alternate port.
+  - EXPLICIT STOP: `autoharn service stop` never fights a start ensure-running performed within
+    the SAME invocation's scope (there is no such overlap here -- stop is its own separate
+    invocation) but DOES refuse, rather than silently no-op, when this world has no record of
+    having started the service itself (no pidfile) -- killing a process this tool never started
+    is exactly the kind of action-at-a-distance ADR-0002 forbids.
+
+PIDFILE: `<world-dir>/.autoharn-service.pid`, written ONLY by a spawn THIS tool performs (never
+by an adopt) -- the one piece of state `stop` needs to act only on what it started. Absence is
+honest, not an error: an operator-started or hand-launched service has no pidfile, and `stop`
+says so rather than guessing a pid.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file. No bare types in
+new Python (ledger row 1105): every function signature below carries its return-type annotation.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from urllib.parse import urlparse
+
+HERE = Path(__file__).resolve().parent          # libexec/autoharn/ is the SIBLING dir this file
+                                                  # lives beside (libexec/autoharn-service is
+                                                  # itself directly under libexec/, one level up
+                                                  # from libexec/autoharn/); AUTOHARN_ROOT climbs
+                                                  # one parent from THIS file's own directory.
+AUTOHARN_ROOT = HERE.parent
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(AUTOHARN_ROOT / "deployment.json")))
+
+_POLL_INTERVAL_S = 0.25
+_POLL_TIMEOUT_S = 10.0
+_HEALTH_TIMEOUT_S = 2.0
+
+
+def _load_deployment() -> dict:
+    if not DEPLOYMENT_PATH.is_file():
+        print(f"autoharn service: REFUSED -- no deployment record at {DEPLOYMENT_PATH}. "
+              f"There is nothing to ensure-running without a deployment.json naming "
+              f"boundary_url/boundary_deployment. Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+    try:
+        return json.loads(DEPLOYMENT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"autoharn service: REFUSED -- {DEPLOYMENT_PATH} could not be read as JSON "
+              f"({e.__class__.__name__}: {e}). Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _boundary_url_and_port(dep: dict) -> tuple[str, int]:
+    url = dep.get("boundary_url")
+    if not url:
+        print("autoharn service: REFUSED -- this deployment.json has no 'boundary_url' -- "
+              "there is no boundary for this world to ensure-running (design/"
+              "FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5: both boundary_url and "
+              "boundary_deployment are refused-if-absent, never guessed). Run the setup wizard "
+              "against this world to configure one. Nothing was touched.", file=sys.stderr)
+        sys.exit(1)
+    parsed = urlparse(url)
+    if not parsed.port:
+        print(f"autoharn service: REFUSED -- boundary_url {url!r} names no port. Nothing was "
+              f"touched.", file=sys.stderr)
+        sys.exit(1)
+    return url, parsed.port
+
+
+def _probe(url: str) -> bool:
+    """True iff SOMETHING answers an HTTP GET at this boundary's own root URL within the health
+    timeout. This is the row-1165 "reachable -> use it, regardless of who started it" check --
+    deliberately not scoped to any one deployment's /health (the multiplex service answers at
+    the process root regardless of which deployments it multiplexes; a 404 still means the port
+    is genuinely held by an HTTP server, not silence)."""
+    try:
+        req = urllib.request.Request(url, method="GET")
+        urllib.request.urlopen(req, timeout=_HEALTH_TIMEOUT_S)
+        return True
+    except urllib.error.HTTPError:
+        # Any HTTP response -- even 404/5xx -- means an HTTP server is genuinely listening there.
+        return True
+    except (urllib.error.URLError, OSError, TimeoutError):
+        return False
+
+
+def _pidfile_path() -> Path:
+    return DEPLOYMENT_PATH.parent / ".autoharn-service.pid"
+
+
+def cmd_status(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    if _probe(url):
+        print(f"autoharn service: REACHABLE at {url} (port {port}).")
+        return 0
+    print(f"autoharn service: UNREACHABLE at {url} (port {port}). Run 'autoharn service start' "
+          f"to spawn it, or 'autoharn <verb>' will ensure-run it automatically.", file=sys.stderr)
+    return 1
+
+
+def cmd_start(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    if _probe(url):
+        print(f"autoharn service: already running at {url} -- nothing to do.")
+        return 0
+    world_dir = DEPLOYMENT_PATH.parent
+    toml_path = world_dir / "boundary-multiplex.toml"
+    if not toml_path.is_file():
+        print(f"autoharn service: REFUSED -- {url} is unreachable and no boundary-multiplex.toml "
+              f"exists at {toml_path} to spawn from. Run the setup wizard against this world to "
+              f"configure a boundary first (python3 tools/setup_tui/app.py {world_dir}). "
+              f"Nothing was touched.", file=sys.stderr)
+        return 1
+    log_path = world_dir / "service.log"
+    py = sys.executable
+    argv_child = [py, "-m", "serving.boundary_service", "--config", str(toml_path),
+                  "--port", str(port)]
+    log_fh = open(log_path, "ab")
+    # Detached child (row 1154: no systemd/D-Bus anywhere) -- start_new_session=True is the
+    # portable stdlib equivalent of setsid, so this child survives this invocation's own exit;
+    # stdout/stderr redirected to a per-world log file, never inherited (a detached child sharing
+    # this process's own stdout/stderr would hang a caller piping this command's output).
+    proc = subprocess.Popen(
+        argv_child, cwd=str(AUTOHARN_ROOT), stdin=subprocess.DEVNULL,
+        stdout=log_fh, stderr=log_fh, start_new_session=True,
+    )
+    log_fh.close()
+    print(f"autoharn: service not running at {url} -- spawning it (pid {proc.pid}, logs at "
+          f"{log_path}).", file=sys.stderr)
+    # BIND-AS-LOCK RACE (spec §2): poll until EITHER this process's own child is reachable, OR a
+    # concurrent winner is (adopt-the-winner, row 1165) -- whichever answers first, this
+    # invocation succeeds. Only write the pidfile if OUR OWN child is still alive when the
+    # boundary becomes reachable (never claim a pid we don't actually own if we lost the race).
+    deadline = time.monotonic() + _POLL_TIMEOUT_S
+    while time.monotonic() < deadline:
+        if _probe(url):
+            # TOCTOU guard: a losing child can still be alive (mid-import, mid-startup, about to
+            # crash on its own failed bind) at the EXACT instant a WINNING sibling's bind makes
+            # the boundary reachable -- `proc.poll() is None` here is not yet proof this
+            # invocation's own child is the one actually holding the port. Re-check after a short
+            # grace delay (well under uvicorn's own typical startup-to-crash time on a genuinely
+            # lost bind, live-witnessed against this exact race): only a child STILL alive after
+            # the grace window is trusted as the actual winner. A false negative here (declaring
+            # "adopted" when we actually won) is harmless -- row 1165 says someone-else-started-
+            # it is a success case regardless of who it truly was; a false positive (claiming a
+            # pid we do not actually own) is the hazard this guard exists to close.
+            time.sleep(0.5)
+            if proc.poll() is None:
+                _pidfile_path().write_text(str(proc.pid), encoding="utf-8")
+                print(f"autoharn service: reachable at {url} (this invocation's own spawn, "
+                      f"pid {proc.pid}).")
+            else:
+                print(f"autoharn service: reachable at {url} -- this invocation's own spawn "
+                      f"(pid {proc.pid}) lost the bind race and exited (see {log_path}); "
+                      f"ADOPTING whichever process won the port (row 1165: someone-else-"
+                      f"started-it is a success case). No pidfile written -- this invocation "
+                      f"does not own the winning process.")
+            return 0
+        time.sleep(_POLL_INTERVAL_S)
+    child_exit = proc.poll()
+    print(f"autoharn service: REFUSED -- {url} is still unreachable after "
+          f"{_POLL_TIMEOUT_S}s. Spawned child (pid {proc.pid}) "
+          + (f"exited with code {child_exit}" if child_exit is not None else "is still running")
+          + f" -- see {log_path} for the diagnosis (a genuinely-held port, an invalid "
+            f"boundary-multiplex.toml, or a slow-starting process needing a longer wait).",
+          file=sys.stderr)
+    return 1
+
+
+def cmd_stop(argv: list[str]) -> int:
+    dep = _load_deployment()
+    url, _port = _boundary_url_and_port(dep)
+    pidfile = _pidfile_path()
+    if not pidfile.is_file():
+        print(f"autoharn service: REFUSED -- no pidfile at {pidfile}. This tool has no record "
+              f"of having started the service at {url} itself (it may be running under an "
+              f"operator's own manual start, or under a different tool) -- stopping a process "
+              f"this tool never started is refused rather than guessed. Stop it by hand if you "
+              f"started it that way.", file=sys.stderr)
+        return 1
+    try:
+        pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError) as e:
+        print(f"autoharn service: REFUSED -- {pidfile} does not contain a readable pid "
+              f"({e.__class__.__name__}: {e}). Nothing was touched.", file=sys.stderr)
+        return 1
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"autoharn service: pid {pid} (from {pidfile}) is already gone -- removing the "
+              f"stale pidfile.", file=sys.stderr)
+        pidfile.unlink(missing_ok=True)
+        return 0
+    except OSError as e:
+        print(f"autoharn service: REFUSED -- could not signal pid {pid} ({e.__class__.__name__}: "
+              f"{e}). Nothing was touched.", file=sys.stderr)
+        return 1
+    pidfile.unlink(missing_ok=True)
+    print(f"autoharn service: sent SIGTERM to pid {pid} (was serving {url}); pidfile removed.")
+    return 0
+
+
+_SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("--help", "-h"):
+        print("usage: autoharn service status|start|stop\n\n"
+              "  status   probe the boundary this world's deployment.json names; never writes\n"
+              "  start    ensure-running: spawn a detached child if unreachable, or adopt\n"
+              "           whichever process wins the bind race; a no-op if already reachable\n"
+              "  stop     explicit stop -- only for a service THIS tool's own 'start' spawned\n"
+              "           (tracked via a pidfile); refuses, never guesses, otherwise")
+        return 0
+    verb = argv[0]
+    if verb not in _SUBCOMMANDS:
+        print(f"autoharn service: REFUSED -- unrecognized subcommand '{verb}' (known: "
+              f"status, start, stop). Nothing was touched.", file=sys.stderr)
+        return 2
+    return _SUBCOMMANDS[verb](argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
