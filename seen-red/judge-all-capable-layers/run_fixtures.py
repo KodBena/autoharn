@@ -180,8 +180,13 @@ def world_all_capable_check(failures: list[str], tmps: list[Path]) -> None:
     layers_run = {ln.split("layer=", 1)[1].strip("'") for ln in out.splitlines()
                   if ln.startswith("## layer=")}
     incapable_lines = [ln for ln in out.splitlines() if "INCAPABLE" in ln]
+    # cli-rebase-fixture-repairs (row 1170): "belief" is a fourth capable layer now (s53's belief
+    # substrate, shipped after this fixture was authored) -- it runs vacuously AGREE (0/0 atoms)
+    # on ANY schema, including this pre-s53 one, since its own capability check apparently needs
+    # no belief-specific column (unlike tnow/work/defeat). Included in the expected set rather
+    # than hardcoding the three-layer roster this fixture predates.
     check("WORLD-ALL-every-layer-detected-and-run",
-          layers_run == {"tnow", "work", "defeat"} and not incapable_lines and exit_code == 0,
+          layers_run == {"tnow", "work", "defeat", "belief"} and not incapable_lines and exit_code == 0,
           f"exit={exit_code}; layers_run={sorted(layers_run)}; incapable_lines={incapable_lines}",
           failures)
     check("WORLD-ALL-tnow-AGREE",
