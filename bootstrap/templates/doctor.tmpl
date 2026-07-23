@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""doctor -- "is this world set up right?" (ledger rows 1147/1148, virgin-experience round).
+
+WHY THIS EXISTS: row 1147's finding named the real gap plainly -- a newborn world was not
+self-describing enough to keep a cheap orchestrator oriented, and the maintainer proposed two
+fixes: a self-describing CLAUDE.md (see bootstrap/templates/CLAUDE.md.tmpl's own new opening
+block) and a `doctor` verb answering the operator's actual question in one witnessed call,
+rather than requiring several separate reads (deployment.json, a psql session, `./led`, ...)
+before an orchestrator can say whether a world is healthy.
+
+READ-ONLY, ALWAYS. This file issues no INSERT/UPDATE/DELETE and writes no file -- every check
+below is a SELECT, an HTTP GET, or an `os.access`/subprocess exit-code read. It ONLY answers
+"is this world set up right", never changes the answer.
+
+EACH LINE IS PASS/FAIL/SKIP, ONE LINE, ONE DETAIL (house convention: distance-to-clean.tmpl's
+own one-section-one-line shape, reused here across seven independent facts instead of one
+composed debt count). SKIP is a DISTINCT, HONEST verdict from FAIL -- e.g. "no boundary_url
+configured" is not a defect (a freshly-scaffolded world never auto-starts a boundary service;
+the scaffold's own header comment for --boundary-url says so explicitly), so it must not read
+as broken. Exit status reflects FAIL only: exit 0 iff zero FAIL lines (any number of SKIP lines
+still exits 0 -- an honestly-reported not-applicable check is not the same as a defect); exit 1
+iff at least one FAIL line. A downstream check that depends on an earlier FAILED check (e.g.
+every DB-backed check once "database reachable" has failed) is printed as SKIP, not a second
+FAIL for the same root cause -- one FAIL should not fan out into a wall of red for one problem.
+
+Deployment resolution: byte-identical to distance-to-clean.tmpl's own module docstring section
+of the same name -- this file executes IN PLACE out of the autoharn checkout (the "live verbs"
+ruling, BACKLOG 2026-07-11), `PICKUP_DEPLOYMENT` is set by the scaffolded shim to the world's own
+deployment.json, and `AUTOHARN` resolves from this file's own on-disk path (overridable).
+
+Lazy imports banned (top-of-file only, per this project's inherited convention, gates/
+no_lazy_imports.py). No bare types in new Python (ledger row 1105) -- every function signature
+below carries its return-type annotation.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+# The directory containing deployment.json IS this deployment's own root -- the same resolution
+# distance-to-clean.tmpl and attest-doc.tmpl both use.
+PROJECT_ROOT = DEPLOYMENT_PATH.parent
+
+sys.path.insert(0, str(AUTOHARN / "filing"))
+try:
+    import deployment_record  # noqa: E402  (filing/deployment_record.py, the ONE home for the shape)
+except ImportError as _e:
+    print(f"doctor: cannot import autoharn's filing/deployment_record.py under "
+          f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
+    print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn", file=sys.stderr)
+    sys.exit(2)
+
+PASS = "PASS"
+FAIL = "FAIL"
+SKIP = "SKIP"
+
+
+def _line(label: str, verdict: str, detail: str) -> str:
+    return f"{label:<32} {verdict:<4} {detail}"
+
+
+def _first_line(text: str) -> str:
+    text = text.strip()
+    return text.splitlines()[0] if text else "(no detail)"
+
+
+def _psql(host: str, db: str, sql: str, binds: dict[str, str] | None = None,
+          timeout: float = 10.0) -> subprocess.CompletedProcess:
+    """SQL text always fed on stdin, never via -c (ADR-0012's 2026-07-18 interpreter-boundary
+    amendment: psql's :'var'/:"var" bind interpolation is only performed for script/stdin input,
+    silently inert under -c) -- same convention every other verb template in this project
+    follows (distance-to-clean.tmpl, teardown-world.sh, new-project.sh)."""
+    argv = ["psql", "-h", host, "-d", db, "-tA", "-v", "ON_ERROR_STOP=1"]
+    for key, value in (binds or {}).items():
+        argv += ["-v", f"{key}={value}"]
+    return subprocess.run(argv, input=sql, capture_output=True, text=True, timeout=timeout)
+
+
+def check_deployment() -> tuple[str, str, deployment_record.DeploymentRecord | None]:
+    """Returns (line, verdict, dep-or-None)."""
+    try:
+        dep = deployment_record.load_deployment(DEPLOYMENT_PATH)
+    except deployment_record.DeploymentError as e:
+        return _line("deployment.json", FAIL, _first_line(str(e))), FAIL, None
+    return _line("deployment.json", PASS, f"parsed ({DEPLOYMENT_PATH})"), PASS, dep
+
+
+def check_db(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """Returns (line, verdict)."""
+    try:
+        r = _psql(dep.host, dep.db, "SELECT 1;")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return _line("database reachable", FAIL, f"{e.__class__.__name__}: {e}"), FAIL
+    if r.returncode != 0:
+        return _line("database reachable", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    return _line("database reachable", PASS, f"{dep.host}/{dep.db} (SELECT 1 ok)"), PASS
+
+
+def check_namespaces(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    r = _psql(dep.host, dep.db,
+              "SELECT count(*) FROM pg_namespace WHERE nspname IN (:'schema', :'kern');",
+              {"schema": dep.schema, "kern": dep.kern})
+    if r.returncode != 0:
+        return _line("schema + kern schema exist", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    count = r.stdout.strip()
+    if count == "2":
+        return _line("schema + kern schema exist", PASS,
+                     f"'{dep.schema}' and '{dep.kern}' both present"), PASS
+    return _line("schema + kern schema exist", FAIL,
+                 f"expected 2 namespaces ('{dep.schema}', '{dep.kern}'), found {count or '0'}"), FAIL
+
+
+def check_lineage(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    r = _psql(dep.host, dep.db, 'SELECT max_id FROM :"kern".chain_high_water;', {"kern": dep.kern})
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return _line("lineage high-water/epoch", SKIP,
+                         "no kern.chain_high_water (this world's kernel predates "
+                         "kernel/lineage/s27-chain-high-water.sql)"), SKIP
+        return _line("lineage high-water/epoch", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    max_id = r.stdout.strip()
+    try:
+        max_id_ok = int(max_id) >= 0
+    except ValueError:
+        max_id_ok = False
+    if not max_id_ok:
+        return _line("lineage high-water/epoch", FAIL,
+                     f"kern.chain_high_water.max_id read back as {max_id!r} "
+                     f"(not a sane non-negative integer)"), FAIL
+    epoch_detail = ""
+    r2 = _psql(dep.host, dep.db, 'SELECT epoch FROM :"kern".migration_epoch;', {"kern": dep.kern})
+    if r2.returncode == 0 and r2.stdout.strip():
+        epoch_detail = f", migration_epoch.epoch={r2.stdout.strip()}"
+    return _line("lineage high-water/epoch", PASS, f"chain_high_water.max_id={max_id}{epoch_detail}"), PASS
+
+
+def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """A freshly `--new-world`-scaffolded deployment carries NO `boundary_url`/
+    `boundary_deployment` by default (the scaffold deliberately never auto-starts a boundary
+    process -- see `check_boundary`'s own docstring) -- in that shape, the served/rebased
+    `./led` shim REFUSES BY DESIGN (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5),
+    and `./legacy/led` (the direct-psql original, demoted by placement, never deleted) is the
+    verb that actually works. A doctor that always ran the plain `./led` would report every
+    boundary-less, freshly-scaffolded world -- the common, default case -- as UNHEALTHY for a
+    fact the scaffold itself chose deliberately. So: prefer `./legacy/led` when no boundary is
+    configured (it exists on every world new enough to carry the rebase, and is the honestly
+    "working" verb in that mode -- track-work.sh's own header comment says so in the same
+    words); fall back to plain `./led` when a boundary IS configured, or when no `./legacy/`
+    directory exists at all (a pre-rebase world, where plain `./led` is itself the direct-psql
+    original)."""
+    legacy_bin = PROJECT_ROOT / "legacy" / "led"
+    plain_bin = PROJECT_ROOT / "led"
+    if not dep.boundary_url and legacy_bin.is_file() and os.access(legacy_bin, os.X_OK):
+        led_bin, cwd, label = legacy_bin, legacy_bin.parent, "./legacy/led"
+    else:
+        led_bin, cwd, label = plain_bin, PROJECT_ROOT, "./led"
+    if not (led_bin.is_file() and os.access(led_bin, os.X_OK)):
+        return _line("./led answers a read query", FAIL, f"no executable {label} at {cwd}"), FAIL
+    try:
+        r = subprocess.run([str(led_bin), "--recent", "1"], cwd=cwd,
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return _line("./led answers a read query", FAIL, f"{e.__class__.__name__}: {e}"), FAIL
+    if r.returncode != 0:
+        detail = _first_line(r.stderr) or _first_line(r.stdout) or f"exit {r.returncode}"
+        return _line("./led answers a read query", FAIL, f"({label}) {detail}"), FAIL
+    return _line("./led answers a read query", PASS, f"{label} --recent 1 exited 0"), PASS
+
+
+def check_boundary(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    if not dep.boundary_url:
+        return _line("boundary URL", SKIP,
+                     "not configured (boundary_url absent from deployment.json -- the scaffold "
+                     "never auto-starts a boundary process; standing one up is a separate "
+                     "operator act)"), SKIP
+    try:
+        req = urllib.request.Request(dep.boundary_url, method="GET")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            return _line("boundary URL", PASS, f"{dep.boundary_url} responded HTTP {resp.status}"), PASS
+    except urllib.error.HTTPError as e:
+        # Any HTTP response at all -- even a 4xx/5xx -- means something is actually listening;
+        # honest and not the same failure mode as "nothing answered".
+        return _line("boundary URL", PASS, f"{dep.boundary_url} responded HTTP {e.code}"), PASS
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        return _line("boundary URL", FAIL,
+                     f"{dep.boundary_url} unreachable ({e.__class__.__name__}: {e})"), FAIL
+
+
+def check_principals(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    r = _psql(dep.host, dep.db, 'SELECT count(*) FROM :"kern".principal;', {"kern": dep.kern})
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return _line("principals registered", SKIP,
+                         f"no {dep.kern}.principal (kernel lineage not applied to this world)"), SKIP
+        return _line("principals registered", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    count = r.stdout.strip()
+    return _line("principals registered", PASS, f"{count or '0'} row(s) in {dep.kern}.principal"), PASS
+
+
+def main() -> int:
+    print("### doctor -- is this world set up right?")
+    print(f"    ({PROJECT_ROOT})")
+    print()
+
+    verdicts: list[str] = []
+
+    dep_line, dep_verdict, dep = check_deployment()
+    print(dep_line)
+    verdicts.append(dep_verdict)
+
+    if dep is None:
+        skip_reason = "deployment.json did not parse (see line above)"
+        for label in ("database reachable", "schema + kern schema exist",
+                      "lineage high-water/epoch", "./led answers a read query",
+                      "boundary URL", "principals registered"):
+            print(_line(label, SKIP, skip_reason))
+            verdicts.append(SKIP)
+        print()
+        fail_count = verdicts.count(FAIL)
+        print(f"TOTAL: {fail_count} FAIL, {verdicts.count(PASS)} PASS, {verdicts.count(SKIP)} SKIP")
+        return 1
+
+    db_line, db_verdict = check_db(dep)
+    print(db_line)
+    verdicts.append(db_verdict)
+
+    if db_verdict == PASS:
+        for line, verdict in (check_namespaces(dep), check_lineage(dep), check_principals(dep)):
+            print(line)
+            verdicts.append(verdict)
+    else:
+        skip_reason = "database unreachable (see line above)"
+        for label in ("schema + kern schema exist", "lineage high-water/epoch", "principals registered"):
+            print(_line(label, SKIP, skip_reason))
+            verdicts.append(SKIP)
+
+    led_line, led_verdict = check_led(dep)
+    print(led_line)
+    verdicts.append(led_verdict)
+
+    boundary_line, boundary_verdict = check_boundary(dep)
+    print(boundary_line)
+    verdicts.append(boundary_verdict)
+
+    print()
+    fail_count = verdicts.count(FAIL)
+    print(f"TOTAL: {fail_count} FAIL, {verdicts.count(PASS)} PASS, {verdicts.count(SKIP)} SKIP"
+          + ("  (0 FAIL = healthy)" if fail_count == 0 else ""))
+    return 0 if fail_count == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

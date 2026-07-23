@@ -569,7 +569,7 @@ echo "== writing $DEST verb shims (exec the DEST's OWN bootstrap/templates, neve
 # needed (ADR-0012 P1: the ONE existing connection mechanism, given the right identity, rather than
 # a second one grown here). The subsequent `SET ROLE <role>` each template still issues becomes a
 # harmless no-op (a role may always SET ROLE to itself).
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc; do
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc doctor; do
     cat > "$DEST/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -577,7 +577,7 @@ exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" AUTOHARN="\$HERE" PGUSER="$D
 SHIM
     chmod +x "$DEST/$verb"
 done
-echo "wrote led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain, attest-doc"
+echo "wrote led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain, attest-doc, doctor"
 
 # --- PROVENANCE: the honest "settled evidence, never refreshed" record --------------------------
 cat > "$DEST/FROZEN-PROVENANCE.md" <<PROV

@@ -1,0 +1,28 @@
+seen-red/setup-tui-control-help-split -- banked RED evidence (both-polarity proof, fixture-census)
+
+Maintainer major reopening the converged cycle-4 loop (ledger row 1138), from his own 251-column
+screenshot of principals-authority: "I have to scroll just to find action surfaces, instead of
+the UI leveraging hierarchical design and using a scrollable text component situated next to each
+action surface" -- content/chrome separation violated (a control belongs in a stable region, only
+content should scroll), progressive disclosure absent (Constitutes/Does-not elucidation fully
+expanded INLINE between controls), available width unused (a single MEASURE-capped ribbon on a
+251-column screen).
+
+Case 1 loads `tools/configtree/panes.py`'s `SectionPane` straight from commit 1e6fb5f (the last
+commit before this fix, via `git show`, executed in an isolated namespace) and drives it against
+a synthetic section carrying deliberately-long `help=` prose on six fields, at 251x61: the
+section's own single scroll region needs to scroll PAST every field's inline help text to reach
+its own final control -- reproducing the maintainer's own complaint live, not merely asserted
+from reading the diff.
+
+Real captured stdout, a clean run against this commit's tree (zero residue, exit 0):
+
+case 1 ok (RED, reproduced against 1e6fb5f): the OLD interleaved layout's own control-and-prose column needs scrolling at 251x61 (virtual 73 > viewport 58) -- exactly the maintainer's own screenshot complaint
+case 2 ok (GREEN): at 251x61 the control column fits the viewport with ZERO scrolling (virtual 58 <= viewport 58) -- the SAME long help text used in case 1, now living in the separate help column instead
+case 3 ok (GREEN): the help column renders the SAME elucidation text, still capped at a readable measure (widest observed 78 columns) -- MEASURE is a line-length rule this split does not get to relax
+case 4 ok (GREEN): scrolling the help column (Offset(x=0, y=0) -> Offset(x=0, y=1)) leaves the control column's own scroll position (Offset(x=0, y=0)) untouched -- genuinely independent regions
+case 5a ok (GREEN, narrow collapse): at the SAME 120x40, the new layout's own virtual content height (37) is LESS than the old always-interleaved layout's (73) -- elucidation is genuinely absent, not merely relocated, with an honest 'press F1' hint in its place
+case 5b ok (GREEN, on-demand disclosure): pressing F1 brings the SAME elucidation text back inline -- on-demand, never a default
+case 6a ok (GREEN, the real screenshot scenario): 'Add Principal' sits inside the control column's own viewport at 251x61, zero scroll, on the REAL principals-authority section
+case 6b ok (GREEN): the selected principal's own 'Add Competence' button is also inside the control column's viewport at 251x61, zero scroll
+ALL CASES OK -- the control/help split (ledger row 1138): RED-first against the OLD, always-interleaved SectionPane (a control needing to scroll past prose at 251x61), GREEN against the CURRENT split (zero-scroll control column, MEASURE still capping the relocated prose, two genuinely independent scroll regions, a narrow-width collapse that is LESS content than the old interleave -- not merely scrolled past -- with an honest on-demand F1 disclosure toggle), and a REAL principals-authority leg reproducing the maintainer's own 251x61 screenshot scenario directly.

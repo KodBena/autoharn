@@ -28,7 +28,10 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tools.setup_tui.content.config_file_data import HEADER_KEYS, SCHEMA
+from tools.setup_tui import content
+
+HEADER_KEYS = content.CONFIG_HEADER_KEYS
+SCHEMA = content.CONFIG_SCHEMA
 
 CONFIG_FORMAT = 1
 

@@ -37,230 +37,225 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
-from tools.setup_tui import config_file, destination, durable_decisions, governed_files, probes
+from tools.configtree import FieldName, NodeId, ScopedFieldKey
+from tools.setup_tui import config_file, content, destination, durable_decisions, governed_files, probes
 from tools.setup_tui import runner
-from tools.setup_tui.content import screens_data as SD
 from tools.setup_tui.plan import CommandAct
 
 # --------------------------------------------------------------------------------------------
-# 1. --from-config: compile to the existing --scripted answers-file shape.
+# 1. --from-config: compile to a per-step {slug: {field: value}} answers dict -- the shape
+#    tools/setup_tui/app.py's headless driver hands straight to each StepSpec.submit, no answers-
+#    file/fake-terminal indirection (that machinery -- ScriptedUi -- is deleted with --scripted;
+#    design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2/§6).
 # --------------------------------------------------------------------------------------------
 
 
-def _yn(val: bool) -> str:
-    return "y" if val else "n"
-
-
-def synthesize_scripted_lines(doc: config_file.ConfigDoc, *, world: str, dest: str) -> list[str]:
-    """Mirrors `screens.py`'s own prompt sequence, screen by screen, driven by `doc`'s already-
-    VALIDATED (`require_complete=True`) values -- never re-validates. `world`/`dest` are the
-    CLI parameters (spec §2); every OTHER answer comes from the config file."""
+def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str) -> dict[str, dict]:
+    """Mirrors `tools.setup_tui.steps.STEPS`'s own field names, screen by screen, driven by
+    `doc`'s already-VALIDATED (`require_complete=True`) values -- never re-validates. `world`/
+    `dest` are the CLI parameters (spec §2); every OTHER value comes from the config file. A
+    field this dict does not set falls back to that field's own default (matching an operator
+    who accepted every default in the interactive UI)."""
     g = lambda k, default=None: config_file.get(doc, k, default)  # noqa: E731
-    lines: list[str] = ["y"]  # preflight -- always run (read-only, no schema key needed)
-    # `screen_preflight` pre-seeds `state["pghost"]` (NEVER `state["db"]`) from HARNESS_PGHOST/
-    # EPISTEMIC_PGHOST when either is set in THIS process's own environment (screens.py's own
-    # preflight probe, always reached above since preflight is always run) -- checked HERE, at
-    # synthesis time, in the SAME environment the flow itself will run in, so this stays
-    # deterministic per invocation rather than guessing. `host_known`/`db_known` are tracked
-    # SEPARATELY (not one joint flag): every later screen's own `state.get("pghost") or ask_text`
-    # / `state.get("db") or ask_text` pair gates each independently, and `screen_substrate`'s own
-    # "Existing database name"/"New (dedicated) database name" ask_text is UNCONDITIONAL (never
-    # gated on `state.get("db")` at all) -- db is asked exactly once, always, if substrate runs.
-    host_known = bool(os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST"))
-    db_known = False
+    host_env = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
 
-    def _host_db_lines(need_host: bool = True, need_db: bool = True) -> None:
-        """Appends "Postgres host"/"Database"-shaped answers for whichever of the two this
-        screen's own `state.get(...) or ask_text(...)` pair will actually ask, given what is
-        known SO FAR -- called at every later screen that shares this same pattern
-        (rehearsal/birth/boundary), marking both known once either screen has asked."""
-        nonlocal host_known, db_known
-        if need_host and not host_known:
-            lines.append(str(g("substrate.host", "192.168.122.1")))
-        if need_db and not db_known:
-            lines.append(str(g("substrate.db", "toy")))
-        host_known = True
-        db_known = True
-
-    sub_run = bool(g("substrate.run", False))
-    lines.append(_yn(sub_run))
-    if sub_run:
-        path = str(g("substrate.path", "existing"))
-        lines.append(path)
-        if not host_known:
-            lines.append(str(g("substrate.host", "192.168.122.1")))
-        host_known = True
-        if path == "existing":
-            lines.append(str(g("substrate.db", "toy")))
-        else:
-            lines += [str(g("substrate.db", "")), str(g("substrate.role", "")),
-                      str(g("substrate.subnets", ""))]
-        db_known = True
-
-    # fork-target: destination is always the CLI parameter, "fresh" mode.
-    lines += ["y", "fresh", dest]
-    extend = bool(g("fork_target.governed_extend", False))
-    lines.append(_yn(extend))
-    if extend:
-        lines.append(str(g("fork_target.governed_extensions", "")))
-
-    reh_run = bool(g("rehearsal.run", False))
-    lines.append(_yn(reh_run))
-    if reh_run:
-        _host_db_lines()
-        lines += ["-", "-"]  # scratch world name / scratch dir -- accept the unique defaults
-
-    birth_run = bool(g("birth.run", False))
-    lines.append(_yn(birth_run))
-    if birth_run:
-        if not reh_run:
-            lines.append("y")  # override: proceed without a green rehearsal
-        _host_db_lines()
-        lines.append(world)
-        lines.append(str(g("birth.project_name", "") or "-"))
-
-    pa_run = bool(g("principals_authority.run", False))
-    lines.append(_yn(pa_run))
-    if pa_run:
-        for row in (g("principals_authority.register", []) or []):
-            lines += ["y", str(row["name"]), str(row["agent_class"]), str(row["purpose"])]
-        lines.append("n")
-        for row in (g("principals_authority.competences", []) or []):
-            lines += ["y", str(row["name"]), str(row["activity"]), str(row["band"]),
-                      str(row["basis"])]
-        lines.append("n")
-        for row in (g("principals_authority.relations", []) or []):
-            lines += ["y", str(row["subject"]), str(row["relation"]), str(row["object"])]
-        lines.append("n")
-        # role charters need a charter FILE PATH -- excluded-by-type (spec §1), so a config-
-        # driven run never offers one; always declined here (a named, honest limitation: this
-        # ONE hydration/principals-authority item cannot round-trip through --from-config).
-        lines.append("n")
-
-    sg_run = bool(g("signed_genesis.run", False))
-    lines.append(_yn(sg_run))
-    if sg_run:
-        lines.append(str(g("signed_genesis.commission_statement", "")))
-        lines += ["-", "-"]  # scripted/fixture keygen identity -- accept the fixture defaults
-
-    b_run = bool(g("boundary.configure", False))
-    lines.append(_yn(b_run))
-    if b_run:
-        if not birth_run:
-            lines.append("y")  # override: proceed without a confirmed successful birth
-            lines.append(world)  # "World/deployment name" -- only unasked when birth set it
-        _host_db_lines()
-        lines.append(_yn(bool(g("boundary.start_now", False))))
-
-    o_run = bool(g("observability.run", False))
-    lines.append(_yn(o_run))
-    if o_run:
-        lines.append(_yn(bool(g("observability.otelcol", False))))
-        lines.append(_yn(bool(g("observability.otel_watch", False))))
-
-    h_run = bool(g("hydration.run", False))
-    lines.append(_yn(h_run))
-    if h_run:
-        lines.append(_yn(bool(g("hydration.fork_provenance", False))))
-        if g("hydration.fork_provenance", False):
-            lines.append(str(g("hydration.fork_provenance_statement", "")))
-        # role charters -- same excluded-by-type reasoning as principals-authority's own item
-        # above; always declined by a config-driven run.
-        lines.append("n")
-        wanted_decisions = set(g("hydration.durable_decisions", []) or [])
-        for decision in durable_decisions.CATALOG:
-            lines.append(_yn(decision.slug in wanted_decisions))
-        wanted_adrs = set(g("hydration.adopt_adrs", []) or [])
-        for number, _title, _relpath in durable_decisions.list_adrs():
-            lines.append(_yn(number in wanted_adrs))
-
-    # "Commit this plan now? (N entries)" -- ONLY fires on a LIVE run (`_execute_commit`'s own
-    # `dry_run` branch returns before ever asking it); harmlessly unused under `--dry-run`
-    # (`ScriptedUi` never complains about an unconsumed trailing line), REQUIRED live -- omitting
-    # it here was a real gap this build caught live (a real, non-dry-run birth from the exemplar
-    # exhausted the answers file one line short at this exact prompt).
-    lines.append("y")
-    lines.append("y")  # "Save this checklist into the new world?" -- always yes
-    return lines
-
-
-@contextlib.contextmanager
-def scripted_answers_file(lines: list[str]) -> Iterator[str]:
-    """Writes `lines` to a scratch file in the SAME shape a real `--scripted` answers file uses
-    (one answer per line), yields its path, and removes it on exit -- `app.py`'s `_run_from_
-    config` feeds the path straight to `tools.setup_tui.ui.ScriptedUi`, never builds one itself.
-
-    DECLARED EXCEPTION (gates/setup_tui_purity_gate.py's EXTRA_EFFECT_EXEMPT table names this
-    function): a real `tempfile`/`os.unlink` effect, but ORCHESTRATION-level, not a decision-
-    phase screen effect -- it runs before any screen, any `Ui`, or any `Plan` exists (the same
-    "outside the normal Ui-mediated flow" register `app.py`'s own `_select_backend` diagnostic
-    already occupies), so the pure-core spec's decision-phase/commit-phase split does not apply
-    to it at all; it is scoped here, not exempted wholesale, so a REAL decision-phase tempfile
-    effect would still be caught."""
-    fd, path = tempfile.mkstemp(prefix="setup-tui-from-config-", suffix=".txt")
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write("\n".join(lines) + "\n")
-        yield path
-    finally:
-        os.unlink(path)
+    out: dict[str, dict] = {
+        "preflight": {"run": True},
+        "substrate": {
+            "run": bool(g("substrate.run", False)),
+            "path": str(g("substrate.path", "existing")),
+            "host": str(g("substrate.host", host_env or "192.168.122.1")),
+            "db_existing": str(g("substrate.db", "toy")),
+            "db_dedicated": str(g("substrate.db", "")),
+            "role": str(g("substrate.role", "")),
+            "subnets": str(g("substrate.subnets", "")),
+        },
+        "fork-target": {
+            "run": True, "mode": "fresh", "dest": dest, "src": "",
+            "accept_foreign": False,
+            "governed_extend": bool(g("fork_target.governed_extend", False)),
+            "governed_extensions": str(g("fork_target.governed_extensions", "")),
+        },
+        "rehearsal": {"run": bool(g("rehearsal.run", False)), "host": str(g("substrate.host", "")),
+                      "db": str(g("substrate.db", "")), "scratch_world": "", "scratch_dir": ""},
+        "birth": {"override": True, "run": bool(g("birth.run", False)),
+                  "host": str(g("substrate.host", "")), "db": str(g("substrate.db", "")),
+                  "world": world, "dest": dest, "name": str(g("birth.project_name", ""))},
+        "principals-authority": {
+            "dest": dest,
+            "register": list(g("principals_authority.register", []) or []) if g("principals_authority.run", False) else [],
+            "competences": list(g("principals_authority.competences", []) or []) if g("principals_authority.run", False) else [],
+            "relations": list(g("principals_authority.relations", []) or []) if g("principals_authority.run", False) else [],
+            "charters": [],  # excluded-by-type (spec §1): a charter needs a file path a
+                              # config file cannot round-trip; always empty from --from-config.
+        },
+        "signed-genesis": {
+            "run": bool(g("signed_genesis.run", False)), "dest": dest,
+            "statement": str(g("signed_genesis.commission_statement", "")),
+            "use_scratch_identity": True,  # --from-config is never a human at the keyboard
+            "name": "", "email": "", "gnupghome": "",
+        },
+        "boundary": {
+            "run": bool(g("boundary.configure", False)), "override": True, "dest": dest,
+            "world": world, "host": str(g("substrate.host", "")), "db": str(g("substrate.db", "")),
+            "start_now": bool(g("boundary.start_now", False)),
+        },
+        "observability": {
+            "run": bool(g("observability.run", False)), "dest": dest,
+            "otelcol": bool(g("observability.otelcol", False)),
+            "otel_watch": bool(g("observability.otel_watch", False)),
+        },
+        "hydration": {
+            "run": bool(g("hydration.run", False)), "dest": dest,
+            "fork_provenance": bool(g("hydration.fork_provenance", False)),
+            "fork_provenance_statement": str(g("hydration.fork_provenance_statement", "")),
+            "role_charters": False,
+            # TYPED LIST, NEVER A JOINED STRING (maintainer round 5, ledger row 1115, defect F):
+            # `hydration.durable_decisions`/`.adopt_adrs` are TOML arrays in the config file
+            # (`config_file.render_toml`'s own list handling already emits them that way) and a
+            # `MultiChoiceField`'s own model value is a `list[str]` -- the comma-join here used
+            # to exist only because the field it fed was a free-text `TextField` the operator
+            # had to hand-edit; that field is gone, so is the join.
+            "durable_decisions": list(g("hydration.durable_decisions", []) or []),
+            "adopt_adrs": list(g("hydration.adopt_adrs", []) or []),
+        },
+    }
+    return out
 
 
 # --------------------------------------------------------------------------------------------
-# 2. --initial-config: seed the existing navigation prior-answers seam.
+# 2. --initial-config: seed the wizard's shared `state` -- every `steps_*.py` field default reads
+#    `state.get(...)` (e.g. `state.get("pghost")`, `state.get("dest")`), so pre-loading these few
+#    shared keys is enough to make a partial config's values show up as widget defaults on first
+#    visit -- no separate prior-answers seam needed (unlike the deleted `flow_position.py`'s
+#    per-prompt map: Textual's own screen stack already retains values across Back, module
+#    docstring's job 2 no longer needs to simulate that for a FIRST visit).
 # --------------------------------------------------------------------------------------------
 
-PROMPT_MAP: dict[str, tuple[str, str]] = {
-    "substrate.run": ("substrate", "Configure substrate now?"),
-    "substrate.host": ("substrate", "Postgres host"),
-    "substrate.db": ("substrate", "Existing database name"),
-    "substrate.role": ("substrate", "New (dedicated) role name"),
-    "substrate.subnets": ("substrate", "Subnets to trust (comma-separated CIDR)"),
-    "fork_target.governed_extend": ("fork-target", SD.CONFIRM_GOVERNED_FILES_EXTEND),
-    "fork_target.governed_extensions": (
-        "fork-target", "Extensions to add, comma-separated (e.g. .ts,.vue,.html)"),
-    "rehearsal.run": (
-        "rehearsal", "Run rehearsal (scratch birth + teardown + zero-residue check)?"),
-    "birth.run": ("birth", "Run the real birth now?"),
-    "birth.project_name": ("birth", "Project name (deployment.json 'name')"),
-    "principals_authority.run": ("principals-authority", SD.CONFIRM_PRINCIPALS_AUTHORITY),
-    "signed_genesis.run": ("signed-genesis", SD.CONFIRM_SIGNED_GENESIS_CEREMONY),
-    "signed_genesis.commission_statement": (
-        "signed-genesis", "Founding commission statement (the ask this world exists to carry "
-                           "out)"),
-    "boundary.configure": ("boundary", "Configure the boundary service now?"),
-    "boundary.start_now": ("boundary", "Start the boundary service now (this process)?"),
-    "observability.run": ("observability", "Configure observability now?"),
-    "observability.otelcol": (
-        "observability", "Select the OTel collector (otelcol-contrib) to start with this "
-                          "world?"),
-    "observability.otel_watch": (
-        "observability", "Select the OTel model-provenance watchdog (otel-watch) to start "
-                          "with this world?"),
-    "hydration.run": ("hydration", "Run hydration now?"),
-    "hydration.fork_provenance": ("hydration", "Hydrate: fork provenance?"),
-    "hydration.fork_provenance_statement": (
-        "hydration", "Statement for 'fork provenance' decision row"),
-    "hydration.role_charters": ("hydration", "Hydrate: role charters to register?"),
+_STATE_OVERRIDE_KEYS: dict[str, str] = {
+    "substrate.host": "pghost",
+    "substrate.db": "db",
+    "substrate.role": "dedicated_role",
+    "substrate.path": "substrate_path",
 }
 
 
-def build_initial_prior_answers(doc: config_file.ConfigDoc) -> dict[str, dict[str, object]]:
-    """`{screen: {prompt_text: value}}`, fed to `tools.setup_tui.flow_position.FlowPosition`'s
-    own `last_answers` at construction (`app.py`) -- from there the EXISTING navigation seam
-    (`NavigableUi`/`FlowPosition.prior_answers_for`) does the rest, unmodified: a config value
-    shows as "you answered this X last time -- press enter to keep it, or answer again" exactly
-    like a real prior visit would. Partial configs are fine (spec §2) -- only keys present in
-    `doc` contribute a default; every field not in `PROMPT_MAP` (the register/competence/
-    relation loops, which have no single prompt to default) is simply not offered as a default,
-    named here rather than silently absent."""
-    out: dict[str, dict[str, object]] = {}
-    for dotted, (screen, prompt) in PROMPT_MAP.items():
+def build_initial_state_overrides(doc: config_file.ConfigDoc) -> dict[str, object]:
+    """`{state_key: value}` merged into `tools.setup_tui.steps.initial_state`'s own dict --
+    partial configs are fine (spec §2); a key not present in `doc` is simply omitted, never
+    guessed. This is the small set of BARE shared-state facts (`dest`/`pghost`-shaped) a config
+    can seed; every SCOPED per-section field (including the principals-authority repeatable
+    rows) is `build_live_field_overrides`'s own job below -- see that function's docstring for
+    why the two are split."""
+    out: dict[str, object] = {}
+    for dotted, state_key in _STATE_OVERRIDE_KEYS.items():
+        val = config_file.get(doc, dotted)
+        if val is not None:
+            out[state_key] = val
+    return out
+
+
+# --------------------------------------------------------------------------------------------
+# 2.5. CONFIG-LOAD COMPLETENESS (cycle-2 fix round, AUDIT.md MAJOR finding #2): the ONE seeding
+# implementation both `tools.setup_tui.steps_load_config.apply` (the in-UI "Load a configuration"
+# action) and `tools.setup_tui.app`'s own `--initial-config` CLI handling call (P1: never a
+# second implementation of the same seeding logic) -- a completeness fix here reaches both paths
+# at once, instead of the two independently drifting.
+#
+# PRIOR GAP (the audit's own reproduction): loading a file whose `[[principals_authority.
+# register]]`/`.competences`/`.relations` rows are populated reported "seeded N field default(s)"
+# naming only SCALAR/simple-list fields (`_SCOPED_OVERRIDE_KEYS` below) -- the repeatable rows
+# were silently dropped, with no operator-facing disclosure anywhere, while the section's own
+# text claimed --initial-config equivalence. FIXED AT THE CLASS, not with a disclosure line
+# alone: a repeatable row seeds the MASTER-DETAIL model directly (`ScopedFieldKey("principals-
+# authority", "register"/"competences"/"relations")`, the SAME `_live_fields` slot the widget
+# itself writes through -- `master_detail.py`'s own "STORAGE IS UNCHANGED" doctrine means this
+# needs no master-detail-specific code at all, just the ordinary per-name live-field seeding
+# every OTHER scoped key already gets). Anything genuinely UNSEEDABLE is named, not silently
+# dropped: a role charter's own file path is host-specific and excluded BY TYPE from the config
+# schema entirely (config_file.SCHEMA carries no `principals_authority.charters` key -- there is
+# no config-file representation for a charter path, by design, not by omission) -- disclosed by
+# name whenever this section was engaged in the loaded file.
+# --------------------------------------------------------------------------------------------
+
+_SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
+    "substrate.run": ("substrate", "run"),
+    "substrate.path": ("substrate", "path"),
+    "substrate.host": ("substrate", "host"),
+    "fork_target.governed_extend": ("fork-target", "governed_extend"),
+    "fork_target.governed_extensions": ("fork-target", "governed_extensions"),
+    "rehearsal.run": ("rehearsal", "run"),
+    "birth.run": ("birth", "run"),
+    "signed_genesis.run": ("signed-genesis", "run"),
+    "signed_genesis.commission_statement": ("signed-genesis", "statement"),
+    "boundary.configure": ("boundary", "run"),
+    "boundary.start_now": ("boundary", "start_now"),
+    "observability.run": ("observability", "run"),
+    "observability.otelcol": ("observability", "otelcol"),
+    "observability.otel_watch": ("observability", "otel_watch"),
+    "hydration.run": ("hydration", "run"),
+    "hydration.fork_provenance": ("hydration", "fork_provenance"),
+    "hydration.fork_provenance_statement": ("hydration", "fork_provenance_statement"),
+    "hydration.role_charters": ("hydration", "role_charters"),
+    "hydration.durable_decisions": ("hydration", "durable_decisions"),
+    "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
+}
+
+# principals_authority's own repeatable rows -- each seeds the master-detail section's OWN
+# scoped list-field slot directly (dotted config key -> that section's own field name).
+_PRINCIPALS_REPEATABLE_KEYS: dict[str, str] = {
+    "principals_authority.register": "register",
+    "principals_authority.competences": "competences",
+    "principals_authority.relations": "relations",
+}
+
+_PRINCIPALS_ENGAGED_KEYS = (
+    "principals_authority.run", "principals_authority.register",
+    "principals_authority.competences", "principals_authority.relations",
+)
+
+_CHARTER_UNSEEDABLE_NOTE = (
+    "principals_authority.charters (role-charter file paths are host-specific -- excluded BY "
+    "TYPE from the config schema entirely, config_file spec §1; register any role charters "
+    "yourself in this section)"
+)
+
+
+def build_live_field_overrides(
+    doc: config_file.ConfigDoc,
+) -> "tuple[dict[ScopedFieldKey, object], list[str], list[str]]":
+    """Returns `(live_overrides, seeded_names, unseedable_notes)` -- see this section's own
+    module-level docstring above ("CONFIG-LOAD COMPLETENESS") for the fix this answers.
+    `live_overrides` is ready to merge straight into `state["_live_fields"]` (the SAME slot
+    `fields.get_field_value`/`set_field_value` read/write for every scoped field, ordinary
+    scalars and the principals-authority master-detail rows alike)."""
+    live: dict[ScopedFieldKey, object] = {}
+    seeded: list[str] = []
+    for dotted, (section, field_name) in _SCOPED_OVERRIDE_KEYS.items():
         val = config_file.get(doc, dotted)
         if val is None:
             continue
-        out.setdefault(screen, {})[prompt] = val
-    return out
+        live[ScopedFieldKey(section=NodeId(section), field=FieldName(field_name))] = val
+        seeded.append(dotted)
+
+    db_val = config_file.get(doc, "substrate.db")
+    if db_val is not None:
+        target = "db_dedicated" if config_file.get(doc, "substrate.path") == "dedicated" else "db_existing"
+        live[ScopedFieldKey(section=NodeId("substrate"), field=FieldName(target))] = db_val
+        seeded.append(f"substrate.db -> substrate.{target}")
+
+    for dotted, field_name in _PRINCIPALS_REPEATABLE_KEYS.items():
+        rows = config_file.get(doc, dotted)
+        if rows is None:
+            continue
+        live[ScopedFieldKey(section=NodeId("principals-authority"), field=FieldName(field_name))] = list(rows)
+        seeded.append(dotted)
+
+    unseedable: list[str] = []
+    if any(config_file.get(doc, k) is not None for k in _PRINCIPALS_ENGAGED_KEYS):
+        unseedable.append(_CHARTER_UNSEEDABLE_NOTE)
+
+    return live, seeded, unseedable
 
 
 # --------------------------------------------------------------------------------------------

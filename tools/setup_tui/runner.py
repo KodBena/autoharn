@@ -28,12 +28,14 @@ from __future__ import annotations
 
 import os
 import re
+import selectors
 import shlex
 import stat
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from typing import Callable
 
 # The ONE home (ADR-0012 P1; ledger row 1799 finding 1) for the fact this pattern encodes: every
 # write-verb this package drives (`led`, `legacy/led`, `role_charter.py` via `led decision`) ends
@@ -113,6 +115,10 @@ class CommandResult:
     returncode: int
     output: str
     dry_run: bool = False
+    # ADDITIVE (cycle-4 audit finding 1, ledger rows 1124/1133): True iff `cancel_check` (below)
+    # fired while this child ran -- `returncode` is whatever the terminated child actually exited
+    # with (never fabricated); a caller tells "cancelled" apart from "failed on its own" here.
+    cancelled: bool = False
     ok: bool = field(init=False)
 
     def __post_init__(self) -> None:
@@ -120,8 +126,9 @@ class CommandResult:
 
 
 def run_command(argv: list[str], *, cwd: str | None = None, env: dict | None = None,
-                 stdin_text: str | None = None, echo: bool = True,
-                 dry_run: bool = False) -> CommandResult:
+                 stdin_text: str | None = None, echo: bool = True, dry_run: bool = False,
+                 cancel_check: "Callable[[], bool] | None" = None,
+                 cancel_poll_interval: float = 0.2) -> CommandResult:
     """Runs `argv`, printing the exact command line first, then streaming stdout+stderr
     (merged, in real time) to this process's own stdout as it arrives, and finally returning the
     full captured text alongside the exit code. `stdin_text`, if given, is written to the
@@ -133,7 +140,15 @@ def run_command(argv: list[str], *, cwd: str | None = None, env: dict | None = N
     `CommandResult` reports `returncode=0`, `ok=True` (a SIMULATED success, `dry_run=True` on the
     result so the caller never mistakes it for a real one) and a placeholder `output` naming the
     fact, so the flow can walk on to the acts that would follow a real success -- the WOULD-DO
-    table it builds along the way is the full flow, not just the first step."""
+    table it builds along the way is the full flow, not just the first step.
+
+    CANCELLATION TOKEN (cycle-4 audit finding 1, ledger rows 1124/1133): `cancel_check`, if
+    given, is polled (every `cancel_poll_interval`s, via `selectors.DefaultSelector.select` --
+    doubles as "line ready?" and "poll again?") WHILE the child runs, not just before/after -- a
+    Cancel press DURING this call now stops the in-flight child (the audit's own gap: checked
+    only between sections before). On a positive poll: SIGTERM, a bounded 5s wait, then SIGKILL
+    if still alive. Partial stdout/stderr is still captured. Omitting `cancel_check` (the
+    default) reproduces prior behavior byte-for-byte -- every other call site is untouched."""
     if echo:
         print(f"$ {quote_argv(argv)}")
     if dry_run:
@@ -152,12 +167,47 @@ def run_command(argv: list[str], *, cwd: str | None = None, env: dict | None = N
         proc.stdin.close()
     lines: list[str] = []
     assert proc.stdout is not None
-    for line in proc.stdout:
-        sys.stdout.write(line)
-        sys.stdout.flush()
-        lines.append(line)
-    proc.wait()
-    return CommandResult(argv=list(argv), returncode=proc.returncode, output="".join(lines))
+    if cancel_check is None:
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lines.append(line)
+        proc.wait()
+        return CommandResult(argv=list(argv), returncode=proc.returncode, output="".join(lines))
+
+    cancelled = False
+    sel = selectors.DefaultSelector()
+    sel.register(proc.stdout, selectors.EVENT_READ)
+    try:
+        while True:
+            if cancel_check():
+                cancelled = True
+                break
+            if not sel.select(timeout=cancel_poll_interval):
+                continue  # no line ready -- poll cancel_check again
+            line = proc.stdout.readline()
+            if line == "":
+                break  # child closed stdout on its own -- not a cancel
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            lines.append(line)
+    finally:
+        sel.close()
+    if cancelled:
+        proc.terminate()  # SIGTERM first -- let a well-behaved child unwind
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()  # still alive after 5s -- no further grace
+            proc.wait()
+        try:  # drain whatever the (now-dead) child already buffered
+            lines.extend(proc.stdout)
+        except (OSError, ValueError):
+            pass  # pipe already torn down -- nothing left to drain
+    else:
+        proc.wait()
+    return CommandResult(argv=list(argv), returncode=proc.returncode, output="".join(lines),
+                          cancelled=cancelled)
 
 
 @dataclass

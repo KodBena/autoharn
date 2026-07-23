@@ -53,30 +53,102 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tools.setup_tui import durable_decisions
-from tools.setup_tui.content.feature_facts_data import RAW_ENTRIES
+from tools.configtree import DescriptionElement, PROVENANCE_LABEL
+from tools.setup_tui import content, durable_decisions
 
 
 @dataclass(frozen=True)
 class FeatureFact:
+    """SCHEMA (round 7, ledger row 1119 -- following the Fable RCA consult,
+    design/CONSULT-FABLE-ELUCIDATION-RCA-2026-07-22.md; supersedes round 6's aspiration/
+    standards/mechanism/external four-slot vocabulary, which the consult diagnosed as: D1
+    CRITICAL, a `standards` slot silently PROMOTED an aspiration -- "aspires to this standard's
+    decomposition" -- into an unqualified conformance claim, a truth-value change no mechanical
+    check could catch (every token survived; the qualifying edge between them did not); D4, a
+    `mechanism` slot held design docs and citations, never actual mechanism; D5, `external` meant
+    three different things across sections; D9, four labeled lines per fact read as
+    "serialization masquerading as layout.").
+
+    `lead` -- REQUIRED-if-anything-is-said, decision-guidance prose (D7: what choosing/having
+    this costs, requires, or changes for the operator -- written as a sentence, D8, never
+    slot:value telegraphy). A standard this feature ASPIRES to (never CONFORMS to, D1) is named
+    INSIDE this sentence, with its qualifying hedge kept intact ("aspires to X's decomposition",
+    never "Standards: X") -- there is no separate standards slot to promote it into. Empty string
+    = nothing to say (D6: an empty slot is not rendered at all, never "none named").
+    `external` -- ONE meaning only (D5): a concrete EXTERNAL PREREQUISITE OR STANDING
+    OBLIGATION the operator must supply or keep -- a binary on PATH, a live cluster, a recurring
+    process to keep alive. Never a description of what the feature does internally. Empty = none.
+    `provenance` -- OPTIONAL list of citations a FOUNDING OPERATOR could actually open and read
+    (this repo's own `user-guide/*` docs, or `law/adr/` itself) -- rendered demoted, LAST, one
+    `PROVENANCE_LABEL` element per path (D2: "where a citation is genuinely operator-relevant it
+    renders as provenance, demoted and last").
+    `maintainer_refs` -- OPTIONAL list of internal-only citations (ledger rows, `design/FABLE-*`/
+    `design/MAINT-*` build-basis docs, kernel lineage SQL files, AI-memory notes) -- NEVER
+    rendered by any widget (D2: "most are maintainer-relevant only: move those OUT of the
+    operator surface entirely"). Kept here only so the maintainer's own audit trail names where
+    each fact's claim comes from; `elements()`/`line()` never read this field.
+
+    `line()` stays the tabular/log-line renderer (`facts_block`'s own checklist/info-line use, an
+    EXEMPT class this codebase already established -- `.ct-info-line`/`.ct-precheck-line` are
+    deliberately never capped/wrapped, and this project's own "claims carry witnesses" register
+    is at home there); `elements()` is the typed accessor for the INTERACTIVE elucidation area --
+    the two are deliberately different shapes for deliberately different registers (D7/D8), never
+    one reused where the other belongs (the round-5 mistake round 6 answered on the WIDTH axis
+    only; round 7 answers it on the TRUTH/AUDIENCE/ALTITUDE axes)."""
     key: str
     label: str
-    aspiration: str
-    external: str
+    lead: str = ""
+    external: str = ""
+    provenance: tuple[str, ...] = ()
+    maintainer_refs: tuple[str, ...] = ()
 
     def line(self) -> str:
-        return f"  facts [{self.label}] -- aspiration: {self.aspiration} | external: {self.external}"
+        parts = [p for p in (self.lead, f"external: {self.external}" if self.external else "") if p]
+        body = "; ".join(parts) if parts else "(no operator-facing content)"
+        return f"  facts [{self.label}] -- {body}"
+
+    def elements(self, *, prefix: "str | None" = None) -> "ElucidationValue | None":
+        """The section-description/elucidation rendering of this fact (round 7): `lead` renders
+        FIRST as unlabeled connective prose (D7/D8); `external`, if present, follows as a SHORT
+        labeled "Requires" line (a genuinely separate, standing prerequisite -- never folded into
+        `lead` when it is a distinct, ongoing fact rather than the sentence's own main point);
+        `provenance`, if any, renders LAST, demoted, one `PROVENANCE_LABEL` element per path.
+        Blank components are simply absent (D6) -- a fact with nothing to say renders NOTHING.
+        `prefix`, if given (a section combining MORE THAN ONE fact under one description, e.g.
+        substrate's existing/dedicated paths), disambiguates the External/Full-basis lines only
+        -- `lead`'s own prose does not need it (a real `ElucidationHeading`, built by the caller,
+        names the group instead, D9)."""
+        out: list = []
+        if self.lead:
+            out.append(self.lead)
+        if self.external:
+            label = f"{prefix} Requires" if prefix else "Requires"
+            out.append(DescriptionElement(label, self.external))
+        for path in self.provenance:
+            label = f"{prefix} {PROVENANCE_LABEL}" if prefix else PROVENANCE_LABEL
+            out.append(DescriptionElement(label, path))
+        if not out:
+            return None
+        if len(out) == 1 and isinstance(out[0], str):
+            return out[0]
+        return tuple(out)
 
 
 # ---------------------------------------------------------------------------------------------
 # Registry -- every selectable act the flow offers (§2's enumeration): the substrate paths, the
 # boundary service, observability (otelcol + watchdog), each hydration item, and the
 # preflight-probed toolchains (idris2, clingo/ASP, python3, psql, textual/urwid if present).
-# Built from feature_facts_data.RAW_ENTRIES (P10's data artifact, see module docstring's
-# "CONTENT SPLIT" note) -- one line of construction, never a parse, never a runtime file read.
+# Built straight from feature_facts.toml (content.py's own validated FEATURE_FACTS) -- one line
+# of construction, never a parse, never a runtime file read.
 # ---------------------------------------------------------------------------------------------
 
-REGISTRY: dict[str, FeatureFact] = {key: FeatureFact(**fields) for key, fields in RAW_ENTRIES.items()}
+REGISTRY: dict[str, FeatureFact] = {
+    row["key"]: FeatureFact(key=row["key"], label=row["label"], lead=row.get("lead", ""),
+                             external=row.get("external", ""),
+                             provenance=tuple(row.get("provenance", ())),
+                             maintainer_refs=tuple(row.get("maintainer_refs", ())))
+    for row in content.FEATURE_FACTS
+}
 
 
 def fact(key: str) -> FeatureFact:

@@ -1,27 +1,21 @@
 seen-red/setup-tui-purity-gate -- banked RED evidence (both-polarity proof, fixture-census)
 
-Commission ledger rows 1823 point 2 / 1825 / 1835 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md §2.8):
-"a census-registered gate asserts, at the AST level over tools/setup_tui/, that calls to the
-three runner choke points (run_command, start_background, write_file) appear ONLY in the
-commit-executor module and the rehearsal module's declared exception -- a screen that acquires a
-direct effect call fails the gate."
+design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2/§6 (2026-07-22 wholesale rebuild): the gate was
+REWRITTEN for the tools/configtree library split -- two AST-level invariants (no print/input/
+stdin/stdout outside the app package; the core imports nothing from the app package). This
+banked evidence is the actual stdout of `python3 seen-red/setup-tui-purity-gate/run_fixtures.py`
+against the rewritten gate, witnessed 2026-07-22:
 
-RED case (run_fixtures.py's case 2, "negative self-check"): gates/setup_tui_purity_gate.py's own
-check_tree function, applied to three synthetic ast.Module trees under the filename "screens.py":
+case 1a ok: bare print() inside a non-exempt module reads red
+case 1b ok: the same shape inside runner.py (the exempted choke point) reads green
+case 2 ok: sys.stdin/sys.stdout attribute access in a non-exempt module reads red (2 hit(s))
+case 3a ok: steps.py importing tools.configtree.app (the textual-dependent submodule) reads red
+case 3b ok: steps.py importing the library's top-level types (SectionSpec/TextField) reads green -- every section module needs these to declare its data
+case 3c ok: the same textual-dependent import inside tui_app.py (the one legitimate importer) reads green
+setup_tui_purity_gate: clean.
+case 4 ok: the rewritten gate against the REAL tools/setup_tui/ tree exits 0 (clean)
+ALL CASES OK -- setup_tui_purity_gate.py's two rewritten detectors, both polarities, plus a real-tree clean confirmation
 
-  1. a bare `run_command(["echo", "hi"])` call inside an ordinary function
-     (`screen_boundary`, a name chosen to look like a real screen) -- the gate reports it as a
-     violation (`check_tree` returns a non-empty list naming the enclosing function).
-  2. `runner.write_file("/tmp/x", "content")` called at MODULE LEVEL (no enclosing function) --
-     also reported as a violation, attributed to "<module level>" (the gate's own stated rule:
-     a module-level call is always a violation, never exempt by construction).
-  3. the control specimen: the identical `run_command(...)` call as case 1, but placed inside a
-     function literally named `screen_rehearsal` -- the gate reports ZERO violations for this
-     one, proving the declared-exception allowlist (EXEMPT["screens.py"] = {"screen_rehearsal"})
-     actually discriminates rather than either over- or under-catching.
-
-This proves the check is not vacuously green: a synthetic violation of each shape the spec names
-(an ordinary function acquiring a direct effect call; a bare module-level call) is caught, and the
-one sanctioned exception is not falsely caught alongside them. Case 1 of the same fixture proves
-the REAL tools/setup_tui/*.py tree is clean against this same check; case 3 proves
-commit_executor.py's own real (and necessary) choke-point calls are correctly exempted.
+RED legs (1a, 2, 3a) prove the detectors actually catch the shape they claim to forbid, not
+merely that the script runs; GREEN legs (1b, 3b, 3c, 4) prove the declared exceptions and the
+real tree are not falsely caught alongside them.

@@ -287,12 +287,12 @@ else
 fi
 echo "wrote attestations/README.md"
 
-echo "-- the nine project-local shims (the operator verbs led, judge, pickup, audit,"
-echo "   distance-to-clean, attest-doc, asof-export, plus the signing tools verify-commission and"
-echo "   verify-chain): thin shims exec'ing autoharn's live templates, identical"
-echo "   mechanism to new-project.sh's own (a template fix in bootstrap/templates/ reaches this"
-echo "   deployment instantly, same as every governed world) --"
-for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export; do
+echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit,"
+echo "   distance-to-clean, attest-doc, asof-export, doctor, plus the signing tools"
+echo "   verify-commission and verify-chain): thin shims exec'ing autoharn's live templates,"
+echo "   identical mechanism to new-project.sh's own (a template fix in bootstrap/templates/"
+echo "   reaches this deployment instantly, same as every governed world) --"
+for verb in led judge pickup audit distance-to-clean verify-commission verify-chain attest-doc asof-export doctor; do
     cat > "$PROJECT_ROOT/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
@@ -348,6 +348,7 @@ echo "  ./led work claim <slug>              # claim it"
 echo "  ./led work close <slug> shipped --witness \"<ref>\"   # close it, witnessed"
 echo "  ./pickup                             # live resume brief incl. IN-FLIGHT work items"
 echo "  ./distance-to-clean                  # composed closure-debt read"
+echo "  ./doctor                             # is this deployment set up right? (witnessed lines)"
 echo "  ./led work violations                # cycles / dangling deps / duplicate opens"
 echo "  ./attest-doc check                   # ADR-0017 A:B:C attestation status per doc"
 echo ""
