@@ -179,182 +179,211 @@ def main() -> int:
     # boundary_deployment to deployment.json IN PLACE -- see the module-level comment above.
     proc = bs_fixtures.serve_existing_world(dest / "deployment.json", tmpdir)
 
-    # a real row to countersign in the review cases below -- message is either "led: row <id>
-    # written." (s43 boundary) or "led <verb>: row <id> written." (pre-s43 legacy branch); the id
-    # is always the SECOND-TO-LAST whitespace token (the last is "written.").
-    r = _run(dest, "led", "finding", f"{TAG}: seed row for review cases")
-    toks = r.stdout.split()
-    seed_id = toks[-2] if r.returncode == 0 and len(toks) >= 2 and toks[-2].isdigit() else None
-    if seed_id is None:
-        failures.append(f"SEED: could not write seed row -- exit={r.returncode}\n"
-                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-        print(f"SEED: FAILED to write seed row, aborting review cases -- {r.stdout!r} {r.stderr!r}")
-
-    # ------------------------------------------------------------------- GREEN-HELP-GENERIC
-    # cli-rebase-fixture-repairs (row 1170): the two DASH-prefixed forms only -- current argparse
-    # refuses both (exit 4, "arguments are required: statement"), never a custom usage block.
-    # The bare, non-dash "help" word is a SEPARATE, REDISCOVERED-GAP-BARE-HELP case below (its
-    # own behavior genuinely differs: it is accepted and written).
-    for probe_args, label in (
-        (("finding", "-h"), "dash-h"),
-        (("finding", "--help"), "dash-dash-help"),
-    ):
-        before = _ledger_row_count(dest)
-        r = _run(dest, "led", *probe_args)
-        after = _ledger_row_count(dest)
-        refused = r.returncode != 0
-        unchanged = before == after
-        ok = refused and unchanged
-        if not ok:
-            failures.append(f"GREEN-HELP-GENERIC[{label}]: exit={r.returncode} "
-                             f"before={before} after={after}\n"
+    # fixture-repairs review (MODERATE-silent finding): everything from here through the last
+    # case used to run with NO try/finally around it -- an uncaught exception anywhere in this
+    # stretch (a KeyError, an index error, a subprocess surprise) would skip BOTH
+    # `bs_fixtures.stop_server(proc)` (the boundary_service subprocess leaks, orphaned) and
+    # `_drop_scratch()` (the scratch schema/kern/role leak in the toy db, never reaped). The
+    # `try`/`finally` below guarantees the server is always reaped; an uncaught exception (as
+    # opposed to an ordinary FAILURES-list check mismatch, which still deliberately leaves the
+    # scratch substrate standing as evidence -- see the tail of main()) carries no check-level
+    # evidence worth preserving, so it also drops the scratch schema/role and tempdir itself
+    # rather than leaking them too.
+    crashed_with: BaseException | None = None
+    try:
+        # a real row to countersign in the review cases below -- message is either "led: row <id>
+        # written." (s43 boundary) or "led <verb>: row <id> written." (pre-s43 legacy branch); the id
+        # is always the SECOND-TO-LAST whitespace token (the last is "written.").
+        r = _run(dest, "led", "finding", f"{TAG}: seed row for review cases")
+        toks = r.stdout.split()
+        seed_id = toks[-2] if r.returncode == 0 and len(toks) >= 2 and toks[-2].isdigit() else None
+        if seed_id is None:
+            failures.append(f"SEED: could not write seed row -- exit={r.returncode}\n"
                              f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-        print(f"GREEN-HELP-GENERIC[{label}]: exit={r.returncode} "
-              f"row-count before={before} after={after} (unchanged={unchanged}) -- "
-              f"{'PASS' if ok else 'FAIL'}")
+            print(f"SEED: FAILED to write seed row, aborting review cases -- {r.stdout!r} {r.stderr!r}")
 
-    # ------------------------------------------------------------- REDISCOVERED-GAP-BARE-HELP
-    # NAMED, NOT SILENCED (see this file's own module docstring): `led decision help` is ordinary
-    # argparse prose now -- accepted and WRITTEN verbatim. This is the exact defect class the
-    # item existed to close, reopened by the CLI rebase for this one non-dash-prefixed token.
-    # Recorded here as an OBSERVED CURRENT FACT (grows by one, statement stored verbatim), not
-    # papered over as a pass -- a future CLI fix that restores the classifier should flip this
-    # case back to "unchanged", at which point it stops being a rediscovered gap.
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "decision", "help")
-    after = _ledger_row_count(dest)
-    stored = _psql("-q", "-tA", "-c", f"SET ROLE {ROLE};",
-                    "-c", f"SELECT statement FROM {SCHEMA}.ledger WHERE id = {after};"
-                    ).stdout.strip() if after == before + 1 else None
-    gap_reproduced = r.returncode == 0 and after == before + 1 and stored == "help"
-    print(f"REDISCOVERED-GAP-BARE-HELP: exit={r.returncode} row-count before={before} "
-          f"after={after} stored_statement={stored!r} -- gap_reproduced={gap_reproduced} "
-          f"(a bare 'help' word is committed verbatim; see module docstring's REDISCOVERED GAP "
-          f"paragraph -- this is EXPECTED CURRENT BEHAVIOR, not a fixture failure, and not "
-          f"silently accepted as fine either)")
-    if not gap_reproduced:
-        failures.append(f"REDISCOVERED-GAP-BARE-HELP: expected the KNOWN gap to reproduce "
-                         f"(accepted+written+stored='help') but observed something else -- "
-                         f"exit={r.returncode} before={before} after={after} stored={stored!r}\n"
-                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        # ------------------------------------------------------------------- GREEN-HELP-GENERIC
+        # cli-rebase-fixture-repairs (row 1170): the two DASH-prefixed forms only -- current argparse
+        # refuses both (exit 4, "arguments are required: statement"), never a custom usage block.
+        # The bare, non-dash "help" word is a SEPARATE, REDISCOVERED-GAP-BARE-HELP case below (its
+        # own behavior genuinely differs: it is accepted and written).
+        for probe_args, label in (
+            (("finding", "-h"), "dash-h"),
+            (("finding", "--help"), "dash-dash-help"),
+        ):
+            before = _ledger_row_count(dest)
+            r = _run(dest, "led", *probe_args)
+            after = _ledger_row_count(dest)
+            refused = r.returncode != 0
+            unchanged = before == after
+            ok = refused and unchanged
+            if not ok:
+                failures.append(f"GREEN-HELP-GENERIC[{label}]: exit={r.returncode} "
+                                 f"before={before} after={after}\n"
+                                 f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+            print(f"GREEN-HELP-GENERIC[{label}]: exit={r.returncode} "
+                  f"row-count before={before} after={after} (unchanged={unchanged}) -- "
+                  f"{'PASS' if ok else 'FAIL'}")
 
-    # ------------------------------------------------------------------- GREEN-HELP-REVIEW
-    if seed_id is not None:
+        # ------------------------------------------------------------- REDISCOVERED-GAP-BARE-HELP
+        # NAMED, NOT SILENCED (see this file's own module docstring): `led decision help` is ordinary
+        # argparse prose now -- accepted and WRITTEN verbatim. This is the exact defect class the
+        # item existed to close, reopened by the CLI rebase for this one non-dash-prefixed token.
+        # Recorded here as an OBSERVED CURRENT FACT (grows by one, statement stored verbatim), not
+        # papered over as a pass -- a future CLI fix that restores the classifier should flip this
+        # case back to "unchanged", at which point it stops being a rediscovered gap.
         before = _ledger_row_count(dest)
-        r = _run(dest, "led", "review", seed_id, "attest", "self-review", "--help")
+        r = _run(dest, "led", "decision", "help")
+        after = _ledger_row_count(dest)
+        stored = _psql("-q", "-tA", "-c", f"SET ROLE {ROLE};",
+                        "-c", f"SELECT statement FROM {SCHEMA}.ledger WHERE id = {after};"
+                        ).stdout.strip() if after == before + 1 else None
+        gap_reproduced = r.returncode == 0 and after == before + 1 and stored == "help"
+        print(f"REDISCOVERED-GAP-BARE-HELP: exit={r.returncode} row-count before={before} "
+              f"after={after} stored_statement={stored!r} -- gap_reproduced={gap_reproduced} "
+              f"(a bare 'help' word is committed verbatim; see module docstring's REDISCOVERED GAP "
+              f"paragraph -- this is EXPECTED CURRENT BEHAVIOR, not a fixture failure, and not "
+              f"silently accepted as fine either)")
+        if not gap_reproduced:
+            failures.append(f"REDISCOVERED-GAP-BARE-HELP: expected the KNOWN gap to reproduce "
+                             f"(accepted+written+stored='help') but observed something else -- "
+                             f"exit={r.returncode} before={before} after={after} stored={stored!r}\n"
+                             f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+
+        # ------------------------------------------------------------------- GREEN-HELP-REVIEW
+        if seed_id is not None:
+            before = _ledger_row_count(dest)
+            r = _run(dest, "led", "review", seed_id, "attest", "self-review", "--help")
+            after = _ledger_row_count(dest)
+            exit0 = r.returncode == 0
+            shows_usage = "usage: led review" in (r.stdout + r.stderr)
+            unchanged = before == after
+            ok = exit0 and shows_usage and unchanged
+            if not ok:
+                failures.append(f"GREEN-HELP-REVIEW: exit={r.returncode} shows_usage={shows_usage} "
+                                 f"before={before} after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+            print(f"GREEN-HELP-REVIEW: exit={r.returncode} shows_usage={shows_usage} row-count "
+                  f"before={before} after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+        # -------------------------------------------------------------- GREEN-HELP-REVIEW-BARE
+        # item led-review-bare-help-exit-code (ledger row 1568): a BARE `led review --help` (no
+        # entry-id/verdict/independence given at all). argparse's own -h handling on this subparser
+        # (built WITH add_help=True) fires before any positional-arity check, so this is exit 0 with
+        # argparse's own usage regardless of how many positionals were supplied -- the arg-count-vs-
+        # help-token ordering bug row 1568 fixed cannot regress under this architecture (there is no
+        # separate arg-count guard left to race against).
+        before = _ledger_row_count(dest)
+        r = _run(dest, "led", "review", "--help")
         after = _ledger_row_count(dest)
         exit0 = r.returncode == 0
         shows_usage = "usage: led review" in (r.stdout + r.stderr)
         unchanged = before == after
         ok = exit0 and shows_usage and unchanged
         if not ok:
-            failures.append(f"GREEN-HELP-REVIEW: exit={r.returncode} shows_usage={shows_usage} "
+            failures.append(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} "
                              f"before={before} after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-        print(f"GREEN-HELP-REVIEW: exit={r.returncode} shows_usage={shows_usage} row-count "
+        print(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} row-count "
               f"before={before} after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
 
-    # -------------------------------------------------------------- GREEN-HELP-REVIEW-BARE
-    # item led-review-bare-help-exit-code (ledger row 1568): a BARE `led review --help` (no
-    # entry-id/verdict/independence given at all). argparse's own -h handling on this subparser
-    # (built WITH add_help=True) fires before any positional-arity check, so this is exit 0 with
-    # argparse's own usage regardless of how many positionals were supplied -- the arg-count-vs-
-    # help-token ordering bug row 1568 fixed cannot regress under this architecture (there is no
-    # separate arg-count guard left to race against).
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "review", "--help")
-    after = _ledger_row_count(dest)
-    exit0 = r.returncode == 0
-    shows_usage = "usage: led review" in (r.stdout + r.stderr)
-    unchanged = before == after
-    ok = exit0 and shows_usage and unchanged
-    if not ok:
-        failures.append(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} "
-                         f"before={before} after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-    print(f"GREEN-HELP-REVIEW-BARE: exit={r.returncode} shows_usage={shows_usage} row-count "
-          f"before={before} after={after} (unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
-
-    # ------------------------------------------------------------- RED-DASH-FIRST-WORD-GENERIC
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "finding", "--bogus-flag", f"{TAG}: dash-first-word probe")
-    after = _ledger_row_count(dest)
-    refused = r.returncode != 0
-    teaches = "unrecognized arguments" in r.stderr and "--bogus-flag" in r.stderr
-    unchanged = before == after
-    ok = refused and teaches and unchanged
-    if not ok:
-        failures.append(f"RED-DASH-FIRST-WORD-GENERIC: exit={r.returncode} refused={refused} "
-                         f"teaches={teaches} before={before} after={after}\nSTDERR:\n{r.stderr}")
-    print(f"RED-DASH-FIRST-WORD-GENERIC: exit={r.returncode} refused={refused} teaches={teaches} "
-          f"row-count before={before} after={after} (unchanged={unchanged}) -- "
-          f"{'PASS' if ok else 'FAIL'}")
-
-    # ------------------------------------------------------------- RED-DASH-FIRST-WORD-REVIEW
-    if seed_id is not None:
+        # ------------------------------------------------------------- RED-DASH-FIRST-WORD-GENERIC
         before = _ledger_row_count(dest)
-        r = _run(dest, "led", "review", seed_id, "attest", "self-review", "--bogus",
-                  f"{TAG}: dash-first-word review probe")
+        r = _run(dest, "led", "finding", "--bogus-flag", f"{TAG}: dash-first-word probe")
+        after = _ledger_row_count(dest)
+        refused = r.returncode != 0
+        teaches = "unrecognized arguments" in r.stderr and "--bogus-flag" in r.stderr
+        unchanged = before == after
+        ok = refused and teaches and unchanged
+        if not ok:
+            failures.append(f"RED-DASH-FIRST-WORD-GENERIC: exit={r.returncode} refused={refused} "
+                             f"teaches={teaches} before={before} after={after}\nSTDERR:\n{r.stderr}")
+        print(f"RED-DASH-FIRST-WORD-GENERIC: exit={r.returncode} refused={refused} teaches={teaches} "
+              f"row-count before={before} after={after} (unchanged={unchanged}) -- "
+              f"{'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------------- RED-DASH-FIRST-WORD-REVIEW
+        if seed_id is not None:
+            before = _ledger_row_count(dest)
+            r = _run(dest, "led", "review", seed_id, "attest", "self-review", "--bogus",
+                      f"{TAG}: dash-first-word review probe")
+            after = _ledger_row_count(dest)
+            refused = r.returncode != 0
+            teaches = "unrecognized arguments" in r.stderr and "--bogus" in r.stderr
+            unchanged = before == after
+            ok = refused and teaches and unchanged
+            if not ok:
+                failures.append(f"RED-DASH-FIRST-WORD-REVIEW: exit={r.returncode} refused={refused} "
+                                 f"teaches={teaches} before={before} after={after}\nSTDERR:\n{r.stderr}")
+            print(f"RED-DASH-FIRST-WORD-REVIEW: exit={r.returncode} refused={refused} "
+                  f"teaches={teaches} row-count before={before} after={after} "
+                  f"(unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------------------- GREEN-MID-SENTENCE-DASH
+        mid_statement = f"{TAG}: prose mentioning -x somewhere mid sentence, not the first word"
+        before = _ledger_row_count(dest)
+        r = _run(dest, "led", "finding", mid_statement)
+        after = _ledger_row_count(dest)
+        accepted = r.returncode == 0
+        grew = after == before + 1
+        ok = accepted and grew
+        if not ok:
+            failures.append(f"GREEN-MID-SENTENCE-DASH: exit={r.returncode} accepted={accepted} "
+                             f"before={before} after={after}\nSTDERR:\n{r.stderr}")
+        print(f"GREEN-MID-SENTENCE-DASH: exit={r.returncode} accepted={accepted} row-count "
+              f"before={before} after={after} (grew-by-one={grew}) -- {'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------------- GREEN-HELP-DECISION-DASHDASH
+        # cli-rebase-fixture-repairs (row 1170): 'decision' no longer runs its own bash --grade loop
+        # ahead of the generic dispatch -- it shares the SAME argparse parser as every other kind
+        # (p.add_argument("--grade", ...) on the one shared parser), so there is no separate
+        # special-casing left to regress; the refusal shape is identical to the generic path's own.
+        before = _ledger_row_count(dest)
+        r = _run(dest, "led", "decision", "--help")
+        after = _ledger_row_count(dest)
+        refused = r.returncode != 0
+        unchanged = before == after
+        ok = refused and unchanged
+        if not ok:
+            failures.append(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} "
+                             f"before={before} after={after}\n"
+                             f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} "
+              f"row-count before={before} after={after} (unchanged={unchanged}) -- "
+              f"{'PASS' if ok else 'FAIL'}")
+
+        # ------------------------------------------------------- RED-DECISION-BOGUS-FLAG-STILL-REFUSED
+        before = _ledger_row_count(dest)
+        r = _run(dest, "led", "decision", "--bogus", f"{TAG}: decision bogus-flag regression probe")
         after = _ledger_row_count(dest)
         refused = r.returncode != 0
         teaches = "unrecognized arguments" in r.stderr and "--bogus" in r.stderr
         unchanged = before == after
         ok = refused and teaches and unchanged
         if not ok:
-            failures.append(f"RED-DASH-FIRST-WORD-REVIEW: exit={r.returncode} refused={refused} "
-                             f"teaches={teaches} before={before} after={after}\nSTDERR:\n{r.stderr}")
-        print(f"RED-DASH-FIRST-WORD-REVIEW: exit={r.returncode} refused={refused} "
+            failures.append(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} "
+                             f"refused={refused} teaches={teaches} before={before} after={after}\n"
+                             f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+        print(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} refused={refused} "
               f"teaches={teaches} row-count before={before} after={after} "
               f"(unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
+    except BaseException as exc:  # noqa: BLE001 -- deliberately broad: this is a last-resort net
+        # (MODERATE-silent finding fix): an uncaught exception anywhere in the try block above
+        # used to skip both stop_server(proc) and _drop_scratch(), leaking the boundary_service
+        # subprocess AND the scratch schema/kern/role. Caught here, recorded as its own failure
+        # (never silently swallowed -- ADR-0002), and re-raised after cleanup so the crash is
+        # still visible with its original traceback.
+        crashed_with = exc
+        failures.append(f"UNCAUGHT EXCEPTION mid-fixture: {exc!r}")
+        print(f"\n!! UNCAUGHT EXCEPTION mid-fixture -- {exc!r} -- reaping server and dropping "
+              f"scratch before re-raising (no check-level evidence to preserve for a crash)")
+    finally:
+        bs_fixtures.stop_server(proc)
 
-    # ------------------------------------------------------------------- GREEN-MID-SENTENCE-DASH
-    mid_statement = f"{TAG}: prose mentioning -x somewhere mid sentence, not the first word"
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "finding", mid_statement)
-    after = _ledger_row_count(dest)
-    accepted = r.returncode == 0
-    grew = after == before + 1
-    ok = accepted and grew
-    if not ok:
-        failures.append(f"GREEN-MID-SENTENCE-DASH: exit={r.returncode} accepted={accepted} "
-                         f"before={before} after={after}\nSTDERR:\n{r.stderr}")
-    print(f"GREEN-MID-SENTENCE-DASH: exit={r.returncode} accepted={accepted} row-count "
-          f"before={before} after={after} (grew-by-one={grew}) -- {'PASS' if ok else 'FAIL'}")
-
-    # ------------------------------------------------------------- GREEN-HELP-DECISION-DASHDASH
-    # cli-rebase-fixture-repairs (row 1170): 'decision' no longer runs its own bash --grade loop
-    # ahead of the generic dispatch -- it shares the SAME argparse parser as every other kind
-    # (p.add_argument("--grade", ...) on the one shared parser), so there is no separate
-    # special-casing left to regress; the refusal shape is identical to the generic path's own.
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "decision", "--help")
-    after = _ledger_row_count(dest)
-    refused = r.returncode != 0
-    unchanged = before == after
-    ok = refused and unchanged
-    if not ok:
-        failures.append(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} "
-                         f"before={before} after={after}\n"
-                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-    print(f"GREEN-HELP-DECISION-DASHDASH: exit={r.returncode} "
-          f"row-count before={before} after={after} (unchanged={unchanged}) -- "
-          f"{'PASS' if ok else 'FAIL'}")
-
-    # ------------------------------------------------------- RED-DECISION-BOGUS-FLAG-STILL-REFUSED
-    before = _ledger_row_count(dest)
-    r = _run(dest, "led", "decision", "--bogus", f"{TAG}: decision bogus-flag regression probe")
-    after = _ledger_row_count(dest)
-    refused = r.returncode != 0
-    teaches = "unrecognized arguments" in r.stderr and "--bogus" in r.stderr
-    unchanged = before == after
-    ok = refused and teaches and unchanged
-    if not ok:
-        failures.append(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} "
-                         f"refused={refused} teaches={teaches} before={before} after={after}\n"
-                         f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
-    print(f"RED-DECISION-BOGUS-FLAG-STILL-REFUSED: exit={r.returncode} refused={refused} "
-          f"teaches={teaches} row-count before={before} after={after} "
-          f"(unchanged={unchanged}) -- {'PASS' if ok else 'FAIL'}")
-
-    bs_fixtures.stop_server(proc)
+    if crashed_with is not None:
+        _drop_scratch()
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        print(f"led-help-token-closure fixture: crashed -- server reaped, scratch dropped "
+              f"(schema {SCHEMA}/{KERN}/role {ROLE} dropped, tempdir removed)")
+        raise crashed_with
 
     if failures:
         print(f"\nled-help-token-closure fixture: {len(failures)} FAILURE(S) -- scratch "

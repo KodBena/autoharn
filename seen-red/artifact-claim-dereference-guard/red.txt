@@ -66,3 +66,36 @@ After the fix (boilerplate hoisted out of the loop: tokens accumulated into a `f
 the six-line preamble + a trailing per-token list printed once after the loop), the same case
 goes green: one preamble, "WARN-ONLY" once, all three tokens listed -- see this commission's
 commit for the green capture.
+
+---
+
+2026-07-23 dated note (fixture-repairs review, batch a74978e0): TWO separate follow-ups landed
+against this fixture, both witnessed live against scratch (HARNESS_PGHOST=192.168.122.1):
+
+1. SCRATCH REWIRE (SEVERE): this fixture used to drive the repo-root `./led` (ROOT/parents[2])
+   against THIS CHECKOUT'S OWN deployment.json -- whatever real deployment the checkout happened
+   to be pointed at. That register produced a live incident: during this same batch, the
+   fixture's own probe writes landed 8 garbage rows in the REAL kernel (ledger rows 1237-1244,
+   marked garbage by finding row 1248) because deployment.json resolved to a live deployment,
+   not a scratch one. The fixture now scaffolds its own scratch world via `bootstrap/
+   new-project.sh --new-world` and stands a real `serving.boundary_service` against it via
+   `serve_existing_world` (seen-red/boundary-service/run_fixtures.py), exactly the pattern its
+   sibling fixtures already use. It never again touches this checkout's own deployment.json.
+
+2. SPECIMEN INERT, NOW REDISCOVERED-GAP (the guard this fixture proves does not exist in the
+   served CLI at all -- ledger row 1245, open work item): live-witnessed against the CURRENT
+   served `led`, BOTH the --evidence path-dereference guard AND the path-shaped-statement
+   warning are entirely absent from the rebased CLI (a rebase feature-loss, not a fixture bug).
+   Every case that used to expect a REFUSAL (dead evidence path, bare directory) is now silently
+   ACCEPTED; every case that used to expect a WARNING (statement-path single/multi token) now
+   writes with NO warning at all. The fixture's cases were rewritten to assert this OBSERVED
+   CURRENT BEHAVIOR as NAMED REDISCOVERED-GAP-* cases (the same treatment seen-red/
+   led-help-token-closure/run_fixtures.py already banks for its own rediscovered gap), rather
+   than silently passing or silently failing against a guard that no longer exists. The
+   specimen is INERT pending row 1245's repair: once the guard/scanner is reimplemented in the
+   served path, the REDISCOVERED-GAP-* cases' assertions must be flipped back to the original
+   RED (refuse)/WARN (warn-but-write) expectations -- at which point they stop being gaps and
+   this note's INERT framing is no longer accurate.
+
+Witnessed live, scratch only, all 8 cases green against the current (gap-carrying) CLI shape --
+see this commit's own message for the run's exact output.

@@ -425,7 +425,27 @@ def serve_existing_world(deployment_path: Path, tmpdir: Path) -> subprocess.Pope
     (the world-name convention every sibling fixture in this tree already uses).
 
     Caller MUST `stop_server(...)` the returned process in its own teardown/finally block --
-    this function starts a real subprocess and does not own its lifecycle beyond returning it."""
+    this function starts a real subprocess and does not own its lifecycle beyond returning it.
+
+    LEAK-CLASS REFUSAL (fixture-repairs review, ledger rows 1237-1244/1248): a fixture that
+    resolves `deployment_path` to a REAL project's deployment.json -- not a scratch one this
+    fixture itself scaffolded under a temp dir -- stands a served `led` against the LIVE
+    kernel and leaks committed rows into it (exactly what happened: 8 garbage rows landed in
+    the real deployment during the fixture-repairs batch, later marked garbage by row 1248).
+    Every one of this fixture class's own callers already scaffolds via `tempfile.mkdtemp`
+    before calling here, so this refusal costs nothing on the intended path; it forecloses the
+    leak class structurally rather than trusting every future caller to get it right by hand."""
+    deployment_path = Path(deployment_path).resolve()
+    scratch_root = Path(tempfile.gettempdir()).resolve()
+    if scratch_root not in deployment_path.parents:
+        raise RuntimeError(
+            f"serve_existing_world REFUSES: {deployment_path} does not live under the scratch "
+            f"root {scratch_root} (tempfile.gettempdir()). This guard exists because a fixture "
+            f"once resolved a REAL project's deployment.json here and stood a served `led` "
+            f"against the LIVE kernel, leaking 8 garbage rows into it (ledger rows "
+            f"1237-1244, marked garbage by row 1248) -- a fixture must scaffold its own world "
+            f"under a temp dir (tempfile.mkdtemp) and pass THAT deployment.json, never a real "
+            f"checkout's.")
     rec = deployment_record.load_deployment(deployment_path)
     # Built from `rec`'s OWN fields throughout (never this module's `{world}_rw`/`{world}_kernel`
     # string-building convention, which several fixtures in this class do not follow) -- the
