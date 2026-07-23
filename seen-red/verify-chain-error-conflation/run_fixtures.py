@@ -76,6 +76,16 @@ NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 VERIFY_CHAIN_TMPL = REPO / "bootstrap" / "templates" / "verify-chain.tmpl"
 LINEAGE = REPO / "kernel" / "lineage"
 
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
 PGHOST, PGDB = fixture_pghost(), "toy"
 BAD_HOST = "verify-chain-conflation-probe.invalid"  # RFC 2606 .invalid -- never resolves, ever
 WORLD = "vccfxprobe"
@@ -150,6 +160,11 @@ def main() -> int:
             return 1
         for verb in ("led", "verify-chain"):
             (world_dir / verb).chmod(0o755)
+        proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+        # birth-sequence rows (author + standing decls + registrations) precede this fixture's
+        # own write now -- baselined rather than assuming a birth of zero rows (row 1170).
+        before_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
+                                f"SELECT count(*) FROM {WORLD}.ledger;"]).stdout.strip())
         rl = sh(["bash", str(world_dir / "led"), "decision", "row one, via led"], cwd=str(world_dir))
         if rl.returncode != 0:
             print("led write FAILED:", rl.stdout, rl.stderr)
@@ -191,7 +206,8 @@ def main() -> int:
 
         # --- d: control -- the SAME world over the real host is still INTACT ---------------------
         rd = run_verify_chain(good_deployment)
-        ok_d = rd.returncode == 0 and rd.stdout.startswith("verify-chain: INTACT -- 1 row(s)")
+        ok_d = (rd.returncode == 0
+                and rd.stdout.startswith(f"verify-chain: INTACT -- {before_count + 1} row(s)"))
         check("d-good-host-control", ok_d, rd.stdout.strip(), failures)
 
         # --- e: the OTHER polarity -- a genuinely pre-s26 world still degrades honestly to
@@ -212,6 +228,10 @@ def main() -> int:
         check("e-pre-s26-honest-absence-preserved", ok_e, re_.stdout.strip(), failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         shutil.rmtree(tmp, ignore_errors=True)
 

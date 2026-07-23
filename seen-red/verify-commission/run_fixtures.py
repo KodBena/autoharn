@@ -51,8 +51,10 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -66,6 +68,16 @@ from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 VERIFY_COMMISSION_TMPL = REPO / "bootstrap" / "templates" / "verify-commission.tmpl"
 
 PGHOST, PGDB = fixture_pghost(), "toy"
@@ -157,6 +169,7 @@ def main() -> int:
             return 1
         for verb in ("led", "verify-commission"):
             (world_dir / verb).chmod(0o755)
+        proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
         print("  scaffold OK.\n")
 
         statement = "Build the GPG trust layer per design/MAINT-GPG-TRUST-LAYER.md, all three rungs."
@@ -165,10 +178,18 @@ def main() -> int:
         if r.returncode != 0:
             print("COMMISSION WRITE FAILED:", r.stdout, r.stderr)
             return 1
+        # cli-rebase-fixture-repairs (row 1170): the commission row's own id is no longer
+        # guaranteed to be 1 -- the s40/s43 birth sequence writes several rows ahead of it now --
+        # parsed from "led: row <id> written." rather than hardcoded.
+        m = re.search(r"row (\d+) written", r.stdout)
+        if m is None:
+            print("COULD NOT PARSE COMMISSION ROW ID:", r.stdout, r.stderr)
+            return 1
+        commission_id = int(m.group(1))
 
         # --- a: no .asc banked -> UNSIGNED, exit 0 (world_dir/keys/ does not even exist yet at
         # this point -- deliberately, to prove UNSIGNED is decided before any key lookup) -------
-        ra = run_verify_commission(world_dir)
+        ra = run_verify_commission(world_dir, commission_id=commission_id)
         body_a = json.loads(ra.stdout) if ra.stdout.strip() else {}
         ok_a = ra.returncode == 0 and body_a.get("verdict") == "UNSIGNED"
         check("a-unsigned", ok_a, f"exit={ra.returncode} verdict={body_a.get('verdict')}", failures)
@@ -176,13 +197,13 @@ def main() -> int:
         # --- b: signed with the byte-fidelity-fixed ceremony, checked against the test key,
         # committed to THIS WORLD's own keys/ (never autoharn's law/keys/) -----------------------
         gpg_env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
-        asc_path = world_dir / ".claude" / "commission-1.asc"
+        asc_path = world_dir / ".claude" / f"commission-{commission_id}.asc"
         rsign = sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o", str(asc_path), "-"],
                    input=statement, env=gpg_env)
         keys_dir.mkdir(parents=True, exist_ok=True)
         r_export = sh(["gpg", "--homedir", str(gnupghome), "--armor", "--export", test_fpr])
         (keys_dir / "test-key.asc").write_text(r_export.stdout, encoding="utf-8")
-        rb = run_verify_commission(world_dir)
+        rb = run_verify_commission(world_dir, commission_id=commission_id)
         body_b = json.loads(rb.stdout) if rb.stdout.strip() else {}
         ok_b = rsign.returncode == 0 and rb.returncode == 0 and body_b.get("verdict") == "VERIFIED"
         check("b-verified", ok_b, f"sign_exit={rsign.returncode} verify_exit={rb.returncode} "
@@ -191,7 +212,7 @@ def main() -> int:
         # --- c: same .asc path, signature over a DIFFERENT statement -> FORGED-OR-CORRUPT ------
         sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o", str(asc_path), "-"],
            input="a completely different ask, never what row 1 actually says", env=gpg_env)
-        rc = run_verify_commission(world_dir)
+        rc = run_verify_commission(world_dir, commission_id=commission_id)
         body_c = json.loads(rc.stdout) if rc.stdout.strip() else {}
         ok_c = rc.returncode == 1 and body_c.get("verdict") == "FORGED-OR-CORRUPT"
         check("c-forged-tampered-bytes", ok_c, f"exit={rc.returncode} verdict={body_c.get('verdict')}", failures)
@@ -205,7 +226,7 @@ def main() -> int:
         sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o", str(asc_path), "-"],
            input=statement, env=gpg_env)
         shutil.move(str(keys_dir / "test-key.asc"), str(saved_key_path))
-        rd = run_verify_commission(world_dir)
+        rd = run_verify_commission(world_dir, commission_id=commission_id)
         body_d = json.loads(rd.stdout) if rd.stdout.strip() else {}
         ok_d = (rd.returncode == 3 and body_d.get("refusal") == "NO-COMMITTED-KEY"
                 and "NO committed public key" in body_d.get("detail", ""))
@@ -225,12 +246,16 @@ def main() -> int:
             except OSError:
                 pass
         no_gpg_path = str(no_gpg_dir)
-        re_ = run_verify_commission(world_dir, path_override=no_gpg_path)
+        re_ = run_verify_commission(world_dir, commission_id=commission_id, path_override=no_gpg_path)
         ok_e = re_.returncode == 2 and "gpg" in (re_.stdout + re_.stderr).lower()
         check("e-gpg-absent-typed-refusal", ok_e,
               f"exit={re_.returncode} stderr={(re_.stdout + re_.stderr).strip()[:200]!r}", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_world()
         shutil.rmtree(tmp, ignore_errors=True)
 
