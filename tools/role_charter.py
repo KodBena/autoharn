@@ -113,17 +113,38 @@ def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout, proc.stderr
 
 
-def parse_current_line(line: str) -> tuple[int, str, str, str] | None:
-    """One line of `led current <N>` output: id|kind|statement|actor_name (psql -tA, default
-    '|' field separator, matching the SELECT list in bootstrap/templates/legacy-led.tmpl's own
-    `current` branch)."""
-    parts = line.split("|")
-    if len(parts) < 4:
+_CURRENT_LINE_RE = re.compile(r"^\[(\d+)\] (\S+): (.*)$")
+
+
+def parse_current_line(line: str) -> tuple[int, str, str] | None:
+    """One line of `led current <N>` output: `[id] kind: statement` -- bootstrap/templates/
+    led.tmpl's own `cmd_recent` print shape.
+
+    legacy-led-retirement inventory pass (ledger row 1149): FIXED here, a real regression this
+    pass's own live exercise of role_charter.py (seen-red/s51-artifact-store's WA8, migrated off
+    legacy-led.tmpl onto the served path) caught failing -- this parser was still written
+    against the RETIRED legacy pipe-delimited `id|kind|statement|actor_name` shape despite this
+    file's DEFAULT_LED already being "./led" (never end-to-end exercised before now).
+    `actor_name` has NO served equivalent (`ledger_current` carries only the bare `actor`
+    bigint id -- see tools/role_brief.py's own disclosed gap on the identical point); this
+    function now returns a 3-tuple. See `find_current_registrations` for `written_by`."""
+    m = _CURRENT_LINE_RE.match(line)
+    if not m:
         return None
-    rid_s, kind, statement, actor_name = parts[0], parts[1], parts[2], "|".join(parts[3:])
-    if not rid_s.isdigit():
-        return None
-    return int(rid_s), kind, statement, actor_name
+    return int(m.group(1)), m.group(2), m.group(3)
+
+
+def parse_served_show(text: str) -> dict[str, str]:
+    """`led show <id>`'s served format: one `f"{k:28s}: {v}"` line per non-null field
+    (bootstrap/templates/led.tmpl's own `cmd_show`) -- fixed-width key (28 chars, left-padded
+    with spaces) then literal `": "` then the value verbatim (a value may itself contain ':
+    ', so this splits on POSITION, never on the first colon in the line)."""
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        if len(line) < 30 or line[28:30] != ": ":
+            continue
+        out[line[:28].strip()] = line[30:]
+    return out
 
 
 def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dict]:
@@ -140,14 +161,22 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
         parsed = parse_current_line(line)
         if not parsed:
             continue
-        rid, kind, statement, actor_name = parsed
+        rid, kind, statement = parsed
         if kind != "decision":
             continue
         m = STATEMENT_RE.match(statement)
         if not m or m.group("role") != role:
             continue
+        # `written_by`: served `current` carries no actor NAME -- resolved per MATCH (not per
+        # scanned row) via one `led show <id>` (role_brief.py's own JB3 convention). Best-effort,
+        # display-only, never load-bearing for the registration match itself.
+        written_by = "(unknown)"
+        src, _out2, _err2 = run_led(led, ["show", str(rid)])
+        if src == 0:
+            detail = parse_served_show(_out2)
+            written_by = detail.get("actor", written_by)
         found.append({"id": rid, "role": role, "path": m.group("path"),
-                       "sha256": m.group("sha256"), "written_by": actor_name})
+                       "sha256": m.group("sha256"), "written_by": written_by})
     return found
 
 
@@ -159,7 +188,7 @@ def principal_is_registered(led: str, role: str, scan_limit: int) -> bool:
         parsed = parse_current_line(line)
         if not parsed:
             continue
-        _rid, kind, statement, _actor = parsed
+        _rid, kind, statement = parsed
         if kind != "principal_registered":
             continue
         m = PRINCIPAL_REGISTERED_RE.match(statement)
@@ -232,7 +261,8 @@ def cmd_show(role: str, led: str, scan_limit: int) -> int:
             f"  python3 tools/role_charter.py register {role} <path>"
         )
     print(f"role '{role}': IN-FORCE charter registration, row {reg['id']} "
-          f"(written by '{reg['written_by']}')")
+          f"(written by actor id {reg['written_by']!r} -- served `led` carries no name join; "
+          f"see `led show {reg['id']}` below for the full row)")
     print(f"  path:   {reg['path']}")
     print(f"  sha256: {reg['sha256']}")
     rc, out, err = run_led(led, ["show", str(reg["id"])])

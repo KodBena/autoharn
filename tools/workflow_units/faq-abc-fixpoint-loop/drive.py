@@ -4,25 +4,35 @@ design/FABLE-WORKFLOW-UNIT-COMPILER-SPEC.md's driver artifact for workflow 'faq-
 
 Executes the wave by kernel conversation: for each phase, in an order re-derived by re-polling
 `led work claim` every round (never precomputed here -- the claim's own verdict is the gate,
-per the governing spec's one design commitment), CLAIM (as --actor, default 'author'; a
-refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH (prints the
-phase's prose brief -- authors/implements/reviews text from the source TOML -- for the caller's
-own agent dispatch; this driver does not itself invoke an agent), CLOSE (--review-deferred by
-default, or --review-bookkeeping --witness commit:<sha> when the phase's reviews clause names a
-bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+per the governing spec's one design commitment), CLAIM (as --role-map, default 'author'; a
+refusal is a BLOCKED unit, reported and moved past, never overridden), DISPATCH, CLOSE
+(--review-deferred by default, or --review-bookkeeping --witness commit:<sha> when the phase's
+reviews clause names a bookkeeping close -- see J4 in tools/workflow_compile.py's own docstring).
+
+DISPATCH, per design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md (commission row 1663, replacing the
+old J1 raw-prose default -- see that note in tools/workflow_compile.py's own docstring): before
+claiming, the resolved principal is checked against `tools/role_charter.py show <principal>`.
+CHARTED (an in-force registered charter exists): the claim proceeds and DISPATCH hands the
+agent that charter text plus a freshly computed `tools/role_brief.py brief <principal>` --
+"charter + brief, nothing else" (the spec's own words). UNCHARTED: REFUSED, with
+role_charter's own teaching relayed verbatim, and the phase is BLOCKED-uncharted this round --
+UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway (says so) and
+falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
+J1 behavior, preserved only as an explicit opt-in degraded path).
 
 Usage:
-    python3 faq-abc-fixpoint-loop/drive.py --instance <token> [--led <path>] [--actor <phase>=<principal> ...]
-                              [--commit-witness <phase>=<sha> ...] [--dry-run] [--rounds N]
+    python3 faq-abc-fixpoint-loop/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
+                              [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
+                              [--dry-run] [--rounds N]
 
 --instance <token> is MANDATORY (spec Amendment, row 1660): it must be the SAME token given to
 hydrate.sh for this wave -- slugs are `faq-abc-fixpoint-loop-<instance>-<phase>`, so a different token drives a
 DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 
-Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units are
-an ordinary, reportable outcome, not a driver failure); exit 1 on an unexpected kernel refusal
-at CLOSE time (a close, unlike a claim, should not refuse once claimed, so that IS treated as
-unexpected here) or a local usage error (exit 2).
+Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units,
+uncharted or kernel-refused alike, are an ordinary, reportable outcome, not a driver failure);
+exit 1 on an unexpected kernel refusal at CLOSE time (a close, unlike a claim, should not refuse
+once claimed, so that IS treated as unexpected here) or a local usage error (exit 2).
 """
 from __future__ import annotations
 
@@ -33,6 +43,8 @@ import sys
 
 STEM = "faq-abc-fixpoint-loop"
 TOML_REL = "design/workflows/faq-abc-fixpoint-loop.toml"
+ROLE_CHARTER_PY = "/home/bork/w/vdc/1/autoharn/tools/role_charter.py"
+ROLE_BRIEF_PY = "/home/bork/w/vdc/1/autoharn/tools/role_brief.py"
 
 PHASES = ['author-draft', 'fresh-context-review', 'adjudicate']
 BRIEFS = {'author-draft': "authors: the author role for whatever artifact the loop is converging (a document, a diff, a defect list) -- model tier is not fixed by the FAQ's own generalized description, unlike the panel's Specimen C, which names sonnet for every role\nimplements: same as authors -- the author phase is a single dispatch producing or updating the artifact under iteration\ndone: the artifact is drafted or updated for this round, ready for fresh-context review\nlanding_zone: the artifact under iteration itself (a repo file, a worktree diff, a ledger row's own content) -- the FAQ names no single fixed location, since this loop shape is generalized across many concrete artifacts; the concrete workflow instantiating this shape must name its own landing zone per artifact", 'fresh-context-review': "implements: a genuinely fresh agent invocation every round, never one long-lived agent resumed across rounds -- the FAQ's own load-bearing caveat, caught failing in practice on 2026-07-13 in this project's own A:B:C loop (ORCH-ABC-AUDIT-LOOP-RECIPE.md's round-2 discipline): a resumed reviewer repeated its first round's verdict verbatim against on-disk content that had since changed underneath it\nreviews: same agent invocation examines the current artifact or defect-list state and reports what remains to fix, or that nothing new was found this round\ndone: the round's fresh-context review reports either zero new findings (a 'dry' round, per the FAQ's loop-until-dry criterion) or a concrete list of what still needs fixing\nlanding_zone: each round's findings, recorded in that round's own report/transcript to the driving script -- the FAQ's own worked instance of this shape, ORCH-ABC-AUDIT-LOOP-RECIPE.md's B-round reviews, lands these in attestations/doc-legibility-attestations.jsonl when the artifact under review is a document; other instantiations of this general shape may land findings elsewhere, which is why this field stays this general rather than naming one fixed path", 'adjudicate': "authors: the driving workflow script's own deterministic control flow (an ordinary while loop wrapping repeated agent invocations, per the FAQ's own words) -- explicitly NOT itself a DSL-declared phase's mechanics, only the fact that adjudication happens is declared here\nimplements: same -- the script decides, each round, whether to re-dispatch author-draft/fresh-context-review for another round or to stop\ndone: K consecutive dry rounds are observed (loop-until-dry, the same criterion vestigial_documentation/design/ORCH-AGENTIC-PATTERNS.md section 3 and this project's own A:B:C loop both use), reached strictly before the hard round-cap guard fires\nlanding_zone: the ledger -- the loop's final disposition (converged clean, or escalated to the orchestrator) is the kind of act this project records as an ordinary ledger row (a decision row, or a review row where the artifact is itself ledger-governed)"}
@@ -44,6 +56,18 @@ INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
     proc = subprocess.run([led] + args, capture_output=True, text=True,
                            env={**os.environ, "LED_ACTOR": actor})
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def check_charter(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_CHARTER_PY, "show", principal, "--led", led],
+                           capture_output=True, text=True)
+    return proc.returncode, (proc.stdout + proc.stderr).strip()
+
+
+def fetch_brief(led: str, principal: str) -> tuple[int, str]:
+    proc = subprocess.run([sys.executable, ROLE_BRIEF_PY, "brief", principal, "--led", led],
+                           capture_output=True, text=True)
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
@@ -59,9 +83,13 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
+    # legacy-led-retirement pass (row 1149): NOT flipped to "./led" (see hydrate.sh's comment) --
+    # this value also feeds `fetch_brief`'s `--led` into role_brief.py, whose parsers still
+    # silently misparse served output (disclosed, still-open gap) -- out of this pass's scope.
     led = "./legacy/led"
     instance: str | None = None
-    actor_overrides: dict[str, str] = {}
+    role_map: dict[str, str] = {}
+    allow_uncharted = False
     commit_witness: dict[str, str] = {}
     dry_run = False
     rounds = len(PHASES) + 1
@@ -73,8 +101,10 @@ def main(argv: list[str]) -> int:
             led = argv[i + 1]; i += 2
         elif a == "--instance":
             instance = argv[i + 1]; i += 2
-        elif a == "--actor":
-            actor_overrides.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--role-map":
+            role_map.update(parse_kv([argv[i + 1]])); i += 2
+        elif a == "--allow-uncharted":
+            allow_uncharted = True; i += 1
         elif a == "--commit-witness":
             commit_witness.update(parse_kv([argv[i + 1]])); i += 2
         elif a == "--dry-run":
@@ -114,7 +144,36 @@ def main(argv: list[str]) -> int:
             slug = f"{STEM}-{instance}-{phase}"
             if slug in closed:
                 continue
-            actor = actor_overrides.get(phase, DEFAULT_ACTOR)
+            actor = role_map.get(phase, DEFAULT_ACTOR)
+            print(f"round {round_no}: phase '{phase}' -> principal '{actor}' (--role-map)")
+
+            charter_rc, charter_out = check_charter(led, actor)
+            if charter_rc != 0:
+                if not allow_uncharted:
+                    print(
+                        f"  REFUSED (uncharted) -- '{actor}' has no in-force registered "
+                        f"charter; phase '{phase}' is BLOCKED-uncharted this round. Register "
+                        f"one (python3 tools/role_charter.py register {actor} <path>) or pass "
+                        f"--allow-uncharted to proceed anyway (loud escape hatch, not silent). "
+                        f"role_charter's own teaching, verbatim:\n{charter_out}"
+                    )
+                    continue
+                print(
+                    f"  -- --allow-uncharted: proceeding with UNCHARTED principal '{actor}' "
+                    f"for phase '{phase}' -- falling back to the TOML's own raw prose brief "
+                    f"(the pre-row-1663 J1 default). role_charter said:\n{charter_out}"
+                )
+                dispatch_text = BRIEFS.get(phase, "")
+            else:
+                brief_rc, brief_out = fetch_brief(led, actor)
+                if brief_rc == 0:
+                    dispatch_text = charter_out + "\n\n" + brief_out
+                else:
+                    dispatch_text = (
+                        charter_out + f"\n\n(role_brief FAILED, rc={brief_rc}, relayed "
+                        f"verbatim rather than silently omitted:\n{brief_out})"
+                    )
+
             print(f"round {round_no}: attempting claim of '{slug}' as '{actor}' ...")
             if dry_run:
                 print(f"  (dry-run) would run: LED_ACTOR={actor} {led} work claim {slug}")
@@ -124,8 +183,7 @@ def main(argv: list[str]) -> int:
                 print(f"  BLOCKED -- kernel refusal (verbatim):\n{claim_out}")
                 continue
             print(f"  claimed: {claim_out}")
-            brief = BRIEFS.get(phase, "")
-            print(f"  DISPATCH -- brief for '{phase}':\n{brief}")
+            print(f"  DISPATCH -- charter+brief for '{phase}' (principal '{actor}'):\n{dispatch_text}")
             if phase in BOOKKEEPING_PHASES:
                 close_args = ["work", "close", slug, "shipped", "--review-bookkeeping",
                               "--witness", f"commit:{commit_witness[phase]}"]

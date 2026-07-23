@@ -457,6 +457,17 @@ BOUNDARY_SERVICE_VERSION = "1.2.0"
 #   work_startable.slug                   -- kernel/lineage/s39-blocks-start.sql (work_slug, text
 #                                             -- the SAME natural key work_item_current already
 #                                             uses one view over)
+# A FOURTH additive registry growth (legacy-led-retirement inventory pass, ledger row 1149,
+# closing the coverage-diff's own witnessed gap -- `led principal grant-competence`/`relate`
+# and their six siblings were the only remaining NOT-COVERED family): the four s41 D-5 derived
+# binding views (kernel/lineage/s41-principal-bindings-and-relations.sql), each already carrying
+# a `row_id` column (the carrying event's own ledger id -- an id-shaped natural key, same
+# pagination shape as review_stamp_distinctness/reservations_outstanding above). No new route,
+# no BOUNDARY_SERVICE_VERSION bump -- same mechanism, fourth use.
+#   principal_relations.row_id       -- s41 D-5 (relate/unrelate)
+#   principal_role_bindings.row_id   -- s41 D-5 (bind-role/release-role)
+#   principal_keys.row_id            -- s41 D-5 (bind-key/revoke-key)
+#   principal_competences.row_id     -- s41 D-5 (grant-competence/withdraw-competence)
 VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "question_status": ("question_id", "id"),
     "review_gap": ("id", "id"),
@@ -477,6 +488,12 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     # legacy-led-retirement phase 1B (ledger row 1149) -- see this dict's own leading comment.
     "work_edge_parent": ("child_slug", "slug"),
     "work_startable": ("slug", "slug"),
+    # legacy-led-retirement inventory pass (ledger row 1149) -- see this dict's own leading
+    # comment, fourth registry growth.
+    "principal_relations": ("row_id", "id"),
+    "principal_role_bindings": ("row_id", "id"),
+    "principal_keys": ("row_id", "id"),
+    "principal_competences": ("row_id", "id"),
 }
 
 # The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
@@ -1026,7 +1043,24 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
         f"ON n.oid = p.pronamespace WHERE n.nspname = '{cfg.kern}' "
         f"AND p.proname = 'ledger_write' AND p.prosecdef));",
     ))
-    return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43, credited_view=credited)
+    # legacy-led-retirement inventory pass (ledger row 1149): the ONE fact `has_s45_standing_
+    # lifecycle()` (bootstrap/templates/legacy-led.tmpl) probes -- the widened
+    # principal_binding_active_kind_shape CHECK naming principal_standing_declared, a fact
+    # only s45's re-issue produces (kernel/lineage/s45-standing-lifecycle.detect.sql fact 1 of
+    # 4; the single fact is sufficient here exactly as it is for legacy's own probe -- the
+    # detect file's other three facts exist for the detect ceremony's OWN thoroughness, not
+    # because any one alone is ambiguous).
+    s45 = bool(_query_json(
+        cfg,
+        f"SELECT to_jsonb(EXISTS (SELECT 1 FROM pg_constraint con "
+        f"JOIN pg_class rel ON rel.oid = con.conrelid "
+        f"JOIN pg_namespace ns ON ns.oid = rel.relnamespace "
+        f"WHERE ns.nspname = '{cfg.schema}' AND rel.relname = 'ledger' AND con.contype = 'c' "
+        f"AND con.conname = 'principal_binding_active_kind_shape' "
+        f"AND pg_get_constraintdef(con.oid) LIKE '%principal_standing_declared%'));",
+    ))
+    return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43,
+                               credited_view=credited, s45_standing_lifecycle=s45)
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
@@ -1751,11 +1785,17 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
-        if not _regclass_exists(cfg, f"{cfg.schema}.principal_relations"):
+        # Hazard fixed in reach (legacy-led-retirement inventory pass, ledger row 1149): this
+        # gate used to probe `principal_relations` (s41-only) even though the view THIS route
+        # actually queries, `principal_standing_current`, is defined by s40 alone (kernel/
+        # lineage/s40-principal-identity-events.sql line ~612) -- an s40-only, pre-s41 kernel
+        # was spuriously refused here even though the object this route serves exists and is
+        # perfectly queryable. Gate on the object this route actually reads.
+        if not _regclass_exists(cfg, f"{cfg.schema}.principal_standing_current"):
             return capability_absent(
-                "s41-identity",
-                "This world carries no principal-identity/relation views "
-                "(kernel/lineage/s41-principal-bindings-and-relations.sql) -- "
+                "s40-identity",
+                "This world carries no principal-identity views "
+                "(kernel/lineage/s40-principal-identity-events.sql) -- "
                 "GET /standing/principals is refused rather than served from a view this "
                 "world's kernel does not have.")
         # A5.4: the SAME `limit`/`after_id` discipline as /rows/current -- `principal_standing_

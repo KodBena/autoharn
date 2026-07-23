@@ -120,19 +120,16 @@ def synthesize_scripted_lines(doc: config_file.ConfigDoc, *, world: str, dest: s
         lines.append(str(g("birth.project_name", "") or "-"))
 
     # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
-    # moved to run BEFORE "principals-authority"/"signed-genesis" in screens.py's own SCREENS
-    # list ("ORDER IS LOAD-BEARING") -- this synthesis MIRRORS that same order (this function's
-    # own docstring: "mirrors screens.py's own prompt sequence, screen by screen"), so the
-    # boundary block moves here too, matching exactly. The block's own internal logic is
-    # UNCHANGED, only its position in `lines`.
-    b_run = bool(g("boundary.configure", False))
-    lines.append(_yn(b_run))
-    if b_run:
-        if not birth_run:
-            lines.append("y")  # override: proceed without a confirmed successful birth
-            lines.append(world)  # "World/deployment name" -- only unasked when birth set it
-        _host_db_lines()
-        lines.append(_yn(bool(g("boundary.start_now", False))))
+    # moved to run BEFORE "principals-authority"/"signed-genesis" -- mirrored here to match.
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): the "Configure the boundary
+    # service now?" gate this block used to emit a `_yn(b_run)` answer for is RETIRED --
+    # screen_boundary no longer asks it (boundary is mandatory) -- no line emitted for it, block
+    # runs unconditionally.
+    if not birth_run:
+        lines.append("y")  # override: proceed without a confirmed successful birth
+        lines.append(world)  # "World/deployment name" -- only unasked when birth set it
+    _host_db_lines()
+    lines.append(_yn(bool(g("boundary.start_now", False))))
 
     pa_run = bool(g("principals_authority.run", False))
     lines.append(_yn(pa_run))
@@ -234,7 +231,7 @@ PROMPT_MAP: dict[str, tuple[str, str]] = {
     "signed_genesis.commission_statement": (
         "signed-genesis", "Founding commission statement (the ask this world exists to carry "
                            "out)"),
-    "boundary.configure": ("boundary", "Configure the boundary service now?"),
+    # "boundary.configure" has no prompt anymore (retired, ledger row 1149/1150 -- always walked).
     "boundary.start_now": ("boundary", "Start the boundary service now (this process)?"),
     "observability.run": ("observability", "Configure observability now?"),
     "observability.otelcol": (
@@ -372,7 +369,10 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
         if stmt_rows:
             out["signed_genesis.commission_statement"] = stmt_rows[0]["statement"]
 
-    out["boundary.configure"] = "boundary_url" in state
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): "boundary.configure" is
+    # retired from SCHEMA entirely -- capturing it here would make `render_toml` raise (its own
+    # "not in SCHEMA -- caller bug" guard), correctly, since it is no longer a decision this run
+    # made (the section is unconditional).
     out["boundary.start_now"] = bool(state.get("boundary_will_start"))
 
     out["observability.run"] = bool(state.get("observability_engaged"))

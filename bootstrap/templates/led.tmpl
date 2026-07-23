@@ -25,6 +25,12 @@ Parts A+B (maintainer-ratified ledger row 1150) close the FINAL two: `led obliga
 targets the new `kernel.obligation_revoke` boundary function (kernel/lineage/
 s57-obligation-revocation-event.sql), and `led artifact put|get|stat` now targets the three new
 `/artifacts/*` routes (serving/boundary_service.py) -- see each item's own COVERED entry below.
+The legacy-led-retirement INVENTORY pass (same ledger row 1149, run as the final round before
+the deletion described in design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md): a mechanical dispatch-
+token diff of legacy-led.tmpl's own `case`/`if [ "${1:-}" = ...` structure against this file
+found exactly one remaining NOT-COVERED family, `led principal *` (13 sub-verbs) -- now COVERED,
+closing the coverage table below to zero remaining gaps; see the SCOPE table at the end of this
+docstring for the full token-by-token enumeration this pass produced.
   COVERED:
     led --recent [N] / led current [N] / led show <id>      (reads, /rows/current, /rows/{id})
     led question-status / review-gap / stamp-distinctness / standing   (reads, /views/{view})
@@ -137,12 +143,56 @@ s57-obligation-revocation-event.sql), and `led artifact put|get|stat` now target
         CLIENT-SIDE too (belt-and-braces with the boundary's own server-side re-verification on
         the way out -- see serving/boundary_service.py's `artifact_get` docstring), preserving
         the legacy tool's own WA6 corruption-drill teach-text byte-for-byte.)
-  NOT COVERED: NONE remain (as of design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Parts A+B, ledger
-    row 1150) -- every `led work *` sub-verb, every statement-grammar pre-flight prefix, and both
-    of the two former structural exclusions (`obligate revoke`, `artifact put|get|stat`) are now
-    served through the boundary path. The two disclosed READ-SHAPE divergences named throughout
-    this section above (JSON-per-line listing for `led work list`/`--json` views; the
-    supersession-aware `led work asof`) remain the only documented behavior differences from
+    led principal declare-standing|undeclare-standing|suspend|lift-suspension|revoke|relate|
+        unrelate|bind-role|release-role|bind-key|revoke-key|grant-competence|withdraw-competence
+                                               (write, all 13 via /write/ledger -- the legacy-
+        led-retirement INVENTORY pass, ledger row 1149: an exhaustive dispatch-token diff of
+        `bootstrap/templates/legacy-led.tmpl` against this file found exactly ONE uncovered
+        family, `led principal *` -- never wired into this rebase's `main()` at all before this
+        pass. Ported off legacy's own shared `_principal_binding_insert` shape (see
+        `_principal_write` below, one writer/many callers, ADR-0012 P1); duplicate-active and
+        value-continuity guards read GET /rows/current client-side filtered by kind (mirrors
+        `_current_row` below `cmd_work_startable`), never a raw SQL lookup. s41/s45 gating is a
+        NEW client-side capability probe, GET /health's `capabilities` dict, extended this same
+        pass with `s45_standing_lifecycle` (boundary_models.py's `CapabilityManifest`) --
+        bespoke teach-text on both gates, byte-similar to legacy's own `has_s41`/
+        `has_s45_standing_lifecycle()` refusal text. principal_relations/principal_role_bindings/
+        principal_keys/principal_competences also joined VIEW_REGISTRY this pass (serving/
+        boundary_service.py) as a fourth additive read-surface growth, though this dispatch
+        itself reads duplicate-active state off /rows/current rather than those four views (both
+        answer the same question; /rows/current needed no new registry entry to answer it, and
+        avoids a SECOND capability-detection path for the very same s41 fact this section already
+        gates on via /health). DISCLOSED NARROWING: an s40-only-not-yet-s41 kernel gets this
+        file's own generic-shaped bespoke refusal (same wording as legacy) for the 8 s41 verbs;
+        the 5 standing-lifecycle verbs (declare-standing/undeclare-standing/suspend/
+        lift-suspension/revoke) need only s40 and work on such a kernel exactly as legacy does.)
+  SCOPE, THE COVERAGE TABLE (legacy dispatch token -> served status; the universe below is every
+  token `bootstrap/templates/legacy-led.tmpl` dispatches on ITS OWN top-level `if [ "${1:-}" = ...`
+  chain plus every named sub-verb `case` inside it -- mechanically enumerated, ledger row 1149's
+  inventory pass, not reconstructed from prose):
+    --recent, current, --json, show                              COVERED
+    question-status, review-gap, stamp-distinctness, standing     COVERED
+    register-principal                                            COVERED
+    principal (13 sub-verbs: declare-standing, undeclare-standing,
+      suspend, lift-suspension, revoke, relate, unrelate,
+      bind-role, release-role, bind-key, revoke-key,
+      grant-competence, withdraw-competence)                       COVERED (this pass -- was the
+                                                                     only NOT-COVERED family)
+    obligate, obligate revoke                                      COVERED
+    artifact put|get|stat                                          COVERED
+    decomposition-review-status, briefing                          COVERED
+    review                                                         COVERED
+    work open|claim|depends|close|list|violations|asof|review-gap|
+      resolve-violation|supersede-cascade|startable (11/11)         COVERED
+    generic <kind> <statement...> (every kind; 8/8 statement-
+      grammar prefixes: resource:/estimate:/actual:/taxon:/
+      interface:/outcome:/review:/review-done:)                    COVERED
+  NOT COVERED / STRUCTURALLY UNPORTABLE: NONE. Every token the mechanical dispatch-diff found is
+    now COVERED (as of this inventory pass, ledger row 1149, on top of design/FABLE-LEGACY-LED-
+    RETIREMENT-SPEC.md Parts A+B, ledger row 1150). The disclosed READ-SHAPE/behavior divergences
+    named throughout this section above (JSON-per-line listing for `led work list`/`--json`
+    views; the supersession-aware `led work asof`; the s41/s45-gated bespoke-vs-generic refusal
+    text split on `led principal *`) remain the only documented behavior differences from
     `./legacy/led`.
 
 Lazy imports banned (CLAUDE.md, 2026-07-02): every import is top-of-file."""
@@ -197,6 +247,532 @@ def _resolve_actor(cfg: bcc.ServedConfig) -> int | None:
     print(f"led: REFUSED -- LED_ACTOR={name!r} is not a registered principal.", file=sys.stderr)
     print(f"  Register it first: ./led register-principal {name} <human|model|subagent|tool>", file=sys.stderr)
     sys.exit(1)
+
+
+def _principals_by_name(cfg: bcc.ServedConfig) -> dict[str, int]:
+    """Name -> id map off GET /standing/principals, walked to completion -- the SAME read
+    `cmd_obligate`/`_resolve_actor` already use for principal-name resolution (shared lookup,
+    not a second mechanism, ADR-0012 P1)."""
+    rows = bcc.get_all_rows(cfg.base, "/standing/principals", cursor="after_id")
+    return {r["name"]: r["id"] for r in rows}
+
+
+def _health_capabilities(cfg: bcc.ServedConfig) -> dict:
+    """GET /health's own `capabilities` dict -- the s41/s45 CLIENT-SIDE capability probes
+    `cmd_principal`'s own verbs need (mirrors legacy-led.tmpl's `has_s41`/`has_s45_standing_
+    lifecycle()`, object-existence/behavior-fingerprint detection, never a version literal),
+    read off the SAME route `led`'s own boundary-unreachable teach-text already touches at
+    startup -- no new route."""
+    return bcc.get_json(cfg.base, "/health").get("capabilities", {})
+
+
+def _current_rows(cfg: bcc.ServedConfig, kind: str, **filters) -> list[dict]:
+    """GET /rows/current (the in-force, supersession-filtered read every other verb in this
+    file already uses -- see `_current_row` below `cmd_work_startable`) filtered client-side to
+    `kind` plus an exact match on every `filters` keyword -- the SAME no-server-side-filter-
+    grammar discipline the whole rebase is built on."""
+    out = []
+    for r in bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id"):
+        if r.get("kind") != kind:
+            continue
+        if all(r.get(k) == v for k, v in filters.items()):
+            out.append(r)
+    return out
+
+
+def _latest_current(cfg: bcc.ServedConfig, kind: str, **filters) -> dict | None:
+    rows = _current_rows(cfg, kind, **filters)
+    return max(rows, key=lambda r: r["id"]) if rows else None
+
+
+# --- `led principal *` (legacy-led-retirement inventory pass, ledger row 1149: the ONE family
+# the served led.tmpl's own SCOPE section above never covered at all -- 13 sub-verbs, ported off
+# legacy-led.tmpl's own `if [ "${1:-}" = "principal" ]` block, same payload shapes, same
+# duplicate-active/value-continuity guards, same refusal texts where the underlying capability
+# check is available through the boundary (s41_identity/s45_standing_lifecycle off GET /health,
+# added this pass -- see boundary_models.py's CapabilityManifest). DISCLOSED NARROWING: a verb
+# that legacy refuses via a bespoke has_s41-style message when this world's kernel genuinely
+# lacks the needed lineage delta gets the SAME bespoke text here (both read the SAME single
+# capability fact); a verb this file does NOT bespoke-gate (there is none left un-gated) would
+# instead surface the kernel's own generic refusal -- named, not reached, in this port.
+def _principal_write(cfg: bcc.ServedConfig, kind: str, statement: str, actor: int | None,
+                      subject: int, active: bool | None = None, supersedes: str | int | None = None,
+                      obj: int | None = None, relation: str | None = None,
+                      role_name: str | None = None, fingerprint: str | None = None,
+                      activity: str | None = None, band: str | None = None,
+                      basis: str | None = None, event_time: str | None = None) -> int:
+    """The ONE shared write point for all 13 principal verbs (mirrors legacy-led.tmpl's own
+    `_principal_binding_insert`, one writer/many callers, ADR-0012 P1) -- POSTs to /write/ledger,
+    the SAME generic surface `led work open`/the generic `<kind> <statement>` path already use."""
+    payload: dict = {"kind": kind, "statement": statement, "principal_subject": subject}
+    if actor is not None:
+        payload["actor"] = actor
+    if active is not None:
+        payload["principal_binding_active"] = active
+    if supersedes:
+        payload["supersedes"] = int(supersedes)
+    if obj is not None:
+        payload["principal_object"] = obj
+    if relation:
+        payload["principal_relation"] = relation
+    if role_name:
+        payload["principal_role_name"] = role_name
+    if fingerprint:
+        payload["principal_key_fingerprint"] = fingerprint
+    if activity:
+        payload["principal_competence_activity"] = activity
+    if band:
+        payload["principal_competence_band"] = band
+    if basis:
+        payload["principal_competence_basis"] = basis
+    if event_time:
+        payload["event_declared_ts"] = event_time
+    return bcc.write_and_report(cfg.base, "ledger", payload)
+
+
+def _principal_usage() -> None:
+    print("usage: led principal declare-standing <name> [--db-role <role>]", file=sys.stderr)
+    print("       led principal undeclare-standing [--db-role <role>]", file=sys.stderr)
+    print("       led principal suspend <name> [reason...] [--supersedes <id>]", file=sys.stderr)
+    print("       led principal lift-suspension <name> [reason...]", file=sys.stderr)
+    print("       led principal revoke <name> [reason...]", file=sys.stderr)
+    print("       led principal relate <subject> <acts-for|dispatched-by|same-natural-person|"
+          "succeeds> <object>", file=sys.stderr)
+    print("       led principal unrelate <subject> <relation> <object> --supersedes <old-id>",
+          file=sys.stderr)
+    print("       led principal bind-role <name> --role \"<role-name>\"", file=sys.stderr)
+    print("       led principal release-role <name> --role \"<role-name>\" --supersedes <id>",
+          file=sys.stderr)
+    print("       led principal bind-key <name> --fingerprint \"<fp>\"", file=sys.stderr)
+    print("       led principal revoke-key <name> --fingerprint \"<fp>\" --supersedes <id>",
+          file=sys.stderr)
+    print("       led principal grant-competence <name> --activity \"<a>\" --band \"<b>\" "
+          "--basis \"<c>\" [--supersedes <id>]", file=sys.stderr)
+    print("       led principal withdraw-competence <name> --activity \"<a>\" --supersedes <id>",
+          file=sys.stderr)
+
+
+def _parse_principal_flags(argv: list[str], flag_names: set[str]) -> tuple[list[str], dict[str, str]]:
+    """A tiny shared flag/positional splitter (every `led principal *` sub-verb's own grammar:
+    `--flag value` pairs from `flag_names`, everything else positional, in any order -- mirrors
+    legacy-led.tmpl's own per-verb `while [ $# -gt 0 ]; case "$1" in --xxx) ...` loops). An
+    unrecognized `--*` token is left in the RETURNED positionals (the caller decides -- some
+    verbs, e.g. suspend/revoke, fold unrecognized non-flag words into a free-text reason)."""
+    pos: list[str] = []
+    flags: dict[str, str] = {}
+    it = iter(argv)
+    for tok in it:
+        if tok in flag_names:
+            flags[tok] = next(it, "")
+        else:
+            pos.append(tok)
+    return pos, flags
+
+
+def cmd_principal(cfg: bcc.ServedConfig, argv: list[str]) -> int:
+    sub = argv[0] if argv else ""
+    rest = argv[1:]
+    actor = _resolve_actor(cfg)
+    event_time = None  # --event-time is parsed per-verb below (the one shared channel legacy's
+                        # refuse_shared_flags_for_principal_verb still honors)
+
+    def refuse_unregistered(verb: str, name: str) -> int:
+        print(f"led principal {verb}: REFUSED -- '{name}' is not a registered principal.",
+              file=sys.stderr)
+        return 1
+
+    def refuse_write_boundary(verb: str) -> int:
+        print(f"led principal {verb}: REFUSED -- 'write-boundary' is the kernel write "
+              f"boundary's own recording identity (kernel/lineage/s43-typed-verdict-write-"
+              f"boundary.sql Element 6): every write_refused row is authored by it, so "
+              f"{('suspending' if verb == 'suspend' else 'revoking')} it bricks refusal "
+              f"recording -- every later refusal would abort loudly instead of landing as a "
+              f"committed record. This guard is CLI-grade; if you genuinely mean to retire "
+              f"this world's refusal recorder, that is a maintainer decision, not a verb.",
+              file=sys.stderr)
+        return 1
+
+    if sub in ("declare-standing", "undeclare-standing", "suspend", "lift-suspension", "revoke"):
+        caps = _health_capabilities(cfg)
+        has_s45 = bool(caps.get("s45_standing_lifecycle"))
+        by_name = _principals_by_name(cfg)
+
+        if sub == "declare-standing":
+            pos, flags = _parse_principal_flags(rest, {"--db-role", "--event-time"})
+            if not pos:
+                _principal_usage()
+                return 1
+            name = pos[0]
+            db_role = flags.get("--db-role") or cfg.record.role
+            event_time = flags.get("--event-time")
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            old = _latest_current(cfg, "principal_standing_declared", principal_db_role=db_role,
+                                   **({"principal_binding_active": True} if has_s45 else {}))
+            old_id = old["id"] if old else None
+            if old_id:
+                print(f"led principal declare-standing: rotating -- superseding standing "
+                      f"declaration row {old_id} for role '{db_role}'.")
+            stmt = (f"database role '{db_role}' speaks for principal '{name}' by default "
+                    f"(standing declaration)")
+            return _principal_write(cfg, "principal_standing_declared", stmt, actor, pid,
+                                     active=(True if has_s45 else None), supersedes=old_id,
+                                     event_time=event_time)
+
+        if sub == "undeclare-standing":
+            pos, flags = _parse_principal_flags(rest, {"--db-role", "--event-time"})
+            db_role = flags.get("--db-role") or cfg.record.role
+            event_time = flags.get("--event-time")
+            if not has_s45:
+                print("led principal undeclare-standing: REFUSED -- this world's kernel "
+                      "predates s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle."
+                      "sql): standing declarations there cannot be retracted (s40 C8's own "
+                      "disclosed limit).", file=sys.stderr)
+                return 1
+            gov = _latest_current(cfg, "principal_standing_declared", principal_db_role=db_role,
+                                   principal_binding_active=True)
+            if gov is None:
+                print(f"led principal undeclare-standing: REFUSED -- role '{db_role}' has no "
+                      f"in-force standing declaration -- nothing to unbind.", file=sys.stderr)
+                return 1
+            stmt = (f"database role '{db_role}' unbound -- standing declaration retracted "
+                    f"(role reverts to undeclared)")
+            rc = _principal_write(cfg, "principal_standing_declared", stmt, actor,
+                                   gov["principal_subject"], active=False,
+                                   supersedes=gov["id"], event_time=event_time)
+            if rc == 0:
+                print(f"led principal undeclare-standing: role '{db_role}' unbound "
+                      f"(superseded declaration row {gov['id']}).")
+                print("  This unbind is FORWARD-ONLY: rows already written under the outgoing "
+                      "declaration stay attributed to their outgoing principal forever.",
+                      file=sys.stderr)
+            return rc
+
+        if sub == "suspend":
+            pos, flags = _parse_principal_flags(rest, {"--supersedes", "--event-time"})
+            if not pos or pos[0].startswith("--"):
+                _principal_usage()
+                return 1
+            name, reason = pos[0], " ".join(pos[1:])
+            sup_id = flags.get("--supersedes")
+            event_time = flags.get("--event-time")
+            if name == "write-boundary":
+                return refuse_write_boundary("suspend")
+            if sup_id and not has_s45:
+                print("led principal suspend: REFUSED -- --supersedes (a rationale-correcting "
+                      "re-suspend) needs an s45 kernel (kernel/lineage/s45-standing-lifecycle."
+                      "sql); this world's kernel predates it.", file=sys.stderr)
+                return 1
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            if has_s45:
+                cur = _latest_current(cfg, "principal_suspended", principal_subject=pid,
+                                       principal_binding_active=True)
+                cur_id = cur["id"] if cur else None
+                if cur_id and str(cur_id) != str(sup_id):
+                    print(f"led principal suspend: REFUSED -- '{name}' already carries an "
+                          f"in-force suspension (row {cur_id}); no duplicate active truth. To "
+                          f"correct its rationale, re-suspend WITH --supersedes {cur_id}; to "
+                          f"lift it instead: ./led principal lift-suspension {name}",
+                          file=sys.stderr)
+                    return 1
+                if sup_id and str(cur_id) != str(sup_id):
+                    print(f"led principal suspend: REFUSED -- --supersedes '{sup_id}' is not "
+                          f"the in-force suspension for '{name}' (the current one is "
+                          f"{cur_id or 'none'}).", file=sys.stderr)
+                    return 1
+            stmt = f"principal '{name}' suspended -- standing withdrawn"
+            if reason:
+                stmt += f": {reason}"
+            return _principal_write(cfg, "principal_suspended", stmt, actor, pid,
+                                     active=(True if has_s45 else None),
+                                     supersedes=(sup_id if has_s45 else None),
+                                     event_time=event_time)
+
+        if sub == "lift-suspension":
+            pos, flags = _parse_principal_flags(rest, {"--event-time"})
+            if not pos:
+                print("usage: led principal lift-suspension <name> [reason...]", file=sys.stderr)
+                return 1
+            name, reason = pos[0], " ".join(pos[1:])
+            event_time = flags.get("--event-time")
+            if not has_s45:
+                print("led principal lift-suspension: REFUSED -- this world's kernel predates "
+                      "s45-standing-lifecycle (kernel/lineage/s45-standing-lifecycle.sql): "
+                      "suspensions there cannot be lifted (s40 Element 4's own disclosed v1 "
+                      "limit).", file=sys.stderr)
+                return 1
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            cur = _latest_current(cfg, "principal_suspended", principal_subject=pid,
+                                   principal_binding_active=True)
+            if cur is None:
+                print(f"led principal lift-suspension: REFUSED -- principal '{name}' has no "
+                      f"in-force suspension.", file=sys.stderr)
+                return 1
+            is_revoked = _latest_current(cfg, "principal_revoked", principal_subject=pid) is not None
+            stmt = f"principal '{name}' suspension lifted"
+            if reason:
+                stmt += f": {reason}"
+            rc = _principal_write(cfg, "principal_suspended", stmt, actor, pid, active=False,
+                                   supersedes=cur["id"], event_time=event_time)
+            if rc == 0 and is_revoked:
+                print(f"led principal lift-suspension: note -- '{name}' is ALSO revoked; "
+                      f"standing remains 'revoked' (revoked dominates suspended, s40 §3.4).",
+                      file=sys.stderr)
+            return rc
+
+        if sub == "revoke":
+            pos, flags = _parse_principal_flags(rest, {"--event-time"})
+            if not pos or pos[0].startswith("--"):
+                _principal_usage()
+                return 1
+            name, reason = pos[0], " ".join(pos[1:])
+            event_time = flags.get("--event-time")
+            if name == "write-boundary":
+                return refuse_write_boundary("revoke")
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            stmt = f"principal '{name}' revoked -- standing withdrawn"
+            if reason:
+                stmt += f": {reason}"
+            return _principal_write(cfg, "principal_revoked", stmt, actor, pid,
+                                     event_time=event_time)
+
+    if sub in ("relate", "unrelate", "bind-role", "release-role", "bind-key", "revoke-key",
+               "grant-competence", "withdraw-competence"):
+        caps = _health_capabilities(cfg)
+        if not caps.get("s41_identity"):
+            print(f"led principal {sub}: REFUSED -- this world's kernel carries s40 but not "
+                  f"s41 (no principal_binding_active column on ledger): binding/relation "
+                  f"events have no typed home here. These verbs work on a world whose birth "
+                  f"chain carries kernel/lineage/s41-principal-bindings-and-relations.sql.",
+                  file=sys.stderr)
+            return 1
+        by_name = _principals_by_name(cfg)
+
+        if sub in ("relate", "unrelate"):
+            pos, flags = _parse_principal_flags(rest, {"--supersedes", "--event-time"})
+            sup_id = flags.get("--supersedes")
+            event_time = flags.get("--event-time")
+            if len(pos) < 3:
+                _principal_usage()
+                return 1
+            subj_name, rel, obj_name = pos[0], pos[1], pos[2]
+            if rel not in ("acts-for", "dispatched-by", "same-natural-person", "succeeds"):
+                print(f"led principal {sub}: REFUSED -- '{rel}' is not a relation (closed "
+                      f"vocabulary: acts-for, dispatched-by, same-natural-person, succeeds -- "
+                      f"s41 D-2).", file=sys.stderr)
+                return 1
+            subj_id, obj_id = by_name.get(subj_name), by_name.get(obj_name)
+            if subj_id is None or obj_id is None:
+                print(f"led principal {sub}: REFUSED -- both endpoints must be registered "
+                      f"principals ('{subj_name}' -> id {subj_id}, '{obj_name}' -> id {obj_id}).",
+                      file=sys.stderr)
+                return 1
+            if subj_id == obj_id:
+                print(f"led principal {sub}: REFUSED -- a principal cannot stand in relation "
+                      f"'{rel}' to itself (s41 D-3's self-edge refusal).", file=sys.stderr)
+                return 1
+            if rel == "same-natural-person" and subj_id > obj_id:
+                subj_id, obj_id = obj_id, subj_id
+                subj_name, obj_name = obj_name, subj_name
+                print(f"led principal {sub}: note -- same-natural-person is symmetric; "
+                      f"canonicalizing to subject='{subj_name}' (lower id), object='{obj_name}'.")
+            cur = _latest_current(cfg, "principal_relation_asserted", principal_subject=subj_id,
+                                   principal_object=obj_id, principal_relation=rel,
+                                   principal_binding_active=True)
+            cur_id = cur["id"] if cur else None
+            if sub == "relate":
+                if cur_id:
+                    print(f"led principal relate: REFUSED -- an active '{rel}' assertion "
+                          f"already exists for this exact pair (row {cur_id}); no duplicate "
+                          f"active truth. To retract it: ./led principal unrelate {subj_name} "
+                          f"{rel} {obj_name} --supersedes {cur_id}", file=sys.stderr)
+                    return 1
+                stmt = f"principal '{subj_name}' {rel} principal '{obj_name}' (relation asserted)"
+                return _principal_write(cfg, "principal_relation_asserted", stmt, actor, subj_id,
+                                         active=True, obj=obj_id, relation=rel,
+                                         event_time=event_time)
+            if not sup_id:
+                print("led principal unrelate: REFUSED -- --supersedes <old-row-id> is "
+                      "mandatory.", file=sys.stderr)
+                return 1
+            if str(cur_id) != str(sup_id):
+                print(f"led principal unrelate: REFUSED -- row '{sup_id}' is not the active "
+                      f"'{rel}' assertion for '{subj_name}' -> '{obj_name}' (the view shows "
+                      f"{cur_id or 'none'}).", file=sys.stderr)
+                return 1
+            stmt = f"relation retracted: principal '{subj_name}' no longer {rel} principal '{obj_name}'"
+            return _principal_write(cfg, "principal_relation_asserted", stmt, actor, subj_id,
+                                     active=False, supersedes=sup_id, obj=obj_id, relation=rel,
+                                     event_time=event_time)
+
+        if sub in ("bind-role", "release-role"):
+            pos, flags = _parse_principal_flags(rest, {"--role", "--supersedes", "--event-time"})
+            role_name = flags.get("--role", "")
+            sup_id = flags.get("--supersedes")
+            event_time = flags.get("--event-time")
+            if not pos or not role_name:
+                print(f"usage: led principal bind-role <name> --role \"<role-name>\"",
+                      file=sys.stderr)
+                print(f"       led principal release-role <name> --role \"<role-name>\" "
+                      f"--supersedes <old-row-id>", file=sys.stderr)
+                return 1
+            name = pos[0]
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            cur = _latest_current(cfg, "principal_role_bound", principal_subject=pid,
+                                   principal_role_name=role_name, principal_binding_active=True)
+            cur_id = cur["id"] if cur else None
+            if sub == "bind-role":
+                if sup_id:
+                    print("led principal bind-role: REFUSED -- --supersedes belongs to "
+                          "release-role (release first to rebind the same role).",
+                          file=sys.stderr)
+                    return 1
+                if cur_id:
+                    print(f"led principal bind-role: REFUSED -- '{name}' already holds an "
+                          f"active '{role_name}' binding (row {cur_id}); no duplicate active "
+                          f"truth.", file=sys.stderr)
+                    return 1
+                return _principal_write(cfg, "principal_role_bound",
+                                         f"principal '{name}' bound to role '{role_name}'",
+                                         actor, pid, active=True, role_name=role_name,
+                                         event_time=event_time)
+            if not sup_id:
+                print("led principal release-role: REFUSED -- --supersedes <old-row-id> is "
+                      "mandatory.", file=sys.stderr)
+                return 1
+            if str(cur_id) != str(sup_id):
+                print(f"led principal release-role: REFUSED -- row '{sup_id}' is not the "
+                      f"active '{role_name}' binding for '{name}' (the view shows "
+                      f"{cur_id or 'none'}).", file=sys.stderr)
+                return 1
+            return _principal_write(
+                cfg, "principal_role_bound",
+                f"role binding released: principal '{name}' no longer bound to role '{role_name}'",
+                actor, pid, active=False, supersedes=sup_id, role_name=role_name,
+                event_time=event_time)
+
+        if sub in ("bind-key", "revoke-key"):
+            pos, flags = _parse_principal_flags(
+                rest, {"--fingerprint", "--supersedes", "--event-time"})
+            fp = flags.get("--fingerprint", "")
+            sup_id = flags.get("--supersedes")
+            event_time = flags.get("--event-time")
+            if not pos or not fp:
+                print("usage: led principal bind-key <name> --fingerprint \"<fp>\"",
+                      file=sys.stderr)
+                print("       led principal revoke-key <name> --fingerprint \"<fp>\" "
+                      "--supersedes <old-row-id>", file=sys.stderr)
+                return 1
+            name = pos[0]
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            cur = _latest_current(cfg, "principal_key_bound", principal_subject=pid,
+                                   principal_key_fingerprint=fp, principal_binding_active=True)
+            cur_id = cur["id"] if cur else None
+            if sub == "bind-key":
+                if cur_id:
+                    print(f"led principal bind-key: REFUSED -- this exact fingerprint is "
+                          f"already actively bound to '{name}' (row {cur_id}); no duplicate "
+                          f"active truth.", file=sys.stderr)
+                    return 1
+                return _principal_write(cfg, "principal_key_bound",
+                                         f"OpenPGP key {fp} bound to principal '{name}'",
+                                         actor, pid, active=True, fingerprint=fp,
+                                         event_time=event_time)
+            if not sup_id:
+                print("led principal revoke-key: REFUSED -- --supersedes <old-row-id> is "
+                      "mandatory.", file=sys.stderr)
+                return 1
+            if str(cur_id) != str(sup_id):
+                print(f"led principal revoke-key: REFUSED -- row '{sup_id}' is not the active "
+                      f"binding of this exact fingerprint for '{name}' (the view shows "
+                      f"{cur_id or 'none'}).", file=sys.stderr)
+                return 1
+            return _principal_write(
+                cfg, "principal_key_bound",
+                f"key binding revoked: OpenPGP key {fp} no longer bound to principal '{name}'",
+                actor, pid, active=False, supersedes=sup_id, fingerprint=fp,
+                event_time=event_time)
+
+        if sub in ("grant-competence", "withdraw-competence"):
+            pos, flags = _parse_principal_flags(
+                rest, {"--activity", "--band", "--basis", "--supersedes", "--event-time"})
+            activity = flags.get("--activity", "")
+            band = flags.get("--band", "")
+            basis = flags.get("--basis", "")
+            sup_id = flags.get("--supersedes")
+            event_time = flags.get("--event-time")
+            if not pos or not activity:
+                print("usage: led principal grant-competence <name> --activity \"<a>\" "
+                      "--band \"<b>\" --basis \"<c>\" [--supersedes <old-row-id>]",
+                      file=sys.stderr)
+                print("       led principal withdraw-competence <name> --activity \"<a>\" "
+                      "--supersedes <old-row-id>", file=sys.stderr)
+                return 1
+            name = pos[0]
+            pid = by_name.get(name)
+            if pid is None:
+                return refuse_unregistered(sub, name)
+            cur = _latest_current(cfg, "principal_competence_granted", principal_subject=pid,
+                                   principal_competence_activity=activity,
+                                   principal_binding_active=True)
+            cur_id = cur["id"] if cur else None
+            if sub == "grant-competence":
+                if not band or not basis:
+                    print("led principal grant-competence: REFUSED -- --band and --basis are "
+                          "mandatory on a grant (G13's value fields; forbidden only on a "
+                          "withdrawal).", file=sys.stderr)
+                    return 1
+                if cur_id and not sup_id:
+                    print(f"led principal grant-competence: REFUSED -- an active grant "
+                          f"already exists for '{name}' / activity '{activity}' (row "
+                          f"{cur_id}); no duplicate active truth. To correct its band/basis, "
+                          f"re-grant WITH --supersedes {cur_id}; to withdraw it: ./led "
+                          f"principal withdraw-competence {name} --activity \"{activity}\" "
+                          f"--supersedes {cur_id}", file=sys.stderr)
+                    return 1
+                if sup_id and str(cur_id) != str(sup_id):
+                    print(f"led principal grant-competence: REFUSED -- --supersedes "
+                          f"'{sup_id}' is not the active grant for '{name}' / activity "
+                          f"'{activity}' (the view shows {cur_id or 'none'}).", file=sys.stderr)
+                    return 1
+                return _principal_write(
+                    cfg, "principal_competence_granted",
+                    f"competence granted: principal '{name}' held competent for '{activity}' "
+                    f"at band '{band}'", actor, pid, active=True, supersedes=sup_id,
+                    activity=activity, band=band, basis=basis, event_time=event_time)
+            if band or basis:
+                print("led principal withdraw-competence: REFUSED -- --band/--basis are VALUE "
+                      "fields, forbidden on a withdrawal (the identity/value split, s41 D-1a).",
+                      file=sys.stderr)
+                return 1
+            if not sup_id:
+                print("led principal withdraw-competence: REFUSED -- --supersedes "
+                      "<old-row-id> is mandatory.", file=sys.stderr)
+                return 1
+            if str(cur_id) != str(sup_id):
+                print(f"led principal withdraw-competence: REFUSED -- row '{sup_id}' is not "
+                      f"the active grant for '{name}' / activity '{activity}' (the view shows "
+                      f"{cur_id or 'none'}).", file=sys.stderr)
+                return 1
+            return _principal_write(
+                cfg, "principal_competence_granted",
+                f"competence withdrawn: principal '{name}' no longer held competent for "
+                f"'{activity}'", actor, pid, active=False, supersedes=sup_id, activity=activity,
+                event_time=event_time)
+
+    _principal_usage()
+    return 1
 
 
 # --- statement-grammar PRE-FLIGHT (legacy-led-retirement phase 1, ledger row 1149) -----------
@@ -1806,6 +2382,8 @@ def main(argv: list[str]) -> int:
         print(f"led artifact {sub}: REFUSED -- usage: led artifact put <path> [--media-type ...] "
               f"| get <hash> [--out <path>] | stat <hash>", file=sys.stderr)
         return 4
+    if argv and argv[0] == "principal":
+        return cmd_principal(cfg, argv[1:])
 
     # The generic <kind> <statement...> write path, flags consumed before the positional kind.
     p = argparse.ArgumentParser(prog="led", add_help=False)

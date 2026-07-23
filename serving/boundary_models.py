@@ -56,6 +56,7 @@ class CapabilityManifest(BaseModel):
     s41_identity: bool = Field(description="principal identity/relation views present (kernel/lineage/s41-principal-bindings-and-relations.sql): principal_relations")
     s43_boundary: bool = Field(description="the four SECURITY DEFINER write-verdict functions present (kernel/lineage/s43-typed-verdict-write-boundary.sql): kernel.ledger_write")
     credited_view: bool = Field(description="the s44 credited-reading view present (unbuilt as of this service's authoring -- spec §7): credited_current")
+    s45_standing_lifecycle: bool = Field(description="s45's widened principal_binding_active_kind_shape CHECK present (kernel/lineage/s45-standing-lifecycle.sql) -- the SAME single fact bootstrap/templates/legacy-led.tmpl's own has_s45_standing_lifecycle() probes; a served `led principal declare-standing|undeclare-standing|suspend|lift-suspension|revoke` payload includes principal_binding_active iff this is true (legacy-led-retirement inventory pass, ledger row 1149)")
 
 
 class HealthResponse(BaseModel):

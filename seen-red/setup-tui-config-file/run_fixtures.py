@@ -62,10 +62,13 @@ def teardown(world: str, dest: str) -> None:
 
 
 def _minimal_valid_values() -> dict[str, object]:
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): "boundary.configure" retired
+    # (boundary is now mandatory, no decline gate); "boundary.start_now" moves from a
+    # contextually-required scalar to REQUIRED_GATES (see config_file.py's own comment).
     return {
         "substrate.run": False, "rehearsal.run": False, "birth.run": False,
         "principals_authority.run": False, "signed_genesis.run": False,
-        "boundary.configure": False, "observability.run": False, "hydration.run": False,
+        "boundary.start_now": False, "observability.run": False, "hydration.run": False,
     }
 
 

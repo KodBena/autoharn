@@ -1794,7 +1794,7 @@ three gates against `autoharn1` (which lacks s41 identity and the s44 credited v
 s22 work):
 ```
 GET /credited            -> HTTP 409 {"disposition":"capability_absent","capability":"s44-credited-view", ...}
-GET /standing/principals -> HTTP 409 {"disposition":"capability_absent","capability":"s41-identity", ...}
+GET /standing/principals -> HTTP 409 {"disposition":"capability_absent","capability":"s40-identity", ...}
 GET /work/items          -> 200, real work_item_current rows
 ```
 

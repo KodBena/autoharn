@@ -58,7 +58,12 @@ SCHEMA: dict[str, str] = {
     "signed_genesis.commission_statement": "str",
 
     # --- boundary (screen_boundary) ---------------------------------------------------------------
-    "boundary.configure": "bool",
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): `boundary.configure` RETIRED
+    # -- the boundary is now MANDATORY at every birth (no decline option, screens.py's own
+    # screen_boundary docstring), so it is no longer a captured decision at all (this section is
+    # always walked, mirroring [fork_target]'s own always-on SECTION_GATE_KEY entry below). A
+    # config file still carrying `configure = ...` now REFUSES as an unknown key (config_file.py
+    # validate()'s own generic closed-schema check), never silently ignored.
     "boundary.start_now": "bool",
 
     # --- observability (screen_observability) -------------------------------------------------------
@@ -89,7 +94,8 @@ SECTION_GATE_KEY = {
     "birth": "birth.run",
     "principals_authority": "principals_authority.run",
     "signed_genesis": "signed_genesis.run",
-    "boundary": "boundary.configure",
+    "boundary": None,  # legacy-led-retirement inventory pass: always walked, no decline gate --
+                       # mirrors "fork_target" above, the boundary is mandatory at every birth
     "observability": "observability.run",
     "hydration": "hydration.run",
 }

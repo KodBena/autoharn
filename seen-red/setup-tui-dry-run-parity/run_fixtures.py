@@ -213,7 +213,10 @@ def main() -> int:
             # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159):
             # "boundary" moved to run BEFORE "principals-authority"/"signed-genesis" in
             # screens.py's own SCREENS list ("ORDER IS LOAD-BEARING") -- reordered here to match.
-            "y", "y",                                             # boundary configure + start
+            # legacy-led-retirement inventory pass (ledger row 1149/1150): ONE FEWER "y" -- the
+            # "Configure the boundary service now?" decline gate is retired (boundary is
+            # mandatory); only the "Start the boundary service now?" confirm remains.
+            "y",                                                   # boundary: start now
             "n",                                                   # principals-authority skip
                                                                     # (design/FABLE-SETUP-TUI-
                                                                     # PRINCIPALS-AUTHORITY-
@@ -228,12 +231,12 @@ def main() -> int:
             "y",                                                  # hydration run
             "n", "n",                                             # fork provenance / role charter
         ] + ["y"] + ["n"] * 12                                    # catalog: accept item 1 (durable_decisions.CATALOG has grown to 13 -- same pre-existing drift as the ADR count above, fixed in passing)
-          + ["y"] + ["n"] * 22   # law/adr/ has grown to 23 entries (durable_decisions.list_adrs()
-                                  # count, checked live) since this fixture's own count was last
-                                  # updated -- a pre-existing drift found while re-verifying this
-                                  # fixture for an unrelated reason (Part C completion, row
-                                  # 1158/1159), fixed in passing (CLAUDE.md engineering-
-                                  # responsibility rule)                                    # ADRs: accept ADR-0000
+          + ["y"] + ["n"] * 20   # law/adr/ carries 21 ADOPTABLE entries (durable_decisions.
+                                  # list_adrs() count, checked live) -- 23 raw *.md files minus
+                                  # two non-ADR files the catalog now correctly EXCLUDES rather
+                                  # than fallback-numbers (RETROSPECTIVE-ADR-CROSSCHECK-2026-07-
+                                  # 23.md, 0019-appendix-ui-proscriptions.md; maintainer-witnessed
+                                  # catalog-inclusion fix, this same pass)   # ADRs: accept ADR-0000
           + ["y"]                                                 # PHASE 2: commit this plan now
           + ["n"]) + "\n"                                         # decline checklist save
         cp = run_scripted(answers_a, scratch, "wdr1-live")
@@ -295,12 +298,12 @@ def main() -> int:
             "n", "n",                                             # fork provenance / role charter
         ] + ["y"] + ["n"] * 12   # durable_decisions.CATALOG has grown to 13 -- same pre-existing
                                   # drift as the ADR count below, fixed in passing
-          + ["y"] + ["n"] * 22   # law/adr/ has grown to 23 entries (durable_decisions.list_adrs()
-                                  # count, checked live) since this fixture's own count was last
-                                  # updated -- a pre-existing drift found while re-verifying this
-                                  # fixture for an unrelated reason (Part C completion, row
-                                  # 1158/1159), fixed in passing (CLAUDE.md engineering-
-                                  # responsibility rule)
+          + ["y"] + ["n"] * 20   # law/adr/ carries 21 ADOPTABLE entries (durable_decisions.
+                                  # list_adrs() count, checked live) -- 23 raw *.md files minus
+                                  # two non-ADR files the catalog now correctly EXCLUDES rather
+                                  # than fallback-numbers (RETROSPECTIVE-ADR-CROSSCHECK-2026-07-
+                                  # 23.md, 0019-appendix-ui-proscriptions.md; maintainer-witnessed
+                                  # catalog-inclusion fix, this same pass)
           + ["n"]) + "\n"                                         # decline checklist save
         cp = run_scripted(answers_dry, scratch, "wdr1-dry",
                            extra_argv=["--dry-run", "--start-at", "hydration"])
@@ -360,8 +363,9 @@ def main() -> int:
             "y", world_b, dest_b, world_b,
             # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159):
             # "boundary" moved to run BEFORE "principals-authority"/"signed-genesis" -- reordered
-            # here to match (same fix as answers_a above).
-            "y", "y",         # boundary configure + in-process start
+            # here to match (same fix as answers_a above). legacy-led-retirement inventory pass
+            # (ledger row 1149/1150): ONE FEWER "y" -- see answers_a's own comment.
+            "y",               # boundary: in-process start
             "n",               # principals-authority skip (design/FABLE-SETUP-TUI-PRINCIPALS-
                                  # AUTHORITY-SPEC.md, now runs between Boundary and Signed genesis)
             "n",               # signed-genesis skip (design/FABLE-SETUP-TUI-SIGNED-GENESIS-

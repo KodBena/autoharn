@@ -494,16 +494,19 @@ def _load_manifest(path: Path) -> tuple[dict, list[dict], dict | None]:
 
 
 def _find_led(project_root: Path) -> Path | None:
-    """legacy/led (the direct-psql original) is preferred over ./led (the boundary_url/
-    boundary_deployment-requiring HTTP client, bootstrap/templates/led.tmpl) here specifically:
-    ingestion is a batch of ordinary attributed writes into a target world that need not have a
-    boundary service wired or running at all -- requiring one would make this tool depend on
-    serving infrastructure orthogonal to its own job. If a deployment has no legacy/led (an
-    older pre-split scaffold, MAINT-EXPERIENCE-REBIRTH-RUNBOOK.md Step 1's own witnessed case),
-    fall back to ./led."""
-    for cand in (project_root / "legacy" / "led", project_root / "led"):
-        if cand.exists() and os.access(cand, os.X_OK):
-            return cand
+    """legacy-led-retirement (ledger row 1149): the direct-psql `legacy/led` original is
+    RETIRED -- every surface, this one included, resolves the served `./led` (the boundary_url/
+    boundary_deployment-requiring HTTP client, bootstrap/templates/led.tmpl) and no other path.
+    This is a genuine behavior change from the pre-retirement docstring here (which preferred
+    `legacy/led` specifically so ingestion would not depend on a boundary service being wired at
+    all) -- named, not silently absorbed: a target deployment with no boundary configured (no
+    `boundary_url`/`boundary_deployment` in its own deployment.json) now REFUSES here with
+    `./led`'s own teach-text (bcc.load_served_config's own message, exit 4) rather than silently
+    falling back to a byte-for-byte legacy original that no longer exists in a post-retirement
+    checkout. No candidate search remains -- there is exactly one lawful `led` per world."""
+    cand = project_root / "led"
+    if cand.exists() and os.access(cand, os.X_OK):
+        return cand
     return None
 
 

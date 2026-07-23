@@ -62,7 +62,7 @@ from tools.setup_tui.content.principals_authority_data import (
     RELATION_CHOICES,
     SCAFFOLD_BASE_PRINCIPALS,
 )
-from tools.setup_tui.runner import legacy_led_path, parse_row_id, served_led_path
+from tools.setup_tui.runner import parse_row_id, served_led_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The kernel-lineage source files CLASS_CHOICES/RELATION_CHOICES below hand-mirror (ledger row
@@ -318,45 +318,42 @@ def register_principal_act(dest: str, name: str, agent_class: str, purpose: str,
     the flow the connection principal has no standing declaration of its own yet, and
     `commissioner` is one of the three principals the scaffold's own birth sequence already
     registers and declares standing for. `led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
-    completion, ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served
-    when this run's own boundary was configured (the normal, re-sequenced case), legacy/led when
-    it was explicitly declined (Case 14's own `boundary.configure = false` shape, ledger row
-    1942) -- `screens.py`'s own `screen_principals_authority` is the ONE place that decision is
-    made, from `state["boundary_url"]`; `None` (unwired callers, e.g. this module's own tests)
-    falls back to `_served_led(dest)`, the ordinary post-re-sequencing default."""
+    completion, ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served,
+    always, since this run's own boundary is configured before this screen ever runs (legacy-led-
+    retirement inventory pass, ledger row 1149/1150: boundary configuration has no decline
+    option anymore) -- `None` (unwired callers, e.g. this module's own tests) falls back to
+    `_served_led(dest)`, the ordinary default; there is no other lawful `led` to fall back to."""
     led = led if led is not None else _served_led(dest)
     argv = (led, "register-principal", name, agent_class, "--purpose", purpose)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"principal-row:{name}"
 
 
 def grant_competence_act(dest: str, name: str, activity: str, band: str,
-                          basis: str) -> tuple[CommandAct, str]:
-    """`legacy/led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>"`
+                          basis: str, led: str | None = None) -> tuple[CommandAct, str]:
+    """`led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>"`
     (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan act.
 
-    ALWAYS drives `legacy_led_path(dest)`, unconditionally, unlike `register_principal_act`/
-    `write_commission_act`/`charter_register_act` above (which take an optional `led=` and drive
-    served led.tmpl when this run's boundary was configured) -- found live while re-verifying
-    the Part C completion re-sequencing (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
-    1158/1159): `led principal grant-competence` is NOT among the boundary-rebased verbs at all
-    -- served led.tmpl has no `principal` sub-dispatch whatsoever (witnessed live: `./led
-    principal grant-competence ...` exits 4, `unrecognized arguments`). A real, PRE-EXISTING
-    scope gap (never rebased), not something this re-sequencing pass introduced or is scoped to
-    close -- deliberately no `led=` parameter here at all, so a future caller cannot assume this
-    verb follows the same served/legacy split its three siblings above do."""
-    argv = (legacy_led_path(dest), "principal", "grant-competence", name,
+    legacy-led-retirement inventory pass (ledger row 1149): the gap this docstring used to name
+    (`led principal grant-competence` NOT among served led.tmpl's rebased verbs at all) is
+    CLOSED this pass -- the served CLI now carries the whole `led principal *` family (13 sub-
+    verbs, bootstrap/templates/led.tmpl's own SCOPE table). This act now takes the SAME optional
+    `led=` parameter its siblings above do, defaulting to `_served_led(dest)`, never
+    `legacy_led_path` (legacy-led.tmpl itself is retired by this same pass -- see design/
+    FABLE-LEGACY-LED-RETIREMENT-SPEC.md's own retirement act)."""
+    led = led if led is not None else _served_led(dest)
+    argv = (led, "principal", "grant-competence", name,
             "--activity", activity, "--band", band, "--basis", basis)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"competence-row:{name}:{activity}"
 
 
-def relate_act(dest: str, subject: str, relation: str, obj: str) -> tuple[CommandAct, str]:
-    """`legacy/led principal relate <subject> <relation> <object>`
-    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act.
-
-    ALWAYS drives `legacy_led_path(dest)` -- see `grant_competence_act`'s own docstring, same
-    reasoning, same verb family (`principal relate`, not among served led.tmpl's rebased
-    verbs)."""
-    argv = (legacy_led_path(dest), "principal", "relate", subject, relation, obj)
+def relate_act(dest: str, subject: str, relation: str, obj: str,
+               led: str | None = None) -> tuple[CommandAct, str]:
+    """`led principal relate <subject> <relation> <object>`
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act -- see
+    `grant_competence_act`'s own docstring, same reasoning, same verb family (`principal
+    relate`, now among served led.tmpl's rebased verbs, legacy-led-retirement inventory pass)."""
+    led = led if led is not None else _served_led(dest)
+    argv = (led, "principal", "relate", subject, relation, obj)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"relation-row:{subject}:{relation}:{obj}"
 
 
@@ -364,8 +361,7 @@ def charter_register_act(dest: str, role: str, path: str,
                           led: str | None = None) -> tuple[CommandAct, str]:
     """`python3 tools/role_charter.py register <role> <path> --led <led>` -- the SAME verb
     `screen_hydration`'s own role-charter item drives, as a plan act. `led`: see
-    `register_principal_act`'s own docstring (served when this run's boundary was configured,
-    legacy/led when explicitly declined)."""
+    `register_principal_act`'s own docstring -- served, always."""
     led = led if led is not None else _served_led(dest)
     argv = ("python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
             role, path, "--led", led)

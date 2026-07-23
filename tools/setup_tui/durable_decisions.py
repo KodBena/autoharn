@@ -119,12 +119,26 @@ _ADR_TITLE_RE = re.compile(r"^#\s*ADR-(\d+)[:\s—-]*(.*)$")
 
 
 def list_adrs() -> list[tuple[str, str, str]]:
-    """(number, title, relpath-from-repo-root) for every law/adr/*.md file, sorted by number,
-    read fresh from disk every call -- the mechanical derivation WD3 checks against. The title
-    line is the first line in the file matching `# ADR-<digits>...` (some files carry a leading
-    `<!-- doc-attest-exempt: ... -->` HTML comment before the real title line, e.g.
-    law/adr/0012-compositional-and-structural-hygiene.md -- this scans every line, not just the
-    first, so that comment never gets mistaken for the title)."""
+    """(number, title, relpath-from-repo-root) for every ADOPTABLE ADR under law/adr/*.md,
+    sorted by number, read fresh from disk every call -- the mechanical derivation WD3 checks
+    against. An ADOPTABLE ADR is a file whose OWN title line matches the numbered `# ADR-<digits>
+    ...` form (`_ADR_TITLE_RE`) -- this scans every line, not just the first, so a leading
+    `<!-- doc-attest-exempt: ... -->` HTML comment (e.g. law/adr/0012-compositional-and-
+    structural-hygiene.md) never masks the real title line beneath it.
+
+    EXCLUSION IS BY CONSTRUCTION, NOT BY NAME (found live, maintainer-witnessed refusal on a
+    fresh TUI run, 2026-07-23): a file directly under law/adr/ that carries NO such title line
+    -- a record, an appendix, a retrospective, anything that is not itself a numbered ADR --
+    is EXCLUDED, never fallback-cataloged under a number scraped from its own filename. That
+    fallback used to catalog TWO non-ADR files under a fabricated number and a fabricated
+    "(title not found)" placeholder title: `law/adr/RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md`
+    (a record document, not law -- its own filename's leading token has no digits at all, so
+    the old fallback degraded to using the WHOLE filename stem as the "number") and
+    `law/adr/0019-appendix-ui-proscriptions.md` (a consult-authored companion adopted BESIDE
+    ADR-0019, not an ADR in its own right -- its filename's leading "0019" collided with the
+    real `law/adr/0019-genre-convention-is-the-default-spec.md`, producing a bogus duplicate
+    "ADR-0019" catalog entry). `history/` is already excluded by this glob's own non-recursion
+    (untouched, unaffected by this fix)."""
     out: list[tuple[str, str, str]] = []
     for path in sorted(ADR_DIR.glob("*.md")):
         title = None
@@ -135,13 +149,10 @@ def list_adrs() -> list[tuple[str, str, str]]:
                 number, title = m.group(1), m.group(2).strip()
                 break
         if number is None:
-            # No recognizable title line -- never fabricate one; the number comes from the
-            # filename's own leading digits so the ADR still appears (loud, not silently
-            # dropped), with an honest "(title not found)" rather than an invented one.
-            stem = path.stem
-            digits = "".join(ch for ch in stem.split("-", 1)[0] if ch.isdigit())
-            number = digits or stem
-            title = "(title not found -- no '# ADR-<n>...' line in file)"
+            # No recognizable "# ADR-<digits>..." title line anywhere in the file -- this is not
+            # an adoptable ADR (a record/appendix/retrospective living beside real law/adr/ ADRs),
+            # excluded by construction rather than fallback-cataloged under an invented number.
+            continue
         out.append((number, title, str(path.relative_to(REPO_ROOT))))
     out.sort(key=lambda t: t[0])
     return out

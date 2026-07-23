@@ -631,11 +631,9 @@ def screen_principals_authority(ui, cl, state):
     state["dest"] = dest
     plan = _plan(state)
     queued_names: set[str] = state.setdefault("planned_principal_names", set())
-    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
-    # now runs BEFORE this screen -- see screen_signed_genesis's own identical comment for the
-    # full reasoning (served when this run's boundary was configured, legacy/led when Case 14's
-    # `boundary.configure = false` shape declined it, ledger row 1942).
-    led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
+    # "boundary" runs BEFORE this screen (Part C, row 1158/1159). legacy-led-retirement
+    # inventory pass (row 1149/1150): the decline fallback is RETIRED -- always the served path.
+    led = served_led_path(dest)
 
     dest_state = destination.classify_destination(dest)
     # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): a not-yet-born
@@ -737,10 +735,10 @@ def screen_principals_authority(ui, cl, state):
             activity = ui.ask_text("Activity")
             band = ui.ask_text("Band")
             basis = ui.ask_text("Basis")
-            # grant_competence_act ALWAYS drives legacy/led (its own docstring): `led principal
-            # grant-competence` is not among served led.tmpl's rebased verbs, unrelated to
-            # whether THIS run's boundary was configured -- no `led=` passed here on purpose.
-            act, produces = principals_authority.grant_competence_act(dest, name, activity, band, basis)
+            # `led principal grant-competence` is now a served led.tmpl verb (row 1149) -- same
+            # `led` as every other act this screen queues.
+            act, produces = principals_authority.grant_competence_act(dest, name, activity, band,
+                                                                       basis, led=led)
             plan.append(PlanEntry(screen="principals-authority",
                                    item=f"grant competence '{activity}' to '{name}'",
                                    lesson=principals_authority.LESSON_COMPETENCE, act=act,
@@ -753,9 +751,8 @@ def screen_principals_authority(ui, cl, state):
             rel = ui.ask_choice("Relation (kernel/lineage/s41 principal_relation_check CHECK)",
                                  principals_authority.RELATION_CHOICES)
             obj = ui.ask_text("Object principal name")
-            # relate_act ALWAYS drives legacy/led too -- same reasoning as grant_competence_act
-            # immediately above (`led principal relate`, not a served-rebased verb).
-            act, produces = principals_authority.relate_act(dest, subj, rel, obj)
+            # `led principal relate` too (row 1149) -- see grant_competence_act's call above.
+            act, produces = principals_authority.relate_act(dest, subj, rel, obj, led=led)
             plan.append(PlanEntry(screen="principals-authority", item=f"relate '{subj}' {rel} '{obj}'",
                                    lesson=principals_authority.LESSON_RELATION, act=act,
                                    produces=produces))
@@ -821,13 +818,10 @@ def screen_signed_genesis(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory (the born world)")
     state["dest"] = dest
     plan = _plan(state)
-    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
-    # now runs BEFORE this screen, so `state["boundary_url"]` is already set (by screen_boundary,
-    # UNCONDITIONALLY once the operator confirms configuring it, whether auto-start or manual)
-    # iff this run actually configured one -- the served path is correct exactly then; a run that
-    # explicitly declined boundary configuration (Case 14's own `boundary.configure = false`
-    # shape, ledger row 1942) still needs legacy/led, the only working choice for it.
-    led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
+    # "boundary" runs BEFORE this screen (Part C, row 1158/1159), so `state["boundary_url"]` is
+    # already set. legacy-led-retirement inventory pass (row 1149/1150): the decline fallback is
+    # RETIRED (boundary mandatory, legacy-led.tmpl gone) -- always the served path.
+    led = served_led_path(dest)
 
     # spec §3: the private isdir probe replaced by the one Port -- FRESH (absent or empty) reads
     # as "not there yet", exactly what the bare isdir check meant here.
@@ -1052,9 +1046,16 @@ def screen_boundary(ui, cl, state):
             return state
         cl.add("boundary", "birth gate", ck.WITNESSED, "OVERRIDDEN by operator")
 
-    if not ui.confirm("Configure the boundary service now?", default=True):
-        cl.add("boundary", "boundary", ck.SKIPPED, skip_detail("boundary"))
-        return state
+    # legacy-led-retirement inventory pass, part 3 (ledger row 1149/1150): the "Configure the
+    # boundary service now?" decline gate that stood here is REMOVED -- the boundary is
+    # MANDATORY at every birth per the ratified coupling (row 1150) now that legacy-led.tmpl is
+    # retired: declining used to fall back to `legacy/led`, now a one-line teaching-refusal stub,
+    # never a working CLI -- "decline" would brick the rest of this run's commit. Configuration
+    # CHOICES (host/db/port/auto-start-now-vs-later) are unchanged; only the existence gate is
+    # gone. Row 1942 (autoharn1's own ledger) is NOT a ratification of decline's continued
+    # existence -- it is a DEFECT-FIX WITNESS (Case 14, runner.resolve_led) that a declining run
+    # correctly fell back to a working legacy/led; that target no longer working is the reason
+    # this option retires now, not a conflict with that earlier witness.
     dest = state.get("dest") or ui.ask_text("Destination directory")
     state["dest"] = dest
     # spec §3: the private isdir probe replaced by the one Port (same FRESH-means-"not there
@@ -1375,23 +1376,21 @@ def screen_hydration(ui, cl, state):
         # now runs BEFORE hydration in this same session's plan (screens.py's SCREENS list) --
         # by the time this act executes at commit time, the world's boundary is normally already
         # configured and live, so hydration's own writes go through the served path too, exactly
-        # like genesis/principals-authority (all three re-sequenced in this same pass) -- UNLESS
-        # this run's operator explicitly declined boundary configuration (Case 14's own
-        # `boundary.configure = false` shape, ledger row 1942, `state["boundary_url"]` unset),
-        # where legacy/led remains the only working choice, exactly as those two screens resolve it.
-        led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
+        # like genesis/principals-authority (all three re-sequenced in this same pass).
+        # legacy-led-retirement inventory pass, part 3 (row 1149/1150): the decline branch this
+        # used to fall back to is RETIRED (boundary now mandatory) -- always the served path.
+        led = served_led_path(dest)
         cl.add("hydration", "led present", ck.DRY_SKIPPED,
-               f"'{led}' queued earlier in this run (written by birth" +
-               ("+boundary" if state.get("boundary_url") else "") +
-               ") -- not independently checkable read-only, recorded honestly rather than faked")
+               f"'{led}' queued earlier in this run (written by birth+boundary) -- not "
+               f"independently checkable read-only, recorded honestly rather than faked")
     else:
         # An OUT-OF-SEQUENCE entry (--start-at hydration against an ALREADY-EXISTING world, not
-        # queued this session) may predate this re-sequencing or never have had its boundary
-        # configured at all -- resolve_led's own live-file check (legacy preferred if present)
-        # stays the right call HERE, unlike the normal-sequence branch above.
-        led = resolve_led(dest)  # resolve_led docstring (cites _find_led): was always served ./led, halting wherever boundary was declined (row 1942)
+        # queued this session) may predate this re-sequencing pass. `resolve_led` no longer
+        # prefers legacy/led (retired with legacy-led.tmpl) -- just the served `./led`, live-
+        # checked for existence exactly as before.
+        led = resolve_led(dest)
         if led is None:
-            ui.emit(Note(f"  REFUSED: no led/legacy-led found under {dest} -- neither was found.", tone="refusal"))
+            ui.emit(Note(f"  REFUSED: no led found under {dest}.", tone="refusal"))
             cl.add("hydration", "led present", ck.WITNESSED, f"RED: no led under {dest}")
             return state
         cl.add("hydration", "led present", ck.WITNESSED, led)

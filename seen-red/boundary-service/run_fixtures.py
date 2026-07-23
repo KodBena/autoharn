@@ -1708,12 +1708,17 @@ def main() -> int:
               f"GET /health on WORLD NOCAP (chain ends {CHAIN_NOCAP[-1]}, no s40/s41/s43): "
               f"status={st_h_nc} body={body_h_nc}", failures)
 
-        # -- W11 ABSENT legs: this world carries NEITHER s22 nor s41 -- both gates refuse.
+        # -- W11 ABSENT legs: this world carries NEITHER s40 nor s22 -- both gates refuse.
+        # (legacy-led-retirement inventory pass, ledger row 1149: /standing/principals' own
+        # gate was re-pointed at principal_standing_current, the view it actually queries --
+        # s40, not s41 -- since that view is defined by kernel/lineage/s40-principal-identity-
+        # events.sql alone; this world (pre-s22/s40/s41) still lacks it, so the capability
+        # name in the refusal body is now "s40-identity", not "s41-identity".)
         st_sp_nc, v_sp_nc = http_get(base_nc + "/standing/principals") if up_nc else (0, {})
         st_wi_nc, v_wi_nc = http_get(base_nc + "/work/items") if up_nc else (0, {})
-        check("w11-absent-legs-s41-and-s22-refuse",
+        check("w11-absent-legs-s40-and-s22-refuse",
               up_nc and st_sp_nc == 409 and v_sp_nc.get("disposition") == "capability_absent"
-              and v_sp_nc.get("capability") == "s41-identity"
+              and v_sp_nc.get("capability") == "s40-identity"
               and st_wi_nc == 409 and v_wi_nc.get("disposition") == "capability_absent"
               and v_wi_nc.get("capability") == "s22-work",
               f"GET /standing/principals status={st_sp_nc} body={v_sp_nc}; "

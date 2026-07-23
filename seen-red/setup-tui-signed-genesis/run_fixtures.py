@@ -42,6 +42,7 @@ Exit 0 if every case matches (or infra is UNEXERCISED); 1 otherwise. Lazy import
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -55,12 +56,55 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "filing"))
+sys.path.insert(0, str(REPO / "serving"))
 
 from pghost_resolve import resolve_pghost  # noqa: E402
+import deployment_record  # noqa: E402
 
 PGDB = "toy"
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 TEARDOWN = REPO / "bootstrap" / "teardown-world.sh"
+
+# legacy-led-retirement inventory pass (ledger row 1149/1150): `write_commission_act`/the
+# generic `led` calls this fixture drives now target the served path unconditionally
+# (tools/setup_tui/signed_genesis.py's own `served_led_path` default, boundary mandatory at
+# every birth) -- reuses seen-red/boundary-service/run_fixtures.py's own scratch-server helpers,
+# the same reuse this pass's other migrations already use.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
+_BOUNDARY_PROCS: dict[str, object] = {}
+
+
+def start_boundary_for(world: str, dest: str) -> None:
+    """Stands a real `serving.boundary_service` against `world` and rewrites `dest`'s own
+    `deployment.json` in place with the two served-shim keys -- see the identical helper in
+    seen-red/setup-tui-principals-authority/run_fixtures.py for the full reasoning."""
+    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-boundary-"))
+    cfg_path = bs_fixtures.write_scratch_multiplex_config(tmp, world)
+    proc, port = bs_fixtures.start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{world}"
+    if not bs_fixtures.wait_health(base):
+        tail = bs_fixtures.stop_server(proc)
+        raise RuntimeError(f"boundary_service for {world} never became healthy: {tail[-1500:]}")
+    dep_path = os.path.join(dest, "deployment.json")
+    with open(dep_path) as f:
+        dep = json.load(f)
+    dep["boundary_url"] = f"http://127.0.0.1:{port}"
+    dep["boundary_deployment"] = world
+    with open(dep_path, "w") as f:
+        json.dump(dep, f)
+    _BOUNDARY_PROCS[world] = proc
+
+
+def stop_boundary_for(world: str) -> None:
+    proc = _BOUNDARY_PROCS.pop(world, None)
+    if proc is not None:
+        bs_fixtures.stop_server(proc)
 
 
 def sh(argv: list[str], **kw) -> subprocess.CompletedProcess:
@@ -105,6 +149,7 @@ def scratch_gnupghomes() -> set[str]:
 def teardown(host: str, world: str, dest: str) -> None:
     """Best-effort, idempotent (module docstring: called from `finally` for worlds that may
     already be torn down, or never fully born)."""
+    stop_boundary_for(world)
     sh([str(TEARDOWN), world, "--db", PGDB, "--host", host, "--dir", dest],
        input=f"{world}\n", timeout=60)
 
@@ -115,6 +160,10 @@ def birth(host: str, world: str, dest: str) -> None:
     assert r.returncode == 0, f"birth of {world} failed: {(r.stdout + r.stderr)[-2000:]}"
     for verb in ("led", "verify-commission"):
         os.chmod(os.path.join(dest, verb), 0o755)
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): `led` is served,
+    # unconditionally, everywhere -- stand a real boundary_service now, before any case drives a
+    # write through it.
+    start_boundary_for(world, dest)
 
 
 def main() -> int:

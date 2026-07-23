@@ -169,13 +169,11 @@ def write_commission_act(dest: str, statement: str, led: str | None = None) -> t
 
     `led` (module docstring, Part C completion re-sequencing, ledger row 1158/1159): the CALLER
     resolves which `led` this act drives -- the "boundary" screen now runs BEFORE this one, so
-    by the time this act actually EXECUTES at commit time the world's own boundary is normally
-    already configured and live, making the served path correct -- EXCEPT when this run's
-    operator explicitly declined boundary configuration (Case 14's own `boundary.configure =
-    false` shape, ledger row 1942), where `legacy/led` remains the only working choice.
-    `screens.py`'s own `screen_signed_genesis` is the ONE place that decision is made, from
-    `state["boundary_url"]`; `None` (unwired callers) falls back to `served_led_path(dest)`, the
-    ordinary post-re-sequencing default."""
+    by the time this act actually EXECUTES at commit time the world's own boundary is always
+    configured and live (legacy-led-retirement inventory pass, ledger row 1149/1150: boundary
+    configuration has no decline option anymore), making the served path the ONLY choice.
+    `None` (unwired callers) falls back to `served_led_path(dest)`, the ordinary default --
+    there is no other lawful `led` for this act to drive since legacy-led.tmpl's own retirement."""
     led = led if led is not None else served_led_path(dest)
     argv = (led, "commission", statement)
     return CommandAct(argv=argv, extra_env=(("LED_ACTOR", "commissioner"),)), COMMISSION_PRODUCES

@@ -56,6 +56,7 @@ Usage: python3 seen-red/setup-tui-principals-authority/run_fixtures.py
 Exit 0 if every case matches (or infra is UNEXERCISED); 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -64,15 +65,56 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "filing"))
+sys.path.insert(0, os.path.join(REPO, "serving"))
 
 from pghost_resolve import resolve_pghost  # noqa: E402
+import deployment_record  # noqa: E402
 
 sys.path.insert(0, REPO)
 from tools.setup_tui import commit_executor as _CE  # noqa: E402
+
+# legacy-led-retirement inventory pass (ledger row 1149/1150): every `led` write this fixture's
+# own screen_principals_authority acts drive (register-principal, and, since this same pass
+# closed the coverage gap, grant-competence/relate too) now targets the served path
+# unconditionally (tools/setup_tui/runner.py's `served_led_path`/`resolve_led`, boundary
+# mandatory at every birth) -- this fixture's own scratch world needs a REAL standing
+# boundary_service, not just a scaffolded `legacy/led`. Reuses seen-red/boundary-service/
+# run_fixtures.py's own scratch-server helpers (ADR-0012 P1), the same reuse this pass's other
+# migrations (reservation-residue, belief-substrate-v1, s51-artifact-store) already use.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", Path(REPO) / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
+
+def start_boundary_for(world: str, dest: str, pghost: str) -> subprocess.Popen:
+    """Stands a real `serving.boundary_service` against `world` (already born through the
+    ordinary schema/kern/role convention `bootstrap/new-project.sh --new-world` uses) and
+    rewrites `dest`'s own `deployment.json` in place with the served-shim's two required keys --
+    the SAME two facts `tools/setup_tui/screens.py`'s own `screen_boundary` writes, applied
+    directly here since this fixture drives the CLI, never the TUI's boundary screen itself."""
+    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-boundary-"))
+    cfg_path = bs_fixtures.write_scratch_multiplex_config(tmp, world)
+    proc, port = bs_fixtures.start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{world}"
+    if not bs_fixtures.wait_health(base):
+        tail = bs_fixtures.stop_server(proc)
+        raise RuntimeError(f"boundary_service for {world} never became healthy: {tail[-1500:]}")
+    dep_path = os.path.join(dest, "deployment.json")
+    with open(dep_path) as f:
+        dep = json.load(f)
+    dep["boundary_url"] = f"http://127.0.0.1:{port}"
+    dep["boundary_deployment"] = world
+    with open(dep_path, "w") as f:
+        json.dump(dep, f)
+    return proc
 
 
 def _clear_journal(dest: str) -> None:
@@ -151,7 +193,13 @@ def _commit_phase_output(out: str) -> str:
     return out[idx:] if idx != -1 else out
 
 def led_show(dest: str, row_id: int) -> str:
-    r = sh([os.path.join(dest, "legacy", "led"), "show", str(row_id)])
+    # legacy-led-retirement inventory pass (ledger row 1149/1150): served, not legacy -- the
+    # served path is COVERED for `led show` (always was) and this fixture's own scratch world
+    # now carries a real standing boundary_service (`start_boundary_for` above).
+    r = subprocess.run([sys.executable, os.path.join(REPO, "bootstrap", "templates", "led.tmpl"),
+                        "show", str(row_id)], capture_output=True, text=True,
+                       env={**os.environ, "AUTOHARN": REPO,
+                            "PICKUP_DEPLOYMENT": os.path.join(dest, "deployment.json")})
     return r.stdout
 
 
@@ -170,6 +218,7 @@ def main() -> int:
     world = f"probeworld{int(time.time())}"
     dest = os.path.join(scratch, "world")
     ok = True
+    boundary_proc: subprocess.Popen | None = None
     try:
         # ---- birth a real scratch world (WP1/WP2/WP3/WP5/WP6's own substrate) -----------------
         res = sh([NEW_PROJECT, dest, "--new-world", world, "--db", PGDB, "--host", pghost,
@@ -178,6 +227,10 @@ def main() -> int:
             print(f"UNEXERCISED: scratch birth failed (not this fixture's own failure):\n"
                   f"{(res.stdout + res.stderr)[-2000:]}")
             return 0
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): `led` is served,
+        # unconditionally, everywhere now -- stand a real boundary_service before any WP case
+        # drives a write (see `start_boundary_for`'s own docstring).
+        boundary_proc = start_boundary_for(world, dest, pghost)
 
         # ---- WP1: full constitutive pass -------------------------------------------------
         ans1 = (
@@ -223,10 +276,20 @@ def main() -> int:
         cp2 = run_scripted(ans2, scratch, "wp2", dest)
         out2 = cp2.stdout + cp2.stderr
         assert "Traceback" not in out2, out2[-1500:]
-        assert "REFUSED -- principal 'reviewer' is already registered" in out2, out2[-1500:]
-        assert "Re-registration is never a silent no-op" in out2, out2[-1500:]
-        print("WP2 ok: duplicate registration of 'reviewer' refused, kernel teach-text "
-              "rendered verbatim, no traceback")
+        # MESSAGE-TEXT UPDATE (legacy-led-retirement inventory pass, ledger row 1149/1150): this
+        # write now goes through the served path (register_principal_act's own `led=served_led`),
+        # not `legacy/led`. DISCLOSED NARROWING, pre-existing (not introduced by this pass):
+        # legacy-led.tmpl's own `register-principal` ran a CLIENT-SIDE pre-check ("principal
+        # 'reviewer' is already registered", "Re-registration is never a silent no-op") before
+        # ever attempting the write; served led.tmpl's `cmd_register_principal` has no such
+        # pre-check (bootstrap/templates/led.tmpl) -- the duplicate surfaces as the KERNEL's own
+        # raw refusal instead (a genuine constraint violation, still refused, still journaled,
+        # just without legacy's nicer client-side wording).
+        assert "REFUSED by the kernel write boundary" in out2, out2[-1500:]
+        assert "duplicate key value violates unique constraint" in out2, out2[-1500:]
+        assert "row_id written" not in out2, out2[-1500:]  # never a false accept
+        print("WP2 ok: duplicate registration of 'reviewer' refused by the kernel's own "
+              "constraint, journaled (SQLSTATE 23505), no traceback")
 
         # ---- WP3a: the trap, DECLINE leg ---------------------------------------------------
         ans3a = ("y\n" + dest + "\nn\nn\nn\ny\nneverregistered\n/tmp/x\nn\nn\n"
@@ -391,6 +454,8 @@ def main() -> int:
               "destination and (b) a real directory with no legacy/led, no traceback")
 
     finally:
+        if boundary_proc is not None:
+            bs_fixtures.stop_server(boundary_proc)
         sh([TEARDOWN, world, "--db", PGDB, "--host", pghost, "--dir", dest,
             "--force-non-scratch"], input=f"{world}\n", timeout=60)
         shutil.rmtree(scratch, ignore_errors=True)

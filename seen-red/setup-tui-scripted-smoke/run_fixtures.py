@@ -202,8 +202,12 @@ def main() -> int:
         # skip cleanly (both screens' own FIRST act is a plain confirm that returns immediately
         # on "n"). Extra "n\nn\n" inserted here, not appended at the end, since ScriptedUi
         # consumes answers as a flat FIFO in PROMPT order, not per-screen.
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): ONE FEWER leading "y" --
+        # screen_boundary's own "Configure the boundary service now?" decline gate is retired
+        # (boundary is mandatory), so only the birth-gate override confirm remains before the
+        # destination prompt.
         missing_dest = os.path.join(scratch, "nonexistent_dest")
-        cp = run_scripted(f"y\ny\n{missing_dest}\nn\nn\nn\nn\n", "boundary", scratch)
+        cp = run_scripted(f"y\n{missing_dest}\nn\nn\nn\nn\n", "boundary", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 4: expected exit 0, got {cp.returncode}: {out[-800:]}"
         assert "REFUSED: destination directory" in out and missing_dest in out, out[-800:]
@@ -221,9 +225,10 @@ def main() -> int:
         hostile_world = 'evil"] [deployments.pwn'
         # Same re-sequencing insertion as case 4 above: two more "n"s for the newly-downstream
         # principals-authority/signed-genesis screens' own one-answer skip, inserted before the
-        # trailing observability/hydration/checklist declines.
+        # trailing observability/hydration/checklist declines. legacy-led-retirement inventory
+        # pass (ledger row 1149/1150): ONE FEWER leading "y" -- see case 4's own comment.
         cp = run_scripted(
-            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
+            f"y\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
         )
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 5: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -277,48 +282,46 @@ def main() -> int:
         cp = run_scripted(f"y\n{no_led_dest}\nn\n", "hydration", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 8: expected exit 0, got {cp.returncode}: {out[-800:]}"
-        # MESSAGE-TEXT UPDATE (autoharn1 succession commission row 1942's DEFECT fix, this
-        # build): the refusal text now names BOTH led/legacy-led (tools/setup_tui/runner.py's
-        # new `resolve_led`, which checks legacy/led FIRST, served ./led second), not only
-        # "./led" -- the old text was itself a symptom of the served-only bug this fix closes.
-        assert "REFUSED: no led/legacy-led found under" in out, out[-800:]
+        # MESSAGE-TEXT UPDATE (legacy-led-retirement inventory pass, ledger row 1149/1150):
+        # `resolve_led` no longer checks legacy/led at all (legacy-led.tmpl itself is retired,
+        # and the boundary is mandatory at every birth) -- back to naming only "led".
+        assert "REFUSED: no led found under" in out, out[-800:]
         print("case 8 ok: hydration refuses cleanly against a destination with no led or "
               "legacy/led shim (WD5's own bar, re-proven here)")
 
-        # --- case 14 (DEFECT FIX WITNESS, autoharn1 succession commission row 1942, 2026-07-22):
-        # a `--from-config` birth with `boundary.configure = false` (no boundary keys ever written
-        # into deployment.json) used to halt hydration outright at its first ledger write, because
-        # screen_hydration ALWAYS resolved the served `./led` shim, which refuses without
-        # deployment.json's boundary_url/boundary_deployment keys, even though the scaffold always
-        # ALSO writes a working `legacy/led` right there (and the served shim's own refusal text
-        # points at it) -- the commit executor never tried it. This case reproduces the exact halt
-        # shape (a dest whose deployment.json lacks boundary keys, a served-shim `led` that would
-        # refuse if invoked, and a working `legacy/led`) and asserts the DECISION-PHASE led
-        # resolution (tools/setup_tui/runner.py's `resolve_led`, wired through
-        # screens.screen_hydration) picks legacy/led, not the served shim -- entirely at the
-        # decision phase (the checklist's own "led present" WITNESSED row this fix also added),
-        # no live commit/db needed. ---
+        # --- case 14 -- RETIRED (legacy-led-retirement inventory pass, ledger row 1149/1150,
+        # this build) -- was: "a `--from-config` birth with `boundary.configure = false` used to
+        # halt hydration ... resolve_led picks legacy/led, not the served shim" (autoharn1
+        # succession commission row 1942's own DEFECT FIX WITNESS, 2026-07-22). The scenario this
+        # case reproduced no longer exists to reproduce: `boundary.configure = false` is not a
+        # representable config shape anymore (the decline gate is retired, boundary is mandatory
+        # at every birth, tools/setup_tui/screens.py's own screen_boundary docstring), and
+        # `resolve_led` itself no longer prefers legacy/led at all -- legacy-led.tmpl is deleted
+        # from this repository outright (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's own
+        # retirement act), so a "working legacy/led fallback" is not a state any scaffolded world
+        # can be in post-retirement. Replaced below with the positive re-assertion of the NEW
+        # invariant `resolve_led` now upholds: served `./led` is picked even when a (non-
+        # functional, post-retirement) `legacy/led` file is ALSO present on disk -- there is no
+        # candidate search left, only one lawful `led` per world (runner.resolve_led's own
+        # docstring).
         led_dest = os.path.join(scratch, "led_resolution_dest")
         os.makedirs(os.path.join(led_dest, "legacy"))
         legacy_led_path = os.path.join(led_dest, "legacy", "led")
         with open(legacy_led_path, "w") as f:
-            f.write("#!/bin/sh\necho 'row: 1 written.'\n")
+            # The retired scaffold shim's own real post-retirement shape: a one-line teaching
+            # refusal, never a working CLI (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's own
+            # retirement act) -- present on disk, but never a lawful resolution target.
+            f.write("#!/bin/sh\necho 'legacy/led: RETIRED 2026-07; every surface serves through "
+                    "./led.' >&2\nexit 1\n")
         os.chmod(legacy_led_path, 0o755)
         served_led_path = os.path.join(led_dest, "led")
         with open(served_led_path, "w") as f:
-            # A faithful stand-in for the REAL served shim's refusal (bootstrap/templates/
-            # led.tmpl / serving/boundary_cli_client.py load_served_config) -- never actually
-            # invoked by this case (decision-phase only), but shaped like the real halt so the
-            # fixture's own claim ("a served-shim led that refuses") is honestly reproduced, not
-            # merely asserted.
-            f.write("#!/bin/sh\necho 'deployment record ... missing required-for-the-served-"
-                    "shim field(s): boundary_url, boundary_deployment ... or run the "
-                    "./legacy/led original instead' >&2\nexit 1\n")
+            f.write("#!/bin/sh\necho 'row: 1 written.'\n")
         os.chmod(served_led_path, 0o755)
         with open(os.path.join(led_dest, "deployment.json"), "w") as f:
-            # boundary.configure = false shape: no boundary_url/boundary_deployment keys at all.
             json.dump({"schema": "ledresworld", "kern": "ledresworld_kernel",
-                       "role": "ledresworld_rw", "name": "ledresworld"}, f)
+                       "role": "ledresworld_rw", "name": "ledresworld",
+                       "boundary_url": "http://127.0.0.1:1", "boundary_deployment": "ledresworld"}, f)
 
         n_catalog = len(durable_decisions.CATALOG)
         n_adrs = len(durable_decisions.list_adrs())
@@ -336,22 +339,20 @@ def main() -> int:
         assert cp14.returncode == 0, f"case 14: expected exit 0, got {cp14.returncode}: {out14[-2000:]}"
         assert "Traceback" not in out14, out14[-2000:]
         assert "REFUSED" not in out14, (
-            f"case 14: hydration must NOT refuse -- legacy/led is present and working: "
+            f"case 14: hydration must NOT refuse -- served ./led is present and working: "
             + out14[-2000:])
         led_row = next(
             (ln for ln in out14.splitlines() if "led present" in ln and "hydration" in ln), None)
         assert led_row is not None, f"case 14: no 'led present' checklist row rendered: {out14[-2000:]}"
-        assert legacy_led_path in led_row, (
-            f"case 14: the 'led present' row must name legacy/led (the DEFECT fix's own "
-            f"resolution): {led_row!r}")
-        assert served_led_path not in led_row, (
-            f"case 14: the 'led present' row must NOT name the served ./led shim -- hydration "
-            f"writes need no boundary service wired at all (runner.resolve_led's own docstring): "
-            f"{led_row!r}")
-        print("case 14 ok (DEFECT FIX WITNESS, row 1942): hydration's led resolution picks "
-              "legacy/led over a present-but-would-refuse served ./led shim, on a world whose "
-              "deployment.json carries no boundary keys at all -- the exact halt shape witnessed "
-              "live against autoharn1, now resolved instead of halted")
+        assert served_led_path in led_row, (
+            f"case 14: the 'led present' row must name the served ./led shim (resolve_led's "
+            f"only lawful target, post-retirement): {led_row!r}")
+        assert legacy_led_path not in led_row, (
+            f"case 14: the 'led present' row must NOT name legacy/led -- it is a retired, non-"
+            f"functional stub even when present on disk: {led_row!r}")
+        print("case 14 ok (POST-RETIREMENT RE-ASSERTION, was row 1942's DEFECT FIX WITNESS): "
+              "hydration's led resolution picks the served ./led even when a (non-functional) "
+              "legacy/led file is also present on disk -- no candidate search remains")
 
         # --- case 9 (WDR3): the SAME hostile-world scenario as case 5, under --dry-run --
         # design/FABLE-SETUP-TUI-SPEC.md's 2026-07-19 amendment, WDR3: "a dry run that reaches a
@@ -362,9 +363,11 @@ def main() -> int:
         refused_line_live = next(
             ln for ln in out_case5.splitlines() if ln.startswith("  REFUSED: world "))
         # Same re-sequencing insertion as case 5 (two more "n"s for the newly-downstream
-        # principals-authority/signed-genesis screens' own one-answer skip).
+        # principals-authority/signed-genesis screens' own one-answer skip). legacy-led-
+        # retirement inventory pass (ledger row 1149/1150): ONE FEWER leading "y" -- see case 4's
+        # own comment.
         cp = run_scripted(
-            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
+            f"y\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
             dry_run=True,
         )
         out9 = cp.stdout + cp.stderr
@@ -439,9 +442,14 @@ def main() -> int:
         # case 11 (witness a, argv-threading half): valid extensions -> threaded into
         # new-project.sh's OWN --governed flag at birth. No live db needed (--dry-run).
         dest11 = os.path.join(scratch, "gf_dest11")
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): the old single "n"
+        # (boundary-configure decline, causing an early return before any further boundary
+        # question) is replaced by TWO new answers -- boundary is now mandatory, so this screen
+        # actually reaches its own "Database" prompt (world/host/dest are already in `state`
+        # from birth above, but `db` is not) and its "Start the boundary service now?" confirm.
         cp11 = run_scripted(
             "y\nfork\n" + gf_src + "\n" + dest11 + "\ny\n.ts,.vue,.html\n"
-            "n\ny\ny\n-\n-\nworld11\n-\n-\n" + "n\n" * 5,
+            "n\ny\ny\n-\n-\nworld11\n-\n-\n" + "-\nn\n" + "n\n" * 5,
             "fork-target", scratch, dry_run=True)
         out11 = cp11.stdout + cp11.stderr
         assert cp11.returncode == 0, f"case 11: expected exit 0, got {cp11.returncode}: {out11[-1500:]}"
@@ -470,9 +478,12 @@ def main() -> int:
         # recorded at all -- the recorded choice reverts to the default, never the hostile text.
         dest12 = os.path.join(scratch, "gf_dest12")
         hostile_tok = '*.py"] ;rm -rf /'
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): see case 11's own comment
+        # for the "-\nn\n" (db default, decline boundary auto-start) replacing the old single
+        # boundary-configure-decline "n".
         cp12 = run_scripted(
             "y\nfork\n" + gf_src + "\n" + dest12 + "\ny\n" + hostile_tok + ",.ts\n"
-            "n\ny\ny\n-\n-\nworld12\n-\n-\n" + "n\n" * 5,
+            "n\ny\ny\n-\n-\nworld12\n-\n-\n" + "-\nn\n" + "n\n" * 5,
             "fork-target", scratch, dry_run=True)
         out12 = cp12.stdout + cp12.stderr
         assert cp12.returncode == 0, f"case 12: expected exit 0, got {cp12.returncode}: {out12[-1500:]}"
@@ -495,9 +506,10 @@ def main() -> int:
         # case 13 (witness d): decline extension -> the default is still explicitly recorded
         # and threaded into --governed (never silently omitted).
         dest13 = os.path.join(scratch, "gf_dest13")
+        # legacy-led-retirement inventory pass (ledger row 1149/1150): see case 11's own comment.
         cp13 = run_scripted(
             "y\nfork\n" + gf_src + "\n" + dest13 + "\nn\n"
-            "n\ny\ny\n-\n-\nworld13\n-\n-\n" + "n\n" * 5,
+            "n\ny\ny\n-\n-\nworld13\n-\n-\n" + "-\nn\n" + "n\n" * 5,
             "fork-target", scratch, dry_run=True)
         out13 = cp13.stdout + cp13.stderr
         assert cp13.returncode == 0, f"case 13: expected exit 0, got {cp13.returncode}: {out13[-1500:]}"
