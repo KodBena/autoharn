@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Seen-red for the legacy-led-retirement retirement-review ROUND 1 combined fix round (ledger
-row 1173's five SEVERE findings + the two remaining minors), against a REAL `serving.
-boundary_service` uvicorn subprocess and a REAL scratch schema pair in the toy db, driving the
-REAL `bootstrap/templates/led.tmpl` CLI as an actual subprocess -- mirrors seen-red/legacy-led-
-retirement-part-ab-boundary/run_fixtures.py's own launch pattern.
+row 1173's five SEVERE findings + the two remaining minors, PLUS row 1174's round-2 faithfulness
+re-check SEVERE), against a REAL `serving.boundary_service` uvicorn subprocess and a REAL scratch
+schema pair in the toy db, driving the REAL `bootstrap/templates/led.tmpl` CLI as an actual
+subprocess -- mirrors seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py's own
+launch pattern.
 
 RED-FIRST (both polarities witnessed live against this exact world, this build, before this
 fixture was written -- transcripts in the commit message; this file re-proves the FIXED, GREEN
@@ -41,6 +42,18 @@ worktree no longer carries):
   W7  Regression: the generic `<kind> <statement...>` path and `led work open/claim/close` still
       honor the shared flags (`--refs`/`--event-time`/`--grade`) and their own per-verb flags
       exactly as before the flag-before-verb rewrite.
+  W8  MISSING/EMPTY FLAG-VALUE REFUSAL (ledger row 1174, round-2 faithfulness re-check SEVERE):
+      BEFORE this fix, `led principal declare-standing <name> --db-role` (trailing, no value) and
+      the same with `--db-role ""` (explicit empty string) both silently substituted
+      `cfg.record.role` (the DEFAULT connecting role) for the missing/empty value and WROTE a
+      real `principal_standing_declared` row for that wrong role -- `led principal undeclare-
+      standing --db-role` (trailing) did the SAME, unbinding the WRONG role's standing. Legacy's
+      own behavior on the identical input was an accidental `shift 2`-past-end crash under
+      `set -euo pipefail` (exit 1, nothing written, no teach-text) -- a wrong write beats a crash
+      for badness. Now: `_parse_principal_flags`/`_parse_principal_flags_strict` REFUSE any
+      recognized flag with a missing or empty value AT THE CLASS (both parsers), before any
+      downstream logic ever sees it -- all three cases REFUSED, nothing written, same observable
+      contract as legacy's crash (nonzero exit, zero writes) plus real teach-text.
 
 Zero residue: the scratch schema/role/world are torn down in a `finally` regardless of outcome,
 and the boundary subprocess is terminated. Lazy imports banned."""
@@ -428,6 +441,34 @@ def main() -> int:
                      "--review-deferred"], dep_path, env_extra=actor_env)
         check("w7-work-close-exit0", cp.returncode == 0, f"exit={cp.returncode} {cp.stdout!r}", failures)
 
+        # ================= W8: missing/empty flag-value refusal (row 1174 round-2 SEVERE) ==========
+        print("== W8: a recognized flag with a MISSING or EMPTY value is REFUSED, nothing written ==")
+        before = max_row_id(base)
+        cp = run_cli(["principal", "declare-standing", "subj-a", "--db-role"], dep_path, env_extra=actor_env)
+        check("w8-declare-standing-trailing-refused",
+              cp.returncode == 1 and "requires a non-empty value" in cp.stderr,
+              f"exit={cp.returncode} stderr={cp.stderr!r}", failures)
+        cp = run_cli(["principal", "declare-standing", "subj-a", "--db-role", ""],
+                    dep_path, env_extra=actor_env)
+        check("w8-declare-standing-empty-string-refused",
+              cp.returncode == 1 and "requires a non-empty value" in cp.stderr,
+              f"exit={cp.returncode} stderr={cp.stderr!r}", failures)
+        cp = run_cli(["principal", "undeclare-standing", "--db-role"], dep_path, env_extra=actor_env)
+        check("w8-undeclare-standing-trailing-refused",
+              cp.returncode == 1 and "requires a non-empty value" in cp.stderr,
+              f"exit={cp.returncode} stderr={cp.stderr!r}", failures)
+        after = max_row_id(base)
+        check("w8-nothing-written", after == before, f"before={before} after={after}", failures)
+        # the wrong-role write this closes: BEFORE this fix, the identical --db-role (trailing)
+        # invocation silently wrote a real principal_standing_declared row for cfg.record.role
+        # (the DEFAULT connecting role), never the value (or lack of one) the operator gave --
+        # see this fixture's own red.txt for the live transcript against the pre-fix code.
+        cp = run_cli(["principal", "suspend", "subj-a", "reason words", "--supersedes"],
+                    dep_path, env_extra=actor_env)
+        check("w8-suspend-trailing-supersedes-refused",
+              cp.returncode == 1 and "requires a non-empty value" in cp.stderr,
+              f"exit={cp.returncode} stderr={cp.stderr!r}", failures)
+
     finally:
         if proc is not None:
             out = stop_server(proc)
@@ -442,7 +483,8 @@ def main() -> int:
         return 1
     print("ALL CASES OK -- legacy-led-retirement round 1 combined fix round: flag-before-verb "
           "grammar, principal shared-flag refusal, leftover-token refusal, all 13 principal "
-          "sub-verbs live, fingerprint-shape guard, generic/work regression -- zero residue")
+          "sub-verbs live, fingerprint-shape guard, missing/empty flag-value refusal (row 1174), "
+          "generic/work regression -- zero residue")
     return 0
 
 

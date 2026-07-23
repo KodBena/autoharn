@@ -56,7 +56,14 @@ docstring for the full token-by-token enumeration this pass produced.
         permanent, unretractable rows. `--statement-really-contains-cli-text` overrides,
         honestly named. Runs ONLY on this generic path -- `led review`/`led work *` build their
         statements from typed fields, never raw captured terminal text.
-    led register-principal <name> <class>      (write, registration_write)
+    led register-principal <name> <class>      (write, registration_write; DISCLOSED MINOR
+        DIVERGENCE, row 1173 round-2 faithfulness re-check, grammar axis verdict, no behavior
+        change: a malformed invocation (missing <class>, an unrecognized flag) exits 4 here
+        (this file's own argparse-SystemExit convention, `boundary_cli_client.py`'s documented
+        "3 boundary-refused, 4 boundary-unreachable/client error" scheme) where legacy exits 1
+        for the same bad-argument shape -- an accepted, disclosed CLI-convention difference
+        of the served rebase generally, not special-cased to this one verb, and not a
+        silent-vs-taught difference (both refuse, both teach; only the exit code differs))
     led obligate <scope> <assigned-by> <obliged-actor>                 (write, obligation_write)
     led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>  (write)
     led decomposition-review-status     (read-only; mode from <world-root>/.claude/apparatus.json,
@@ -151,8 +158,10 @@ docstring for the full token-by-token enumeration this pass produced.
         led-retirement INVENTORY pass, ledger row 1149: an exhaustive dispatch-token diff of
         `bootstrap/templates/legacy-led.tmpl` against this file found exactly ONE uncovered
         family, `led principal *` -- never wired into this rebase's `main()` at all before this
-        pass. Ported off legacy's own shared `_principal_binding_insert` shape (see
-        `_principal_write` below, one writer/many callers, ADR-0012 P1); duplicate-active and
+        pass. Ported off legacy's own shared `_principal_binding_insert` shape (see the typed
+        payload classes and `_write_principal` below, one writer/many callers, ADR-0012 P1;
+        row 1173 finding 4 replaced the original single bag-of-optionals `_principal_write` with
+        six typed dataclasses, one per write shape); duplicate-active and
         value-continuity guards read GET /rows/current client-side filtered by kind (mirrors
         `_current_row` below `cmd_work_startable`), never a raw SQL lookup. s41/s45 gating is a
         NEW client-side capability probe, GET /health's `capabilities` dict, extended this same
@@ -167,7 +176,17 @@ docstring for the full token-by-token enumeration this pass produced.
         gates on via /health). DISCLOSED NARROWING: an s40-only-not-yet-s41 kernel gets this
         file's own generic-shaped bespoke refusal (same wording as legacy) for the 8 s41 verbs;
         the 5 standing-lifecycle verbs (declare-standing/undeclare-standing/suspend/
-        lift-suspension/revoke) need only s40 and work on such a kernel exactly as legacy does.)
+        lift-suspension/revoke) need only s40 and work on such a kernel exactly as legacy does.
+        DISCLOSED IMPROVEMENT, not a narrowing (row 1173 round-2 faithfulness re-check, SEVERE):
+        a recognized flag given with a MISSING or EMPTY value (e.g. `--db-role` as the trailing
+        token) is REFUSED here (`_parse_principal_flags`/`_parse_principal_flags_strict`'s own
+        `flag '<tok>' requires a non-empty value` teach-text) -- legacy's own behavior on the
+        identical input was an accidental `shift 2`-past-end crash under `set -euo pipefail`
+        (exit 1, nothing written, no teach-text); this closes a REAL defect the crash used to
+        mask (`declare-standing`/`undeclare-standing`'s own `db_role = flags.get(...) or
+        cfg.record.role` fallback silently wrote a real standing row for the DEFAULT role, not a
+        refusal) with the SAME observable contract legacy's crash had -- nonzero exit, zero
+        writes -- plus teaching where legacy had a bare stack trace.)
   SCOPE, THE COVERAGE TABLE (legacy dispatch token -> served status; the universe below is every
   token `bootstrap/templates/legacy-led.tmpl` dispatches on ITS OWN top-level `if [ "${1:-}" = ...`
   chain plus every named sub-verb `case` inside it -- mechanically enumerated, ledger row 1149's
@@ -543,18 +562,47 @@ def _principal_usage() -> None:
           file=sys.stderr)
 
 
-def _parse_principal_flags(argv: list[str], flag_names: set[str]) -> tuple[list[str], dict[str, str]]:
+_MISSING = object()  # sentinel distinguishing "flag was the last token" from "flag's value was
+                     # itself an empty string" -- both are refused identically below (row 1173
+                     # round-2 faithfulness finding), but the sentinel keeps that refusal's own
+                     # condition (`not val`) honest about which case it is: `next(it, "")` could
+                     # not tell the two apart at all (both silently read as "").
+
+
+def _parse_principal_flags(argv: list[str], flag_names: set[str],
+                            verb: str) -> tuple[list[str], dict[str, str]] | None:
     """A tiny shared flag/positional splitter (every `led principal *` sub-verb's own grammar:
     `--flag value` pairs from `flag_names`, everything else positional, in any order -- mirrors
     legacy-led.tmpl's own per-verb `while [ $# -gt 0 ]; case "$1" in --xxx) ...` loops). An
     unrecognized `--*` token is left in the RETURNED positionals (the caller decides -- some
-    verbs, e.g. suspend/revoke, fold unrecognized non-flag words into a free-text reason)."""
+    verbs, e.g. suspend/revoke, fold unrecognized non-flag words into a free-text reason).
+
+    ROW 1173 ROUND-2 FAITHFULNESS FINDING (SEVERE): a recognized flag with a MISSING or EMPTY
+    value is now REFUSED here, at the class (both parsers), not left to each call site to
+    notice. Before this fix, `flags[tok] = next(it, "")` silently produced `""` for BOTH "the
+    flag was the last token" and "the flag's value was itself an empty string" -- and at least
+    one call site (`declare-standing`/`undeclare-standing`'s own `db_role = flags.get(...) or
+    cfg.record.role`) treated that `""` as "value omitted, use the default", so `led principal
+    declare-standing <name> --db-role` (trailing, no value) SILENTLY WROTE a real standing row
+    for the DEFAULT role -- not a refusal, not even the value the operator (mis)typed, a
+    DIFFERENT one, live-witnessed on a scratch world before this fix. DISCLOSED, not a
+    regression: legacy's own behavior on the identical input was an accidental `shift 2`-past-
+    end crash under `set -euo pipefail` (exit 1, nothing written, no teach-text) -- this fix
+    trades that accidental crash for a DELIBERATE refusal with the SAME observable contract
+    (nonzero exit, zero writes) plus teaching where legacy had a bare stack trace. A wrong
+    write beats a crash for badness; this closes the gap without reopening it as some OTHER
+    silent substitution."""
     pos: list[str] = []
     flags: dict[str, str] = {}
     it = iter(argv)
     for tok in it:
         if tok in flag_names:
-            flags[tok] = next(it, "")
+            val = next(it, _MISSING)
+            if val is _MISSING or val == "":
+                print(f"led principal {verb}: REFUSED -- flag '{tok}' requires a non-empty "
+                      f"value.", file=sys.stderr)
+                return None
+            flags[tok] = val
         else:
             pos.append(tok)
     return pos, flags
@@ -573,14 +621,23 @@ def _parse_principal_flags_strict(argv: list[str], flag_names: set[str], n_posit
     competence/withdraw-competence) -- contrast suspend/revoke/lift-suspension, which fold any
     non-flag remainder into a free-text reason and stay on the permissive `_parse_principal_
     flags` above (legacy's own grammar: those three verbs never refuse on a stray word, they
-    absorb it into `$reason`). Returns None (having printed REFUSED) on a violation."""
+    absorb it into `$reason`). Returns None (having printed REFUSED) on a violation.
+
+    Also refuses a recognized flag's MISSING/EMPTY value -- see `_parse_principal_flags`'s own
+    docstring above (row 1173 round-2 SEVERE finding); this strict variant is where the finding
+    was actually caught (`declare-standing`/`undeclare-standing` both parse `--db-role` here)."""
     pos = list(argv[:n_positional])
     rest = argv[n_positional:]
     flags: dict[str, str] = {}
     it = iter(rest)
     for tok in it:
         if tok in flag_names:
-            flags[tok] = next(it, "")
+            val = next(it, _MISSING)
+            if val is _MISSING or val == "":
+                print(f"led principal {verb}: REFUSED -- flag '{tok}' requires a non-empty "
+                      f"value.", file=sys.stderr)
+                return None
+            flags[tok] = val
         else:
             print(f"led principal {verb}: REFUSED -- unrecognized argument '{tok}'.",
                   file=sys.stderr)
@@ -711,7 +768,10 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
             return rc
 
         if sub == "suspend":
-            pos, flags = _parse_principal_flags(rest, {"--supersedes"})
+            parsed = _parse_principal_flags(rest, {"--supersedes"}, sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos or pos[0].startswith("--"):
                 _principal_usage()
                 return 1
@@ -755,7 +815,10 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
             return _write_principal(cfg, "principal_suspended", stmt, actor, payload)
 
         if sub == "lift-suspension":
-            pos, flags = _parse_principal_flags(rest, set())
+            parsed = _parse_principal_flags(rest, set(), sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos:
                 print("usage: led principal lift-suspension <name> [reason...]", file=sys.stderr)
                 return 1
@@ -791,7 +854,10 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
             return rc
 
         if sub == "revoke":
-            pos, flags = _parse_principal_flags(rest, set())
+            parsed = _parse_principal_flags(rest, set(), sub)
+            if parsed is None:
+                return 1
+            pos, flags = parsed
             if not pos or pos[0].startswith("--"):
                 _principal_usage()
                 return 1
