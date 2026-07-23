@@ -12,9 +12,10 @@ a pinned git submodule, and it adds governance around the work you're already do
 > high-assurance ambitions — NIST- and NRC-flavored language, a law corpus, witnessed
 > claims — and those are **aims the design is built toward, not statements of its current
 > maturity**. It works, more or less, for its maintainer's own daily needs; everything
-> beyond that you should treat as aspiration until you have witnessed it yourself. (That
-> distinction — an aspiration is not a conformance claim — is enforced inside this project
-> as law, ADR-0020. It applies to this repository's own self-description first.)
+> beyond that you should treat as aspiration until you have witnessed it yourself. (This
+> project once watched a rewrite quietly turn an "aspires to NIST..." into a bare
+> conformance claim, and wrote law about that class of drift afterwards; this notice is
+> the same honesty, applied by hand to our own front page.)
 
 This page is only about deployment: getting autoharn wired into a project of your own, and
 keeping it that way. It assumes you have `psql` and `git` on your `PATH` and a Postgres database
