@@ -33,6 +33,7 @@ new Python (ledger row 1105): every function signature below carries its return-
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -100,6 +101,27 @@ def pid_is_boundary_service(pid: int, toml_path: Path) -> bool:
     return "serving.boundary_service" in text and str(toml_path) in text
 
 
+def _pid_holding_port(port: int) -> int | None:
+    """Ground truth, independent of any pidfile or /proc cmdline text match: the pid the KERNEL's
+    own socket table (`ss`) reports as holding the LISTEN socket at 127.0.0.1:<port>, or None if
+    nothing is listening there, `ss` is unavailable, or its output could not be parsed (round-4
+    review SEVERE-B item 2 -- used only to arbitrate a pidfile-vs-own-child disagreement in
+    `spawn_and_wait`'s poll loop; never trusted over an actual probe() success/failure)."""
+    try:
+        r = subprocess.run(["ss", "-H", "-ltnp"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    for line in r.stdout.splitlines():
+        if re.search(rf"[:.]{port}\s", line) is None:
+            continue
+        m = re.search(r"pid=(\d+)", line)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 @dataclass(frozen=True)
 class SpawnOutcome:
     """The structured result of one `spawn_and_wait` call -- deliberately NOT pre-formatted into
@@ -147,50 +169,54 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
     # but with no pidfile at all -- unstoppable via `autoharn service stop` ("no pidfile" refusal)
     # even though the service is healthy.
     #
-    # So: before touching the pidfile at all, check whether it already names a LIVE
-    # serving.boundary_service process for THIS world's own boundary-multiplex.toml
-    # (pid_is_boundary_service -- the same identity check `stop` itself uses, not a bare "the file
-    # exists" test). If it does, this invocation's own spawn is unnecessary and its pidfile is
-    # provably still someone else's live winner: short-circuit to "adopted" WITHOUT spawning a
-    # child or touching the pidfile. As a second, independent check (belt-and-suspenders, since
-    # `pid_is_boundary_service` only proves the process is A boundary_service for this world, not
-    # that it has finished binding this exact port), also re-probe the boundary URL itself right
-    # here -- if it now answers OK, some concurrent spawn has already won, pidfile or not, and this
-    # is an adopt too.
-    #
-    # Only when BOTH checks say "not live" is the pidfile provably describing either a dead pid or
-    # no pid at all -- safe to clear structurally, never on trust alone (the same standard `stop`
-    # already holds itself to).
-    #
-    # RESIDUAL WINDOW: the check-then-unlink pair below is still, in principle, two separate
-    # observations with a gap between them -- a winner's bind could theoretically land in that gap.
-    # But the gap is now a handful of Python bytecodes (a stat + a read + a /proc read + a possible
-    # HTTP probe, no sleep anywhere), several orders of magnitude narrower than the previous
-    # design's actual exposure (an entire concurrent invocation's subprocess.Popen-to-poll-loop
-    # lifetime). It is not eliminated because two independent OS-level processes cannot coordinate
-    # a single atomic test-and-clear on a plain file without a second synchronization primitive
-    # (e.g. flock) that this project has not introduced here -- the true zero-window backstop
-    # remains the spawned child's own O_CREAT|O_EXCL pidfile write in serving/boundary_service.py:
-    # a straggler that DOES lose to a winner born inside this narrow gap simply fails its own
-    # bind() (the winner already holds the port) and this function's own poll loop below correctly
-    # reports "adopted" either way -- the only thing this fix closes is DESTROYING the winner's
-    # pidfile in the process, not the (already-handled) race over who gets to serve.
+    # ROUND-4 REVIEW SEVERE-A FIX (this comment previously claimed the pid check was "belt-and-
+    # suspenders" over an independent re-probe -- FALSE against the code below it: the pid check
+    # used to return "adopted" on its own, unconditionally, WITHOUT the probe ever running. That
+    # let a decoy process merely NAMED like `serving.boundary_service` for this exact toml (its
+    # cmdline matches, but it is bound to nothing at all) get adopted outright, and let a STALE
+    # service still holding an OLD port -- e.g. after an operator edited deployment.json's port
+    # without restarting the boundary -- get adopted for the WRONG port. Fixed: `pid_is_boundary_
+    # service` may only ever inform the SPAWN decision (see below); it is NEVER, by itself,
+    # sufficient to return "adopted" -- only a successful probe() of THIS world's own actual
+    # boundary_url may do that. So: read the pidfile's own claim (if any) first, purely as a
+    # candidate winner_pid to report if adoption turns out to be warranted, then ALWAYS probe
+    # before deciding anything.
     existing_pid: int | None = None
     if pidfile.is_file():
         try:
             existing_pid = int(pidfile.read_text(encoding="utf-8").strip())
         except (OSError, ValueError):
             existing_pid = None
-    if existing_pid is not None and pid_is_boundary_service(existing_pid, toml_path):
-        return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=existing_pid,
-                             log_path=None, detail=None)
+    pid_looks_like_boundary_service = (
+        existing_pid is not None and pid_is_boundary_service(existing_pid, toml_path)
+    )
     outcome, _detail = probe(url, boundary_deployment)
     if outcome == OK:
         return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=existing_pid,
                              log_path=None, detail=None)
-    # Neither check found a live winner: whatever this pidfile names (if anything) is provably
-    # stale (a dead pid, an unrelated process, or simply absent) -- clearing it here is safe and
-    # necessary so the child's own O_CREAT|O_EXCL write below does not fail spuriously.
+    # The probe FAILED -- regardless of what pid_is_boundary_service said. Even if
+    # `pid_looks_like_boundary_service` is True (a real serving.boundary_service process for this
+    # toml IS alive under that pid), it evidently is not the thing answering this world's own
+    # boundary_url right now -- a decoy that never bound anything, or a stale service still bound
+    # to an old, no-longer-configured port, look identical to the pid check alone. Whatever the
+    # pidfile names is therefore not a valid adoption target either way: clearing it here is safe
+    # and necessary so the child's own O_CREAT|O_EXCL write below does not fail spuriously against
+    # content this function has already proven is not a reachable winner.
+    #
+    # RESIDUAL WINDOW: the check-then-unlink pair below is still, in principle, two separate
+    # observations with a gap between them -- a winner's bind could theoretically land in that gap.
+    # But the gap is now a handful of Python bytecodes (a stat + a read + a /proc read + an HTTP
+    # probe, no sleep anywhere), several orders of magnitude narrower than the previous design's
+    # actual exposure (an entire concurrent invocation's subprocess.Popen-to-poll-loop lifetime).
+    # It is not eliminated because two independent OS-level processes cannot coordinate a single
+    # atomic test-and-clear on a plain file without a second synchronization primitive (e.g. flock)
+    # that this project has not introduced here -- the true zero-window backstop is now TWO deep:
+    # `serving/boundary_service.py`'s own O_CREAT|O_EXCL pidfile write, AND (round-4 review SEVERE-
+    # B fix) that module's own reclaim-if-stale handling of an EEXIST there, AND this function's
+    # own post-poll ground-truth check below (against a straggler's own child winning despite a
+    # stale pidfile surviving the squat trap) -- a straggler that loses to a winner born inside
+    # this narrow gap simply fails its own bind() and this function's own poll loop below still
+    # resolves the outcome truthfully either way.
     pidfile.unlink(missing_ok=True)
     py = sys.executable
     argv_child = [py, "-m", "serving.boundary_service", "--config", str(toml_path),
@@ -220,8 +246,44 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
             if outcome != OK:
                 time.sleep(_POLL_INTERVAL_S)
                 continue
-            status = "own" if winner_pid == proc.pid else "adopted"
-            return SpawnOutcome(status=status, proc_pid=proc.pid, winner_pid=winner_pid,
+            if winner_pid == proc.pid:
+                return SpawnOutcome(status="own", proc_pid=proc.pid, winner_pid=winner_pid,
+                                     log_path=log_path, detail=None)
+            # ROUND-4 REVIEW SEVERE-B FIX (item 2): the pidfile disagrees with THIS invocation's
+            # own child pid, even though the boundary now answers OK. Two shapes look identical
+            # from here: (a) a genuine sibling invocation actually won the bind and OUR OWN child
+            # lost (the ordinary, already-handled race -- this invocation's child should be
+            # exiting or dead) -- true "adopted"; or (b) `serving/boundary_service.py`'s own
+            # O_CREAT|O_EXCL pidfile write lost to a STALE file that was left in place (the squat
+            # trap that module's own EEXIST branch is documented against), in which case OUR OWN
+            # CHILD is the one that actually won the real bind()+listen() and is the one answering
+            # -- reporting "adopted" here would be a FALSE narrative (this invocation's own spawn
+            # did NOT lose; the pidfile is merely stale/wrong). Never assert either story on trust
+            # alone: if this invocation's own child is still alive, ground-truth it against the
+            # kernel's own socket table (the same authority `ss` gives seen-red/umbrella-cli-
+            # ensure-running's own case g) before deciding.
+            if proc.poll() is None:
+                port_holder = _pid_holding_port(port)
+                if port_holder == proc.pid:
+                    return SpawnOutcome(status="own", proc_pid=proc.pid, winner_pid=proc.pid,
+                                         log_path=log_path, detail=None)
+                if port_holder is not None:
+                    return SpawnOutcome(status="adopted", proc_pid=proc.pid,
+                                         winner_pid=port_holder, log_path=log_path, detail=None)
+                # `ss` itself could not name a holder (missing binary, transient read failure, or
+                # a permissions gap) -- do not assert either story; the truth is indeterminate,
+                # and saying so loudly beats a confident lie.
+                return SpawnOutcome(
+                    status="failed", proc_pid=proc.pid, winner_pid=None, log_path=log_path,
+                    detail=(f"REFUSED -- {url} answers OK, but the pidfile at {pidfile} names "
+                            f"pid {winner_pid}, disagreeing with this invocation's own spawned "
+                            f"child (pid {proc.pid}, still alive) -- and `ss` could not "
+                            f"independently confirm which process actually holds port {port} "
+                            f"(missing binary, or a transient read failure). This is a genuine, "
+                            f"unresolved ambiguity, not a settled race -- do not trust either pid "
+                            f"on faith. Inspect {log_path}, and run `ss -ltnp | grep :{port}` by "
+                            f"hand to find the real winner before acting."))
+            return SpawnOutcome(status="adopted", proc_pid=proc.pid, winner_pid=winner_pid,
                                  log_path=log_path, detail=None)
         if proc.poll() is not None:
             outcome, _detail = probe(url, boundary_deployment)
@@ -238,7 +300,14 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
               f"(pid {proc.pid}) "
               + (f"exited with code {child_exit}" if child_exit is not None else "is still running")
               + f" -- see {log_path} for the diagnosis (a genuinely-held port, an invalid "
-                f"boundary-multiplex.toml, or a slow-starting process needing a longer wait).")
+                f"boundary-multiplex.toml, or a slow-starting process needing a longer wait)."
+              + (f" Note: the pre-existing pidfile at {pidfile} named pid {existing_pid}, which "
+                 f"IS a live serving.boundary_service process for this world's own toml -- but "
+                 f"evidently not one answering {url} (round-4 review SEVERE-A: the pid check "
+                 f"alone is never trusted for adoption). This may be a stale service still bound "
+                 f"to a different, previously-configured port; check its own log/cmdline before "
+                 f"assuming this spawn attempt's own failure is unrelated to it."
+                 if pid_looks_like_boundary_service else ""))
     return SpawnOutcome(status="failed", proc_pid=proc.pid, winner_pid=None, log_path=log_path,
                         detail=detail)
 

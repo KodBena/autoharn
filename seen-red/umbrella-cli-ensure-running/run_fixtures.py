@@ -59,6 +59,21 @@ Cases:
                                  point is fine and expected against this scratch, DB-less config;
                                  what matters is the call is no longer `BoundaryUnreachable`).
 
+  k-hot-service-late-straggler -- round-2 review AXIS 2 SEVERE: a winner's own live pidfile must
+                                 never be destroyed by a later straggler's own spawn_and_wait call
+                                 against the same world.
+  k2-adopted-requires-probe -- round-4 review SEVERE-A (red-first against pre-fix code): a decoy
+                                 process named like serving.boundary_service for this exact toml
+                                 (passes the pid identity check) but bound to nothing at all (no
+                                 listener on the URL) must NEVER be adopted -- the pid check alone
+                                 must never suffice; only a successful probe() may.
+  k3-stale-squat-reclamation -- round-4 review SEVERE-B item 1 (red-first against pre-fix code): a
+                                 pidfile pre-seeded with a dead pid, present when serving/
+                                 boundary_service.py's own O_CREAT|O_EXCL pidfile write loses to
+                                 that stale file, must be RECLAIMED (rewritten to the real winner's
+                                 own pid) rather than merely warned about and left stale forever --
+                                 and 'autoharn service stop' must then work against it.
+
 RUN: python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
 (needs a free loopback port; picks one dynamically to avoid colliding with any of this host's
 many concurrent boundary_service test fixtures)
@@ -438,6 +453,140 @@ def main() -> int:
         shutil.rmtree(k_scratch, ignore_errors=True)
 
     shutil.rmtree(scratch, ignore_errors=True)
+
+    # k2-adopted-requires-probe (round-4 review SEVERE-A, red-first against the pre-fix code): a
+    # DECOY process whose own cmdline matches serving.boundary_service AND this exact toml path
+    # (so pid_is_boundary_service's identity check says "yes") but which is bound to NOTHING at
+    # all -- no listener anywhere on k2_url -- must NEVER be adopted. Pre-fix code returned
+    # "adopted" straight off the pid check, without ever calling probe(); the fix requires a
+    # successful probe() before any "adopted" verdict, so this decoy is refused-over-and-spawned-
+    # past, never adopted.
+    k2_scratch = Path("/tmp") / f"umbrella-cli-ensure-running-decoy-fixture-{os.getpid()}"
+    k2_scratch.mkdir(parents=True, exist_ok=True)
+    k2_port = _free_port()
+    k2_toml = k2_scratch / "boundary-multiplex.toml"
+    k2_toml.write_text(
+        "[deployments.svctest]\n"
+        "pghost = \"192.168.122.1\"\npgdatabase = \"toy\"\npguser = \"toy_rw\"\n"
+        "pgschema = \"toy\"\npgkern = \"toy_kernel\"\n", encoding="utf-8")
+    k2_url = f"http://127.0.0.1:{k2_port}"
+    k2_pidfile = k2_scratch / ".autoharn-service.pid"
+    decoy2 = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(300)",
+         "serving.boundary_service", str(k2_toml)])
+    try:
+        k2_pidfile.write_text(str(decoy2.pid), encoding="utf-8")
+        outcome = er.spawn_and_wait(k2_scratch, k2_url, k2_port, "svctest")
+        if outcome.status == "adopted":
+            print(f"k2-adopted-requires-probe: FAIL -- adopted a decoy (pid {decoy2.pid}) that "
+                  f"was named like serving.boundary_service for this toml but bound to nothing "
+                  f"(outcome={outcome!r})")
+            ok = False
+        else:
+            print(f"k2-adopted-requires-probe: PASS (status={outcome.status!r}, never adopted "
+                  f"the bound-to-nothing decoy; the pid check alone never suffices)")
+    finally:
+        decoy2.terminate()
+        try:
+            decoy2.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            decoy2.kill()
+        if k2_pidfile.is_file():
+            try:
+                real_pid = int(k2_pidfile.read_text(encoding="utf-8").strip())
+                if real_pid != decoy2.pid:
+                    os.kill(real_pid, 15)
+            except (OSError, ValueError):
+                pass
+        shutil.rmtree(k2_scratch, ignore_errors=True)
+
+    # k3-stale-squat-reclamation (round-4 review SEVERE-B item 1, red-first against the pre-fix
+    # code): a pidfile pre-seeded with a genuinely DEAD pid sits at the exact path
+    # serving/boundary_service.py's own --pidfile targets. Invoking that module DIRECTLY (bypassing
+    # ensure_running.py's own pre-clear, which would otherwise unlink an obviously-stale file
+    # before the child ever runs -- this fixture exists specifically to prove boundary_service.py's
+    # OWN O_CREAT|O_EXCL-lost-to-a-stale-file branch reclaims rather than merely warns) must
+    # rewrite the pidfile to name the real winner, and `autoharn service stop` must then work
+    # against it. Pre-fix, that branch only ever warned and left the dead pid in place forever --
+    # unstoppable via the tracked path even though the real service is healthy.
+    k3_scratch = Path("/tmp") / f"umbrella-cli-ensure-running-stale-squat-fixture-{os.getpid()}"
+    k3_scratch.mkdir(parents=True, exist_ok=True)
+    k3_port = _free_port()
+    k3_toml = k3_scratch / "boundary-multiplex.toml"
+    k3_toml.write_text(
+        "[deployments.svctest]\n"
+        "pghost = \"192.168.122.1\"\npgdatabase = \"toy\"\npguser = \"toy_rw\"\n"
+        "pgschema = \"toy\"\npgkern = \"toy_kernel\"\n", encoding="utf-8")
+    k3_url = f"http://127.0.0.1:{k3_port}"
+    k3_dep_path = k3_scratch / "deployment.json"
+    k3_dep_path.write_text(json.dumps({
+        "db": "toy", "host": "192.168.122.1", "kern": "toy_kernel", "name": "svctest",
+        "role": "toy_rw", "schema": "toy",
+        "boundary_url": k3_url, "boundary_deployment": "svctest",
+    }), encoding="utf-8")
+    k3_env = dict(os.environ)
+    k3_env["PICKUP_DEPLOYMENT"] = str(k3_dep_path)
+    k3_pidfile = k3_scratch / ".autoharn-service.pid"
+    _dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    _dead.wait(timeout=5)
+    dead_pid = _dead.pid
+    k3_pidfile.write_text(str(dead_pid), encoding="utf-8")
+    service_proc = subprocess.Popen(
+        [sys.executable, "-m", "serving.boundary_service", "--config", str(k3_toml),
+         "--port", str(k3_port), "--pidfile", str(k3_pidfile)],
+        cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        start_new_session=True)
+    try:
+        deadline = time.monotonic() + 10.0
+        up = False
+        while time.monotonic() < deadline:
+            if er.probe(k3_url, "svctest")[0] == er.OK:
+                up = True
+                break
+            time.sleep(0.1)
+        if not up:
+            _out, _err = service_proc.communicate(timeout=2) if service_proc.poll() is not None else ("", "")
+            print(f"k3-stale-squat-reclamation: FAIL -- SETUP, service never came up "
+                  f"(stdout={_out!r} stderr={_err!r})")
+            ok = False
+        else:
+            reclaimed_pid: int | None = None
+            if k3_pidfile.is_file():
+                try:
+                    reclaimed_pid = int(k3_pidfile.read_text(encoding="utf-8").strip())
+                except (OSError, ValueError):
+                    reclaimed_pid = None
+            if reclaimed_pid != service_proc.pid:
+                print(f"k3-stale-squat-reclamation: FAIL -- pidfile still names {reclaimed_pid} "
+                      f"(pre-seeded dead pid was {dead_pid}), not the real winner "
+                      f"{service_proc.pid}")
+                ok = False
+            else:
+                r = _run([str(AUTOHARN), "service", "stop"], k3_env)
+                if r.returncode != 0 or "sent SIGTERM" not in r.stdout:
+                    print(f"k3-stale-squat-reclamation: FAIL -- stop after reclamation: exit "
+                          f"{r.returncode}, stdout={r.stdout!r}, stderr={r.stderr!r}")
+                    ok = False
+                else:
+                    print("k3-stale-squat-reclamation: PASS (dead-pid stale pidfile reclaimed to "
+                          "name the real winner; stop worked against it)")
+    finally:
+        if k3_pidfile.is_file():
+            try:
+                pid = int(k3_pidfile.read_text(encoding="utf-8").strip())
+                os.kill(pid, 15)
+            except (OSError, ValueError):
+                pass
+        else:
+            try:
+                os.kill(service_proc.pid, 15)
+            except OSError:
+                pass
+        try:
+            service_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            service_proc.kill()
+        shutil.rmtree(k3_scratch, ignore_errors=True)
 
     if ok:
         print("\nALL CASES PASS")

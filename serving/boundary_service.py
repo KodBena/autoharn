@@ -352,6 +352,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bootstrap"))
 import deployment_record  # filing/deployment_record.py -- the ONE home for the deployment.json shape  # noqa: E402
+# serving/ensure_running.py's own `pid_is_boundary_service` -- the ONE identity check `autoharn
+# service stop` and ensure_running.py's own pre-spawn pidfile check both already use (ADR-0012
+# P1) -- reused here (round-4 review SEVERE-B item 1) so this module's own stale-pidfile-squat
+# reclaim asks the exact SAME question, never a second, drifting copy of the same logic. No
+# import cycle: ensure_running.py imports boundary_cli_client, never this module.
+import ensure_running  # noqa: E402
 
 import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3)
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
@@ -2414,28 +2420,76 @@ def main(argv: list[str] | None = None) -> int:
         try:
             fd = os.open(args.pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
         except FileExistsError:
-            # Round-2 review MODERATE-silent fix: this branch means THIS process just won a real
-            # bind()+listen() -- it IS the boundary, right now -- but a pidfile already sat at
-            # this exact path (an unrelated leftover, a caller reusing a stale path, or a lost
-            # race against ensure_running.py's own pre-unlink identity check). Silently passing
-            # here left a WRONG-PID pidfile in place with zero diagnostic: the service is up and
-            # correct, but UNRECORDED under its own real pid -- `autoharn service stop` would
-            # later act (or refuse to act) on whatever stale pid that file names, not on this
-            # process. Never fatal (the bind already succeeded; the service genuinely IS up and
-            # serving) -- but never silent either.
+            # Round-2 review MODERATE-silent fix, ROUND-4 REVIEW SEVERE-B (item 1) EXTENSION:
+            # this branch means THIS process just won a real bind()+listen() -- it IS the
+            # boundary, right now -- but a pidfile already sat at this exact path (an unrelated
+            # leftover, a caller reusing a stale path, or a lost race against ensure_running.py's
+            # own pre-unlink identity check). The round-2 fix only ever WARNED and left the stale
+            # file untouched, unconditionally -- which is exactly the "stale-pidfile squat trap"
+            # round-4 review's SEVERE-B finding named: `autoharn service stop` would act (or,
+            # correctly, refuse to act) on whatever stale content sat there, while the REAL winner
+            # -- this process -- served unrecorded, and the only truthful diagnostic was buried in
+            # this stderr line, never reaching the pidfile itself.
+            #
+            # Fix: read the squatting content and ask the SAME identity question `stop` and
+            # ensure_running.py's own pre-clear already ask -- is it a LIVE serving.boundary_
+            # service process for THIS world's own --config? If the squatter is dead, unparseable,
+            # or simply not a boundary_service at all, this pidfile is provably stale: reclaim it
+            # ATOMICALLY (a tempfile in the SAME directory + os.replace, never a bare truncate-in-
+            # place, so a reader never observes a half-written file) so `stop` targets the TRUE,
+            # live winner instead of dead/wrong content. Only when the squatter IS a live
+            # serving.boundary_service for this same toml -- a genuinely surprising case (this
+            # process's own successful bind()+listen() proves nothing else holds THIS port, but
+            # says nothing about a live sibling using the same toml against a different one) -- is
+            # the file left untouched, warning exactly as the round-2 fix always did.
             try:
                 squatting_content = Path(args.pidfile).read_text(encoding="utf-8")
             except OSError as read_err:
                 squatting_content = f"<unreadable: {read_err.__class__.__name__}: {read_err}>"
-            sys.stderr.write(
-                f"boundary_service: WARNING -- pidfile {args.pidfile} already existed (content: "
-                f"{squatting_content!r}) when this process (pid {os.getpid()}) won the "
-                f"bind()+listen() on {args.host}:{args.port}. The service IS up and correctly "
-                f"serving under pid {os.getpid()}, but that pid was NOT recorded -- this existing "
-                f"pidfile was left untouched rather than overwritten. 'autoharn service stop' will "
-                f"act on the pidfile's OLD content, which is very likely wrong now. Remedy: remove "
-                f"{args.pidfile} by hand and re-run with --pidfile once this process is confirmed "
-                f"healthy, or stop this pid ({os.getpid()}) directly.\n")
+            squatting_pid: int | None = None
+            try:
+                squatting_pid = int(squatting_content.strip())
+            except ValueError:
+                squatting_pid = None
+            squatter_is_live_boundary_service = (
+                squatting_pid is not None
+                and ensure_running.pid_is_boundary_service(squatting_pid, Path(args.config))
+            )
+            if squatter_is_live_boundary_service:
+                sys.stderr.write(
+                    f"boundary_service: WARNING -- pidfile {args.pidfile} already existed "
+                    f"(content: {squatting_content!r}) when this process (pid {os.getpid()}) won "
+                    f"the bind()+listen() on {args.host}:{args.port}. The service IS up and "
+                    f"correctly serving under pid {os.getpid()}, but that pid was NOT recorded -- "
+                    f"the existing pidfile names pid {squatting_pid}, which IS a live "
+                    f"serving.boundary_service process for this same --config, so it was left "
+                    f"untouched rather than overwritten (never reclaim a pidfile that may "
+                    f"legitimately belong to a live sibling). 'autoharn service stop' will act on "
+                    f"the pidfile's OLD content, which is very likely wrong now for THIS process. "
+                    f"Remedy: remove {args.pidfile} by hand and re-run with --pidfile once this "
+                    f"process is confirmed healthy, or stop this pid ({os.getpid()}) directly.\n")
+            else:
+                tmp_fd, tmp_path = tempfile.mkstemp(
+                    dir=str(Path(args.pidfile).parent), prefix=".autoharn-service.pid.")
+                try:
+                    with os.fdopen(tmp_fd, "w") as f:
+                        f.write(str(os.getpid()))
+                    os.replace(tmp_path, args.pidfile)
+                except OSError:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+                sys.stderr.write(
+                    f"boundary_service: RECLAIMED stale pidfile {args.pidfile} -- its previous "
+                    f"content ({squatting_content!r}) was not a live serving.boundary_service "
+                    f"process for this world's own --config {args.config} (dead pid, unparseable "
+                    f"content, or an unrelated process -- PID REUSE can produce any of these). "
+                    f"Rewrote it, atomically (tempfile + rename, never a bare truncate), to this "
+                    f"process's own pid {os.getpid()}, which just won the real bind()+listen() on "
+                    f"{args.host}:{args.port}. 'autoharn service stop' now targets the real "
+                    f"winner.\n")
         else:
             with os.fdopen(fd, "w") as f:
                 f.write(str(os.getpid()))

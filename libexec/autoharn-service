@@ -181,7 +181,8 @@ def cmd_start(argv: list[str]) -> int:
 
 def cmd_stop(argv: list[str]) -> int:
     dep = _load_deployment()
-    url, _port = _boundary_url_and_port(dep)
+    url, port = _boundary_url_and_port(dep)
+    boundary_deployment = _boundary_deployment(dep)
     world_dir = DEPLOYMENT_PATH.parent
     toml_path = world_dir / "boundary-multiplex.toml"
     pidfile = _pidfile_path()
@@ -200,11 +201,30 @@ def cmd_stop(argv: list[str]) -> int:
         return 1
     if not er.pid_is_boundary_service(pid, toml_path):
         pidfile.unlink(missing_ok=True)
+        # ROUND-4 REVIEW SEVERE-B FIX (item 3): the pidfile pid failing this identity check
+        # (dead, unparseable, or an unrelated process -- PID REUSE can produce any of these) does
+        # NOT mean nothing is serving at `url` right now -- the stale-pidfile-squat trap this
+        # round's review named means a REAL, UNRECORDED winner can be answering this exact URL at
+        # this exact moment while this pidfile named something else entirely. The pre-fix message
+        # here was clean-success-shaped ("stale pidfile was removed; nothing was signaled") with
+        # no hint that the operator's actual boundary might still be up and simply untracked --
+        # probe it, and if it answers, TEACH the recovery instead of leaving the operator to
+        # rediscover it by hand.
+        unrecorded_note = ""
+        outcome, _detail = er.probe(url, boundary_deployment)
+        if outcome == er.OK:
+            unrecorded_note = (
+                f" NOTE: {url} still answers as a healthy, protocol-compatible boundary right "
+                f"now -- this looks like an UNRECORDED winner (e.g. a stale pidfile squat this "
+                f"tool's own spawn lost to, or an operator-started process this tool never "
+                f"tracked). This tool has no record of that pid and will not guess it. Check "
+                f"{world_dir / 'service.log'} for which pid actually bound the port, or run `ss "
+                f"-ltnp | grep :{port}` directly to find it, then stop that pid by hand.")
         print(f"autoharn service: REFUSED -- pidfile named pid {pid}, which is not a "
               f"serving.boundary_service process for this world's own boundary-multiplex.toml "
               f"({toml_path}) -- PID REUSE can make a stale pidfile name an unrelated process; "
               f"signaling it on trust risks killing a bystander while reporting success. The "
-              f"stale pidfile was removed; nothing was signaled.", file=sys.stderr)
+              f"stale pidfile was removed; nothing was signaled.{unrecorded_note}", file=sys.stderr)
         return 1
     try:
         os.kill(pid, signal.SIGTERM)
