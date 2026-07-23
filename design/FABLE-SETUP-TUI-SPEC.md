@@ -126,7 +126,10 @@ dependencies (the builder states which was available and used).~~ **SUPERSEDED
 the build interpreter had neither library, so only the fallback exists — and the
 maintainer, meeting the result, commissioned the real thing):** the interactive face
 is a Textual application per
-[FABLE-SETUP-TUI-TEXTUAL-SPEC.md](FABLE-SETUP-TUI-TEXTUAL-SPEC.md); the numbered-menu
+[FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)
+(that build was itself later deleted wholesale and replaced by the configtree rebuild,
+[FABLE-SETUP-TUI-REBUILD-SPEC.md](FABLE-SETUP-TUI-REBUILD-SPEC.md) — this clause is now
+history, the TEXTUAL-SPEC doc moved to vestigial accordingly); the numbered-menu
 backend survives as the explicit `--plain` / textual-absent fallback and as the
 `--scripted` witnessing substrate, which stays dependency-free. No daemon
 management beyond emitting unit text (PREPARED). No editing of the operator's real

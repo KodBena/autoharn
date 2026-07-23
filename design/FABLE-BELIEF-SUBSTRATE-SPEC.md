@@ -5,8 +5,9 @@
 **Status:** DRAFT FOR MAINTAINER RATIFICATION. Fable-authored, fresh-context, 2026-07-22, per
 the standing rule that nobody edits `kernel/lineage/` without a Fable-authored,
 maintainer-ratified spec (CLAUDE.md ORCHESTRATION). Implements the RATIFIED consult
-[design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md](FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md)
-under the maintainer's resolved decisions (ledger rows 1893–1894, 1909–1910). Nothing here is
+[design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md](../vestigial_documentation/design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md)
+(moved to vestigial 2026-07-23: its recommendations are now built, s53/s54, and this
+spec is the live reference copy) under the maintainer's resolved decisions (ledger rows 1893–1894, 1909–1910). Nothing here is
 applied to any existing world: the v2 deltas reach reality only by entering a FUTURE world's
 [birth chain](../GLOSSARY.md#birth-chain) (runs are strictly linear, maintainer ruling
 2026-07-11). The three genuinely open choices are collected in §10; everything else is fixed by

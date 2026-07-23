@@ -641,3 +641,78 @@ call):**
 - `tools/makespan-scheduler-PROVENANCE.md` — manifest classed IMPLEMENTED-LEGACY, but it is
   submodule-adjacent provenance (vendored-submodule documentation directly under `tools/`); row
   1625 exception, left in place.
+
+## 2026-07-23 pre-2.0.0 documentation sweep (ledger row 1171 commission)
+
+A third sweep, this time classifying every `design/*.md` file by its OWN evidence (self-declared
+status markers, whether its build/commission landed, and — the decisive test — whether any
+current code, gate, kernel/lineage file, or law/adr document still cites it as a governing basis)
+rather than by age or a survey manifest. 7 files moved, one-paragraph-each below; every inbound
+relative link this move broke was repointed to the new path (verified green,
+`gates/link_integrity.py`), never rewritten in prose. A wider set of ~15 borderline candidates was
+investigated and kept LIVING after checking their citers turned up load-bearing hits in current
+code/gates/law that a citation-count-only pass would have missed — see the session report for the
+full table; naming two here because moving them was seriously considered and would have been
+wrong: `design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md` (cited pervasively by
+`serving/boundary_service.py` and siblings, the actual running multiplexing architecture) and
+`design/MAINT-REVIEW-GAP-SCOPE-SEMANTICS-RULING.md` (cited by `law/adr/0017` and
+`engine/lp/review_gap_audit.lp`).
+
+- **`design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md`** →
+  `vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md`. Specified the Textual-shell
+  backend (`tools/setup_tui/ui_textual.py`) built 2026-07-19. That module — along with `ui.py`,
+  `flow_position.py`, and `elements.py` — was deleted wholesale 2026-07-22 by the commission
+  `design/FABLE-SETUP-TUI-REBUILD-SPEC.md` ("delete the teletype, build a real Textual wizard";
+  `user-guide/USER-RECIPES-FAQ.md` confirms the deletion, "seen-red/setup-tui-textual-shell
+  (deleted 2026-07-22 ... wholesale rebuild)"). No current code imports or cites this design as a
+  governing basis; the sole live inbound link, in `design/FABLE-SETUP-TUI-SPEC.md`, was repointed
+  here with a note that the clause is now history.
+- **`design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md`** →
+  `vestigial_documentation/design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md`. Specified the typed-element
+  content vocabulary (`tools/setup_tui/elements.py`, `Ui.emit`), explicitly named for deletion by
+  `FABLE-SETUP-TUI-REBUILD-SPEC.md` ("elements.py and render_text (the typed-teletype
+  vocabulary) — the content it carried lives on in `content/`; Textual widgets render it
+  directly"). `elements.py` does not exist in the current tree. Remaining mentions
+  (`gates/max_lines.py`, `design/CONSULT-OPUS-UI-PROSCRIPTIONS-2026-07-22.md`) are plain-text
+  historical citations, not markdown links, and not governing.
+- **`design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md`** →
+  `vestigial_documentation/design/FABLE-SETUP-TUI-NAVIGATION-SPEC.md`. Specified back-navigation
+  over `flow_position.py`'s hand-rolled back-stack, which `FABLE-SETUP-TUI-REBUILD-SPEC.md`
+  deleted by name ("`flow_position.py` (the hand-rolled back-stack)"). The one live-code mention
+  (`tools/setup_tui/config_seam.py`'s docstring, referencing `FlowPosition.last_answers`) is
+  itself now a stale comment pointing at a class that no longer exists anywhere in the tree —
+  flagged in the session report as a small hazard for a follow-up touch, not fixed here (out of
+  this sweep's scope to edit code prose).
+- **`design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md`** →
+  `vestigial_documentation/design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md`. A banked, point-in-time
+  Fable consult on `design/Autoharn.idr`'s correspondence and lowering opportunities. Its own
+  adjudication note (ledger row 1644) records the one actionable finding (the s47 correctness gap)
+  fixed same-day, and the remaining items "filed as candidates for the maintainer, not acted on" —
+  i.e. any further action lives in the ledger/tracker, not this document. Zero live citations
+  outside one sibling design doc (link repointed) and the Idris source's own historical comment
+  (not a markdown link).
+- **`design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md`** →
+  `vestigial_documentation/design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md`. The
+  consult input that `design/FABLE-BELIEF-SUBSTRATE-SPEC.md` states it "Implements ... the
+  RATIFIED consult" of; that spec's own kernel deltas (`kernel/lineage/s53-belief-substrate.sql`,
+  `s54-belief-views.sql`) are built. Per this project's own precedent (a consult once its
+  recommendations are ratified and built becomes a historical input, not a standing reference),
+  moved with the live citing link in `FABLE-BELIEF-SUBSTRATE-SPEC.md` repointed here.
+- **`design/PHIL-DEFEASIBLE-DECISIONS-AND-HYDRATED-DOCS.md`** →
+  `vestigial_documentation/design/PHIL-DEFEASIBLE-DECISIONS-AND-HYDRATED-DOCS.md`. A 2026-07-14
+  point-in-time philosophical rumination on two speculative ideas (a defeasible maintainer-decision
+  model; a FUSE-mounted knowledge-hydration VFS), explicitly self-declared "not living prose ...
+  superseded by any later maintainer ruling." Neither idea has been built (no FUSE/VFS machinery
+  exists anywhere in the tree); zero live citations found outside a migration manifest and the
+  epistemic-doxastic consult moved alongside it in this same sweep (its internal link to this file
+  needed no repointing — both files landed in the same new directory).
+- **`design/FABLE-SUBSTITUTION-OF-AUTHORITY-CONSULT-2026-07-19.md`** →
+  `vestigial_documentation/design/FABLE-SUBSTITUTION-OF-AUTHORITY-CONSULT-2026-07-19.md`. A banked
+  consult checking whether the substituted-orchestrator class was subsumed by work since
+  2026-07-18; its own headline finding is that the representational mechanisms it names
+  (`./otel-attest`, `kernel/lineage/s44-model-identity-attestation.sql`, the defeat pipeline,
+  `kernel/lineage/s46-credited-views.sql`) are already shipped, and the one genuinely open residual
+  it identifies (a real-time watchdog) is tracked separately by the still-living
+  `design/ORCH-WATCHDOG-LIVENESS.md` (cited by `tools/watchdog_liveness.py`). Zero live citations
+  outside plain-text mentions (not markdown links) in two other design docs and a migration
+  manifest.

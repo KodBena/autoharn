@@ -3,7 +3,7 @@
 <!-- doc-attest-exempt: build-basis spec; attestation rides witnessed delivery -->
 
 **Status: Fable-authored 2026-07-19, build basis. Commission: ledger row 1818
-(maintainer, verbatim there). Extends [FABLE-SETUP-TUI-SPEC.md](FABLE-SETUP-TUI-SPEC.md)
+(maintainer, verbatim there). Extends [FABLE-SETUP-TUI-SPEC.md](../../design/FABLE-SETUP-TUI-SPEC.md)
 — all posture rules and the `--dry-run`/out-of-sequence amendments bind unchanged —
 and SUPERSEDES that spec's v1 UI-substrate clause (marked at its site). The v1 build
 was conformant: the clause said "textual/urwid ONLY if already installed," the build

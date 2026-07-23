@@ -154,7 +154,10 @@ mid-flow you can finish by hand from what was already printed. Full spec:
 seriously robust experience*").
 
 **The interactive face is a real Textual application**
-([design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md),
+([design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md) —
+that build was itself later deleted wholesale and replaced by the configtree rebuild, see
+[design/FABLE-SETUP-TUI-REBUILD-SPEC.md](../design/FABLE-SETUP-TUI-REBUILD-SPEC.md); this
+whole paragraph is now stale history, flagged not rewritten by the 2026-07-23 doc sweep,
 commission ledger row 1818), superseding [FABLE-SETUP-TUI-SPEC.md](../design/FABLE-SETUP-TUI-SPEC.md)'s
 original v1 "library ONLY if already installed" clause. The maintainer's own words commissioning this: "I tried to run the setup TUI
 after installing
@@ -389,7 +392,7 @@ session:
   seen-red/setup-tui-dry-run-parity (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild)
   (degrades to UNEXERCISED, exit 0, without a reachable Postgres host and the boundary
   service's venv — same honest-degrade posture as this doc pass hit live). This particular
-  table predates [design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)'s Textual-face build and was captured
+  table predates [design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)'s Textual-face build and was captured
   against an interpreter without `textual` installed — kept verbatim as a historical witness,
   per this doc's own no-retro-edit discipline. Where `textual` IS importable that row instead
   reads `available`, and the interactive face above the table becomes the real Textual

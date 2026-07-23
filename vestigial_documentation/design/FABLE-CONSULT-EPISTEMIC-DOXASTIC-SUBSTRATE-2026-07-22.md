@@ -6,15 +6,15 @@ maintainer 2026-07-21 (ledger row 1888, kind=commission, verbatim: *"Commissioni
 entry now which will be implemented right away: typed epistemic-doxastic substrate in the
 ledger so that we can track beliefs and knowledge. Have a Fable consult take a look at the
 collective failure modes and suggest a shape for it."*). Dispatched under
-[ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md): this
+[ADR-0018](../../law/adr/0018-consults-are-not-front-loaded.md): this
 consult received the witnessed problem, its evidence, and the law — no candidate answers.
 Nothing here binds anyone; a kernel delta reaches reality only via a Fable-authored,
-maintainer-ratified spec entering a future [world](../GLOSSARY.md#world)'s
-[birth chain](../GLOSSARY.md#birth-chain) (runs are strictly linear).
+maintainer-ratified spec entering a future [world](../../GLOSSARY.md#world)'s
+[birth chain](../../GLOSSARY.md#birth-chain) (runs are strictly linear).
 This document is input to that spec, not the spec.
 
 **How to read it.** §1 derives what the witnessed failure modes actually demand — the
-[ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Rule 2(a) question
+[ADR-0000](../../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Rule 2(a) question
 ("what type would make this class unrepresentable, or at least
 loud?") applied to collective epistemics. §2 surveys what the kernel already represents and
 what is genuinely absent. §3 proposes the shape. §4 states composition with the existing
@@ -23,9 +23,9 @@ machinery. §5 is this consult's own closure statement. §6 names deliberate exc
 levels are stated per position; where a position is a judgment call rather than a
 derivation, it says so.
 
-**One correction to the commission's surroundings, up front ([ADR-0008](../law/adr/0008-classification-discipline.md) honesty).** The
+**One correction to the commission's surroundings, up front ([ADR-0008](../../law/adr/0008-classification-discipline.md) honesty).** The
 dispatch referred to "the claims-lane vocabulary wherever it is defined." It is defined
-nowhere: no `lane` vocabulary exists in `kernel/lineage/` or [`GLOSSARY.md`](../GLOSSARY.md) (the only
+nowhere: no `lane` vocabulary exists in `kernel/lineage/` or [`GLOSSARY.md`](../../GLOSSARY.md) (the only
 occurrence of the word, `s38-bookkeeping-close.sql` — sNN tokens name the kernel's numbered
 lineage deltas, `kernel/lineage/sNN-*.sql`, and that gloss covers every bare sNN token in this
 document from here on — uses it colloquially for a
@@ -44,7 +44,7 @@ basis, nothing could demand its quantification universe, and nothing could defea
 a human catching it by eye. Each specimen, and the distinction that would have made it
 unrepresentable or loud:
 
-### 1.1 The two-bias audit failure (rows 1884–1887; [design/AUDIT-AC-IA-POSTURE-2026-07-21.md](AUDIT-AC-IA-POSTURE-2026-07-21.md))
+### 1.1 The two-bias audit failure (rows 1884–1887; [design/AUDIT-AC-IA-POSTURE-2026-07-21.md](../../design/AUDIT-AC-IA-POSTURE-2026-07-21.md))
 
 An auditor's absence-verdicts (AC-1/IA-1 "SILENT", from a repo-only search when the
 artifact is born per-deployment) and satisfaction-verdicts (4 of 6 MET-BY-MECHANISM failing
@@ -65,7 +65,7 @@ Row 1887's own three rules are already the type demand, stated as prose:
   universe is the clause list of the requirement's full statement, walked before any
   mechanism is examined. Same field, different universe.
 - The correction arrived only via maintainer challenge plus an independent re-derivation
-  (row 1885, [ADR-0014](../law/adr/0014-executor-second-opinion.md) invoked). The substrate must make *challenge* a typed act — a
+  (row 1885, [ADR-0014](../../law/adr/0014-executor-second-opinion.md) invoked). The substrate must make *challenge* a typed act — a
   contrary record that visibly contests the verdict — not a conversational event.
 
 **Demand 1: claims are typed by quantifier polarity, and each polarity carries a mandatory
@@ -73,7 +73,7 @@ evidence obligation — a universal claim carries its enumerated universe; an ex
 claim carries its witness.** (Confidence: high. This is the sharpest single derivation in
 the evidence; row 1887 wrote the rule, this consult only types it.)
 
-### 1.2 The attestation incident (decision row 293; [ORCH-ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md))
+### 1.2 The attestation incident (decision row 293; [ORCH-ABC-AUDIT-LOOP-RECIPE.md](../../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md))
 
 Two independent fresh reviewers attested a document CLEAN, twice; six defects stood, all
 caught by the maintainer by eye. The diagnosis's deep factor: *dialect blindness* —
@@ -259,7 +259,7 @@ Columns (prefix `belief_`, per the `attest_*`/`refusal_*` house pattern):
 | column | type / domain | obligation |
 | --- | --- | --- |
 | `belief_polarity` | closed CHECK: `universal` \| `existential` | mandatory (two-way kind-shape CHECK) |
-| `belief_universe` | text: the enumerated quantification universe — searched surfaces, clause list, axes, sibling surfaces; `row:<id>` / `artifact:<hash>` tokens existence-checked (s48 pattern), including registry references where a registry exists ([law/STANDARDS-REGISTRY.md](../law/STANDARDS-REGISTRY.md)) | mandatory iff `polarity='universal'` (two-way coupling CHECK) |
+| `belief_universe` | text: the enumerated quantification universe — searched surfaces, clause list, axes, sibling surfaces; `row:<id>` / `artifact:<hash>` tokens existence-checked (s48 pattern), including registry references where a registry exists ([law/STANDARDS-REGISTRY.md](../../law/STANDARDS-REGISTRY.md)) | mandatory iff `polarity='universal'` (two-way coupling CHECK) |
 | `belief_witness` | text: witness tokens (`row:<id>` / `artifact:<hash>`), existence-checked | mandatory iff `polarity='existential'` AND `basis='observed'` |
 | `belief_basis` | closed CHECK: `observed` \| `derived` \| `testimony` \| `assumed` | mandatory |
 | `belief_source` | bigint FK → ledger(id): the source record a testimony relays | mandatory iff `basis='testimony'` (two-way) |
@@ -290,7 +290,7 @@ plus one existential row, and the teach-text should say so.)
    verbatim: the surface list derives from *where the system produces artifacts of that
    kind*, not from where the auditor happens to stand.
 2. `existential`+`observed` without a resolvable `belief_witness` → refused (teach: a
-   finding without its witness "is treated exactly as [ADR-0005](../law/adr/0005-documentation-discipline.md) Rule 9 treats a verdict
+   finding without its witness "is treated exactly as [ADR-0005](../../law/adr/0005-documentation-discipline.md) Rule 9 treats a verdict
    without its artifact: as nothing").
 3. `testimony` without `belief_source`, or `derived` without `belief_premises` → refused.
 4. Witness/universe row-tokens that cite nonexistent rows → refused (s48 mechanism reused).
@@ -299,7 +299,7 @@ plus one existential row, and the teach-text should say so.)
    source, and `observed` demands a witness the relayer does not have. Finding 6's
    laundering path is closed at the type layer.
 
-What stays honestly review-only, declared per [ADR-0011](../law/adr/0011-mechanization-discipline.md) Rule 1: whether an enumerated
+What stays honestly review-only, declared per [ADR-0011](../../law/adr/0011-mechanization-discipline.md) Rule 1: whether an enumerated
 universe is the *right* universe (a lazy universe is representable — the type makes it
 visible and contestable, not impossible), and whether a paraphrase strengthens its source's
 vocabulary. No mechanism reads meaning; the substrate's job is to force the material for
@@ -381,7 +381,7 @@ Two-step, mirroring the attestation family's own v1-statement-convention → s44
   §3.1–3.2, refusals at the s43 boundary, views in kernel, `--layer belief` in
   `engine/lp_registry.py` `LAYERS`. Kind + refusals + derived views is within the
   class-ratified fail-safe *shape* (the standing ruling in
-  [CLAUDE.md](../CLAUDE.md)'s ORCHESTRATION section: a kernel delta that only ADDS
+  [CLAUDE.md](../../CLAUDE.md)'s ORCHESTRATION section: a kernel delta that only ADDS
   refusals, vocabulary, or derived views — nothing existing relaxed or changed — and that
   arrives witnessed on a scratch schema on both polarities enters the birth chain without a
   per-delta maintainer question), but this delta should route to the maintainer as a
@@ -416,7 +416,7 @@ Two-step, mirroring the attestation family's own v1-statement-convention → s44
   premise un-founds that belief in `credited_beliefs` automatically (the chain-in-force
   test), which composes the two calculi without either knowing the other's internals.
 - **ASP layer:** new EDB families (belief/…, `belief_edge/3` for premises/source/contests),
-  capability-gated per the existing `require()` discipline ([FINDINGS.md](../FINDINGS.md)'s
+  capability-gated per the existing `require()` discipline ([FINDINGS.md](../../FINDINGS.md)'s
   F49: a fact family must declare PRODUCED \| CAPABLE \| DEFERRED rather than return a bare
   empty result, because a silent empty is indistinguishable from a verified "none exist" and
   the F49 incident was exactly that confusion reaching a mandatory close check); one new
@@ -444,7 +444,7 @@ creditable only via derived, never-stored views.
   `asof-export` surface is the natural later home).
 - *Sibling surfaces the same shape occurs on:* reviews (§7 Q5 — bridged later, not in v1),
   s44 attestations (already typed; untouched), work-item closes' completion claims
-  ([ADR-0013](../law/adr/0013-execution-integrity.md)'s own, pre-existing term for a different mechanism — a natural later consumer of
+  ([ADR-0013](../../law/adr/0013-execution-integrity.md)'s own, pre-existing term for a different mechanism — a natural later consumer of
   `belief_universe`, named not covered in v1), operator reports (remain prose; beliefs are
   the typed extract, entered by verb, never parsed from prose — §6).
 - *Denomination:* the substrate's "bounds" are closed vocabularies and existence-checked

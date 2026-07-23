@@ -7,7 +7,7 @@ an earlier answer can only kill the wizard and start over. This document is for
 whoever builds or reviews that change.
 
 - **Status:** Proposed (Fable-authored; Track 2.5 of
-  [FABLE-SETUP-TUI-FIELD-STRATEGY.md](FABLE-SETUP-TUI-FIELD-STRATEGY.md), which
+  [FABLE-SETUP-TUI-FIELD-STRATEGY.md](../../design/FABLE-SETUP-TUI-FIELD-STRATEGY.md), which
   also carries the maintainer's full lettered observation list this spec's
   commission quotes from). Build deliberately LAST in the track: it
   restructures the driver loop the other Track-2 builds pass through, and it wants
@@ -61,7 +61,7 @@ Navigation exists **only in the decision phase**. The commit boundary is unchang
 (one commit, journal-backed, resume as built in d8a375e): once the operator confirms
 the final review screen, the plan freezes and navigation ends. Going back never
 un-executes anything because nothing has executed. (The pure-core restructure —
-prior work, [FABLE-SETUP-TUI-PURE-CORE-SPEC.md](FABLE-SETUP-TUI-PURE-CORE-SPEC.md),
+prior work, [FABLE-SETUP-TUI-PURE-CORE-SPEC.md](../../design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md),
 that made every screen's decision logic a pure function queueing effects for a
 single later commit phase — is what makes this spec cheap: moving the cursor is
 position math over those pure functions, with no effects to undo.) Interaction with

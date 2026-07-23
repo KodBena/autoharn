@@ -46,12 +46,12 @@ The composition is where the sharpest new rule falls out.
 ### 1.1 What already exists, so the new part can be seen plainly
 
 The ledger is already a defeasible store, by design and in production. The
-ledger–logic marriage design ([ORCH-LEDGER-LOGIC-MARRIAGE.md](../vestigial_documentation/design/ORCH-LEDGER-LOGIC-MARRIAGE.md))
+ledger–logic marriage design ([ORCH-LEDGER-LOGIC-MARRIAGE.md](ORCH-LEDGER-LOGIC-MARRIAGE.md))
 settled the two-theory split: the stored record is `T_event`, a monotone history of
 timestamped speech acts; "currently valid" is `T_now`, a non-monotone theory derived by
 closure over defeater edges (`supersedes` for whole-row defeat, `amends` for clause-level
 defeat) and never stored. The engine already computes this in ASP
-([engine/lp/ledger_tnow.lp](../engine/lp/ledger_tnow.lp)); defaults-with-exceptions is
+([engine/lp/ledger_tnow.lp](../../engine/lp/ledger_tnow.lp)); defaults-with-exceptions is
 answer-set semantics' home ground, exactly as row 689's framing says. "Newer explicit
 rulings defeat older ones" is not a proposal — it is how `./led` has worked all along.
 
@@ -145,7 +145,7 @@ lights*. Worse, the premises enter the store through agent transcription, and th
 has a fresh censure on exactly this path: the 2026-07-13 paraphrase censure (commissions
 verbatim, never paraphrased — a paraphrased brief narrowed scope). A decision model built
 on transcribed rulings is systematized paraphrase; the KR titration record
-([ORCH-KR-TITRATION-EXPLORATION.md](../vestigial_documentation/design/ORCH-KR-TITRATION-EXPLORATION.md)) shows three
+([ORCH-KR-TITRATION-EXPLORATION.md](ORCH-KR-TITRATION-EXPLORATION.md)) shows three
 independent fresh readers misreading the same half-typed datum three different ways.
 
 **Goodhart on the fact base.** Once inferred rulings are actionable, the fact base becomes
