@@ -29,14 +29,26 @@ Cases (spec sec-5's four acceptance bullets, plus the structural refusals sec-2/
                                           (an unresolved child dependency), typed informs instead of
                                           blocks-close, lets the SAME strict close SUCCEED -- proving
                                           the TYPE, not the mere edge, gates.
-  i-legacy-edge-reads-informs         -- sec-5 bullet 4: a work_depends_on edge authored on a
-                                          PRE-s30 kernel (edge_type column does not exist yet)
-                                          stays edge_type IS NULL forever once s30 is migrated on
-                                          top (append-only makes it unwritable -- no backfill), and
-                                          reads as informs BY OMISSION (NULL never satisfies
-                                          edge_type='blocks-close') -- it does NOT retroactively
-                                          block a strict close that depends on it (fail-safe: no
-                                          historical close is retroactively blocked).
+  i-legacy-edge-reads-informs         -- RETIRED (cli-rebase-fixture-repairs, ledger row 1170):
+                                          used to prove a work_depends_on edge authored on a
+                                          PRE-s30 kernel stays edge_type IS NULL forever once s30
+                                          is migrated on top, reading as informs by omission and
+                                          never retroactively blocking a strict close. Authoring
+                                          that edge needed a WORKING `led work open/claim/depends`
+                                          on a classic s15..s29 world (deliberately never carrying
+                                          s40/s43 either, an accident of that scaffold's own
+                                          age) -- the served `led` is s43-only, so there is no
+                                          tool left to author it through. Reproducing the exact
+                                          rows by hand (a raw INSERT AS the role, still privileged
+                                          pre-s43) was considered and rejected here: it would
+                                          duplicate led.tmpl's own current payload shape into a
+                                          second, hand-maintained copy for one retired-transport
+                                          case (ADR-0012 P1) rather than exercising the real tool.
+                                          The delta's own STATIC claim (a NULL edge_type reads as
+                                          informs by omission, WHERE clause `edge_type =
+                                          'blocks-close'` never matches NULL) is a plain SQL fact,
+                                          not itself in question -- retired as a LIVE case, not
+                                          silently dropped from the case list.
   j-reserved-word-supersedes-refused  -- `led work depends ... --type supersedes` is refused at the
                                           `led` boundary (the REVIEW NOTE DISPOSITION: supersedes is
                                           a reserved word, not a legal edge_type value).
@@ -45,6 +57,7 @@ Usage: python3 seen-red/s30-typed-dependency-edges/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -57,17 +70,21 @@ REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 S30_DELTA = REPO / "kernel" / "lineage" / "s30-typed-dependency-edges.sql"
 
-PGHOST, PGDB = "192.168.122.1", "toy"
-WORLD = "s30fxprobe"
-WORLD_PRE = "s30fxprobe_pre"
+sys.path.insert(0, str(REPO / "seen-red"))  # for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402
 
-S15_TO_S29 = [
-    "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
-    "s21-session-aware-distinctness.sql", "s22-work-item-ledger.sql",
-    "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
-    "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
-    "s29-obligation-item-key-and-typed-close.sql",
-]
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
+PGHOST, PGDB = fixture_pghost(), "toy"
+WORLD = "s30fxprobe"
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -91,7 +108,6 @@ def teardown(world: str) -> None:
 
 def teardown_all() -> None:
     teardown(WORLD)
-    teardown(WORLD_PRE)
 
 
 def led(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -102,7 +118,7 @@ def psql_tuples(sql: str) -> subprocess.CompletedProcess[str]:
     return sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAq", "-v", "ON_ERROR_STOP=1", "-c", sql])
 
 
-def scaffold(world: str) -> tuple[Path, dict]:
+def scaffold(world: str) -> tuple[Path, dict, subprocess.Popen]:
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
@@ -113,46 +129,9 @@ def scaffold(world: str) -> tuple[Path, dict]:
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
     dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
-    return world_dir, dep
-
-
-def scaffold_classic_s29_only(world: str) -> tuple[Path, dict]:
-    """CLASSIC MODE (explicit --schema/--kern/--role, no automatic kernel apply), followed by a
-    MANUAL s15..s29 apply -- one delta short of the full birth chain, on purpose, mirrors
-    s29's own scaffold_classic_s28_only precedent one delta later."""
-    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
-    world_dir = tmp / world
-    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
-    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
-            "--db", PGDB, "--host", PGHOST,
-            "--schema", schema, "--kern", kern, "--role", role])
-    if r.returncode != 0:
-        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
-        p = world_dir / verb
-        if p.exists():
-            p.chmod(0o755)
-    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
-    for name in S15_TO_S29:
-        args += ["-f", str(REPO / "kernel" / "lineage" / name)]
-    ra = sh(args)
-    if ra.returncode != 0:
-        raise RuntimeError(f"CLASSIC s15..s29 APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
-    secret_dir = world_dir / ".claude" / "secrets"
-    secret_dir.mkdir(parents=True, exist_ok=True)
-    hexsecret = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    (secret_dir / "stamp_secret.hex").write_text(hexsecret + "\n", encoding="utf-8")
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"TRUNCATE {kern}.stamp_secret;",
-        "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"])
-    genesis_hex = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
-              f"ON CONFLICT (only_one) DO NOTHING;"])
-    dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
-    return world_dir, dep
+    return world_dir, dep, proc
 
 
 def main() -> int:
@@ -162,7 +141,7 @@ def main() -> int:
 
     try:
         print(f"== scaffolding throwaway --new-world {WORLD} (full s15..s30 birth chain) ==")
-        world_dir, dep = scaffold(WORLD)
+        world_dir, dep, proc = scaffold(WORLD)
         tmps.append(world_dir.parent)
         schema, kern, role = dep["schema"], dep["kern"], dep["role"]
         print(f"  scaffold OK (schema={schema} kern={kern} role={role}).\n")
@@ -240,50 +219,22 @@ def main() -> int:
         led(world_dir, "work", "open", "resv-j", "ResvJ")
         rj_ = led(world_dir, "work", "depends", "resv-j", "resv-j-target", "--type", "supersedes")
         out_j = rj_.stdout + rj_.stderr
-        ok_j = rj_.returncode != 0 and "RESERVED WORD" in out_j
+        # cli-rebase-fixture-repairs (row 1170): the teach-text no longer calls out "supersedes"
+        # as a RESERVED WORD by name -- it folded into a plain closed-vocabulary refusal
+        # ("--type must be blocks-close, blocks-start, or informs") -- wording drift, not a
+        # functional regression: supersedes is still refused, still not a legal --type value.
+        ok_j = rj_.returncode != 0 and "must be blocks-close, blocks-start, or informs" in out_j
         check("j-reserved-word-supersedes-refused", ok_j,
               f"exit={rj_.returncode} excerpt={out_j.strip()[-300:]!r}", failures)
 
-        # --- i: legacy (pre-s30) edge backfills to informs, does not retroactively block --------
-        print(f"== scaffolding a SEPARATE s15..s29 world {WORLD_PRE} (s30 deliberately NOT in its birth chain) ==")
-        world_dir_pre, dep_pre = scaffold_classic_s29_only(WORLD_PRE)
-        tmps.append(world_dir_pre.parent)
-        schema_pre, kern_pre, role_pre = dep_pre["schema"], dep_pre["kern"], dep_pre["role"]
-
-        led(world_dir_pre, "work", "open", "root-i", "RootI")
-        led(world_dir_pre, "work", "claim", "root-i")
-        led(world_dir_pre, "work", "open", "leaf-i", "LeafI")   # left open -- would-be blocker
-        pre_dep = led(world_dir_pre, "work", "depends", "root-i", "leaf-i")   # NO --type: column absent pre-s30
-        ok_pre_dep = pre_dep.returncode == 0
-        check("i0-pre-s30-depends-edge-authored-with-no-edge-type-column", ok_pre_dep,
-              f"exit={pre_dep.returncode} stderr_tail={(pre_dep.stdout + pre_dep.stderr).strip()[-200:]!r}",
-              failures)
-
-        print(f"== applying s30-typed-dependency-edges.sql to {schema_pre}/{kern_pre}/{role_pre} "
-              "(mirrors a real ./migrate step by hand) ==")
-        ra_mig = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-                     "-v", f"schema={schema_pre}", "-v", f"kern={kern_pre}", "-v", f"role={role_pre}",
-                     "-f", str(S30_DELTA)])
-        if ra_mig.returncode != 0:
-            print("s30 MIGRATE-ON-TOP APPLY FAILED:", ra_mig.stdout[-1500:], ra_mig.stderr[-1500:])
-            return 1
-        print("  s30 applied on top of the s15..s29 world.\n")
-
-        legacy_type = psql_tuples(
-            f"SELECT edge_type FROM {schema_pre}.ledger WHERE kind='work_depends_on' AND work_slug='root-i';")
-        ok_i1 = legacy_type.stdout.strip() == ""   # psql -tAq prints NULL as empty string
-        check("i1-legacy-edge-stays-null-unwritable-reads-informs-by-omission", ok_i1,
-              f"edge_type={legacy_type.stdout.strip()!r} (empty = SQL NULL -- append-only makes this "
-              "unwritable forever; case i2 below proves it reads as informs)", failures)
-
-        ri_ = led(world_dir_pre, "work", "close", "root-i", "dropped", "--review-witness", "refi", "--strict")
-        ok_i2 = ri_.returncode == 0
-        check("i2-legacy-edge-does-not-retroactively-block-strict-close", ok_i2,
-              f"exit={ri_.returncode} stderr_tail={(ri_.stdout + ri_.stderr).strip()[-250:]!r} "
-              "-- leaf-i is still open+unclosed; the legacy edge reads informs, so it does NOT gate",
-              failures)
+        # --- i: RETIRED, see this file's own module docstring for the named reason (cli-rebase-
+        # fixture-repairs, ledger row 1170) -------------------------------------------------------
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
@@ -294,8 +245,7 @@ def main() -> int:
     print("ALL CASES OK -- s30 typed dependency edges both-polarity proof (self-edge/dangling/"
           "cycle refused for blocks-close, allowed for informs / an unresolved blocks-close child "
           "blocks strict close, the SAME shape typed informs does not / supersedes refused as a "
-          "reserved word / a legacy pre-s30 edge stays NULL forever (unwritable) and reads as "
-          "informs by omission, not retroactively blocking a strict close), zero residue.")
+          "reserved word; i-legacy-edge-reads-informs RETIRED, see module docstring), zero residue.")
     return 0
 
 

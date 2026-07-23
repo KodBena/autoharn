@@ -112,6 +112,7 @@ Usage: python3 seen-red/boundary-service/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -405,6 +406,47 @@ def write_scratch_deployment(tmpdir: Path, world: str) -> Path:
     path = tmpdir / f"{world}-deployment.json"
     deployment_record.write_deployment(path, rec)
     return path
+
+
+def serve_existing_world(deployment_path: Path, tmpdir: Path) -> subprocess.Popen:
+    """cli-rebase-fixture-repairs (ledger row 1170, THE CLASS): the ONE shared move a red fixture
+    needs to migrate off the retired legacy-fallback path onto the served shim -- given an
+    EXISTING deployment.json (already written by `bootstrap/new-project.sh`'s or `bootstrap/
+    track-work.sh`'s own CLASSIC scaffold, which both already run the FULL birth chain including
+    the s40/s43 birth sequence -- see either script's own header -- so no separate birth_via_
+    boundary() call is needed here), stand a REAL `serving.boundary_service` against that EXACT
+    schema/kern/role and rewrite deployment.json IN PLACE to add the two served-shim keys
+    (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5: `boundary_url`,
+    `boundary_deployment`). Every fixture call site already points its `led`/`pickup`/etc
+    invocations at this SAME deployment.json (via cwd, or an explicit AUTOHARN=/
+    PICKUP_DEPLOYMENT= override) -- adding these two keys IN PLACE is the one edit a fixture
+    needs to move onto the served path; nothing else about the fixture's own test body, scratch
+    naming, or assertions changes. `boundary_deployment` is set to the record's own `schema`
+    (the world-name convention every sibling fixture in this tree already uses).
+
+    Caller MUST `stop_server(...)` the returned process in its own teardown/finally block --
+    this function starts a real subprocess and does not own its lifecycle beyond returning it."""
+    rec = deployment_record.load_deployment(deployment_path)
+    # Built from `rec`'s OWN fields throughout (never this module's `{world}_rw`/`{world}_kernel`
+    # string-building convention, which several fixtures in this class do not follow) -- the
+    # config always matches the deployment.json this function was actually handed.
+    cfg_path = tmpdir / f"{rec.schema}-boundary-multiplex.toml"
+    cfg_path.write_text(
+        f'[deployments.{rec.schema}]\n'
+        f'pghost = "{rec.host}"\n'
+        f'pgdatabase = "{rec.db}"\n'
+        f'pguser = "{rec.role}"\n'
+        f'pgschema = "{rec.schema}"\n'
+        f'pgkern = "{rec.kern}"\n', encoding="utf-8")
+    proc, port = start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{rec.schema}"
+    if not wait_health(base):
+        tail = stop_server(proc)
+        raise RuntimeError(f"boundary_service for {rec.schema} never became healthy: {tail[-1500:]}")
+    served = dataclasses.replace(rec, boundary_url=f"http://127.0.0.1:{port}",
+                                  boundary_deployment=rec.schema)
+    deployment_record.write_deployment(deployment_path, served)
+    return proc
 
 
 def start_server(config_path: Path, host: str = "127.0.0.1", port: int | None = None,

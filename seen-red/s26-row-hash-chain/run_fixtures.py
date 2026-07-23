@@ -57,6 +57,7 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -72,6 +73,17 @@ from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+
+# cli-rebase-fixture-repairs (ledger row 1170): the served shim now refuses a deployment.json
+# missing boundary_url/boundary_deployment -- REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py, the ONE shared home this whole fixture class
+# migrates onto (see that function's own docstring).
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 VERIFY_CHAIN_TMPL = REPO / "bootstrap" / "templates" / "verify-chain.tmpl"
 LINEAGE = REPO / "kernel" / "lineage"
 
@@ -159,15 +171,30 @@ def main() -> int:
         genesis_ok = "one fresh genesis seed provisioned" in r.stdout
         print(f"  scaffold OK (genesis auto-provisioned: {genesis_ok}).\n")
 
+        # Stand a REAL boundary_service against this exact schema and add boundary_url/
+        # boundary_deployment to deployment.json IN PLACE (see module-level comment above) --
+        # the served `led` shim refuses every write otherwise.
+        proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+
         # --- b: three real rows via led, chain builds and verifies intact -----------------------
+        # row count is BASELINED, not hardcoded to 3: the s40/s43 birth sequence itself now
+        # writes several boundary-attributed rows ahead of these three (author registration event
+        # + two standing declarations + reviewer/commissioner/write-boundary registrations) --
+        # this delta's own subject (s26, chain builds/verifies INTACT) has nothing to do with how
+        # many birth-sequence rows precede it, so the assertion is baselined against the world's
+        # ACTUAL pre-existing row count rather than assuming a birth sequence of zero.
+        before_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
+                                f"SELECT count(*) FROM {WORLD}.ledger;"]).stdout.strip())
         for stmt in ("row one, via led", "row two, via led", "row three, via led"):
             rl = sh(["bash", str(world_dir / "led"), "decision", stmt], cwd=str(world_dir))
             if rl.returncode != 0:
                 print("led write FAILED:", rl.stdout, rl.stderr)
                 return 1
         rb = run_verify_chain(world_dir)
-        ok_b = rb.returncode == 0 and rb.stdout.startswith("verify-chain: INTACT -- 3 row(s)")
-        check("b-chain-builds-and-verifies", ok_b, rb.stdout.strip(), failures)
+        ok_b = (rb.returncode == 0
+                and rb.stdout.startswith(f"verify-chain: INTACT -- {before_count + 3} row(s)"))
+        check("b-chain-builds-and-verifies", ok_b,
+              f"before_count={before_count} {rb.stdout.strip()}", failures)
 
         # --- c: --head shape -----------------------------------------------------------------
         rc = run_verify_chain(world_dir, "--head")
@@ -298,6 +325,10 @@ def main() -> int:
         check("e-tamper-fixed-hash-breaks-downstream", ok_e, detail_e, failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         shutil.rmtree(tmp, ignore_errors=True)
 

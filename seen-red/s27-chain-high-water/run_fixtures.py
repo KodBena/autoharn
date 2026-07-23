@@ -55,6 +55,7 @@ Exit 0 if every case matches its EXPECTED outcome; 1 otherwise. Lazy imports ban
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -70,6 +71,16 @@ from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 VERIFY_CHAIN_TMPL = REPO / "bootstrap" / "templates" / "verify-chain.tmpl"
 LINEAGE = REPO / "kernel" / "lineage"
 
@@ -112,18 +123,26 @@ def run_verify_chain(world_dir: Path, *extra: str, dep_override: Path | None = N
     return sh(["python3", str(VERIFY_CHAIN_TMPL), *extra], env=env)
 
 
-def scaffold(world_dir: Path, world: str, n_rows: int) -> None:
+def scaffold(world_dir: Path, world: str, n_rows: int, tmp: Path) -> tuple[subprocess.Popen, int]:
+    """Returns (boundary proc, pre-existing ledger row count) -- the caller baselines its own
+    row-count assertions against the SECOND element rather than assuming a birth sequence of
+    zero rows (the s40/s43 birth sequence itself now writes several boundary-attributed rows
+    ahead of any of this fixture's own writes)."""
     r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
             "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
         raise RuntimeError(f"SCAFFOLD FAILED for {world}: {r.stdout[-1500:]} {r.stderr[-1500:]}")
     for verb in ("led", "verify-chain"):
         (world_dir / verb).chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+    before_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
+                           f"SELECT count(*) FROM {world}.ledger;"]).stdout.strip())
     for i in range(1, n_rows + 1):
         rl = sh(["bash", str(world_dir / "led"), "decision", f"row {i} of {n_rows}, via led"],
                 cwd=str(world_dir))
         if rl.returncode != 0:
             raise RuntimeError(f"led write FAILED ({world}, row {i}): {rl.stdout} {rl.stderr}")
+    return proc, before_count
 
 
 def delete_row(schema: str, row_id: str) -> None:
@@ -167,29 +186,37 @@ def main() -> int:
         # --- scaffold the real --new-world (s27 in its birth chain automatically) ---------------
         world_dir = tmp / WORLD
         print(f"== scaffolding throwaway --new-world {WORLD} (4 rows; s27 applied automatically) ==")
-        scaffold(world_dir, WORLD, 4)
+        proc, before_count = scaffold(world_dir, WORLD, 4, tmp)
+        total = before_count + 4  # birth sequence rows (author + standing decls + registrations,
+                                  # ledger row 1170's own migration) + this fixture's own 4 writes
 
         # --- a: intact chain, witness agrees -----------------------------------------------------
         ra = run_verify_chain(world_dir)
         ok_a = (ra.returncode == 0
-                and ra.stdout.startswith("verify-chain: INTACT -- 4 row(s)")
+                and ra.stdout.startswith(f"verify-chain: INTACT -- {total} row(s)")
                 and "TAIL-COVERAGE-CONFIRMED" in ra.stdout
-                and "witness max_id=4 agrees with walked max_id=4" in ra.stdout)
+                and f"witness max_id={total} agrees with walked max_id={total}" in ra.stdout)
         check("a-intact-witness-agrees", ok_a, ra.stdout.strip(), failures)
 
         # --- f: rollback does not bump the witness (run BEFORE any tail deletion below, on the
         # same intact world, so the baseline for b/c is unaffected) ------------------------------
+        # cli-rebase-fixture-repairs (row 1170): a raw INSERT is no longer possible at all -- s43
+        # REVOKES the granted role's INSERT on every kernel-governed table (kernel/lineage/
+        # s43-typed-verdict-write-boundary.sql), so the rolled-back write goes through the SAME
+        # SECURITY DEFINER kernel.ledger_write() the served `led` shim itself calls, wrapped in an
+        # explicit BEGIN/ROLLBACK -- the semantic this case proves (a rolled-back write must not
+        # advance chain_high_water) is unchanged; only the write MECHANISM moved.
         before_witness = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
                               f"SELECT max_id FROM {WORLD}_kernel.chain_high_water;"]).stdout.strip()
         rf_insert = psql_as_role(f"{WORLD}_rw", WORLD,
-            "BEGIN; INSERT INTO ledger (kind, statement) VALUES "
-            "('decision', 'row that will rollback'); ROLLBACK;")
+            f"BEGIN; SELECT ({WORLD}_kernel.ledger_write(jsonb_build_object("
+            f"'kind', 'decision', 'statement', 'row that will rollback'))).disposition; ROLLBACK;")
         after_witness = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
                              f"SELECT max_id FROM {WORLD}_kernel.chain_high_water;"]).stdout.strip()
-        ok_f = (rf_insert.returncode == 0 and before_witness == "4" and after_witness == "4")
+        ok_f = (rf_insert.returncode == 0 and before_witness == str(total) and after_witness == str(total))
         check("f-rollback-does-not-bump", ok_f,
               f"witness before={before_witness!r} after-rolled-back-insert={after_witness!r} "
-              f"(expect unchanged at 4 -- a rolled-back insert must not advance the witness, "
+              f"(expect unchanged at {total} -- a rolled-back insert must not advance the witness, "
               f"the entire reason this delta's shape is a same-transaction trigger rather than a "
               f"bare sequence comparison)", failures)
 
@@ -206,13 +233,13 @@ def main() -> int:
         check("e-role-cannot-delete-witness", ok_e,
               f"exit={re_.returncode} stderr={(re_.stdout + re_.stderr).strip()[-160:]!r}", failures)
 
-        # --- confirm the witness is STILL 4 after d/e's refused attempts, before tampering below --
+        # --- confirm the witness is STILL {total} after d/e's refused attempts, before tampering --
         post_de_witness = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
                                f"SELECT max_id FROM {WORLD}_kernel.chain_high_water;"]).stdout.strip()
-        if post_de_witness != "4":
+        if post_de_witness != str(total):
             check("d-e-witness-unchanged-after-refused-attempts", False,
-                  f"witness={post_de_witness!r}, expected 4 -- a refused UPDATE/DELETE must not "
-                  f"have partially applied", failures)
+                  f"witness={post_de_witness!r}, expected {total} -- a refused UPDATE/DELETE must "
+                  f"not have partially applied", failures)
 
         # --- b: delete the tail row (id=4), verify-chain reports TAIL-DELETION-SUSPECT -----------
         tail_id = last_id(WORLD)
@@ -221,7 +248,7 @@ def main() -> int:
         ok_b = (rb.returncode == 3
                 and "TAIL-DELETION-SUSPECT" in rb.stdout
                 and f"witness max_id={tail_id}" in rb.stdout
-                and "walked max_id=3" in rb.stdout)
+                and f"walked max_id={total - 1}" in rb.stdout)
         check("b-tail-deletion-suspect", ok_b,
               f"deleted tail id={tail_id}: {rb.stdout.strip()}", failures)
 
@@ -263,6 +290,10 @@ def main() -> int:
         check("h-differential-agree", ok_h, f"diff_ok={'DIFFERENTIAL GREEN' in rh.stdout}", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         shutil.rmtree(tmp, ignore_errors=True)
 

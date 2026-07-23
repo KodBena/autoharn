@@ -80,6 +80,7 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -96,6 +97,16 @@ from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD = "s28fxprobe"
@@ -152,6 +163,11 @@ def main() -> int:
         schema, kern, role = dep["schema"], dep["kern"], dep["role"]
         print(f"  scaffold OK (schema={schema} kern={kern} role={role}, s28 objects carried by "
               f"the standard chain).\n")
+
+        # Stand a REAL boundary_service against this exact schema and add boundary_url/
+        # boundary_deployment to deployment.json IN PLACE -- the served `led` shim refuses every
+        # write otherwise (cli-rebase-fixture-repairs, ledger row 1170).
+        proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
 
         # --- a: valid parent accepted ------------------------------------------------------------
         r1 = led(world_dir, "work", "open", "root-a", "Root", "A")
@@ -238,7 +254,15 @@ def main() -> int:
         led(world_dir, "work", "open", "child-d", "Child", "D", "--parent", "root-a")
         led(world_dir, "decision",
             "estimate: child-d | 20-30 | 0 | 30m | 10K | hand-computed seen-red fixture")
-        rp = sh(["bash", str(world_dir / "pickup")], cwd=str(world_dir))
+        # cli-rebase-fixture-repairs (ledger row 1170): the REBASED `./pickup` names ROLLUP
+        # (alongside RESOURCES/ESTIMATES/TAXONOMIES/MAINTAINER-REVIEW-QUEUE/RECENT-CHANGES/
+        # GIT-STATE/IN-FLIGHT) as explicitly UNEXERCISED/NOT-REBASED -- design/FABLE-BOUNDARY-
+        # MULTIPLEX-AND-CLI-REBASE-SPEC.md §5's own stated scope, not a regression this pass
+        # introduced -- and points the operator at `./legacy/pickup` for that section. This case's
+        # actual subject is the ROLLUP arithmetic itself (still a real, direct-psql feature, not
+        # retired), so it runs against `./legacy/pickup`, the same direct-psql original the
+        # rebased shim's own teach-text names, rather than the served (ROLLUP-less) `./pickup`.
+        rp = sh(["bash", str(world_dir / "legacy" / "pickup")], cwd=str(world_dir))
         out = rp.stdout
         # hand-computed expectation: children of root-a are child-b (40 calls, 0 spawns, 60-120m)
         # and child-d (20-30 calls, 0 spawns, 30m). SUM tool_calls = (40+20)-(40+30) = 60-70.
@@ -276,6 +300,10 @@ def main() -> int:
               f"exit={rh.returncode} parent_slug_is_null={rh_check.stdout.strip()!r}", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         shutil.rmtree(tmp, ignore_errors=True)
 

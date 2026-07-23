@@ -69,11 +69,27 @@ Cases (spec sec-7's own negative controls, plus the positive path each is paired
   i-differential-agree              -- SQL floor (`engine/ledger_floor.py::work_review_floor_atoms`)
                                         vs ASP (`engine/lp/work_review.lp`) AGREE on this world's
                                         live facts (both an UNRESOLVED and a RESOLVED tree present).
-  j-pre-s29-led-close-unaffected    -- `led work close` with NO review flags at all, against a
-                                        kernel that predates s29 (the has_review_disposition_col
-                                        live-check's FALSE branch), still succeeds exactly as
-                                        before this delta -- exercised on a SEPARATE, s28-only
-                                        scaffold (no s29 applied), not just assumed.
+  j-pre-s29-led-close-unaffected    -- RETIRED (cli-rebase-fixture-repairs, ledger row 1170):
+                                        used to prove `led work close` with no review flags at
+                                        all still succeeds against a kernel that predates s29
+                                        (has_review_disposition_col's FALSE branch), on a
+                                        SEPARATE classic scaffold applying s15..s28 only (no
+                                        s29, and -- an accident of that list's own age, not this
+                                        delta's doing -- no s40..s43 either). The served `led` is
+                                        now s43-ONLY: there is no code path left, direct-INSERT
+                                        or otherwise, that can write through a kernel lacking
+                                        kernel.ledger_write, so this case's own world can no
+                                        longer produce ANY led write to observe, success or
+                                        refusal -- retired rather than reshaped into a case that
+                                        would actually be testing something else (the generic
+                                        pre-s43 capability_absent refusal every other pre-s43
+                                        world already gets, unrelated to s29's own has_review_
+                                        disposition_col branch this case existed to prove).
+                                        Extending the classic list to s15..s28+s30..s43 (skipping
+                                        ONLY s29) was considered and rejected here: verifying s30
+                                        onward tolerates s29's absence is a real kernel-lineage
+                                        question, out of scope for a fixture-transport migration
+                                        (CLAUDE.md: kernel/lineage changes need a ratified spec).
   l-close-bad-resolution-refused-client-side -- item led-work-close-resolution-teaching (row
                                         1613): a non-enum resolution is refused CLIENT-SIDE,
                                         naming the closed vocabulary, never surfacing the raw
@@ -88,6 +104,7 @@ Usage: python3 seen-red/s29-obligation-item-key-and-typed-close/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -107,9 +124,24 @@ sys.path.insert(0, str(REPO / "engine"))
 import clingo_run  # noqa: E402  (engine/clingo_run.py, via the sys.path bridge above)
 import ledger_floor  # noqa: E402  (engine/ledger_floor.py -- work_review_floor_atoms, WORK_REVIEW_PREDS)
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+sys.path.insert(0, str(REPO / "seen-red"))  # for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
+# a hardcoded host literal is exactly the hazard seen-red/_fixture_env.py exists to close (found
+# in reach while migrating this fixture onto the served path, fixed here per CLAUDE.md's
+# engineering-responsibility clause rather than left for the next caller to trip on).
+PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD = "s29fxprobe"
-WORLD_PRE = "s29fxprobe_pre"
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -133,7 +165,6 @@ def teardown(world: str) -> None:
 
 def teardown_all() -> None:
     teardown(WORLD)
-    teardown(WORLD_PRE)
 
 
 def led(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -160,7 +191,7 @@ def s29_already_applied(schema: str, kern: str, role: str) -> bool:
     return bool(lines) and all(ln == "t" for ln in lines)
 
 
-def scaffold(world: str) -> tuple[Path, dict]:
+def scaffold(world: str) -> tuple[Path, dict, subprocess.Popen]:
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
@@ -171,65 +202,9 @@ def scaffold(world: str) -> tuple[Path, dict]:
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
     dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
-    return world_dir, dep
-
-
-# s15..s28, no s29 -- the exact prefix of new-project.sh's own --new-world -f list, one entry
-# short (mirrors this same file's own PARAMETERIZATION "VALIDATE" recipe in its header comment).
-S15_TO_S28 = [
-    "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
-    "s21-session-aware-distinctness.sql", "s22-work-item-ledger.sql",
-    "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
-    "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s28-work-parent-edge.sql",
-]
-
-
-def scaffold_classic_s28_only(world: str) -> tuple[Path, dict]:
-    """sec-10 amendment consequence (2026-07-15): `scaffold()` above uses `--new-world`, which
-    applies new-project.sh's own LINEAGE_CHAIN in full -- s29 and everything wired in after it
-    (s30, s31, ... as the chain keeps growing), never just s15..s28. Case j's whole point is an
-    s28-only kernel (s29 genuinely absent), so it cannot reuse `scaffold()` -- this is CLASSIC
-    MODE (explicit --schema/--kern/--role, no automatic kernel apply at all per new-project.sh's
-    own header) followed by a MANUAL s15..s28 apply (S15_TO_S28 above, a fixed list -- safe to
-    hardcode because s15..s28 are frozen, already-shipped lineage files, ADR-0005 Rule 8; only
-    entries AFTER s28 could ever be added to the chain), mirroring new-project.sh's own
-    --new-world block (kernel apply, then stamp-secret seed, then chain-genesis seed, then
-    principal registration) by hand, one delta short on purpose."""
-    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
-    world_dir = tmp / world
-    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
-    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
-            "--db", PGDB, "--host", PGHOST,
-            "--schema", schema, "--kern", kern, "--role", role])
-    if r.returncode != 0:
-        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
-        p = world_dir / verb
-        if p.exists():
-            p.chmod(0o755)
-    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
-    for name in S15_TO_S28:
-        args += ["-f", str(REPO / "kernel" / "lineage" / name)]
-    ra = sh(args)
-    if ra.returncode != 0:
-        raise RuntimeError(f"CLASSIC s15..s28 APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
-    # stamp secret + chain genesis, mirroring new-project.sh's own --new-world seeding blocks by
-    # hand (classic mode does neither automatically).
-    secret_dir = world_dir / ".claude" / "secrets"
-    secret_dir.mkdir(parents=True, exist_ok=True)
-    hexsecret = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    (secret_dir / "stamp_secret.hex").write_text(hexsecret + "\n", encoding="utf-8")
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"TRUNCATE {kern}.stamp_secret;",
-        "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"])
-    genesis_hex = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
-              f"ON CONFLICT (only_one) DO NOTHING;"])
-    dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
-    return world_dir, dep
+    return world_dir, dep, proc
 
 
 def main() -> int:
@@ -242,7 +217,7 @@ def main() -> int:
         # reaches), then apply s29 explicitly ONLY IF s29's own .detect.sql says it isn't already
         # live -- robust to the chain's head moving in either direction over time -------------
         print(f"== scaffolding throwaway --new-world {WORLD} ==")
-        world_dir, dep = scaffold(WORLD)
+        world_dir, dep, proc = scaffold(WORLD)
         tmps.append(world_dir.parent)
         schema, kern, role = dep["schema"], dep["kern"], dep["role"]
         print(f"  scaffold OK (schema={schema} kern={kern} role={role}).\n")
@@ -447,19 +422,8 @@ def main() -> int:
               f"has_unresolved_present={has_unresolved} "
               f"only_asp={sorted(only_asp)} only_sql={sorted(only_sql)}", failures)
 
-        # --- j: `led work close` with NO review flags, against an s28-ONLY kernel (s29 not
-        # applied), still succeeds exactly as before this delta -- a SEPARATE scaffold, CLASSIC
-        # MODE + manual s15..s28 apply (see scaffold_classic_s28_only's own docstring for why
-        # `scaffold()`'s --new-world can no longer produce this shape as of this session) --------
-        print(f"== scaffolding a SEPARATE s28-only world {WORLD_PRE} (s29 deliberately NOT applied) ==")
-        world_dir_pre, dep_pre = scaffold_classic_s28_only(WORLD_PRE)
-        tmps.append(world_dir_pre.parent)
-        led(world_dir_pre, "work", "open", "pre-item", "Pre")
-        led(world_dir_pre, "work", "claim", "pre-item")
-        rj_ = led(world_dir_pre, "work", "close", "pre-item", "dropped", "--witness", "shipwit")
-        ok_j = rj_.returncode == 0
-        check("j-pre-s29-led-close-unaffected", ok_j,
-              f"exit={rj_.returncode} stderr_tail={(rj_.stdout + rj_.stderr).strip()[-200:]!r}", failures)
+        # --- j: RETIRED, see this file's own module docstring for the named reason (cli-rebase-
+        # fixture-repairs, ledger row 1170) -----------------------------------------------------
 
         # --- l/m/n: item led-work-close-resolution-teaching (ledger row 1613, witnessed
         # 2026-07-18: a non-enum resolution / a shipped resolution with no witness used to
@@ -492,8 +456,14 @@ def main() -> int:
 
         rm_ = led(world_dir, "work", "close", "resw-item", "shipped", "--review-deferred")
         out_m = rm_.stdout + rm_.stderr
+        # cli-rebase-fixture-repairs (row 1170): the client-side teach-text no longer cites the
+        # kernel constraint's NAME literally ("resolution=shipped REQUIRES a non-blank --witness
+        # <ref>" -- plain English, the same requirement) -- wording drift, not a functional
+        # regression (still a client-side refusal, before any DB round trip, still names
+        # --witness); the exact-string check is updated to match, the underlying behavior it was
+        # written to prove (refused, client-side, naming the requirement) is unchanged.
         ok_m = (rm_.returncode != 0
-                and "work_shipped_requires_witness" in out_m
+                and "REQUIRES a non-blank --witness" in out_m
                 and "--witness" in out_m
                 and "violates check constraint" not in out_m)
         check("m-close-shipped-no-witness-refused-client-side", ok_m,
@@ -510,6 +480,10 @@ def main() -> int:
               f"excerpt={(rn_.stdout + rn_.stderr).strip()[-200:]!r}", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown_all()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
@@ -523,7 +497,8 @@ def main() -> int:
           "discharges the item-keyed obligation / strict+deferred refused / strict-over-"
           "unresolved-tree refused naming the leaf / strict succeeds once resolved / strict-over-"
           "unresolved-DEPENDENCY refused+succeeds (the audit-caught regression case) / SQL-ASP "
-          "differential AGREE / pre-s29 led close unaffected), zero residue.")
+          "differential AGREE; j-pre-s29-led-close-unaffected RETIRED, see module docstring), "
+          "zero residue.")
     return 0
 
 
