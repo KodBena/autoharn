@@ -27,7 +27,7 @@ lapse let it recur — and only then the fix. Everything below elaborates that.)
   single root question they are three answers to, and binds the contributor to ask
   it *first*. (The genre overlap with that trio is the ADR-0008 tension flagged below.)
 - **Date:** 2026-06-24
-- **Provenance:** Native to chocofarm — not a transferred universal. It arises from
+- **Provenance:** Native to [chocofarm](../../GLOSSARY.md#omega-and-chocofarm) — not a transferred universal. It arises from
   a **named, dated, first-person session** on the `throughput-lab` testbed
   (`throughput-lab/`, the producer↔server↔consumer leaf-evaluation loop), in which
   the maintainer **repeatedly redirected the executor** from the reflex *"how do I
@@ -620,3 +620,5 @@ proposals.
 Public Domain (The Unlicense).
 
 *Facet (2026-07-16): closure questions posed to consults are not front-loaded — [ADR-0018](0018-consults-are-not-front-loaded.md).*
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

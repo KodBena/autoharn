@@ -23,7 +23,7 @@
   executor's *own repeated mis-targeted attempts at one problem*; the mechanism
   the recurrence mints is the **structured second-opinion request**.
 - **Date:** 2026-06-24
-- **Provenance:** Native to chocofarm (this tenet's originating project — a numpy/JAX/numba
+- **Provenance:** Native to [chocofarm](../../GLOSSARY.md#omega-and-chocofarm) (this tenet's originating project — a numpy/JAX/numba
   search codebase, named here in this Provenance field only as the dated source of the
   specimen; no autoharn artifact depends on the name). Not a transferred universal — a response
   to a **named, dated, first-person failure** on the `throughput-lab` testbed,
@@ -489,3 +489,5 @@ existed as recorded orchestrator practice and did not survive the next decision 
 load, which is why the trigger is now law and countable: two reports, one surface,
 post-done. A false fire on genuinely independent defects costs one quick honest
 review; the alternative cost four rebuilds.
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

@@ -37,7 +37,7 @@ every module in a hosting project that could otherwise let such a failure pass s
 - **Date:** 2026-06-15
 - **Provenance:** Transferred from the LengYue ADR corpus (this project forks
   that corpus's authoring discipline). The tenet is universal and transfers
-  wholesale; the instance list is re-derived against chocofarm's real
+  wholesale; the instance list is re-derived against [chocofarm](../../GLOSSARY.md#omega-and-chocofarm)'s real
   surfaces (the env/scenario seams, the parallel executor, the hp registry,
   the AZ — AlphaZero-style search/training — stack). chocofarm's code **already cites this ADR by number** — 16+
   `ADR-0002` invocations across seven modules and the tests — so this
@@ -390,3 +390,5 @@ by naming, not by adding machinery.*
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

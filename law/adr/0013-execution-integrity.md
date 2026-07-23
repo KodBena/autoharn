@@ -18,7 +18,7 @@
   god-object left un-split, a fossil name left standing, a dual-write left
   un-dissolved).
 - **Date:** 2026-06-22
-- **Provenance:** Native to chocofarm (this tenet's originating project — a numpy/JAX/numba
+- **Provenance:** Native to [chocofarm](../../GLOSSARY.md#omega-and-chocofarm) (this tenet's originating project — a numpy/JAX/numba
   search codebase, named here and in the shielded Provenance/Amendment fields below only as
   the dated source of the specimens; no autoharn artifact depends on the name). It is not a
   transferred universal; it is
@@ -555,3 +555,5 @@ assists.*
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

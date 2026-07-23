@@ -24,7 +24,7 @@ makes this declaration at all) its license.
   (documentation discipline).
 - **Date:** 2026-06-15
 - **Provenance:** Transferred from the LengYue ADR corpus — LengYue and
-  chocofarm are two prior software projects this ADR corpus passed through
+  [chocofarm](../../GLOSSARY.md#omega-and-chocofarm) are two prior software projects this ADR corpus passed through
   before autoharn adopted it, LengYue the earlier of the two. LengYue's tenet
   unified two divergent header conventions across a TypeScript frontend and a
   Python backend; chocofarm, LengYue's successor project, was a single Python
@@ -204,3 +204,5 @@ declaration (or omits the license slot entirely).
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

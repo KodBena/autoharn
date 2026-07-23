@@ -35,7 +35,7 @@
   principle (refuse fuzzy matches against an inadequate vocabulary; refuse to
   fabricate categories under ambiguity) is universal and transfers wholesale.
   LengYue's instance substrate (a Vue knob-domain enum, chrome-neighborhood
-  mounts) is re-derived against chocofarm's real classification surfaces — the
+  mounts) is re-derived against [chocofarm](../../GLOSSARY.md#omega-and-chocofarm)'s real classification surfaces — the
   detector-model keying decision, the SSOT vocabulary, the audit's
   band/severity classifications, and the consult-record `kind` choice.
 - **Scope:** All authoring work involving classification — picking values from
@@ -258,3 +258,5 @@ the discipline working as intended.
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

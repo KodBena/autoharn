@@ -29,7 +29,7 @@
 [`design/MAINT-ADR-PORTABILITY-SPEC.md`](../../design/MAINT-ADR-PORTABILITY-SPEC.md)
 (tracker `adr-portability-refactor`, maintainer-ratified 2026-07-13). The
 pre-refactor text stands verbatim at commit `cce9272`; extracted records live in
-[`history/0011-chocofarm-context.md`](history/0011-chocofarm-context.md) and
+[`history/0011-[chocofarm](../../GLOSSARY.md#omega-and-chocofarm)-context.md`](history/0011-chocofarm-context.md) and
 [`history/0011-throughput-lab-amendments.md`](history/0011-throughput-lab-amendments.md)
 and are not retro-edited. This pass also executes the enforcement-vocabulary
 amendment Rule 1 was missing, per this refactor's own §7 C8
@@ -341,3 +341,5 @@ flagged for separate dispatch, not silently done or silently dropped.*
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->

@@ -16,7 +16,7 @@ of prior text.*
 - **Date:** 2026-06-15
 - **Provenance:** Transferred from the LengYue ADR corpus. The tenet and its
   rules are universal and transfer wholesale. LengYue's instance list named
-  monorepo/dispatch-ledger/work-status-store machinery chocofarm does not
+  monorepo/dispatch-ledger/work-status-store machinery [chocofarm](../../GLOSSARY.md#omega-and-chocofarm) does not
   have; the rules are re-derived against chocofarm's real documentation
   corpus — the design notes under `docs/design/`, the consult records under
   `docs/consults/`, the agent commission/report pairs under `docs/agents/`,
@@ -322,3 +322,5 @@ A record kind this table does not yet cover gets a new bullet here when it recur
 ## License
 
 Public Domain (The Unlicense).
+
+<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->
