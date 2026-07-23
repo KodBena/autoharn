@@ -112,6 +112,7 @@ Usage: python3 seen-red/boundary-service/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -405,6 +406,86 @@ def write_scratch_deployment(tmpdir: Path, world: str) -> Path:
     path = tmpdir / f"{world}-deployment.json"
     deployment_record.write_deployment(path, rec)
     return path
+
+
+def serve_existing_world(deployment_path: Path, tmpdir: Path) -> subprocess.Popen:
+    """cli-rebase-fixture-repairs (ledger row 1170, THE CLASS): the ONE shared move a red fixture
+    needs to migrate off the retired legacy-fallback path onto the served shim -- given an
+    EXISTING deployment.json (already written by `bootstrap/new-project.sh`'s or `bootstrap/
+    track-work.sh`'s own CLASSIC scaffold, which both already run the FULL birth chain including
+    the s40/s43 birth sequence -- see either script's own header -- so no separate birth_via_
+    boundary() call is needed here), stand a REAL `serving.boundary_service` against that EXACT
+    schema/kern/role and rewrite deployment.json IN PLACE to add the two served-shim keys
+    (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5: `boundary_url`,
+    `boundary_deployment`). Every fixture call site already points its `led`/`pickup`/etc
+    invocations at this SAME deployment.json (via cwd, or an explicit AUTOHARN=/
+    PICKUP_DEPLOYMENT= override) -- adding these two keys IN PLACE is the one edit a fixture
+    needs to move onto the served path; nothing else about the fixture's own test body, scratch
+    naming, or assertions changes. `boundary_deployment` is set to the record's own `schema`
+    (the world-name convention every sibling fixture in this tree already uses).
+
+    Caller MUST `stop_server(...)` the returned process in its own teardown/finally block --
+    this function starts a real subprocess and does not own its lifecycle beyond returning it.
+
+    LEAK-CLASS REFUSAL (fixture-repairs review, ledger rows 1237-1244/1248): a fixture that
+    resolves `deployment_path` to a REAL project's deployment.json -- not a scratch one this
+    fixture itself scaffolded under a temp dir -- stands a served `led` against the LIVE
+    kernel and leaks committed rows into it (exactly what happened: 8 garbage rows landed in
+    the real deployment during the fixture-repairs batch, later marked garbage by row 1248).
+    Every one of this fixture class's own callers already scaffolds via `tempfile.mkdtemp`
+    before calling here, so this refusal costs nothing on the intended path; it forecloses the
+    leak class structurally rather than trusting every future caller to get it right by hand."""
+    deployment_path = Path(deployment_path).resolve()
+    scratch_root = Path(tempfile.gettempdir()).resolve()
+    if scratch_root not in deployment_path.parents:
+        raise RuntimeError(
+            f"serve_existing_world REFUSES: {deployment_path} does not live under the scratch "
+            f"root {scratch_root} (tempfile.gettempdir()). This guard exists because a fixture "
+            f"once resolved a REAL project's deployment.json here and stood a served `led` "
+            f"against the LIVE kernel, leaking 8 garbage rows into it (ledger rows "
+            f"1237-1244, marked garbage by row 1248) -- a fixture must scaffold its own world "
+            f"under a temp dir (tempfile.mkdtemp) and pass THAT deployment.json, never a real "
+            f"checkout's.")
+    # fixture-repairs review (MODERATE-loud finding): the tempdir-ancestor check above is a
+    # no-op whenever TMPDIR resolves to an ancestor of THIS repo (e.g. $HOME, or the repo's
+    # own parent directory) -- in that case scratch_root itself sits above the repo, so a
+    # REAL deployment.json living inside the checkout still passes the "lives under
+    # scratch_root" test above. Refuse independently on repo-containment: never serve a
+    # deployment.json that is inside this repo's own working tree, and never serve one where
+    # the repo root itself is not disjoint from the resolved path (covers deployment_path
+    # equal to, or an ancestor of, REPO too -- not just the ordinary "path under REPO" case).
+    # This is the same leak class named above (ledger rows 1237-1244/1248): a fixture must
+    # never stand a served `led` against this checkout's own deployment.json.
+    if deployment_path.is_relative_to(REPO) or REPO.is_relative_to(deployment_path):
+        raise RuntimeError(
+            f"serve_existing_world REFUSES: {deployment_path} is inside (or otherwise not "
+            f"disjoint from) this repo's own working tree ({REPO}). This guard exists because "
+            f"a fixture once resolved a REAL project's deployment.json here and stood a served "
+            f"`led` against the LIVE kernel, leaking 8 garbage rows into it (ledger rows "
+            f"1237-1244, marked garbage by row 1248) -- a fixture must scaffold its own world "
+            f"under a temp dir (tempfile.mkdtemp) and pass THAT deployment.json, never a path "
+            f"anywhere inside this checkout.")
+    rec = deployment_record.load_deployment(deployment_path)
+    # Built from `rec`'s OWN fields throughout (never this module's `{world}_rw`/`{world}_kernel`
+    # string-building convention, which several fixtures in this class do not follow) -- the
+    # config always matches the deployment.json this function was actually handed.
+    cfg_path = tmpdir / f"{rec.schema}-boundary-multiplex.toml"
+    cfg_path.write_text(
+        f'[deployments.{rec.schema}]\n'
+        f'pghost = "{rec.host}"\n'
+        f'pgdatabase = "{rec.db}"\n'
+        f'pguser = "{rec.role}"\n'
+        f'pgschema = "{rec.schema}"\n'
+        f'pgkern = "{rec.kern}"\n', encoding="utf-8")
+    proc, port = start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{rec.schema}"
+    if not wait_health(base):
+        tail = stop_server(proc)
+        raise RuntimeError(f"boundary_service for {rec.schema} never became healthy: {tail[-1500:]}")
+    served = dataclasses.replace(rec, boundary_url=f"http://127.0.0.1:{port}",
+                                  boundary_deployment=rec.schema)
+    deployment_record.write_deployment(deployment_path, served)
+    return proc
 
 
 def start_server(config_path: Path, host: str = "127.0.0.1", port: int | None = None,

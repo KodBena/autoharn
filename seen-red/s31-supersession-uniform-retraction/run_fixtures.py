@@ -5,11 +5,13 @@ ledger item supersession-semantics-closure) + gates/ledger_reader_allowlist.py (
 allowlist detect) + the engine companion (work_items.lp / work_review.lp composed with
 ledger_tnow.lp's supersession closure; ledger_floor.py's matching floor updates).
 
-Real infra, no mocks: a CLASSIC-mode scaffold (explicit --schema/--kern/--role, no automatic
-kernel apply -- s30's own scaffold_classic idiom, one delta later) followed by a MANUAL
-s15..s31 apply, in the TOY db, torn down before AND after so re-running leaves no residue.
-s31 is deliberately NOT in new-project.sh's LINEAGE_CHAIN yet (the orchestrator lands that at
-the seam, per the s28 precedent), so classic+manual is the honest wiring for this witness.
+Real infra, no mocks: a `bootstrap/new-project.sh --new-world` scaffold in the TOY db, torn down
+before AND after so re-running leaves no residue. cli-rebase-fixture-repairs (ledger row 1170):
+this used to be a CLASSIC-mode scaffold + a manual s15..s31 apply (s31 was, at authoring time,
+deliberately not yet in new-project.sh's own LINEAGE_CHAIN) -- s31 has been in that chain for a
+while now, and classic+manual was never an isolated-delta requirement here (no before/after
+two-chain comparison exists in this file), so it moved onto `--new-world` for the working s43
+boundary the served `led` this fixture drives throughout now unconditionally requires.
 
 Cases (the ratified spec's sec-5 acceptance list, every polarity):
   a-retracted-close-reopens         -- superseding a work_closed row makes the item read OPEN
@@ -43,9 +45,13 @@ Cases (the ratified spec's sec-5 acceptance list, every polarity):
                                        arm, mirroring `work open`/`work resolve-violation`'s own
                                        --supersedes position).
   f-history-readers-unchanged       -- the s26 row-hash chain RECOMPUTES clean across every row
-                                       including retracted ones + their retractors; led --recent
-                                       still SHOWS retracted rows, MARKED 'SUPERSEDED', never
-                                       hidden.
+                                       including retracted ones + their retractors. `led --recent`
+                                       showing retracted rows marked 'SUPERSEDED' is RETIRED (cli-
+                                       rebase-fixture-repairs, row 1170): the served boundary has
+                                       no raw-ledger route at all (legacy-led-retirement, row
+                                       1149/1150) -- `--recent` now discloses this loudly and
+                                       reads the same in-force-only view `current` does; see this
+                                       case's own comment for the full account.
   g-allowlist-gate-both-polarities  -- gates/ledger_reader_allowlist.py exits 0 green on the
                                        real chain AND refuses a deliberately misfactored scratch
                                        view under --red, teach-text naming both discharge paths.
@@ -66,6 +72,7 @@ Usage: python3 seen-red/s31-supersession-uniform-retraction/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -86,6 +93,16 @@ sys.path.insert(0, str(REPO / "filing"))
 import clingo_run  # noqa: E402  (engine/clingo_run.py, via the sys.path bridge above)
 import ledger_floor  # noqa: E402  (engine/ledger_floor.py -- the SQL floor, producer one)
 import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 WORLD = "s31fxprobe"
@@ -135,40 +152,27 @@ def psql_tuples(sql: str) -> str:
     return cp.stdout.strip()
 
 
-def scaffold_classic_s31(world: str) -> tuple[Path, dict]:
-    """CLASSIC MODE + manual s15..s31 apply (s30's scaffold_classic idiom, one delta later)."""
+def scaffold_classic_s31(world: str) -> tuple[Path, dict, subprocess.Popen]:
+    """cli-rebase-fixture-repairs (ledger row 1170): moved off CLASSIC MODE + a manual s15..s31
+    apply onto `--new-world`. This fixture's own docstring note ("s31 is deliberately NOT in
+    new-project.sh's LINEAGE_CHAIN yet") is itself stale -- s31 has been in that chain for a
+    while now, so classic+manual was never an isolated-delta requirement here (no before/after
+    two-chain comparison exists in this file, unlike e.g. s32/s34's own genuine isolation
+    tests) -- it was only ever a lighter-weight scaffold choice, now needing `--new-world`'s
+    full chain (through s43) for the served `led` this fixture drives throughout."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
-    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
-    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
-            "--db", PGDB, "--host", PGHOST,
-            "--schema", schema, "--kern", kern, "--role", role])
+    r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
+            "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
-        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+        raise RuntimeError(f"SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
     for verb in ("led", "judge", "pickup"):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
-    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
-            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
-    for name in CHAIN:
-        args += ["-f", str(LINEAGE / name)]
-    ra = sh(args)
-    if ra.returncode != 0:
-        raise RuntimeError(f"CLASSIC s15..s31 APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
-    secret_dir = world_dir / ".claude" / "secrets"
-    secret_dir.mkdir(parents=True, exist_ok=True)
-    hexsecret = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    (secret_dir / "stamp_secret.hex").write_text(hexsecret + "\n", encoding="utf-8")
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"TRUNCATE {kern}.stamp_secret;",
-        "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"])
-    genesis_hex = sh(["openssl", "rand", "-hex", "32"]).stdout.strip()
-    sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
-        "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
-              f"ON CONFLICT (only_one) DO NOTHING;"])
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
     dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
-    return world_dir, dep
+    return world_dir, dep, proc
 
 
 def retract(world_dir: Path, row_id: str, why: str) -> subprocess.CompletedProcess[str]:
@@ -246,8 +250,8 @@ def main() -> int:
     failures: list[str] = []
     tmps: list[Path] = []
     try:
-        print(f"== scaffolding classic world {WORLD} + manual s15..s31 apply (see docstring for why classic) ==")
-        world_dir, dep = scaffold_classic_s31(WORLD)
+        print(f"== scaffolding --new-world {WORLD} ==")
+        world_dir, dep, proc = scaffold_classic_s31(WORLD)
         tmps.append(world_dir.parent)
         schema = dep["schema"]
         print(f"  scaffold OK (schema={schema}).\n")
@@ -400,6 +404,18 @@ def main() -> int:
               f"second_close_id={close_e3_second} supersedes_col={supersedes_col_e3!r}", failures)
 
         # --- f: history readers unchanged -------------------------------------------------------
+        # cli-rebase-fixture-repairs (ledger row 1170): the `led --recent` half of this case is
+        # RETIRED, not fixed -- led.tmpl's own cmd_recent docstring names this a DISCLOSED,
+        # PERMANENT narrowing (legacy-led-retirement, ledger row 1149/1150): the served boundary
+        # has NO raw-ledger route at all ("no truth of its own" applied to routes -- every route
+        # reads a kernel VIEW), so `--recent` now reads the SAME in-force-only view `current`
+        # does, printing a loud disclosure on stderr instead of ever showing a superseded row
+        # marked or otherwise. There is no surviving CLI path left that shows raw, superseded-
+        # inclusive history (legacy-led.tmpl, which used to, is deleted outright) -- this is
+        # exactly the case class WM6/WM11 (boundary-cli-rebase) already retired for the same
+        # reason. The row-hash-chain half of this case (history is byte-recoverable and verifies
+        # clean across every row including retracted ones, independent of any CLI reader) is
+        # still fully live and checked below.
         chain_ok = psql_tuples(
             f"SELECT bool_and(l.row_hash = {schema}.compute_row_hash(l, "
             f"  COALESCE(prev.row_hash, (SELECT seed FROM {schema}_kernel.chain_genesis)))) "
@@ -408,12 +424,15 @@ def main() -> int:
             f"  (SELECT max(p.id) FROM {schema}.ledger p WHERE p.id < l.id);")
         n_retracted = psql_tuples(f"SELECT count(*) FROM {schema}.ledger l WHERE EXISTS "
                                   f"(SELECT 1 FROM {schema}.ledger s WHERE s.supersedes = l.id);")
-        recent = led(world_dir, "--recent", "50").stdout
-        marks = recent.count("SUPERSEDED")
-        ok_f = chain_ok == "t" and int(n_retracted) >= 4 and marks >= 4
+        disclosure = led(world_dir, "--recent", "50").stderr
+        ok_f = (chain_ok == "t" and int(n_retracted) >= 4
+                and "no raw-ledger route exists on the boundary" in disclosure)
         check("f-history-readers-unchanged", ok_f,
-              f"row-hash chain recomputes clean across ALL rows incl. {n_retracted} retracted: {chain_ok}; "
-              f"led --recent shows retracted rows MARKED (SUPERSEDED x{marks}), never hidden", failures)
+              f"row-hash chain recomputes clean across ALL rows incl. {n_retracted} retracted: "
+              f"{chain_ok}; led --recent's raw-history reading is RETIRED (see this case's own "
+              f"comment) -- its disclosure fires instead of a silent narrowing "
+              f"(disclosed={'no raw-ledger route exists on the boundary' in disclosure})",
+              failures)
 
         # --- g: allowlist gate, both polarities --------------------------------------------------
         gg = sh([sys.executable, str(GATE)])
@@ -452,6 +471,10 @@ def main() -> int:
               "see docstring)", failures)
 
     finally:
+        try:
+            bs_fixtures.stop_server(proc)
+        except NameError:
+            pass  # scaffold itself failed before `proc` was ever assigned
         teardown()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
@@ -461,9 +484,11 @@ def main() -> int:
         return 1
     print("ALL CASES OK -- s31 uniform retraction both-polarity proof (retracted close re-opens / "
           "claim unclaims / blocks-close edge stops gating / open burns slug + orphans surface + "
-          "redo idiom taught / reinstatement-free / hash chain + led --recent history reads "
-          "unchanged / allowlist gate green+red / composed SQL-ASP differential AGREE), zero residue. "
-          "a2 (composite ancestor) UNEXERCISED with its named blocker.")
+          "redo idiom taught / reinstatement-free / --supersedes wired both positions (row 1170 "
+          "found e2's own front-of-'work' regression live, fixed in led.tmpl) / hash chain intact "
+          "across retracted history (led --recent's own raw-history reading RETIRED, disclosed "
+          "not silent) / allowlist gate green+red / composed SQL-ASP differential AGREE), zero "
+          "residue. a2 (composite ancestor) UNEXERCISED with its named blocker.")
     return 0
 
 

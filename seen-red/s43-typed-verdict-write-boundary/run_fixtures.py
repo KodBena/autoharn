@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac as hmac_mod
+import importlib.util
 import json
 import os
 import re
@@ -50,6 +51,16 @@ import hash_coverage_gate  # noqa: E402  (FIELD_REF -- the gate's own serialized
 import ledger_differential  # noqa: E402
 import ledger_edb  # noqa: E402
 import pghost_resolve  # noqa: E402
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -262,10 +273,14 @@ def main() -> int:
               f"columns) -- the per-delta law's red, the exact shape the gate refuses",
               failures)
         # ...and the real repository gate is green on the real chain head (s43's re-issue).
+        # cli-rebase-fixture-repairs (row 1170): the literal "58" is stale (the repo head has
+        # grown past s43 since this fixture was authored) -- checked against "clean" instead,
+        # same fix as s45's own identical hardcoded-column-count case (see that fixture for the
+        # full rationale: the count's single home is gates/hash_coverage_gate.py itself).
         gg = sh([sys.executable, str(REPO / "gates" / "hash_coverage_gate.py")])
-        check("xv-green-gate-on-s43-head", gg.returncode == 0 and "58" in gg.stdout,
-              f"gates/hash_coverage_gate.py exit={gg.returncode} on the real lineage head "
-              f"(58 columns serialized)", failures)
+        check("xv-green-gate-on-s43-head", gg.returncode == 0 and "clean" in gg.stdout,
+              f"gates/hash_coverage_gate.py exit={gg.returncode} stdout={gg.stdout.strip()!r}",
+              failures)
 
         # ===================== WORLD B (s43 head) =====================
         print(f"== scaffolding classic world {world_b} (chain ends {CHAIN_S43[-1]}) ==")
@@ -540,6 +555,8 @@ def main() -> int:
         nwdir = tmpnw / world_nw
         rnw = sh(["bash", str(NEW_PROJECT), str(nwdir), "--new-world", world_nw,
                   "--db", PGDB, "--host", PGHOST])
+        proc_nw = bs_fixtures.serve_existing_world(nwdir / "deployment.json", tmpnw) \
+            if rnw.returncode == 0 else None
         det_nw = detect(world_nw, f"{world_nw}_kernel") if rnw.returncode == 0 else "?"
         principals = psql_tuples(
             f"SELECT string_agg(name, ',' ORDER BY id) FROM {world_nw}_kernel.principal;") \
@@ -551,6 +568,11 @@ def main() -> int:
             if rnw.returncode == 0 else None
         rrefuse = led(nwdir, "bogus_kind", "x") if rnw.returncode == 0 else None
         refuse_out = (rrefuse.stdout + rrefuse.stderr) if rrefuse else ""
+        # cli-rebase-fixture-repairs (row 1170): the boundary's own refusal text no longer
+        # includes a friendly "valid kinds" list -- it passes through the raw postgres
+        # CHECK-violation text ("... violates check constraint \"ledger_kind_check\"") verbatim
+        # instead. Wording drift, not a functional regression: the write is still refused, still
+        # attributed to the kernel write boundary, still names the CHECK that fired.
         check("new-world-s43-birth",
               rnw.returncode == 0 and det_nw == "t"
               and principals == "author,reviewer,commissioner,write-boundary"
@@ -558,7 +580,7 @@ def main() -> int:
               and rfirst is not None and rfirst.returncode == 0
               and rrefuse is not None and rrefuse.returncode != 0
               and "REFUSED by the kernel write boundary" in refuse_out
-              and "valid kinds" in refuse_out,
+              and "ledger_kind_check" in refuse_out,
               f"scaffold exit={rnw.returncode}; detect={det_nw!r}; principals="
               f"{principals!r} (write-boundary birth-registered); {login_decl} standing "
               f"declarations (role + login, the s43 dual declaration); first ordinary "
@@ -574,6 +596,9 @@ def main() -> int:
               f"mechanical head s43, elaboration clean)", failures)
 
     finally:
+        proc_nw_ = locals().get("proc_nw")
+        if proc_nw_ is not None:
+            bs_fixtures.stop_server(proc_nw_)
         for w in (world_a, world_b, world_nw):
             teardown(w)
         for t in tmps:

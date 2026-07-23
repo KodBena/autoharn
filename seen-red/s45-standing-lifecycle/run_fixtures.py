@@ -24,6 +24,7 @@ Each check() names the witness that would show it false. Usage:
 Exit 0 if every case matches; 1 otherwise. Lazy imports are banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -44,6 +45,16 @@ sys.path.insert(0, str(REPO / "gates"))
 import ledger_differential  # noqa: E402
 import ledger_edb  # noqa: E402
 import pghost_resolve  # noqa: E402
+
+# cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
+# seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
+# this deployment.json gains boundary_url/boundary_deployment.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
@@ -265,6 +276,7 @@ def main() -> int:
             v = bw_call(world_a, fn, payload)
             if v["disposition"] != "accepted":
                 raise RuntimeError(f"world A birth act refused: {v}")
+        proc_a = bs_fixtures.serve_existing_world(wa / "deployment.json", wa.parent)
         # a payload carrying principal_binding_active on an s43-only kernel is refused (the
         # CHECK does not yet license the kind) -- confirms the flag is genuinely NEW territory.
         v_flag_pre_s45 = bw_call(world_a, "ledger_write",
@@ -294,6 +306,7 @@ def main() -> int:
         tmps.append(wb.parent)
         S, K, R = world_b, f"{world_b}_kernel", f"{world_b}_rw"
         birth_via_boundary(world_b)
+        proc_b = bs_fixtures.serve_existing_world(wb / "deployment.json", wb.parent)
         check("detect-t-on-s45-head", detect(S, K) == "t",
               f"s45 detect on the s45 chain reads {detect(S, K)!r} (expect t)", failures)
         author = psql_tuples(f"SELECT id FROM {K}.principal WHERE name='author';")
@@ -682,10 +695,18 @@ def main() -> int:
         gr = sh([sys.executable, str(REPO / "gates" / "ledger_reader_allowlist.py")])
         check("gate-reader-allowlist-green", gr.returncode == 0,
               f"gates/ledger_reader_allowlist.py exit={gr.returncode}", failures)
+        # cli-rebase-fixture-repairs (row 1170): the literal column count ("58") is stale -- the
+        # repo head has grown well past s45 since this fixture was authored (76 columns at
+        # s57), and hardcoding a count here would need updating on every later column-adding
+        # delta forever, which is exactly gates/hash_coverage_gate.py's OWN job (ADR-0012 P1: one
+        # home for that count). This case's actual claim -- s45 adds no ledger column, so it
+        # never re-issues compute_row_hash, so the gate stays "clean" (not merely exit 0, which a
+        # gate could also report on an unrelated pre-existing failure state) -- is checked
+        # against "clean" text, not a column literal that drifts with every later delta.
         gh = sh([sys.executable, str(REPO / "gates" / "hash_coverage_gate.py")])
-        check("gate-hash-coverage-green-no-reissue", gh.returncode == 0 and "58" in gh.stdout,
-              f"gates/hash_coverage_gate.py exit={gh.returncode} on the s45 head (still 58 "
-              f"columns -- s45 adds no ledger column, so s42's law does not fire)", failures)
+        check("gate-hash-coverage-green-no-reissue", gh.returncode == 0 and "clean" in gh.stdout,
+              f"gates/hash_coverage_gate.py exit={gh.returncode} stdout={gh.stdout.strip()!r} "
+              f"(s45 adds no ledger column, so s42's law does not fire)", failures)
         gh_neg = sh([sys.executable, str(REPO / "gates" / "hash_coverage_gate.py"),
                     "--inject-column", "s45_seenred_probe"])
         check("gate-hash-coverage-negative-control-still-red", gh_neg.returncode == 1,
@@ -732,6 +753,8 @@ def main() -> int:
         nwdir = tmpnw / world_nw
         rnw = sh(["bash", str(NEW_PROJECT), str(nwdir), "--new-world", world_nw,
                   "--db", PGDB, "--host", PGHOST])
+        proc_nw = bs_fixtures.serve_existing_world(nwdir / "deployment.json", tmpnw) \
+            if rnw.returncode == 0 else None
         det_nw = detect(world_nw, f"{world_nw}_kernel") if rnw.returncode == 0 else "?"
         birth_flags = psql_tuples(
             f"SELECT bool_and(principal_binding_active) FROM {world_nw}.ledger_current "
@@ -786,6 +809,10 @@ def main() -> int:
               failures)
 
     finally:
+        for p in ("proc_a", "proc_b", "proc_nw"):
+            proc = locals().get(p)
+            if proc is not None:
+                bs_fixtures.stop_server(proc)
         for w in (world_a, world_b, world_nw):
             teardown(w)
         for t in tmps:

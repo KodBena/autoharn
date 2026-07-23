@@ -46,8 +46,30 @@ sys.path.insert(0, str(REPO / "gates"))
 import column_complete as cc  # noqa: E402
 import column_complete_gate as ccgate  # noqa: E402
 
-PGHOST, PGDB = "192.168.122.1", "toy"
+sys.path.insert(0, str(REPO / "seen-red"))  # for _fixture_env
+from _fixture_env import fixture_pghost  # noqa: E402
+
+PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD = "ccgatefxprobe"
+
+# cli-rebase-fixture-repairs (ledger row 1170): case b's whole premise is "the registered views'
+# EXPECTED column list, computed from a schema whose catalog head IS s30, equals s30's own
+# hand-authored list" -- true when this fixture was authored (--new-world's own chain ended at
+# s30 then) but now stale (--new-world carries the FULL current chain, s57 at last count, so the
+# live catalog carries dozens of later-delta columns the s30-era hand-authored list never saw).
+# Scaffolding CLASSIC + a manual apply pinned to exactly s15..s30 (this fixture needs no ledger
+# ROWS at all -- every case here inspects catalog/DDL shape only, no `led`/boundary required)
+# restores the s30-headed catalog case (b) actually needs, without touching --new-world's own
+# chain (which correctly keeps growing for every OTHER fixture in this class).
+CHAIN_TO_S30 = [
+    "s15-schema.sql", "s17-stamp-mechanism.sql", "s17-independence-vocabulary.sql",
+    "s19-trigger-search-path.sql", "s20-obligation-grants-and-view-refresh.sql",
+    "s21-session-aware-distinctness.sql", "s22-work-item-ledger.sql",
+    "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
+    "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s27-chain-high-water.sql",
+    "s28-work-parent-edge.sql", "s29-obligation-item-key-and-typed-close.sql",
+    "s30-typed-dependency-edges.sql",
+]
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -72,10 +94,19 @@ def teardown() -> None:
 def scaffold(world: str) -> str:
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
-    r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
-            "--db", PGDB, "--host", PGHOST])
+    schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
+    r = sh(["bash", str(NEW_PROJECT), str(world_dir),
+            "--db", PGDB, "--host", PGHOST,
+            "--schema", schema, "--kern", kern, "--role", role])
     if r.returncode != 0:
-        raise RuntimeError(f"SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+        raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+    args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
+            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
+    for name in CHAIN_TO_S30:
+        args += ["-f", str(REPO / "kernel" / "lineage" / name)]
+    ra = sh(args)
+    if ra.returncode != 0:
+        raise RuntimeError(f"CLASSIC APPLY FAILED ({world}): {ra.stdout[-1500:]} {ra.stderr[-1500:]}")
     return str(tmp)
 
 
@@ -106,7 +137,7 @@ def main() -> int:
     tmps: list[str] = []
 
     try:
-        print(f"== scaffolding throwaway --new-world {WORLD} (full s15..s30 birth chain) ==")
+        print(f"== scaffolding throwaway CLASSIC world {WORLD}, manual s15..s30 apply ==")
         tmp = scaffold(WORLD)
         tmps.append(tmp)
         schema = WORLD
