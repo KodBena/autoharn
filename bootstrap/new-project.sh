@@ -775,8 +775,51 @@ echo "-- .gitignore (scaffolding-owned churn + secret paths in the subject repo)
 GITIGNORE="$PROJECT_ROOT/.gitignore"
 GITIGNORE_MARK_BEGIN="# >>> autoharn scaffold-owned churn (bootstrap/new-project.sh) >>>"
 GITIGNORE_MARK_END="# <<< autoharn scaffold-owned churn <<<"
+# The scaffold-owned lines this block must carry INSIDE the markers. This list is checked
+# content-aware, not just "does the marker exist" (tracker item experience-secret-gitignore-
+# hazard follow-up): a deployment whose .gitignore carries the PRE-d211165 block (marker +
+# .claude/logs/ but no .claude/secrets/, since .claude/secrets/ was added to this block by
+# d211165, 2026-07-19, after some deployments already had the marker-only block) used to get
+# "already carries the block -- left untouched" on --force re-scaffold, leaving the stamp secret
+# un-ignored while the operator believed the fix applied. Fixed here: presence of the marker no
+# longer short-circuits the check; each owned line is verified present INSIDE the block, and any
+# missing one is appended inside it (before the end marker), loudly, append-only -- never a
+# rewrite of anything else in the file, never a silent no-op, never a duplicate on re-run.
+GITIGNORE_OWNED_LINES=".claude/logs/ .claude/secrets/"
 if [ -f "$GITIGNORE" ] && grep -qF "$GITIGNORE_MARK_BEGIN" "$GITIGNORE" 2>/dev/null; then
-    echo "   $GITIGNORE already carries the scaffold-owned churn block -- left untouched (idempotent)"
+    BLOCK_CONTENT="$(awk -v b="$GITIGNORE_MARK_BEGIN" -v e="$GITIGNORE_MARK_END" '
+        $0==b {inblock=1; next}
+        $0==e {inblock=0}
+        inblock {print}
+    ' "$GITIGNORE")"
+    MISSING=""
+    for _line in $GITIGNORE_OWNED_LINES; do
+        # exact whole-line match ONLY -- a comment mentioning the path as prose text (e.g. "this
+        # deployment's OWN stamp secret (.claude/secrets/stamp_secret.hex)") must never be
+        # mistaken for the actual ignore pattern line.
+        if ! printf '%s\n' "$BLOCK_CONTENT" | grep -qxF "$_line"; then
+            MISSING="$MISSING $_line"
+        fi
+    done
+    if [ -z "$MISSING" ]; then
+        echo "   $GITIGNORE already carries the scaffold-owned churn block with every scaffold-owned path -- left untouched (idempotent)"
+    else
+        for _line in $MISSING; do
+            "$PY" - "$GITIGNORE" "$GITIGNORE_MARK_END" "$_line" <<'PYEOF'
+import sys
+path, end_marker, line = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f:
+    lines = f.read().split("\n")
+idx = lines.index(end_marker)
+lines.insert(idx, line)
+with open(path, "w") as f:
+    f.write("\n".join(lines))
+PYEOF
+            echo "   NOTICE: $GITIGNORE's scaffold-owned churn block predates '$_line' -- appended it" >&2
+            echo "   INSIDE the existing block (this .gitignore was scaffolded before that path was" >&2
+            echo "   added to the scaffold-owned set; healed in place, nothing else in the file touched)." >&2
+        done
+    fi
 else
     {
         echo ""

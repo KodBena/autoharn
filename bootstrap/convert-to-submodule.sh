@@ -13,7 +13,8 @@
 # the pinned shape (design/ORCH-DEPLOYMENT-PINNING.md's "submodule-as-default"): adds autoharn as
 # a git submodule at <deployment>/.autoharn pinned to the EXACT commit the deployment was already
 # running (never autoharn's current tip -- conversion is not conflated with an upgrade), repoints
-# the operator-verb shims (SHIM_VERBS_ALL, bootstrap/shim-verbs.sh) AND the hook wiring in .claude/settings.json at that pinned copy,
+# the operator-verb shims discovered present (SHIM_VERBS_ORIGINAL_EIGHT required, asof-export/
+# doctor folded in when present -- bootstrap/shim-verbs.sh) AND the hook wiring in .claude/settings.json at that pinned copy,
 # verifies every verb still answers, and records the act.
 #
 # Usage:
@@ -30,7 +31,8 @@
 #
 # REFUSES LOUDLY, and touches NOTHING, on any of:
 #   - <deployment-dir> missing deployment.json, or it fails to parse (filing/deployment_record.py).
-#   - the required operator-verb shims (SHIM_VERBS) are missing, malformed, already pinned (already has .autoharn), or
+#   - the required operator-verb shims (SHIM_VERBS_ORIGINAL_EIGHT; asof-export/doctor are
+#     discovery-optional, see bootstrap/shim-verbs.sh) are missing, malformed, already pinned (already has .autoharn), or
 #     DISAGREE with each other about which autoharn checkout they exec (a pre-existing hazard this
 #     script will not paper over by picking one arbitrarily).
 #   - the discovered autoharn checkout is dirty or its commit cannot be determined (nothing
@@ -111,23 +113,35 @@ if [ -e "$DEST/.autoharn" ]; then
 fi
 
 # --- 3. discover the CURRENT live-exec AUTOHARN_ROOT from the shims, and confirm agreement ---
-# `doctor` (SHIM_VERBS_OPTIONAL, bootstrap/shim-verbs.sh -- added after this script's original
-# nine) is deliberately OPTIONAL here, never REQUIRED: a deployment scaffolded before `./doctor`
-# existed legitimately has no such shim, and hard-requiring it would refuse conversion for every
-# pre-existing deployment on this fix's account. When present, it is folded into $VERBS below so
-# it gets discovered/repointed/committed exactly like the required set -- absent, it is silently
-# skipped, same posture as everywhere else in this repo that treats `doctor` as
-# additive-and-optional to already-scaffolded worlds. Every OTHER verb in SHIM_VERBS is required
-# (unlike before this fix, this now includes asof-export -- see bootstrap/shim-verbs.sh's header).
-VERBS="$SHIM_VERBS"
-[ -f "$DEST/doctor" ] && VERBS="$VERBS doctor"
+# REQUIRED here is SHIM_VERBS_ORIGINAL_EIGHT only -- the verbs every scaffold has written since
+# before either `asof-export` (added 2026-07-18, commit badc51c) or `doctor` (ledger rows
+# 1147/1148) existed. Both of those are DISCOVERY-OPTIONAL (SHIM_VERBS_OPTIONAL_DISCOVERY,
+# bootstrap/shim-verbs.sh): a deployment scaffolded before either verb existed legitimately has
+# no such shim, and hard-requiring either would refuse conversion for every pre-existing
+# deployment on that one verb's account -- exactly the bug this fix retires (~/ent, scaffolded
+# 2026-07-13, has the original eight and neither newer verb; it is this script's own named
+# motivating case, and used to be refused by the asof-export omission alone). Each optional verb
+# is folded into $VERBS below when its shim is present, so it gets discovered/repointed/committed
+# exactly like the required set; absent, it is silently skipped.
+VERBS="$SHIM_VERBS_ORIGINAL_EIGHT"
+for _opt in $SHIM_VERBS_OPTIONAL_DISCOVERY; do
+    [ -f "$DEST/$_opt" ] && VERBS="$VERBS $_opt"
+done
 DISCOVERED=""
 for v in $VERBS; do
     shim="$DEST/$v"
     if [ ! -f "$shim" ]; then
-        echo "convert-to-submodule.sh: $shim not found -- this deployment is missing an expected" >&2
-        echo "                         operator-verb shim; not a live-exec scaffold this script" >&2
-        echo "                         recognizes. Nothing touched." >&2
+        echo "convert-to-submodule.sh: $shim not found -- this deployment is missing the" >&2
+        echo "                         operator-verb shim '$v', which is REQUIRED for conversion." >&2
+        echo "                         If this deployment was scaffolded before '$v' existed, add" >&2
+        echo "                         the shim by hand (it is just this 3-line shape, matching" >&2
+        echo "                         every other shim in $DEST):" >&2
+        echo "                           #!/bin/sh" >&2
+        echo "                           HERE=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"" >&2
+        echo "                           exec env PICKUP_DEPLOYMENT=\"\$HERE/deployment.json\" <AUTOHARN_ROOT>/bootstrap/templates/$v.tmpl \"\$@\"" >&2
+        echo "                         (then chmod +x it), or re-run bootstrap/new-project.sh" >&2
+        echo "                         --force against $DEST to have the scaffold write it for" >&2
+        echo "                         you. Nothing touched." >&2
         exit 1
     fi
     # Every shim is `exec env PICKUP_DEPLOYMENT=... <ROOT>/bootstrap/templates/<verb>.tmpl "$@"`
