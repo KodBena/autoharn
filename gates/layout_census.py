@@ -122,6 +122,13 @@ ROOT_FILES = {
     # track-work.sh shim set (bootstrap/track-work.sh's own shim loop, extended by this same
     # commission) -- registered on landing, not left an unregistered breach for the next run.
     "asof-export",
+    # doctor — "is this world set up right?" in one witnessed call (ledger rows 1147/1148,
+    # virgin-experience round; bootstrap/templates/doctor.tmpl), landed on the TUI-rebuild
+    # branch line alongside the guard/CLAUDE.md work never registered here -- caught live
+    # during the 2026-07-23 integration merge's full-verification pass (CLAUDE.md hazard-
+    # flagging duty: found in reach of task A's own doctor.tmpl edit, fixed rather than routed
+    # around).
+    "doctor",
     # otel-attest — the OTel model-attestation verb (ledger item otel-model-attestation),
     # landed without registration here; one of three pre-existing breaches flagged loudly by
     # the asof-export builder (2026-07-18) and fixed at the merge seam rather than left for
