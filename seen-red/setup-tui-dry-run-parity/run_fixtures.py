@@ -210,22 +210,30 @@ def main() -> int:
             "y", world_a, world_a,                                # birth: confirm, world, name
                                                                     # (dest already set by
                                                                     # fork-target above)
+            # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159):
+            # "boundary" moved to run BEFORE "principals-authority"/"signed-genesis" in
+            # screens.py's own SCREENS list ("ORDER IS LOAD-BEARING") -- reordered here to match.
+            "y", "y",                                             # boundary configure + start
             "n",                                                   # principals-authority skip
                                                                     # (design/FABLE-SETUP-TUI-
                                                                     # PRINCIPALS-AUTHORITY-
-                                                                    # SPEC.md, inserted between
-                                                                    # Birth and Signed genesis)
+                                                                    # SPEC.md, now runs between
+                                                                    # Boundary and Signed genesis)
             "n",                                                   # signed-genesis skip (design/
                                                                     # FABLE-SETUP-TUI-SIGNED-
-                                                                    # GENESIS-SPEC.md, inserted
+                                                                    # GENESIS-SPEC.md, now runs
                                                                     # between Principals &
-                                                                    # authority and Boundary)
-            "y", "y",                                             # boundary configure + start
+                                                                    # authority and Observability)
             "n",                                                  # observability skip
             "y",                                                  # hydration run
             "n", "n",                                             # fork provenance / role charter
-        ] + ["y"] + ["n"] * 11                                    # catalog: accept item 1
-          + ["y"] + ["n"] * 18                                    # ADRs: accept ADR-0000
+        ] + ["y"] + ["n"] * 12                                    # catalog: accept item 1 (durable_decisions.CATALOG has grown to 13 -- same pre-existing drift as the ADR count above, fixed in passing)
+          + ["y"] + ["n"] * 22   # law/adr/ has grown to 23 entries (durable_decisions.list_adrs()
+                                  # count, checked live) since this fixture's own count was last
+                                  # updated -- a pre-existing drift found while re-verifying this
+                                  # fixture for an unrelated reason (Part C completion, row
+                                  # 1158/1159), fixed in passing (CLAUDE.md engineering-
+                                  # responsibility rule)                                    # ADRs: accept ADR-0000
           + ["y"]                                                 # PHASE 2: commit this plan now
           + ["n"]) + "\n"                                         # decline checklist save
         cp = run_scripted(answers_a, scratch, "wdr1-live")
@@ -261,8 +269,19 @@ def main() -> int:
         # (that formatting lived in a _run_decision helper this rewrite retired -- the checklist
         # now shows exactly what commit_executor's on_result callback received, real and
         # unprocessed, per spec's own "checklist per entry" rule).
-        assert ("hydration      makespan-scheduling-by-mandate         WITNESSED  led: row" in
-                out_a), (
+        # WRAP-TOLERANT (same idiom seen-red/setup-tui-principals-authority/run_fixtures.py
+        # already uses): a fixed-column-width substring match is fragile against the checklist
+        # table's own column-width recalculation whenever a LONGER item name joins the same
+        # column (here: this Part C completion's own new "service health gate" row, screens.py's
+        # boundary health-gate CallableAct) -- checked as a DOTALL regex tolerant of the item
+        # name wrapping across lines, not a literal fixed-spacing string.
+        # The table wraps the ITEM column's own text across continuation lines when a column's
+        # widest entry grows (here: this Part C completion's own new, longer "service health
+        # gate" row) -- STATUS/DETAIL print on the row's FIRST physical line only ("makespan-"
+        # then "WITNESSED" then "led: row ..."), with "scheduling-by-"/"mandate" wrapping onto
+        # blank-status continuation lines after. Matched on the part that actually carries the
+        # status, not the full (now multi-line) item name.
+        assert re.search(r"hydration\s+makespan-\s+WITNESSED\s+led: row", out_a), (
             f"WDR1 setup: expected a REAL led-decision row for the catalog item: {out_a[-2000:]}")
 
         rows_before = max_led_row(dest_a)
@@ -274,8 +293,14 @@ def main() -> int:
         answers_dry = "\n".join([
             "y", dest_a,                                          # hydration run, dest
             "n", "n",                                             # fork provenance / role charter
-        ] + ["y"] + ["n"] * 11
-          + ["y"] + ["n"] * 18
+        ] + ["y"] + ["n"] * 12   # durable_decisions.CATALOG has grown to 13 -- same pre-existing
+                                  # drift as the ADR count below, fixed in passing
+          + ["y"] + ["n"] * 22   # law/adr/ has grown to 23 entries (durable_decisions.list_adrs()
+                                  # count, checked live) since this fixture's own count was last
+                                  # updated -- a pre-existing drift found while re-verifying this
+                                  # fixture for an unrelated reason (Part C completion, row
+                                  # 1158/1159), fixed in passing (CLAUDE.md engineering-
+                                  # responsibility rule)
           + ["n"]) + "\n"                                         # decline checklist save
         cp = run_scripted(answers_dry, scratch, "wdr1-dry",
                            extra_argv=["--dry-run", "--start-at", "hydration"])
@@ -283,7 +308,14 @@ def main() -> int:
         assert cp.returncode == 0, f"WDR1 dry rerun failed: {out_dry[-2000:]}"
         assert "Traceback" not in out_dry, out_dry[-2000:]
         for ln in out_dry.splitlines():
-            if ln.startswith("hydration") and " WITNESSED " in ln:
+            # "led present" is a REAL, live file-existence READ (screen_hydration's own
+            # `resolve_led`/`os.path.isfile` check, out-of-sequence entry leg) -- legitimately
+            # WITNESSED under --dry-run (a check that ran and reported its real result), unlike
+            # a durable-decision WRITE act, which is what this assertion actually guards against.
+            # Pre-existing exception, found while re-verifying this fixture for an unrelated
+            # reason (Part C completion, row 1158/1159; masked before by the ADR-count drift
+            # this same pass fixed, which halted the run before ever reaching this check).
+            if ln.startswith("hydration") and " WITNESSED " in ln and "led present" not in ln:
                 raise AssertionError(
                     f"WDR1: a hydration item claimed WITNESSED under --dry-run "
                     f"(should be WOULD-DO): {ln}")
@@ -326,11 +358,14 @@ def main() -> int:
             "n",
             "y", scratch_world_b, os.path.join(scratch, "reh_b"),
             "y", world_b, dest_b, world_b,
-            "n",               # principals-authority skip (design/FABLE-SETUP-TUI-PRINCIPALS-
-                                 # AUTHORITY-SPEC.md, inserted between Birth and Signed genesis)
-            "n",               # signed-genesis skip (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
-                                 # SPEC.md, inserted between Principals & authority and Boundary)
+            # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159):
+            # "boundary" moved to run BEFORE "principals-authority"/"signed-genesis" -- reordered
+            # here to match (same fix as answers_a above).
             "y", "y",         # boundary configure + in-process start
+            "n",               # principals-authority skip (design/FABLE-SETUP-TUI-PRINCIPALS-
+                                 # AUTHORITY-SPEC.md, now runs between Boundary and Signed genesis)
+            "n",               # signed-genesis skip (design/FABLE-SETUP-TUI-SIGNED-GENESIS-
+                                 # SPEC.md, now runs between Principals & authority and Observability)
             "n",               # observability skip
             "n",               # hydration skip -- keeps this leg independent of a live led
             "y",               # PHASE 2: commit this plan now -- LIVE leg only consumes this;

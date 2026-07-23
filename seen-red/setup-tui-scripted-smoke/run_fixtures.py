@@ -195,8 +195,15 @@ def main() -> int:
               "(the tools/setup_tui/probes.py valid_subnet repair)")
 
         # --- case 4: boundary, out-of-sequence entry, nonexistent dest -> REFUSED ---
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
+        # moved to run BEFORE "principals-authority"/"signed-genesis" in screens.py's own SCREENS
+        # list -- `--start-at boundary` now ALSO visits those two (newly downstream of it) before
+        # reaching observability/hydration/checklist, each needing its own one-"n" decline to
+        # skip cleanly (both screens' own FIRST act is a plain confirm that returns immediately
+        # on "n"). Extra "n\nn\n" inserted here, not appended at the end, since ScriptedUi
+        # consumes answers as a flat FIFO in PROMPT order, not per-screen.
         missing_dest = os.path.join(scratch, "nonexistent_dest")
-        cp = run_scripted(f"y\ny\n{missing_dest}\nn\nn\n", "boundary", scratch)
+        cp = run_scripted(f"y\ny\n{missing_dest}\nn\nn\nn\nn\n", "boundary", scratch)
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 4: expected exit 0, got {cp.returncode}: {out[-800:]}"
         assert "REFUSED: destination directory" in out and missing_dest in out, out[-800:]
@@ -212,8 +219,11 @@ def main() -> int:
             json.dump({"schema": "validworld", "kern": "validworld_kernel",
                        "role": "validworld_rw", "name": "validworld"}, f)
         hostile_world = 'evil"] [deployments.pwn'
+        # Same re-sequencing insertion as case 4 above: two more "n"s for the newly-downstream
+        # principals-authority/signed-genesis screens' own one-answer skip, inserted before the
+        # trailing observability/hydration/checklist declines.
         cp = run_scripted(
-            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\n", "boundary", scratch,
+            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
         )
         out = cp.stdout + cp.stderr
         assert cp.returncode == 0, f"case 5: expected exit 0, got {cp.returncode}: {out[-800:]}"
@@ -351,8 +361,10 @@ def main() -> int:
         # its own byte-for-byte comparison (not just a substring match) of the REFUSED line.
         refused_line_live = next(
             ln for ln in out_case5.splitlines() if ln.startswith("  REFUSED: world "))
+        # Same re-sequencing insertion as case 5 (two more "n"s for the newly-downstream
+        # principals-authority/signed-genesis screens' own one-answer skip).
         cp = run_scripted(
-            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\n", "boundary", scratch,
+            f"y\ny\n{valid_dest}\n{hostile_world}\n-\n-\nn\nn\nn\nn\nn\n", "boundary", scratch,
             dry_run=True,
         )
         out9 = cp.stdout + cp.stderr

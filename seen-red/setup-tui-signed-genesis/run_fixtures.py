@@ -144,7 +144,11 @@ def main() -> int:
             "y", dest_a,                                          # ceremony on, destination
             "WG1 founding commission: build this scratch world per the signed-genesis fixture.",
             "AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY", "setup-tui-fixture@example.invalid",
-            "n", "n", "n",                                        # boundary/observability/hydration declines
+            # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159):
+            # "boundary" moved to run BEFORE "signed-genesis" in screens.py's own SCREENS list --
+            # `--start-at signed-genesis` no longer includes it in SCREENS[idx:] at all, so one
+            # fewer decline is needed here (observability/hydration only, not boundary too).
+            "n", "n",                                             # observability/hydration declines
             "y",                                                   # PHASE 2: commit this plan now
             "n",                                                   # decline checklist save
         ]) + "\n"
@@ -199,7 +203,10 @@ def main() -> int:
             "n",                                                   # decline reusing commission genesis_id
             "WG4 dry-run founding commission text -- never actually written",
             "AUTOHARN SETUP-TUI FIXTURE KEY -- THROWAWAY", "setup-tui-fixture@example.invalid",
-            "n", "n", "n", "n",
+            # One fewer decline than before (boundary no longer between signed-genesis and
+            # Checklist -- design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, row
+            # 1158/1159): observability/hydration/checklist-save, not boundary too.
+            "n", "n", "n",
         ]) + "\n"
         before_scratch_dirs2 = scratch_gnupghomes()
         cp4 = run_scripted(answers_wg4, scratch, "wg4",
@@ -257,7 +264,9 @@ def main() -> int:
         assert m3, f"WG3 setup: no row id in output: {r3w.stdout}"
         wg3_id = int(m3.group(1))
 
-        answers_wg3 = "n\n" + "n\n" * 4  # decline the ceremony, then boundary/obs/hydration/checklist-save
+        # One fewer decline than before (boundary no longer between signed-genesis and Checklist --
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, row 1158/1159).
+        answers_wg3 = "n\n" + "n\n" * 3  # decline the ceremony, then obs/hydration/checklist-save
         cp3 = run_scripted(answers_wg3, scratch, "wg3", ["--start-at", "signed-genesis"])
         out3 = cp3.stdout + cp3.stderr
         assert cp3.returncode == 0, f"WG3: expected exit 0, got {cp3.returncode}: {out3[-1500:]}"

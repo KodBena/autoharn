@@ -94,10 +94,17 @@ KERNEL_LINEAGE = os.path.join(REPO, "kernel", "lineage")
 
 # PHASE-2 answer tails (module docstring's own "PHASE-2 CONTRACT CHANGE" note): every case that
 # needs a real committed act, or the closing checklist's own WOULD-DO/save-checklist prompts, must
-# navigate the four screens between principals-authority and Checklist.
-COMMIT_TAIL = "n\nn\nn\nn\ny\nn\n"     # decline sg/boundary/observability/hydration, commit=yes, save=no
-NOCOMMIT_TAIL = "n\nn\nn\nn\n"           # same four declines; no commit-confirm for an EMPTY plan
-DRYRUN_TAIL = "n\nn\nn\nn\nn\n"          # same four declines; no commit-confirm under --dry-run; save=no
+# navigate the screens between principals-authority and Checklist.
+#
+# design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary" moved
+# to run BEFORE "principals-authority" in screens.py's own SCREENS list ("ORDER IS LOAD-BEARING")
+# -- `--start-at principals-authority` (every case in this fixture) now slices `SCREENS[idx:]`
+# starting AT principals-authority, so boundary (now BEFORE it) is no longer in that slice at
+# all. THREE screens remain between principals-authority and Checklist (signed-genesis,
+# observability, hydration), not four -- one "n" fewer in every tail below.
+COMMIT_TAIL = "n\nn\nn\ny\nn\n"     # decline sg/observability/hydration, commit=yes, save=no
+NOCOMMIT_TAIL = "n\nn\nn\n"           # same three declines; no commit-confirm for an EMPTY plan
+DRYRUN_TAIL = "n\nn\nn\nn\n"          # same three declines; no commit-confirm under --dry-run; save=no
 
 _CHAIN_THROUGH_S40 = [
     "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -331,7 +338,12 @@ def main() -> int:
 
         # ---- WP6a: out-of-sequence, nonexistent destination --------------------------------
         missing = os.path.join(scratch, "nonexistent")
-        ans6a = "y\n" + missing + "\nn\nn\nn\nn\n"
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): boundary
+        # is no longer in this `--start-at principals-authority` slice (it now runs BEFORE
+        # principals-authority) -- one fewer downstream decline (sg/observability/hydration, not
+        # sg/boundary/observability/hydration); `missing` never exists, so checklist's own
+        # save-prompt is never even asked (dest_reachable short-circuits it).
+        ans6a = "y\n" + missing + "\nn\nn\nn\n"
         cp6a = run_scripted(ans6a, scratch, "wp6a", missing)
         out6a = cp6a.stdout + cp6a.stderr
         assert "Traceback" not in out6a, out6a[-1500:]
@@ -358,7 +370,9 @@ def main() -> int:
         os.makedirs(bare)
         with open(os.path.join(bare, "placeholder.txt"), "w", encoding="utf-8") as f:
             f.write("not autoharn's -- this fixture only needs a non-empty (non-FRESH) directory\n")
-        ans6b = "y\n" + bare + "\nn\nn\nn\nn\nn\n"  # PHASE 2: bare exists -- save-checklist IS asked
+        # One fewer downstream decline than before (boundary no longer in this slice -- see ans6a's
+        # own comment above); bare exists -- save-checklist IS asked.
+        ans6b = "y\n" + bare + "\nn\nn\nn\nn\n"
         cp6b = run_scripted(ans6b, scratch, "wp6b", bare)
         out6b = cp6b.stdout + cp6b.stderr
         assert "Traceback" not in out6b, out6b[-1500:]
@@ -412,7 +426,10 @@ def main() -> int:
                 f.write(led_shim)
             os.chmod(led_path, 0o755)
 
-            ans4 = "y\n" + mid_dest + "\nn\nn\nn\nn\nn\nn\n"  # PHASE 2: reach Checklist cleanly (empty plan, real dest)
+            # One fewer downstream decline than before (boundary no longer between principals-
+            # authority and Checklist -- design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
+            # completion, row 1158/1159).
+            ans4 = "y\n" + mid_dest + "\nn\nn\nn\nn\nn\n"  # PHASE 2: reach Checklist cleanly (empty plan, real dest)
             cp4 = run_scripted(ans4, mid_dest, "wp4", mid_dest)
             out4 = cp4.stdout + cp4.stderr
             assert "Traceback" not in out4, out4[-1500:]

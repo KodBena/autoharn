@@ -644,10 +644,11 @@ def cmd_view(cfg: bcc.ServedConfig, view: str, cursor: str) -> int:
     return 0
 
 
-def cmd_register_principal(cfg: bcc.ServedConfig, name: str, agent_class: str) -> int:
+def cmd_register_principal(cfg: bcc.ServedConfig, name: str, agent_class: str,
+                            purpose: str | None = None) -> int:
     actor = _resolve_actor(cfg)
     payload: dict = {"name": name, "agent_class": agent_class,
-                      "purpose": f"registered via ./led register-principal"}
+                      "purpose": purpose or "registered via ./led register-principal"}
     if actor is not None:
         payload["actor"] = actor
     return bcc.write_and_report(cfg.base, "registration", payload)
@@ -1674,10 +1675,24 @@ def main(argv: list[str]) -> int:
     if argv and argv[0] == "standing":
         return cmd_view(cfg, "standing_decisions", "after_id")
     if argv and argv[0] == "register-principal":
-        if len(argv) != 3:
-            print("usage: led register-principal <name> <class>", file=sys.stderr)
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): found
+        # live -- this verb's own grammar was missing legacy-led.tmpl's `--purpose "<why>"` flag
+        # entirely (a real gap, surfaced only once tools/setup_tui/principals_authority.py's own
+        # re-sequencing made this the DEFAULT path for register-principal, where before it always
+        # used legacy/led instead). `--purpose` is OPTIONAL here exactly as legacy's own grammar
+        # treats it (a caller that omits it gets this CLI's own placeholder text, unchanged
+        # behavior for every existing caller); `cmd_register_principal` now threads whatever is
+        # given straight to the kernel's own registration_write payload.
+        p = argparse.ArgumentParser(prog="led register-principal", add_help=False)
+        p.add_argument("name")
+        p.add_argument("agent_class")
+        p.add_argument("--purpose", default=None)
+        try:
+            ns = p.parse_args(argv[1:])
+        except SystemExit:
+            print("usage: led register-principal <name> <class> [--purpose \"<why>\"]", file=sys.stderr)
             return 4
-        return cmd_register_principal(cfg, argv[1], argv[2])
+        return cmd_register_principal(cfg, ns.name, ns.agent_class, ns.purpose)
     if argv and argv[0] == "obligate":
         if len(argv) >= 2 and argv[1] == "revoke":
             p = argparse.ArgumentParser(prog="led obligate revoke", add_help=False)

@@ -62,9 +62,9 @@ from tools.setup_tui import durable_decisions, feature_facts, governed_files, pg
 from tools.setup_tui import principals_authority, signed_genesis
 from tools.setup_tui.content import screens_data as SD
 from tools.setup_tui.elements import Heading, Note, Paragraph, Rule, Table
-from tools.setup_tui.plan import (BackgroundAct, CommandAct, DaemonSelection, Plan, PlanEntry,
-                                   WriteAct)
-from tools.setup_tui.runner import legacy_led_path, resolve_led, run_command
+from tools.setup_tui.plan import (BackgroundAct, CallableAct, CommandAct, DaemonSelection, Plan,
+                                   PlanEntry, WriteAct)
+from tools.setup_tui.runner import legacy_led_path, resolve_led, run_command, served_led_path
 from tools.setup_tui.ui import ScriptedUi
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -631,6 +631,11 @@ def screen_principals_authority(ui, cl, state):
     state["dest"] = dest
     plan = _plan(state)
     queued_names: set[str] = state.setdefault("planned_principal_names", set())
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
+    # now runs BEFORE this screen -- see screen_signed_genesis's own identical comment for the
+    # full reasoning (served when this run's boundary was configured, legacy/led when Case 14's
+    # `boundary.configure = false` shape declined it, ledger row 1942).
+    led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
 
     dest_state = destination.classify_destination(dest)
     # Out-of-sequence-entry amendment (design/FABLE-SETUP-TUI-SPEC.md 2026-07-19): a not-yet-born
@@ -713,7 +718,7 @@ def screen_principals_authority(ui, cl, state):
                                      principals_authority.CLASS_CHOICES)
         purpose = ui.ask_text("Stated purpose (mandatory -- AC-2's 'account with a stated "
                                "purpose')")
-        act, produces = principals_authority.register_principal_act(dest, name, agent_class, purpose)
+        act, produces = principals_authority.register_principal_act(dest, name, agent_class, purpose, led=led)
         plan.append(PlanEntry(screen="principals-authority", item=f"register principal '{name}'",
                                lesson=principals_authority.LESSON_REGISTER, act=act,
                                produces=produces))
@@ -732,6 +737,9 @@ def screen_principals_authority(ui, cl, state):
             activity = ui.ask_text("Activity")
             band = ui.ask_text("Band")
             basis = ui.ask_text("Basis")
+            # grant_competence_act ALWAYS drives legacy/led (its own docstring): `led principal
+            # grant-competence` is not among served led.tmpl's rebased verbs, unrelated to
+            # whether THIS run's boundary was configured -- no `led=` passed here on purpose.
             act, produces = principals_authority.grant_competence_act(dest, name, activity, band, basis)
             plan.append(PlanEntry(screen="principals-authority",
                                    item=f"grant competence '{activity}' to '{name}'",
@@ -745,6 +753,8 @@ def screen_principals_authority(ui, cl, state):
             rel = ui.ask_choice("Relation (kernel/lineage/s41 principal_relation_check CHECK)",
                                  principals_authority.RELATION_CHOICES)
             obj = ui.ask_text("Object principal name")
+            # relate_act ALWAYS drives legacy/led too -- same reasoning as grant_competence_act
+            # immediately above (`led principal relate`, not a served-rebased verb).
             act, produces = principals_authority.relate_act(dest, subj, rel, obj)
             plan.append(PlanEntry(screen="principals-authority", item=f"relate '{subj}' {rel} '{obj}'",
                                    lesson=principals_authority.LESSON_RELATION, act=act,
@@ -761,7 +771,7 @@ def screen_principals_authority(ui, cl, state):
                    f"pre-registration trap (spec WP3)."))
             if not ui.confirm(f"Register '{role}' now, in-flow, so the charter can proceed?",
                                default=True):
-                manual = (f"{legacy_led_path(dest)} register-principal {role} "
+                manual = (f"{led} register-principal {role} "
                           f"<class> --purpose \"<why>\", then retry this charter")
                 ui.emit(Note(f"  REFUSED: charter left unregistered -- manual command: {manual}", tone="refusal"))
                 cl.add("principals-authority", f"charter '{role}' (unregistered, declined)",
@@ -771,14 +781,14 @@ def screen_principals_authority(ui, cl, state):
                                          principals_authority.CLASS_CHOICES)
             purpose = ui.ask_text(f"Stated purpose for '{role}'")
             reg_act, reg_produces = principals_authority.register_principal_act(
-                dest, role, agent_class, purpose)
+                dest, role, agent_class, purpose, led=led)
             plan.append(PlanEntry(screen="principals-authority",
                                    item=f"register principal '{role}' (in-flow, from charter)",
                                    lesson=principals_authority.LESSON_REGISTER, act=reg_act,
                                    produces=reg_produces))
             queued_names.add(role)
             ui.emit(Paragraph(f"  queued: {reg_act.render()}"))
-        act, produces = principals_authority.charter_register_act(dest, role, path)
+        act, produces = principals_authority.charter_register_act(dest, role, path, led=led)
         plan.append(PlanEntry(screen="principals-authority", item=f"charter '{role}' <- {path}",
                                lesson=principals_authority.LESSON_CHARTER, act=act,
                                produces=produces))
@@ -811,6 +821,13 @@ def screen_signed_genesis(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory (the born world)")
     state["dest"] = dest
     plan = _plan(state)
+    # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): "boundary"
+    # now runs BEFORE this screen, so `state["boundary_url"]` is already set (by screen_boundary,
+    # UNCONDITIONALLY once the operator confirms configuring it, whether auto-start or manual)
+    # iff this run actually configured one -- the served path is correct exactly then; a run that
+    # explicitly declined boundary configuration (Case 14's own `boundary.configure = false`
+    # shape, ledger row 1942) still needs legacy/led, the only working choice for it.
+    led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
 
     # spec §3: the private isdir probe replaced by the one Port -- FRESH (absent or empty) reads
     # as "not there yet", exactly what the bare isdir check meant here.
@@ -881,7 +898,7 @@ def screen_signed_genesis(ui, cl, state):
                "hole until then."))
         statement = ui.ask_text("Founding commission statement (the ask this world exists to "
                                  "carry out)")
-        act, produces = signed_genesis.write_commission_act(dest, statement)
+        act, produces = signed_genesis.write_commission_act(dest, statement, led=led)
         plan.append(PlanEntry(screen="signed-genesis", item="genesis commission written",
                                lesson="the world's founding commission row", act=act,
                                produces=produces))
@@ -1145,6 +1162,42 @@ def screen_boundary(ui, cl, state):
                                lesson="starts the boundary service, this process's own child",
                                act=BackgroundAct(argv=tuple(argv2), cwd=str(REPO_ROOT)),
                                produces=BOUNDARY_PROC_PRODUCES))
+
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159, item 2 --
+        # FAILURE HONESTY): the BackgroundAct above reports ok=True the instant Popen() succeeds
+        # (commit_executor.py's own _run_entry -- forking/exec'ing is not the same fact as "the
+        # service actually came up"), so a genuinely failed start (the concrete case this closes:
+        # the picked port is ALREADY occupied -- uvicorn's own bind refuses and the child exits
+        # within milliseconds) would otherwise sail through as a false accept, and every act
+        # queued AFTER it -- genesis, principal registration, charters, hydration -- would then
+        # run against a boundary that is not there: a half-born world, no different from the
+        # silent-fallback class this whole re-sequencing exists to foreclose. This CallableAct
+        # (the one generic commit-time-effect escape hatch, plan.py's own docstring) polls the
+        # SAME health URL for up to 10s (probes.wait_for_health, the automated sibling of this
+        # screen's own operator-keypress _verify_boundary_started below) and is the ACT that
+        # actually fails the commit -- REFUSED, with the last probe's own detail as teaching --
+        # when the service never answers; per-act atomicity means NOTHING queued after this
+        # entry ever runs (commit_executor.execute's own "stops at the FIRST entry whose act
+        # does not succeed"). No silent fallback to legacy/led exists to reach for either way --
+        # the operator's only lawful next step is fixing the port/env and re-running the commit
+        # (which resumes exactly here, the journal's own resume-from-PENDING contract).
+        def _boundary_health_gate() -> tuple[bool, str]:
+            ok, last = probes.wait_for_health(f"{boundary_url}/d/{world}/health", timeout_s=10.0)
+            if ok:
+                return True, f"boundary healthy: {last}"
+            return False, (
+                f"REFUSED -- the boundary service never answered {boundary_url}/d/{world}/health "
+                f"within 10s (last probe: {last}). The most likely cause is the port ({port}) "
+                f"already being occupied by another process -- check with `ss -ltnp | grep "
+                f"{port}` (or lsof -i :{port}), free the port or re-run this screen to pick a "
+                f"different one, then retry the commit. NOTHING after this act ran (per-act "
+                f"atomicity); genesis/principal-registration/hydration never touched a half-born "
+                f"world.")
+        plan.append(PlanEntry(screen="boundary", item="service health gate",
+                               lesson="confirms the boundary actually came up before any "
+                                      "ledger-writing act trusts it",
+                               act=CallableAct(fn=_boundary_health_gate,
+                                                label=f"poll {boundary_url}/d/{world}/health")))
         state["boundary_will_start"] = True
         state["boundary_world"] = world
     else:
@@ -1318,10 +1371,24 @@ def screen_hydration(ui, cl, state):
     dest = state.get("dest") or ui.ask_text("Destination directory (with a led shim)")
     state["dest"] = dest
     if state.get("dest_would_exist"):
-        led = legacy_led_path(dest)  # birth still QUEUED -- scaffold's own guarantee (legacy_led_path docstring)
+        # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion (row 1158/1159): boundary
+        # now runs BEFORE hydration in this same session's plan (screens.py's SCREENS list) --
+        # by the time this act executes at commit time, the world's boundary is normally already
+        # configured and live, so hydration's own writes go through the served path too, exactly
+        # like genesis/principals-authority (all three re-sequenced in this same pass) -- UNLESS
+        # this run's operator explicitly declined boundary configuration (Case 14's own
+        # `boundary.configure = false` shape, ledger row 1942, `state["boundary_url"]` unset),
+        # where legacy/led remains the only working choice, exactly as those two screens resolve it.
+        led = served_led_path(dest) if state.get("boundary_url") else legacy_led_path(dest)
         cl.add("hydration", "led present", ck.DRY_SKIPPED,
-               f"'{led}' queued earlier in this run (written by birth) -- not independently checkable read-only, recorded honestly rather than faked")
+               f"'{led}' queued earlier in this run (written by birth" +
+               ("+boundary" if state.get("boundary_url") else "") +
+               ") -- not independently checkable read-only, recorded honestly rather than faked")
     else:
+        # An OUT-OF-SEQUENCE entry (--start-at hydration against an ALREADY-EXISTING world, not
+        # queued this session) may predate this re-sequencing or never have had its boundary
+        # configured at all -- resolve_led's own live-file check (legacy preferred if present)
+        # stays the right call HERE, unlike the normal-sequence branch above.
         led = resolve_led(dest)  # resolve_led docstring (cites _find_led): was always served ./led, halting wherever boundary was declined (row 1942)
         if led is None:
             ui.emit(Note(f"  REFUSED: no led/legacy-led found under {dest} -- neither was found.", tone="refusal"))
@@ -1672,15 +1739,28 @@ def screen_checklist(ui, cl, state):
     return state
 
 
+# ORDER IS LOAD-BEARING (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger
+# row 1158/1159, item 1): each screen's own acts are appended to the shared plan in VISIT order
+# (this list's order, in the normal top-to-bottom flow -- commit_executor.execute runs
+# `plan.entries` strictly in that same order, stopping at the first failure), so "boundary"
+# moving here, between "birth" and "principals-authority" -- ahead of EVERY act that writes a
+# ledger row (principal registration, signed genesis, hydration decisions/charters) -- is what
+# makes those later acts able to assume a live, already-configured boundary rather than
+# defaulting to `legacy/led` for lack of one. Was: birth, principals-authority, signed-genesis,
+# boundary, observability, hydration -- the exact ordering the original Part C attempt found as
+# the reason `resolve_led`'s legacy-preference existed for those two screens' own led choice
+# (their own module docstrings, `tools/setup_tui/signed_genesis.py`/`principals_authority.py`,
+# named the OLD position verbatim: "this screen sits between Birth and Boundary"). Both modules'
+# own led choice is updated in this same pass to `served_led_path` -- see their own docstrings.
 SCREENS = [
     ("preflight", screen_preflight),
     ("substrate", screen_substrate),
     ("fork-target", screen_fork_target),
     ("rehearsal", screen_rehearsal),
     ("birth", screen_birth),
+    ("boundary", screen_boundary),
     ("principals-authority", screen_principals_authority),
     ("signed-genesis", screen_signed_genesis),
-    ("boundary", screen_boundary),
     ("observability", screen_observability),
     ("hydration", screen_hydration),
     ("checklist", screen_checklist),
