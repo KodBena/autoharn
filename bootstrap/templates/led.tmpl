@@ -2594,6 +2594,19 @@ def main(argv: list[str]) -> int:
     if argv and argv[0] == "work":
         sub = argv[1] if len(argv) > 1 else ""
         rest = argv[2:]
+        # cli-rebase-fixture-repairs (ledger row 1170, seen-red/s31-supersession-uniform-
+        # retraction's own e2 case, a live regression of the item led-work-close-supersedes-
+        # swallowed fix, row 1601): `_strip_shared_flags` above consumes a FRONT-ANCHORED
+        # `--supersedes <id>` (given BEFORE the 'work' verb, e.g. `led --supersedes <id> work
+        # close ...`) into `shared` -- but every `work` sub-verb that honors --supersedes
+        # (open/depends/close/resolve-violation, each via its own LOCAL argv loop below) only
+        # ever sees `rest = argv[2:]`, which no longer contains the flag once the front-anchored
+        # strip has already removed it. The front position SILENTLY SWALLOWED the flag again --
+        # forwarded here into `rest` (unless the sub-verb's own AFTER-the-subverb position
+        # already supplied one, which wins) so both supported positions actually land.
+        if shared.get("--supersedes") and sub in ("open", "depends", "close", "resolve-violation") \
+                and "--supersedes" not in rest:
+            rest = ["--supersedes", shared["--supersedes"], *rest]
         if sub == "open":
             return cmd_work_open(cfg, rest)
         if sub == "claim":
