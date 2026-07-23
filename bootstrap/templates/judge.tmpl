@@ -86,8 +86,9 @@ except dr.DeploymentError as e:
     sys.exit(2)
 if not d.name:
     print(f"judge: deployment record at {dep_path!r} has no 'name' field -- scaffold this world "
-          f"with a current bootstrap/new-project.sh (writes it automatically), or add one by hand "
-          f"(filing/deployment_record.py's DeploymentRecord.name).", file=sys.stderr)
+          f"with a current bootstrap/new-project.sh (writes it automatically), or add one by hand: "
+          f"open {dep_path!r} and add a \"name\": \"<yourproject>\" key to the JSON object.",
+          file=sys.stderr)
     sys.exit(2)
 for k in ("db", "host", "schema", "kern", "role", "name"):
     print(f"DEP_{k.upper()}={shlex.quote(getattr(d, k))}")
