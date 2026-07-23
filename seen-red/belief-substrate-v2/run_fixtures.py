@@ -8,6 +8,20 @@ this build, carries s53/s54/s55 in its LINEAGE_CHAIN) + direct kernel.ledger_wri
 in s53's own LIMITS), torn down before and after. Never touches kernel/, bootstrap/, or any live
 world -- scratch schema pairs only.
 
+MIGRATED off legacy/led onto the served path (closing-batch build, ledger rows 1176/1178, found
+gap row 1175): this file's own `led()` helper used to exec `world_dir/legacy/led` directly --
+now a one-line teaching-refusal stub (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md), never a
+working CLI -- which would refuse every register-principal/decision/grant-competence call below.
+Migrated onto sibling belief-substrate-v1's own already-migrated precedent (this same closing
+batch's sibling task): `scaffold_classic` now ALSO stands a real `serving.boundary_service`
+instance per world (reusing seen-red/boundary-service/run_fixtures.py's scratch-server-standing
+helpers, ADR-0012 P1) and writes a served-shape deployment.json; `led()` runs the served
+`bootstrap/templates/led.tmpl` against it (`PICKUP_DEPLOYMENT` pointing at the served record)
+instead of the retired stub. Red/green semantics preserved exactly -- only the write TRANSPORT
+for the CLI-shaped calls (register-principal, decision, grant-competence) changed; the raw
+`kernel_write()` calls for belief/review rows (the s51 plumbing precedent, unaffected by the
+retirement -- there never was a `led belief` verb to retire) are untouched.
+
 WORLDS:
   WORLD BV -- chain to today's head (s55): the main positive witness -- one legal typed row per
               polarity/basis cell, contest resolution (tied and evidence-class-resolved),
@@ -27,6 +41,7 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -39,13 +54,32 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 ENGINE = REPO / "engine"
+LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
+PYVENV = Path.home() / "w" / "vdc" / "venvs" / "generic" / "bin" / "python"
 sys.path.insert(0, str(ENGINE))
 sys.path.insert(0, str(REPO / "filing"))
+sys.path.insert(0, str(REPO / "serving"))
 
 import ledger_differential  # noqa: E402
 import pghost_resolve  # noqa: E402
+import deployment_record  # noqa: E402
+
+# legacy-led-retirement migration (closing-batch build, ledger rows 1176/1178): reuses seen-red/
+# boundary-service/run_fixtures.py's own scratch-server-standing helpers (ADR-0012 P1) rather
+# than re-deriving them -- the SAME reuse belief-substrate-v1/run_fixtures.py's own sibling
+# migration uses.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
+
+# world name -> (Popen, served-deployment.json path) -- populated by scaffold_classic, consulted
+# by led() below (same shape as belief-substrate-v1/run_fixtures.py's own _SERVED).
+_SERVED: dict[str, tuple[subprocess.Popen, Path]] = {}
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -61,6 +95,12 @@ def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
 
 
 def teardown(world: str) -> None:
+    # stop this world's own boundary_service FIRST, if scaffold_classic ever stood one (it may
+    # not have, for a world torn down pre-emptively before scaffolding -- `_SERVED.pop` with a
+    # default handles both; belief-substrate-v1/run_fixtures.py's own teardown() precedent).
+    served = _SERVED.pop(world, None)
+    if served is not None:
+        bs_fixtures.stop_server(served[0])
     sh(["psql", "-h", PGHOST, "-d", PGDB, "-c",
         f"DROP SCHEMA IF EXISTS {world} CASCADE; DROP SCHEMA IF EXISTS {world}_kernel CASCADE; "
         f"DROP OWNED BY {world}_rw;"])
@@ -68,10 +108,18 @@ def teardown(world: str) -> None:
 
 
 def led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess[str]:
+    """Runs the served `bootstrap/templates/led.tmpl` against a REAL `serving.boundary_service`
+    instance `scaffold_classic` now stands per world (`_SERVED` above) -- replaces the retired
+    direct call to `world_dir/legacy/led` (legacy-led-retirement migration, ledger rows 1176/
+    1178; belief-substrate-v1/run_fixtures.py's own `led()` precedent, identical shape)."""
+    world = world_dir.name
+    _proc, dep_path = _SERVED[world]
     e = dict(os.environ)
     if env:
         e.update(env)
-    return sh(["bash", str(world_dir / "legacy" / "led"), *args], cwd=str(world_dir), env=e)
+    e["AUTOHARN"] = str(REPO)
+    e["PICKUP_DEPLOYMENT"] = str(dep_path)
+    return sh([str(PYVENV), str(LED_TMPL), *args], cwd=str(world_dir), env=e)
 
 
 def psql_tuples(sql: str) -> str:
@@ -82,12 +130,30 @@ def psql_tuples(sql: str) -> str:
 
 
 def scaffold_classic(world: str) -> Path:
+    """Scaffold a fresh CLASSIC world at TODAY's full lineage head via `new-project.sh
+    --new-world`, THEN stand a REAL `serving.boundary_service` against it and write a
+    served-shape deployment.json beside the classic one `led()` above resolves by world name
+    (legacy-led-retirement migration, ledger rows 1176/1178 -- belief-substrate-v1/
+    run_fixtures.py's own `scaffold_classic()` precedent, identical shape)."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
             "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
         raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-2500:]} {r.stderr[-1500:]}")
+
+    cfg_path = bs_fixtures.write_scratch_multiplex_config(tmp, world)
+    proc, port = bs_fixtures.start_server(cfg_path)
+    base = f"http://127.0.0.1:{port}/d/{world}"
+    if not bs_fixtures.wait_health(base):
+        tail = bs_fixtures.stop_server(proc)
+        raise RuntimeError(f"boundary_service for {world} never became healthy: {tail[-1500:]}")
+    served_dep = tmp / f"{world}-served-deployment.json"
+    rec = deployment_record.DeploymentRecord(
+        db=PGDB, host=PGHOST, schema=world, kern=f"{world}_kernel", role=f"{world}_rw",
+        name=world, boundary_url=f"http://127.0.0.1:{port}", boundary_deployment=world)
+    deployment_record.write_deployment(served_dep, rec)
+    _SERVED[world] = (proc, served_dep)
     return world_dir
 
 
