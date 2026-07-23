@@ -1,6 +1,11 @@
 #!/bin/sh
-# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
-# (runs are linear, dust-and-settled), it keeps the direct-psql original
-# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
+# Part C completion (ledger rows 1158/1159, maintainer-approved plan, 2026-07-23): this repo's
+# own world now has its own standing boundary service (boundary-multiplex.toml, deployment.json's
+# boundary_url/boundary_deployment keys) -- ./led is the served shim, the SAME shape
+# bootstrap/new-project.sh scaffolds for every new world. legacy-led.tmpl stays in the repo
+# (tools/setup_tui/* structurally depend on it for a NEW world's own pre-boundary genesis
+# sequence -- a project-wide dependency named, not silently routed around); use ./legacy/led (once
+# scaffolded) or bootstrap/templates/legacy-led.tmpl directly for the byte-faithful raw-ledger
+# reads/writes this rebase's own SCOPE section discloses.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-led.tmpl" "$@"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/led.tmpl" "$@"

@@ -21,13 +21,24 @@ a lazy cross-import).
 
 TRANSPORT HONESTY (spec, deliverable 2): `--led` is ONE knob for every section, exactly the
 convention tools/workflow_compile.py's generated drive.py already established for the SAME
-work-family gap. It defaults to "./legacy/led" (never the served "./led") because two of this
-brief's sections -- CLAIMABLE WORK (`led work startable`) and part of OBLIGATION DEBT
-(`led work review-gap`) -- are work-family verbs the served boundary does NOT cover yet
-(bootstrap/templates/led.tmpl's own "NOT COVERED... led work *" list); using one knob rather
-than two keeps every section servable from a single invocation instead of silently degrading
-some sections when only the served shim is reachable. A deployment where only the served `./led`
-is reachable can still get the served-covered sections (STANDING, IN-FORCE DECISIONS, the
+work-family gap. It defaults to "./legacy/led" (never the served "./led") -- STALE REASONING,
+NAMED (found and disclosed during the legacy-led-retirement Part C completion pass, 2026-07-23,
+rather than silently carried): this docstring used to say the work-family verbs `led work
+startable`/`led work review-gap` were NOT covered by the served boundary -- that gap CLOSED at
+legacy-led-retirement phase 1B (ledger row 1149), before this note was ever corrected. The
+REAL, live reason this default has not simply flipped to "./led" is DEEPER and still stands:
+this file's own PARSERS (`parse_current_line`'s `id|kind|statement|actor_name` pipe format,
+and the `psql -x`-shaped `-[ RECORD 1 ]---` scanner) are written against `bootstrap/templates/
+legacy-led.tmpl`'s own specific OUTPUT SHAPES -- the served `bootstrap/templates/led.tmpl`
+prints a DIFFERENT shape for the same data (`[id] kind: statement` for `--recent`/`current`;
+`key : value` lines, no record-header, for `show`) that these parsers do NOT recognize. Pointing
+this tool at the served `./led` today would not error -- it would SILENTLY MISPARSE (every
+section reading empty or malformed), the exact vacuous-pass class this project's own doctrine
+(F49) exists to catch. NOT FIXED in this same pass (a parser rewrite is its own, separately-
+scoped piece of work, not a drive-by default flip) -- named here as an open, disclosed gap
+rather than either silently left wrong or falsely claimed working. `--led` still defaults to
+"./legacy/led"; passing "./led" is UNSUPPORTED until this parser gap is closed, not merely
+untested. A deployment where only the served `./led` is reachable can still get the served-covered sections (STANDING, IN-FORCE DECISIONS, the
 review_gap half of OBLIGATION DEBT, OPEN QUESTIONS) by passing `--led ./led` explicitly -- the
 work-family sections will then fail loudly (this tool relays `led`'s own refusal/error text
 verbatim, never silently omits a section) rather than serving a false empty section.

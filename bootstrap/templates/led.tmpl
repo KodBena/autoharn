@@ -40,6 +40,14 @@ s57-obligation-revocation-event.sql), and `led artifact put|get|stat` now target
         `_GRAMMAR_CHECKERS` below, ported byte-identical refusal text from legacy-led.tmpl) --
         REFUSED, nothing written, before the payload is even built, on a malformed declaration.
         All eight of legacy's own statement-grammar prefixes are now covered -- none remain.
+        SAME path (ledger row 1159, 2026-07-23 Part C completion, class-ratified fail-safe
+        additive-refusal lane): a GARBAGE-STATEMENT GUARD (`_cli_usage_guard_violation` below)
+        refuses a statement pattern-matching CAPTURED CLI usage/help output -- a bare `--help`
+        token, a `usage:` line, or a run of 3+ option-flag-shaped tokens -- the maintainer's own
+        testimony that fumbled agent invocations have written CLI usage text into the ledger as
+        permanent, unretractable rows. `--statement-really-contains-cli-text` overrides,
+        honestly named. Runs ONLY on this generic path -- `led review`/`led work *` build their
+        statements from typed fields, never raw captured terminal text.
     led register-principal <name> <class>      (write, registration_write)
     led obligate <scope> <assigned-by> <obliged-actor>                 (write, obligation_write)
     led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>  (write)
@@ -544,6 +552,38 @@ def _preflight_grammar(statement: str) -> bool:
         if trimmed.startswith(prefix):
             return checker(trimmed)
     return True
+
+
+_CLI_USAGE_HELP_TOKEN_RE = re.compile(r'(?:^|\s)--help(?:\s|$)')
+_CLI_USAGE_LINE_RE = re.compile(r'(?:^|\n)\s*usage:\s', re.IGNORECASE)
+_CLI_USAGE_FLAG_RE = re.compile(r'(?:^|\s)--[a-zA-Z][\w-]*')
+_CLI_USAGE_FLAG_RUN_THRESHOLD = 3
+
+
+def _cli_usage_guard_violation(statement: str) -> str | None:
+    """Ledger row 1159 (garbage-statement guard, class-ratified fail-safe additive-refusal
+    lane): the maintainer's own testimony -- 'I've never been able to understand the syntax of
+    ./led and always too afraid to try, lest I add something to the ledger by mistake... fumbled
+    agent invocations have WRITTEN CLI usage text into a ledger as permanent rows.' This is a
+    HEURISTIC NET OVER THE CLASS (ADR-0011 Rule 4), never an exhaustive parser of every CLI's
+    own usage-text shape -- three independent, deliberately loose fingerprints, any one of which
+    is enough: (1) a bare `--help` token (the single most common fumbled-invocation residue);
+    (2) a `usage:` line (argparse's/legacy-led.tmpl's own convention, and this file's own,
+    verbatim); (3) a RUN of three or more `--flag`-shaped tokens (captured multi-option usage/
+    help text reads as a dense cluster of these; an ordinary prose statement essentially never
+    does). Returns the violation's own human-readable reason, or None when the statement is
+    clean. Runs ONLY on the generic <kind> <statement...> write path (cmd_generic), exactly
+    where `led review`/`led work *` do NOT run it -- those build their statements from typed
+    fields, never raw user free text captured from a terminal."""
+    if _CLI_USAGE_HELP_TOKEN_RE.search(statement):
+        return "contains a bare '--help' token"
+    if _CLI_USAGE_LINE_RE.search(statement):
+        return "contains a 'usage:' line"
+    flag_hits = _CLI_USAGE_FLAG_RE.findall(statement)
+    if len(flag_hits) >= _CLI_USAGE_FLAG_RUN_THRESHOLD:
+        sample = ", ".join(sorted({h.strip() for h in flag_hits})[:5])
+        return f"contains a run of {len(flag_hits)} option-flag-shaped tokens ({sample}, ...)"
+    return None
 
 
 def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
@@ -1559,6 +1599,18 @@ def cmd_generic(cfg: bcc.ServedConfig, args: argparse.Namespace) -> int:
     statement = " ".join(args.statement)
     if not _preflight_grammar(statement):
         return 1
+    if not getattr(args, "statement_really_contains_cli_text", False):
+        violation = _cli_usage_guard_violation(statement)
+        if violation is not None:
+            print(f"led: REFUSED -- this statement {violation} -- it pattern-matches CAPTURED "
+                  f"CLI usage/help output, not authored prose (garbage-statement guard, ledger "
+                  f"row 1159: the maintainer's own testimony that fumbled agent invocations "
+                  f"have written CLI usage text into the ledger as permanent rows). NOTHING "
+                  f"was written.", file=sys.stderr)
+            print(f"  If this statement genuinely, deliberately needs to quote CLI usage/help "
+                  f"text (e.g. reporting a real bug in that text), re-run with "
+                  f"--statement-really-contains-cli-text to override.", file=sys.stderr)
+            return 1
     payload: dict = {"kind": args.kind, "statement": statement}
     if args.files:
         payload["rationale"] = f"files: {args.files}"
@@ -1754,6 +1806,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("--confidence", default=None)
     p.add_argument("--event-time", dest="event_time", default=None)
     p.add_argument("--grade", default=None)
+    p.add_argument("--statement-really-contains-cli-text",
+                    dest="statement_really_contains_cli_text", action="store_true")
     p.add_argument("kind")
     p.add_argument("statement", nargs="+")
     try:
@@ -1767,4 +1821,13 @@ if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
     except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable, bcc.BoundaryClientError) as e:
-        sys.exit(bcc.report_boundary_exception("led", e))
+        # Part C completion item 5 (ledger row 1158/1159): best-effort re-read of this
+        # deployment's own boundary_url for the restart teach-text -- wrapped so a SECOND
+        # failure here (a missing/malformed deployment.json) never masks the original
+        # exception `e` this handler exists to report.
+        _boundary_url = None
+        try:
+            _boundary_url = bcc.load_served_config(DEPLOYMENT_PATH).record.boundary_url
+        except Exception:
+            pass
+        sys.exit(bcc.report_boundary_exception("led", e, boundary_url=_boundary_url))

@@ -159,6 +159,7 @@ REGISTRY: dict[str, str] = {
     "reservation-residue":             "seen-red/reservation-residue/run_fixtures.py",
     "s57-obligation-revocation-event": "seen-red/s57-obligation-revocation-event/run_fixtures.py",
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
+    "led-garbage-statement-guard":     "seen-red/led-garbage-statement-guard/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",

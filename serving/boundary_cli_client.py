@@ -313,13 +313,23 @@ def write_and_report(base: str, surface: str, payload: dict, *, echo_row_id: boo
     return 1
 
 
-def report_boundary_exception(prog: str, exc: Exception) -> int:
+def report_boundary_exception(prog: str, exc: Exception, boundary_url: str | None = None) -> int:
     """The ONE place a rebased shim's top-level dispatch turns a `BoundaryRefusal`/
     `BoundaryUnreachable`/`BoundaryClientError` into stderr text + an exit code (ADR-0012 P1) --
     spec §5: "The boundary's own refusals ... surface as the shim's stderr with their teach-text
     and a distinct nonzero exit code." Never reached for a genuine kernel write_verdict refusal
     (that path returns exit 1 through `write_and_report`/`post_write` directly, without ever
-    raising)."""
+    raising).
+
+    `boundary_url` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger row
+    1158/1159, item 5: "the started boundary service's liveness is honestly handled -- if it
+    dies, ./led's refusal must teach how to restart it"): when the caller can supply it (its own
+    `ServedConfig.record.boundary_url`), a `BoundaryUnreachable` teaches the ONE restart command
+    for the STANDARD deployment shape this project's own tooling always produces (a
+    `boundary-multiplex.toml` beside `deployment.json`, launched via `python3 -m
+    serving.boundary_service`) -- the ensure-running umbrella spec automates this later; this is
+    the honest bridge until then. `None` (the default) preserves the prior, generic teach-text
+    exactly, for a caller that has no config in scope at its own exception-handling site."""
     if isinstance(exc, BoundaryRefusal):
         # Two message-key conventions coexist on the boundary's own typed shapes: the NAMED
         # pydantic models (PayloadTooLarge/InfraFailure/UnknownView/...) carry "message"; the
@@ -341,10 +351,21 @@ def report_boundary_exception(prog: str, exc: Exception) -> int:
             f"call):\n  {message}\n")
         return 3
     if isinstance(exc, BoundaryUnreachable):
+        shown_url = boundary_url or "unknown -- see this deployment.json"
         sys.stderr.write(
             f"{prog}: REFUSED -- the boundary service itself could not be reached "
             f"({exc.detail}). Nothing was read or written. Is the boundary process running at "
-            f"the deployment record's own boundary_url?\n")
+            f"the deployment record's own boundary_url ({shown_url})?\n")
+        if boundary_url is not None:
+            sys.stderr.write(
+                f"  Restart (this project's standard shape -- a boundary-multiplex.toml beside "
+                f"deployment.json, this same {boundary_url!r} URL's own port): from this "
+                f"deployment's own directory, run:\n"
+                f"    python3 -m serving.boundary_service --config boundary-multiplex.toml "
+                f"--port <the port in {boundary_url!r}> &\n"
+                f"  (background it, e.g. with `nohup ... &` or a process manager -- the "
+                f"ensure-running umbrella spec automates this standing-service lifecycle later; "
+                f"this is the bridge until then.)\n")
         return 4
     if isinstance(exc, BoundaryClientError):
         sys.stderr.write(f"{prog}: REFUSED -- {exc}\n")
