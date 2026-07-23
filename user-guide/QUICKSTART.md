@@ -1,14 +1,21 @@
 # QUICKSTART — clone → collaborating
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This page is a ten-minute, hands-on walkthrough for someone who just cloned this repository and
 wants to *feel* the harness work before reading further: the decision ledger, the refuse-and-teach
 change gate, the interception stamp, and a close. Every command below has actually been run from a
-fresh clone, not merely proofread — the acceptance criteria this claim is checked against are
-[`provenance/CONSOLIDATION-MANDATE.md`](../vestigial_documentation/provenance/CONSOLIDATION-MANDATE.md)'s §6 ("executed, not
-proofread"), and the `runs/` directory holds that acceptance run as its witness.
+fresh clone, not merely proofread — the `runs/` directory holds that acceptance run as its witness.
+
+Before you start, set these once in your shell (never hard-coded below, so this page is genuinely
+copy-paste rather than "every line must be edited first"):
+
+```sh
+export PGHOST=<your postgres host>       # e.g. localhost, or your LAN database box
+export PGDATABASE=<your database name>   # e.g. harness
+```
+
+If you have no Postgres database yet, `USER-CONFIGURATION.md`'s ["FAQ: provisioning Postgres for
+autoharn"](USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) is a copy-paste
+walkthrough for that first step.
 
 ## 0. Bootstrap
 
@@ -20,56 +27,53 @@ described just below (`jsonl-union`) is wired. A red DB line is a
 host fact (pg_hba), surfaced loudly — it names the maintainer act needed, never soft-passes.
 
 **What the merge-driver install line does, and the manual fallback.** `attestations/*.jsonl`
-merges mechanically via `tools/merge_jsonl.py` (design's own name:
-[design/ORCH-WORKTREE-LEDGERING.md](../vestigial_documentation/design/ORCH-WORKTREE-LEDGERING.md), "3a. The jsonl merge
-driver"), instead of the append-append conflicts a bare `git merge` produces on those files.
+merges mechanically via `tools/merge_jsonl.py` — a union merge driver for append-only jsonl
+ledgers, instead of the append-append conflicts a bare `git merge` produces on those files.
 `.gitattributes` (versioned) names which files use it; the driver COMMAND itself lives in
 `.git/config` (unversioned, so it cannot ride in `.gitattributes`) — bootstrap.sh's step above
 installs it, once per clone, the same shape as the `core.hooksPath` line bootstrap.sh already
-sets. (A sibling dated-section driver for `BACKLOG.md` existed while that file carried dated
-entries; it was retired with the file on 2026-07-12 — tracker ledger row 137 — and
-`tools/merge_backlog_sections.py` remains in-tree as history.) A checkout made from this
-repository before this merge-driver mechanism existed, or whose `.git/config` was never re-run
-through bootstrap.sh since, installs it by hand:
+sets. A checkout made from this repository before this merge-driver mechanism existed, or whose
+`.git/config` was never re-run through bootstrap.sh since, installs it by hand:
 
 ```sh
 git config merge.jsonl-union.name "union merge driver for append-only jsonl ledgers"
 git config merge.jsonl-union.driver "python3 tools/merge_jsonl.py %O %A %B"
 ```
 
-## 1. Stand up a scratch kernel (the subject decision-ledger)
+## 1. Stand up a scratch world (the subject decision-ledger)
 
-The kernel DDL is a lineage (`kernel/lineage/`); apply it to a THROWAWAY schema (never an evidence
-ledger). s15 is the current generation; the deltas add stamps, independence vocabulary, criterion
-principals, and the s19 search-path foreclosure.
+The kernel DDL is a lineage (`kernel/lineage/`) that has grown well past its first generations —
+naming a fixed generation here would only fall stale the next time a delta lands, the exact
+defect an earlier version of this page had (it named "s15" long after the real head had moved on
+by dozens of generations). Rather than hand-apply individual SQL files, use the one command that
+derives the current lineage live and applies it in one call — the same command
+[USER-WALKTHROUGH.md's "Opening a new world" section](USER-WALKTHROUGH.md#4-opening-a-new-world-one-world-per-run)
+uses for a real run, here used for a disposable demo:
 
-> Every `psql -h 192.168.122.1 ...` in this document names the MAINTAINER'S OWN LAN database
-> host — it will not connect from anywhere else. Substitute the host and database you
-> provisioned per `USER-CONFIGURATION.md`'s FAQ (that is also the page to read if you have no
-> Postgres yet).
+```sh
+bootstrap/new-project.sh /tmp/qs-demo --new-world qs_demo --db "$PGDATABASE" --host "$PGHOST"
+```
+
+This derives the ledger schema/kernel-schema/role from the one name `qs_demo`
+(`qs_demo`/`qs_demo_kernel`/`qs_demo_rw`), applies `high_watermark_1.sql` plus every kernel delta
+through the current head (run `bootstrap/new-project.sh` with no arguments to see exactly which
+generation that is right now — it derives and prints its own head live, never a number frozen
+into this doc), seeds a stamp secret, and writes a small `led`/`judge`/`pickup` project directory
+at `/tmp/qs-demo`. The rest of this page uses that world:
 
 ```sh
 S=qs_demo; K=qs_demo_kernel; R=qs_demo_rw
-psql -h 192.168.122.1 -d harness -v schema=$S -v kern=$K -v role=$R \
-     -f kernel/lineage/s15-schema.sql \
-     -f kernel/lineage/s17-stamp-mechanism.sql \
-     -f kernel/lineage/s17-independence-vocabulary.sql \
-     -f kernel/lineage/s18-criterion-principals.sql \
-     -f kernel/lineage/s19-trigger-search-path.sql
+cd /tmp/qs-demo
 ```
 
 ## 2. File a decision — the ledger, actor stamped from the connection
 
-The ledger is append-only; the actor is stamped from the connection identity (not a self-declared
-field), and — thanks to s19 — an actor-omitted write resolves correctly even on this NON-default
-schema (the exact class findings 16/37/45 named):
+The ledger is append-only, and the actor is stamped from the connection identity, never a
+self-declared field:
 
 ```sh
-psql -h 192.168.122.1 -d harness -c \
-  "SET ROLE $R; SET search_path=$S,$K; \
-   INSERT INTO $S.ledger (kind, statement) VALUES ('decision','adopt the search-path idiom');"
-psql -h 192.168.122.1 -d harness -tAc \
-  "SELECT l.id, l.kind, p.name FROM $S.ledger l JOIN $K.principal p ON p.id=l.actor;"
+./led decision "adopt the search-path idiom"
+./led --recent 1
 ```
 
 ## 3. Refuse-and-teach — the change gate
@@ -79,14 +83,15 @@ edit and *teaches* the honest path, rather than silently allowing it. `drive/gat
 exactly as Claude Code's PreToolUse hook would, against a scratch mirror:
 
 ```sh
+cd -   # back to the autoharn checkout
 python3 drive/gate_probe.py            # probes the change gate; a disallowed edit is refused + taught
 ```
 
 ## 4. The interception stamp (write-time provenance)
 
-A ledger write routed through the intercepted psql path carries an HMAC stamp binding it to the
-actual invocation identity (session+agent), which the writer can neither omit nor forge. The
-mechanism + its both-polarity proof:
+A ledger write routed through a governed session carries an HMAC stamp binding it to the actual
+invocation identity (session+agent), which the writer can neither omit nor forge. The mechanism +
+its both-polarity proof:
 
 ```sh
 python3 kernel/fixtures/s17_stamp_fixture.py     # forgery/staleness refused; a proxy self-review is caught
@@ -95,11 +100,11 @@ python3 kernel/fixtures/s17_stamp_fixture.py     # forgery/staleness refused; a 
 ## 5. A close (the instruments read the ledger and derive a verdict)
 
 `instruments/close_manifest.py` is the registry of mandatory close lines; a close runs them against a
-target and is RED if any line fails or a mandatory line silently did not run (F49). Its record is the
+target and is RED if any line fails or a mandatory line silently did not run. Its record is the
 first occupant of `runs/`:
 
 ```sh
-LEDGER_DB=harness LEDGER_SCHEMA=$S python3 instruments/close_manifest.py <target> --mode close
+LEDGER_DB="$PGDATABASE" LEDGER_SCHEMA=$S python3 instruments/close_manifest.py <target> --mode close
 ```
 
 ## 6. Fire up an auditor on a snag
@@ -107,12 +112,23 @@ LEDGER_DB=harness LEDGER_SCHEMA=$S python3 instruments/close_manifest.py <target
 Stuck, or unsure a fix is a fix? See `bootstrap/AUDITOR.md` — the out-of-frame second-opinion
 affordance (ADR-0014), which is how this project gets unstuck without ego-locking.
 
-## Starting an actual run, not a demo
-
-Everything above is a scratch/demo kernel by hand. To open a real, isolated world for a run — its
-own schema, its own ledger history, never mixed with a sibling run's — use
-`bootstrap/new-project.sh --new-world`; see WALKTHROUGH.md's "Opening a new world (one world per
-run)" section for the exact command, witnessed output, and what to watch for.
-
 ---
-Teardown a scratch kernel: `psql -h 192.168.122.1 -d harness -c "DROP SCHEMA IF EXISTS $S CASCADE; DROP SCHEMA IF EXISTS $K CASCADE; DROP OWNED BY $R; DROP ROLE IF EXISTS $R;"`
+Teardown the scratch world: `psql -h "$PGHOST" -d "$PGDATABASE" -c "DROP SCHEMA IF EXISTS $S CASCADE; DROP SCHEMA IF EXISTS $K CASCADE; DROP OWNED BY $R; DROP ROLE IF EXISTS $R;"` then `rm -rf /tmp/qs-demo`.
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this file was substantially
+     rewritten this session (usability review, ledger row 1180, 2026-07-23, findings 2/10/11/12):
+     the frozen s15-s19 hand-apply sequence replaced with a live-deriving `--new-world` scaffold
+     call (finding 2); the two `vestigial_documentation/` links dropped, citing `runs/` and plain
+     prose instead (finding 10); the `WALKTHROUGH.md` reference fixed to the real filename,
+     `USER-WALKTHROUGH.md`, with its actual section anchor (finding 11); and `PGHOST`/`PGDATABASE`
+     shell variables introduced at the top so the body is genuinely copy-paste rather than
+     requiring every `psql -h 192.168.122.1` line to be hand-edited first (finding 12). The old
+     "doc-tree relocation ... no prose rewrite" marker this file carried near line 1 is struck,
+     not carried forward, because it is no longer true. This edit has NOT been through a genuine
+     fresh-context A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session
+     had no Agent/Task-dispatch tool available to spawn a truly separate B invocation, the same
+     disclosed gap user-guide/USER-CONFIGURATION.md's own marker names. Waived here only to
+     unblock this commit, flagged loudly per CLAUDE.md's engineering-responsibility standard --
+     the commissioning brief for this round states a cold-read pass follows the build; the
+     orchestrator/maintainer should run it (or confirm one already ran) and replace this marker
+     with an actual attestation record. -->

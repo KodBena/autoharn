@@ -1,8 +1,5 @@
 # autoharn — project overview
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 This page is the general orientation to autoharn that used to live in `README.md`. It was moved
 here on 2026-07-14 (recorded as an entry — a "ledger item" — in this project's own append-only
 decision ledger, described further down this page, under the slug
@@ -37,9 +34,9 @@ here, organized so every directory level is `ls`-legible.
 > the two prerequisites (a Postgres database you can reach and a Claude Code install) BEFORE
 > any command asks for them, then walks you through scaffolding your own governed project.
 > Read **[`CLAUDE.md`](../CLAUDE.md)** next (the working standard every session runs under),
-> then **[`bootstrap/QUICKSTART.md`](QUICKSTART.md)** — a walkthrough from cloning
-> the repo to collaborating in it, executed rather than merely proofread; note its `psql`
-> examples name the maintainer's own LAN database host, so substitute yours per
+> then **[`QUICKSTART.md`](QUICKSTART.md)** — a walkthrough from cloning
+> the repo to collaborating in it, executed rather than merely proofread; set the `PGHOST`/
+> `PGDATABASE` shell variables it names at the top per
 > **[`USER-CONFIGURATION.md`](USER-CONFIGURATION.md)**. What *binds* is in **[`law/`](../law)**;
 > the vocabulary is in **[`GLOSSARY.md`](../GLOSSARY.md)**. If you are here to deploy autoharn
 > into a project of your own via git submodule, that is `README.md`'s job now, not this page's.
@@ -144,3 +141,19 @@ bounded accordingly; no claim of externally-verifiable assurance is made. This b
 accepted and named rather than mitigated (maintainer ruling 2026-07-13). A second
 key-holder or external state anchoring remain documented upgrades should the bound ever
 be revisited — neither is in progress or planned.
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- the "New here?" pointer box's
+     QUICKSTART.md link-text/path mismatch (it said `bootstrap/QUICKSTART.md`, a path that does
+     not exist; QUICKSTART.md lives at user-guide/QUICKSTART.md) was fixed this session
+     (usability review, ledger row 1180, 2026-07-23, same defect class as finding 1's
+     docs/PROJECT-OVERVIEW.md mismatch, found in reach while fixing that finding), and its
+     PGHOST/PGDATABASE mention updated to match QUICKSTART.md's own rewrite (finding 12). The old
+     "doc-tree relocation ... no prose rewrite" marker this file carried near line 1 is struck,
+     not carried forward, because it is no longer true. This edit has NOT been through a genuine
+     fresh-context A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session
+     had no Agent/Task-dispatch tool available to spawn a truly separate B invocation, the same
+     disclosed gap user-guide/USER-CONFIGURATION.md's own marker names. Waived here only to
+     unblock this commit, flagged loudly per CLAUDE.md's engineering-responsibility standard --
+     the commissioning brief for this round states a cold-read pass follows the build; the
+     orchestrator/maintainer should run it (or confirm one already ran) and replace this marker
+     with an actual attestation record. -->

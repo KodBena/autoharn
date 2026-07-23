@@ -1,8 +1,5 @@
 # WALKTHROUGH — a decision ledger for your own project
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 Audience: adopter
 
 In about ten minutes, this page walks you through standing up an append-only decision ledger
@@ -109,14 +106,16 @@ bootstrap/new-project.sh <dest-dir> --new-world <world-name> --db <db> --host <h
   afterward leaves those files pointing at the old path (a real hazard — see the box below).
 - `--new-world <world-name>` — derives the ledger schema, kernel schema, and role from ONE name
   (`<world-name>`, `<world-name>_kernel`, `<world-name>_rw`) so you never have to keep three
-  strings in agreement by hand. Applies the current kernel lineage (s15 → s17-stamp →
-  s17-independence → s19 → s20 → s21-session-aware-distinctness — s20 and s21 included by
-  construction, never the pre-s20 shape (which left the `countersign_obligation` review-debt
-  table ungranted to the roles that needed to read it — the "grants gap" s20 closed) nor
-  s21's pre-fix shape (session-blind distinctness, which falsely refused an honest
-  cross-session review; and the s19 residue, four `validate_*` functions that resolved the
-  ledger via session `search_path` in a way `SET ROLE` could break — both closed by s21) and
-  seeds a fresh stamp secret, both in one call.
+  strings in agreement by hand. Applies the FULL current kernel lineage, `high_watermark_1.sql`
+  through whatever generation is actually the head by the time you run this — `bootstrap/
+  new-project.sh`'s own `--help` names the exact head it will apply, derived live from
+  `kernel/lineage/` at the moment you run it (never hand-typed in this doc, so this line cannot
+  fall behind the way an earlier version of this page did), and seeds a fresh stamp secret, both
+  in one call. Every additive delta this applies is either class-ratified fail-safe (adds a
+  refusal or vocabulary, relaxes nothing) or shipped under its own ratified spec — see each
+  delta's own file header in `kernel/lineage/` for its individual history, or
+  `bootstrap/new-project.sh`'s own `LINEAGE_CHAIN` comment (one bullet per generation) for the
+  full provenance narrative in one place.
 - `--name <name>` — this project's own identifier for `judge`'s target-name argument. Defaults to
   `<dest-dir>`'s basename; give it explicitly if that basename would collide with autoharn's
   curated target names (`toy`, `nla`, `e15`-`e18`) or its scratch-naming conventions
@@ -256,3 +255,17 @@ settled evidence, not a thing to patch.
   project. Nothing above depends on them.
 - **s18-criterion-principals**: reviewer machinery the project uses on itself; not part of a user
   kernel (deliberately excluded from `high_watermark_1.sql`).
+
+<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this file's old marker
+     ("no prose rewrite") is struck, not carried forward, because §4's kernel-lineage description
+     was rewritten to derive live instead of naming a frozen s15-s21 chain (usability review,
+     ledger row 1180, 2026-07-23, in-reach hazard found while fixing QUICKSTART.md's own frozen
+     lineage claim, finding 2 -- the same defect class recurring in a sibling doc reached by the
+     same citation). This edit has NOT been through a genuine fresh-context A:B:C loop
+     (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch
+     tool available to spawn a truly separate B invocation, the same disclosed gap
+     user-guide/USER-CONFIGURATION.md's own marker names. Waived here only to unblock this
+     commit, flagged loudly per CLAUDE.md's engineering-responsibility standard -- the
+     commissioning brief for this round states a cold-read pass follows the build; the
+     orchestrator/maintainer should run it (or confirm one already ran) and replace this marker
+     with an actual attestation record. -->
