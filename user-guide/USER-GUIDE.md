@@ -20,7 +20,7 @@ handful of guardrails refuse an action that would break that guarantee — but r
 explanation*, not a bare error, so the refusal itself tells you what to do next (the
 "refuse-and-teach" idea [§6](#6-when-something-refuses) covers in full). Day to day, you touch
 this through a small number of commands — this guide calls them **verbs** because each one does
-one clear thing, [§4](#4-operate-the-eight-verbs) names all eight.
+one clear thing, [§4](#4-operate-the-verbs) names all ten, derived rather than hand-counted.
 
 ## 2. Before you start
 
@@ -71,8 +71,11 @@ cd /path/to/your/autoharn-checkout
 bootstrap/track-work.sh /path/to/your-project --name yourproject --db <db> --host <host>
 ```
 
-**What you should see** (condensed from a real run against a throwaway schema): a block of
-`CREATE SCHEMA`/`CREATE TABLE`/`GRANT` lines from the database apply, then
+**What you should see** (condensed from a real run against a throwaway schema — **dated
+transcript, 2026-07-18, superseded by the current shim count**: `./doctor` was added to
+`bootstrap/track-work.sh`'s own shim-writing loop after this transcript was captured, so it does
+not show a `wrote doctor` line; the script's own loop is the current source of truth, quoted
+below the transcript, not this capture):
 
 ```
    'reviewer' + 'commissioner' principals registered ('author' was already seeded by s15-schema.sql)
@@ -97,6 +100,11 @@ wrote legacy/distance-to-clean (shim -> .../bootstrap/templates/legacy-distance-
 == done ==
 ```
 
+`bootstrap/track-work.sh`'s own current shim-writing loop (the live source of truth this
+transcript predates): `led judge pickup audit distance-to-clean verify-commission verify-chain
+attest-doc asof-export doctor` — ten shims, its own echoed header text calls them "the ten
+project-local shims."
+
 **FLAGGED GAP (legacy-led-retirement, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
 1149/1150) — `led` specifically has no working path for a `track-work.sh` deployment right
 now.** `bootstrap/templates/legacy-led.tmpl` is deleted outright as part of that retirement;
@@ -110,10 +118,10 @@ standing boundary service is a real architecture question outside that pass's ow
 maintainer decision resolves this, treat a `track-work.sh` deployment's own ledger as
 read/write via `./pickup` and direct `psql`, not `./led`.
 
-**What landed where:** `deployment.json` (which database/schema this project points at) and nine
+**What landed where:** `deployment.json` (which database/schema this project points at) and ten
 small command files (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
-`verify-chain`, `attest-doc`, `asof-export`) in your project directory — nothing written back
-into the autoharn checkout.
+`verify-chain`, `attest-doc`, `asof-export`, `doctor`) in your project directory — nothing
+written back into the autoharn checkout.
 
 **UPDATED 2026-07-18 — `./led`/`./pickup`/`./asof-export`/`./distance-to-clean` now talk HTTP to
 a boundary service by default** — a "boundary service" is `serving/boundary_service.py`, a
@@ -171,20 +179,25 @@ bootstrap/new-project.sh /path/to/your-project --new-world yourworld --db <db> -
 cd /path/to/your-project && claude
 ```
 
-**What you should see** (condensed; confirmed live against a throwaway [world](../GLOSSARY.md#world) —
-this guide's word for one scaffolded project instance): the same kind of
-database-apply block as above, then a fresh secret provisioned for attributing writes ([§5
-below](#5-audit-and-trust) explains what this "stamp" secret proves), the standard identities
-registered, and
+**What you should see** (condensed; **dated transcript, predates the 2026-07-11 "live verbs"
+shim rewrite, superseded by the current output shape** — this capture shows `led`/`judge`/
+`pickup` written as standalone `(executable)` files, three of them; the script now writes all
+ten operator verbs as `(shim -> .../bootstrap/templates/<verb>.tmpl)` lines, the exact same
+shape §3a's own transcript above shows, since `--new-world` and the plain scaffold path share
+the same shim-writing loop): the same kind of database-apply block as above, then a fresh secret
+provisioned for attributing writes ([§5 below](#5-audit-and-trust) explains what this "stamp"
+secret proves), the standard identities registered, and
 
 ```
 -- .claude/ wiring --
 wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, apparatus.json, APPARATUS.md, HOOKS.md
 wrote CLAUDE.md (governance preamble, auto-loaded at session start)
--- the three verbs (led, judge, pickup) --
-wrote led (executable)
-wrote judge (executable)
-wrote pickup (executable)
+-- the ten operator verbs (led, judge, pickup, audit, distance-to-clean, verify-commission,
+   verify-chain, attest-doc, asof-export, doctor) --
+wrote led (shim -> .../bootstrap/templates/led.tmpl)
+wrote judge (shim -> .../bootstrap/templates/judge.tmpl)
+wrote pickup (shim -> .../bootstrap/templates/pickup.tmpl)
+... (and the other seven, same shape, one line each) ...
 == done ==
 ```
 
@@ -192,7 +205,7 @@ Running `./judge` right after scaffolding printed `AGREE` in this page's own ver
 two independent ways the harness (autoharn's own tooling; this page uses the two names
 interchangeably from here on) computes "what is currently true" (a rule engine and a plain SQL
 query) agreeing on a brand-new, still-empty project. That is the expected result for a fresh
-[world](../GLOSSARY.md#world); [§4](#4-operate-the-eight-verbs) explains what `./judge` checks and
+[world](../GLOSSARY.md#world); [§4](#4-operate-the-verbs) explains what `./judge` checks and
 what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
@@ -241,19 +254,21 @@ such as study-design tooling or an analysis layer — read
 [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md), which describes this
 offering's sibling (the work tracker from §3a) for contrast.
 
-## 4. Operate: the eight verbs
+## 4. Operate: the verbs
 
-Once a project is scaffolded (either §3a or §3b), you interact with it through eight small
-commands: `led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
-`verify-chain`, `attest-doc`. All eight run from inside your project directory, once it exists;
-the scaffold itself (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
-`bootstrap/track-experiments.sh` — §3 above) is a separate, ninth act: the one you run once per
-project, before the project exists, from the autoharn checkout, to stand the other eight up. This
-is the same eight-verb count [`README.md`](../README.md) gives for a pinned-submodule deployment
-(its own "Operator verbs" list) — one roster, counted once. This section is a paragraph-each
-index — the authoritative detail, including exact output and what each verdict means, is
-[ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), written for whoever is actually running a
-session; read it once you're past this page.
+Once a project is scaffolded (either §3a or §3b), you interact with it through small commands —
+ten of them, derived from `bootstrap/new-project.sh`'s own shim-writing loop (never hand-counted
+here, so this section cannot fall stale the way an earlier version of it did): `led`, `judge`,
+`pickup`, `audit`, `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`,
+`asof-export`, `doctor`. All ten run from inside your project directory, once it exists; the
+scaffold itself (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
+`bootstrap/track-experiments.sh` — §3 above) is a separate act: the one you run once per project,
+before the project exists, from the autoharn checkout, to stand the other ten up. This is the
+same ten-verb count [`README.md`](../README.md) gives for a pinned-submodule deployment (its own
+"Operator verbs" list) — one roster, counted once, from the same source. This section is a
+paragraph-each index — the authoritative detail, including exact output and what each verdict
+means, is [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), written for whoever is actually
+running a session; read it once you're past this page.
 
 **`./led`** writes one entry to the record — a decision, a finding, an assumption, a piece of
 work opened or claimed or closed — and reads entries back. Every entry is attributed to whoever
@@ -297,6 +312,18 @@ it done (the "A:B:C fresh-context audit loop" this project runs on its own docum
 [design/USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md) is the full "what you type, what
 you should see" walkthrough, including how to fold its debt into `./distance-to-clean` once you
 start using it.
+
+**`./asof-export`** reconstructs the whole ledger as it stood at an earlier moment in time
+(`./asof-export read --asof <timestamp>`), or writes that reconstruction out as a three-file
+inspection copy (`./asof-export export --asof <timestamp> --out <dir>`) — a human-readable
+rendering, a JSON rendering, and a sha256 manifest, for auditing what the record actually said at
+a point in the past.
+
+**`./doctor`** answers one question in a single call — "is this world set up right?" — as a
+fixed-column PASS/FAIL/SKIP checklist (deployment record parses, database reachable, schema/kernel
+schema present, lineage applied, `./led` answers a read, boundary service reachable, principals
+registered), instead of requiring several separate manual checks. It is read-only and never
+changes anything; a fresh project's first troubleshooting step.
 
 **Putting the task itself on the record.** If you want the very first thing your project's record
 shows to be the task you gave it — rather than an AI collaborator's own paraphrase of your chat
@@ -359,7 +386,7 @@ its own mechanism:
   recorded as a new entry that supersedes the old one, and the old one stays exactly as it was.
   [USER-WALKTHROUGH.md's "File a decision, read it back"](USER-WALKTHROUGH.md#2-file-a-decision-read-it-back)
   shows this live, including the refusal you get if you try to `UPDATE` or `DELETE` a row.
-- **Contemporaneity** — the [`./audit`](#4-operate-the-eight-verbs) verb checks every entry for
+- **Contemporaneity** — the [`./audit`](#4-operate-the-verbs) verb checks every entry for
   whether it was recorded at the time of the event it describes, or added after the fact, and
   reports the honest answer rather than assuming good faith.
 - **The signing layer is** an optional further step where a real person, using a key outside the
@@ -417,7 +444,7 @@ a page is meant for you:
 
 - **`USER-`** pages are for you: an adopter using autoharn in your own project. This guide is one.
 - **`ORCH-`** pages are for whoever is actually running or orchestrating a session day to day
-  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-eight-verbs) above, is the main one). They are
+  (`ORCH-OPERATING-CARD.md`, [§4](#4-operate-the-verbs) above, is the main one). They are
   useful once you're past adoption and into regular use.
 - **`MAINT-`** pages are for autoharn's own maintainer: decisions about autoharn's law and
   infrastructure, not things an adopter's project needs to act on.
@@ -447,16 +474,18 @@ The pages this guide ordered into a journey, gathered here as one map:
 - [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) — the work-tracking
   offering [§3a](#3a-just-track-your-work-bootstraptrack-worksh) uses, and why BACKLOG.md is a
   findings journal rather than a work tracker as of 2026-07-11.
-- [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing reference for the seven
+- [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing reference for the ten
   verbs, resuming a project, and how to decide whether a future fix to autoharn's own database
   schema is safe to fold into your next project automatically or needs the maintainer's
   sign-off first; read it once you're running sessions regularly.
 - [GLOSSARY.md](../GLOSSARY.md) — every coined term this guide and its siblings use, defined once.
 
 <!-- doc-attest-exempt: disclosed gap, not a clean exemption -- §2's deployment-shape framing,
-     §4's verb roster (six -> eight, the two missing verbs added), and this file's other edits
-     from this round were rewritten this session (usability review, ledger row 1180, 2026-07-23,
-     findings 3/9) and have NOT been through a genuine fresh-context A:B:C loop
+     §4's verb roster (six named of a claimed seven -> corrected to the actual ten, derived from
+     bootstrap/new-project.sh's own shim loop, after a cold read caught the first pass's "eight"
+     as itself false against the tree), and this file's other edits from this round were
+     rewritten this session (usability review, ledger row 1180, 2026-07-23, findings 3/9) and
+     have NOT been through a genuine fresh-context A:B:C loop
      (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch
      tool available to spawn a truly separate B invocation, the same disclosed gap
      user-guide/USER-CONFIGURATION.md's own marker names (this file already carried an unrelated,

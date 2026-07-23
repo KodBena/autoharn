@@ -36,8 +36,9 @@ directly beside `README.md`, plus 15 root executables with no signposting of whi
 points versus internal maintainer tooling. The proposal, noted here rather than executed because
 it touches many citations and is genuinely risky to get wrong in one pass: move the large working
 archives under a `dev/` or `internal/` subtree, keeping the root to README, LICENSE, the operator
-verbs (README.md's own "Operator verbs" list — `led`, `judge`, `pickup`, `audit`,
-`distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`), and little else — the
+verbs (README.md's own "Operator verbs" list, derived from `bootstrap/new-project.sh`'s own
+shim-writing loop — `led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
+`verify-chain`, `attest-doc`, `asof-export`, `doctor`), and little else — the
 same spareness a `git`/`cargo` repo root has. Any executor picking this up should run
 `gates/link_integrity.py` before and after (many citations move), and should expect the
 in-tree-executable discovery this project's own tooling does (e.g. `new-project.sh`'s shim

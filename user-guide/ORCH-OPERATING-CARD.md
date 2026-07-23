@@ -75,10 +75,15 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](../GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-## The verbs (run inside a world directory; seven since 2026-07-12)
+## The verbs (run inside a world directory)
 
 These are the operator verbs, invoked from inside a scaffolded world directory (see
-[world](../GLOSSARY.md#world) above); the list below is authoritative as of 2026-07-12.
+[world](../GLOSSARY.md#world) above) — ten of them, derived from
+`bootstrap/new-project.sh`'s own shim-writing loop rather than hand-counted here, so this
+section cannot fall stale the way an earlier version of it did (it read "seven since
+2026-07-12" and named six, missing `verify-commission`, `verify-chain`, `asof-export`, and
+`doctor` entirely). The scaffold itself is listed separately below, after the ten — it runs
+from the autoharn checkout, before a world directory exists, not from inside one.
 
 - `./led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
   finding, question, verification, and — since s25 — commission). `./led --refs row:<id> ...`
@@ -113,6 +118,29 @@ These are the operator verbs, invoked from inside a scaffolded world directory (
   [ADR-0017's fresh-context audit loop](../law/adr/0017-the-zero-context-reader.md) —
   offered to deployments, surfaced in `distance-to-clean` behind the `doc_attestation`
   apparatus switch, default off). Witness: CAPABILITIES item 35.
+- `./verify-commission` — checks a SIGNED commission's GPG signature against this
+  deployment's own committed public key, reporting one of the closed verdicts `VERIFIED`
+  | `UNSIGNED` | `FORGED-OR-CORRUPT`, plus two distinct honestly-named refusals for the
+  cases where none of the three is decidable (no `gpg` on `PATH`; no committed key yet).
+  Witness: CAPABILITIES item 29.
+- `./verify-chain` — walks this world's `row_hash` tamper-evidence chain end to end and
+  reports the first row, if any, whose stored hash disagrees with a fresh recomputation;
+  `--head` emits the current chain head for out-of-band anchoring. Witness: CAPABILITIES
+  item 30.
+- `./asof-export` — reconstructs the whole ledger as it stood at an earlier timestamp
+  (`read --asof <ts>`), or writes that reconstruction as a three-file inspection copy
+  (`export --asof <ts> --out <dir>`: human-readable rendering, JSON rendering, sha256
+  manifest). No dedicated CAPABILITIES item yet — a documentation gap found in reach
+  while correcting this section's verb count, not fixed here.
+- `./doctor` — "is this world set up right?", one fixed-column PASS/FAIL/SKIP checklist
+  (deployment record, database reachability, schema/kernel-schema presence, lineage
+  high-water, `./led` answering a read, boundary reachability, principals registered);
+  read-only, exits non-zero iff at least one FAIL. No dedicated CAPABILITIES item yet —
+  same disclosed gap as `asof-export` above.
+
+The scaffold is a separate act, not one of the ten above — it runs from the autoharn checkout,
+before a world directory exists, not from inside one:
+
 - the scaffold — `bootstrap/new-project.sh`, run from the autoharn checkout: creates a
   fresh world directory plus its Postgres schema pair, applies the birth chain, wires
   hooks and verbs, registers the principals (invocation in the next section). Witness:

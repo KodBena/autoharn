@@ -165,7 +165,7 @@ the pgAudit package step.
 - Key generation and everything downstream of it (signed tags, chain-head sign-off) is
   DEFERRED by standing maintainer ruling until every other concern is banked — never
   re-raise it as a recommendation. The trust-domain decision
-  ([docs/PROJECT-OVERVIEW.md § Trust domain](PROJECT-OVERVIEW.md#trust-domain) — moved out
+  ([PROJECT-OVERVIEW.md § Trust domain](PROJECT-OVERVIEW.md#trust-domain) — moved out
   of README.md on 2026-07-14 when README.md became a pure deployment guide, ledger item
   `readme-idiots-deployment-guide`) is likewise his, at leisure.
 - The contemporaneity fact exporter (`engine/contemp_edb.py`, which turns a ledger window

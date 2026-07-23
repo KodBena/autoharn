@@ -67,7 +67,7 @@ a single model's unchecked say-so.
   real, useful distinction — e.g. it is what names `judgment/` and `law/` as straddling
   DOC-but-binding-in-spirit), the sweep folded its per-directory labels into `README.md`'s tree
   as terse bracketed tags (`[CORE]`, `[DOC]`, `[RESEARCH]`, `[OTHER]`, with straddle notes kept
-  verbatim) before moving this file out — see docs/PROJECT-OVERVIEW.md's "The tree" section for
+  verbatim) before moving this file out — see user-guide/PROJECT-OVERVIEW.md's "The tree" section for
   the merged result (that section, and the rest of README.md's prior general content, moved
   there on 2026-07-14, ledger item `readme-idiots-deployment-guide`, when README.md became a
   pure git-submodule deployment guide). Provenance: machine-consensus (classifier + adversarial

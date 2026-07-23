@@ -101,11 +101,13 @@ this repo, the one you're reading this file in) materializes two independent rep
 - **The ledger** is the append-only record autoharn gives your project — a Postgres table plus
   supporting views/triggers that every command below reads from or writes to. `schema` and
   `kern` in [Configuration](#configuration) are the two Postgres schemas that hold it.
-- **Operator verbs** are the small command-line tools (`led`, `judge`, `pickup`, `audit`,
-  `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`) that a deployment gets
-  scaffolded with, to read and write that ledger day to day. This page does not explain what
-  each one does individually — once a deployment exists, run any of them with no arguments for
-  its own usage text, or see [`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) and
+- **Operator verbs** are the small command-line tools that a deployment gets scaffolded with, to
+  read and write that ledger day to day — ten of them, derived from
+  `bootstrap/new-project.sh`'s own shim-writing loop (never hand-counted): `led`, `judge`,
+  `pickup`, `audit`, `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`,
+  `asof-export`, `doctor`. This page does not explain what each one does individually — once a
+  deployment exists, run any of them with no arguments for its own usage text, or see
+  [`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) and
   [`USER-GUIDE.md`](user-guide/USER-GUIDE.md) for the fuller tour.
 
 The setup wizard above (`python3 -m tools.setup_tui`) does all of what follows for you,
@@ -147,15 +149,25 @@ Replace `<dest-dir>` with the path to your project (created if it doesn't exist 
 submodule` is what makes this a pinned deployment instead of the older "live checkout" shape —
 always pass it. `--pin-url` is optional; see its own entry in Configuration.
 
-**What you should see.** This is the script's own `--help` text (run with no arguments, so
-nothing was touched):
+**What you should see.** This is the script's own `--help` text, re-captured live 2026-07-23
+(run with no arguments, so nothing was touched) — the tool's own `--help` always supersedes this
+quote if the two ever disagree; this is a point-in-time capture, not a second source of truth:
 
 ```
 usage: bootstrap/new-project.sh <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]
        bootstrap/new-project.sh <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]
+         (--boundary-url <url> --boundary-deployment <name> write deployment.json's two
+          new served-shim keys, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md
+          §5 -- both optional; the rebased led/pickup/asof-export/distance-to-clean
+          shims refuse loudly, teaching both names, when either is absent at RUN time
+          rather than this scaffold guessing a boundary URL or standing one up)
          (--new-world derives --schema/--kern/--role from <world> unless given explicitly;
-          also applies high_watermark_1.sql + s20 through s28 and seeds the stamp secret -- see
-          the --new-world block in this script's own header comment)
+          also applies high_watermark_1.sql + every kernel/lineage/sNN delta through the
+          current head (s57 as of this run -- derived live from
+          kernel/lineage/ itself, never hand-typed here), seeds the stamp secret, and
+          runs the s40 birth sequence (author registration event, standing declaration,
+          reviewer/commissioner ceremony) -- see the --new-world block in this script's
+          own header comment)
          (--governed <comma-separated-fnmatch-patterns> sets .claude/governed_files.json;
           omit it and the *.py-only default is used, with a loud post-scaffold notice)
          (--pin submodule adds autoharn as a git submodule at <dest-dir>/.autoharn, pinned
@@ -164,14 +176,27 @@ usage: bootstrap/new-project.sh <dest-dir> --db <db> --host <host> --schema <sch
           NOT combinable with --new-world. --pin-url <url> overrides the submodule remote
           (default: this checkout's own on-disk path -- portable only on this machine;
           pass a real git remote URL for a submodule another machine can also fetch))
+         (--no-law suppresses the generated LAW section (portable ADR subset + pointers)
+          this scaffold otherwise writes into .claude/HOOKS.md (and root CLAUDE.md in
+          --new-world mode) by default -- tracker item portable-adr-delivery, maintainer
+          instruction 2026-07-15: deployments must at least optionally receive the
+          portable ADRs; default is ON)
+         (--accept-existing-content: <dest-dir> classifies FOREIGN -- non-empty, no
+          autoharn birth evidence (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md) --
+          is REFUSED unless this flag is given explicitly; the setup TUI passes it
+          exactly when its own fork-target screen recorded the operator's typed
+          acknowledgment. Has no effect on AUTOHARN_COMPLETE/AUTOHARN_PARTIAL, which
+          keep the existing deployment.json-exists / --force gate above)
 ```
 
 The command's own help text above covers more than this guide does: **ignore the second usage
 line** (the one starting `--new-world`) — it describes autoharn's own internal disposable test
 instances (this project's own "run" scaffolds, unrelated to deploying autoharn anywhere), not a
-deployment to your project. The first usage line, the `--pin`/`--pin-url` parenthetical, and the
-`--governed` parenthetical DO apply here: omitting `--governed` is a real, live choice for your
-deployment (see below — it prints more than one line when you make it).
+deployment to your project. The first usage line, the `--boundary-url`/`--boundary-deployment`,
+`--pin`/`--pin-url`, `--no-law`, and `--governed` parentheticals DO apply here: omitting
+`--governed` is a real, live choice for your deployment (see below — it prints more than one
+line when you make it). `--accept-existing-content` only matters if `<dest-dir>` already has
+unrelated content in it.
 
 With real arguments, the command does the following, in order (read plainly, not witnessed with
 live output in this document — running it needs a real Postgres target):
@@ -198,8 +223,9 @@ live output in this document — running it needs a real Postgres target):
   writer drafts a doc, a fresh-context reviewer with no memory of the writing session checks it
   reads clearly on its own, a repairer fixes what that reviewer flags): `attestations/README.md`
   plus an empty `attestations/doc-legibility-attestations.jsonl`, separate from autoharn's own.
-- Writes eight thin shim scripts at the top of `<dest-dir>` — `led`, `judge`, `pickup`, `audit`,
-  `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc` — each one `exec`s the
+- Writes ten thin shim scripts at the top of `<dest-dir>` — `led`, `judge`, `pickup`, `audit`,
+  `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`, `asof-export`,
+  `doctor` (the exact set `new-project.sh`'s own shim-writing loop names) — each one `exec`s the
   matching template out of `<dest-dir>/.autoharn/bootstrap/templates/`, i.e. out of the pinned
   submodule, never out of this live checkout.
 - Commits the submodule and the shims/hook-wiring it points at, in `<dest-dir>`'s own git
@@ -250,8 +276,8 @@ mutable autoharn checkout on disk) and you want to freeze it to a pinned commit 
 bootstrap/convert-to-submodule.sh <deployment-dir> [--pin-url <url>] [--yes]
 ```
 
-`<deployment-dir>` is your existing deployment (must already have a `deployment.json` and the
-eight operator-verb shims, still live-exec today). `--pin-url` is the same setting as in step 1
+`<deployment-dir>` is your existing deployment (must already have a `deployment.json` and its
+operator-verb shims, still live-exec today). `--pin-url` is the same setting as in step 1
 — see [Configuration](#configuration). `--yes` skips the typed `CONVERT` confirmation prompt (for
 scripted use only — leave it off the first time so you see exactly what will change).
 
@@ -266,9 +292,16 @@ With a real `<deployment-dir>`, the script, in order:
 1. Checks `<deployment-dir>/deployment.json` exists and parses. Refuses and stops if not.
 2. Checks the deployment isn't already pinned (no `.autoharn` present already). If it is, it
    tells you to use `bootstrap/upgrade-submodule.sh` instead.
-3. Reads all eight operator-verb shims and confirms they all agree on which autoharn checkout
-   they currently `exec` out of. Refuses if any shim is missing, malformed, or they disagree with
-   each other.
+3. Reads the original eight operator-verb shims (`led`, `judge`, `pickup`, `audit`,
+   `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`) plus `doctor` if
+   present (added after this script's original eight, so deliberately optional rather than
+   required — a deployment scaffolded before `./doctor` existed legitimately has no such shim;
+   the script's own comment states this), and confirms they all agree on which autoharn checkout
+   they currently `exec` out of. Refuses if any of those (eight, or nine with `doctor`) is
+   missing, malformed, or they disagree with each other. **Disclosed gap, found in reach, not
+   fixed here:** unlike `doctor`, `asof-export` (also scaffolded by `new-project.sh`, ten shims
+   total) is never checked at all, even when present — a deployment whose `asof-export` shim
+   disagrees with the others on which checkout it points at would not be caught by this check.
 4. Confirms that discovered autoharn checkout is a clean git repository (no uncommitted changes)
    and reads its current commit — that is the commit your deployment gets pinned to (**not**
    autoharn's current tip; converting is not the same act as upgrading).
@@ -278,9 +311,11 @@ With a real `<deployment-dir>`, the script, in order:
    `<deployment-dir>`.
 6. Prints exactly what it is about to do and asks you to type `CONVERT` to proceed (unless
    `--yes`).
-7. Adds the `.autoharn` submodule pinned to that commit, repoints all eight shims and the hook
-   wiring in `<deployment-dir>/.claude/settings.json` at the pinned copy, and commits the change
-   in `<deployment-dir>`'s own git history.
+7. Adds the `.autoharn` submodule pinned to that commit, repoints those shims (eight, or nine
+   with `doctor` — same set step 3 discovered; `asof-export` is not repointed by this script even
+   if present, the same disclosed gap named in step 3 above) and the hook wiring in
+   `<deployment-dir>/.claude/settings.json` at the pinned copy, and commits the change in
+   `<deployment-dir>`'s own git history.
 8. Verifies every verb resolves into the new pin, then runs `./led --recent 1` inside
    `<deployment-dir>` as a smoke test.
 9. Prints the exact `./led decision "..."` lines to record the conversion, both in this autoharn
@@ -329,8 +364,11 @@ With real arguments, the script:
 4. Prints the old and new pin and asks you to type `UPGRADE` (unless `--yes`).
 5. Checks out `<new-sha>` inside `<deployment-dir>/.autoharn` and commits the pin bump in
    `<deployment-dir>`'s own git history.
-6. Verifies every operator verb still resolves to an executable file at the new pin, then runs
-   `./led --recent 1` as a smoke test.
+6. Verifies nine of the ten operator verbs (the original eight plus `doctor`, this script's own
+   `VERBS` list — `asof-export` is not checked, the same disclosed gap
+   [step 2's convert-to-submodule.sh section above](#2-convert-an-existing-deployment-to-a-submodule)
+   names) still resolve to an executable file at the new pin, then runs `./led --recent 1` as a
+   smoke test.
 7. Prints the exact `./led decision "..."` lines to record the upgrade, in both ledgers as in
    step 2.
 
@@ -349,7 +387,7 @@ for any deployment, regardless of which kernel generation it's currently on.
 new flags as the kernel grows, because the list of SQL deltas it needs is read live out of
 `bootstrap/new-project.sh`'s own manifest rather than hard-coded here.
 
-Unlike the eight operator verbs (`led`, `judge`, `pickup`, …), `./migrate` is **not** scaffolded
+Unlike the ten operator verbs (`led`, `judge`, `pickup`, …), `./migrate` is **not** scaffolded
 into your deployment directory — there is only one copy, at the root of this autoharn checkout,
 and it takes the deployment directory as an argument.
 
