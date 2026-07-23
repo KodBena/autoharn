@@ -86,14 +86,28 @@ wrote verify-commission (shim -> .../bootstrap/templates/verify-commission.tmpl)
 wrote verify-chain (shim -> .../bootstrap/templates/verify-chain.tmpl)
 wrote attest-doc (shim -> .../bootstrap/templates/attest-doc.tmpl)
 wrote asof-export (shim -> .../bootstrap/templates/asof-export.tmpl)
--- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5;
-   THIS deployment has no boundary service of its own, so these are the working verbs) --
-wrote legacy/led (shim -> .../bootstrap/templates/legacy-led.tmpl)
+-- ./legacy/ (pickup/asof-export/distance-to-clean's direct-psql originals, demoted by
+   placement, spec §5; THIS deployment has no boundary service of its own, so these three are
+   the working verbs) --
+wrote legacy/led (RETIRED teaching-refusal stub -- see FLAGGED GAP note below)
 wrote legacy/pickup (shim -> .../bootstrap/templates/legacy-pickup.tmpl)
 wrote legacy/asof-export (shim -> .../bootstrap/templates/legacy-asof-export.tmpl)
 wrote legacy/distance-to-clean (shim -> .../bootstrap/templates/legacy-distance-to-clean.tmpl)
 == done ==
 ```
+
+**FLAGGED GAP (legacy-led-retirement, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
+1149/1150) — `led` specifically has no working path for a `track-work.sh` deployment right
+now.** `bootstrap/templates/legacy-led.tmpl` is deleted outright as part of that retirement;
+`./legacy/led` is now a one-line teaching refusal, never a working CLI, and `./led` (the served
+shim) refuses too — this deployment shape deliberately writes no `boundary_url`/
+`boundary_deployment` ("a standing work tracker runs no boundary service by design," this
+script's own header). This is a genuine, unresolved gap the retirement found in reach and
+named rather than silently shipped or unilaterally patched (giving `track-work.sh` its own
+standing boundary service is a real architecture question outside that pass's own mandate).
+`judge`/`pickup`/`audit`/`distance-to-clean`/the signing verbs are unaffected. Until a
+maintainer decision resolves this, treat a `track-work.sh` deployment's own ledger as
+read/write via `./pickup` and direct `psql`, not `./led`.
 
 **What landed where:** `deployment.json` (which database/schema this project points at) and nine
 small command files (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
@@ -115,20 +129,26 @@ hook-wired session (`bootstrap/track-work.sh`'s own header comment states this c
 heading "STANDING vs WORLD" — see that file directly for the full text). WITNESSED live: those
 four shims refuse with exit 4 out of the box
 (`led: deployment record at .../deployment.json is missing required-for-the-served-shim
-field(s): boundary_url, boundary_deployment ... run the ./legacy/ original instead`). The
-scaffold writes `./legacy/led`/`./legacy/pickup`/`./legacy/asof-export`/`./legacy/distance-to-clean`
-for exactly this reason — the direct-`psql` originals, demoted by placement, not deleted — so
-"try it immediately" below uses those:
+field(s): boundary_url, boundary_deployment ...`). The scaffold writes `./legacy/pickup`/
+`./legacy/asof-export`/`./legacy/distance-to-clean` for exactly this reason — the direct-`psql`
+originals, demoted by placement, not deleted — so "try it immediately" below uses those.
+**`led` is the ONE exception, and a currently-open gap** (legacy-led-retirement,
+design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row 1149/1150): its own direct-psql
+original, `legacy-led.tmpl`, is deleted outright, and `./legacy/led` is now a one-line teaching
+refusal — a `track-work.sh` deployment has no working `led` verb at all right now (see §3a's own
+FLAGGED GAP note above). Use `./pickup` to read, and a direct `psql` session against this
+deployment's own schema (named in its `deployment.json`) to write, until a maintainer decision
+resolves this:
 
 ```sh
 cd /path/to/your-project
-./legacy/led work open first-item "Describe the first thing to track"
-./legacy/pickup
+./pickup
 ```
 
-`./legacy/pickup` prints your open work back to you — this was confirmed live during this page's
-own verification pass: the opened item showed up in `./legacy/pickup`'s first section on the very
-next command. (If you later stand up a boundary service for this deployment and add its
+`./pickup` prints your open work back to you — confirmed live during this page's own
+verification pass, back when `./legacy/led work open` was still the working write path (now
+retired; the read side, `./pickup`, is unaffected). (If you later stand up a boundary service for
+this deployment and add its
 `boundary_url`/`boundary_deployment` to `deployment.json` by hand, the un-prefixed `./led`/
 `./pickup` start working too — see
 [USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#boundary-multiplex-cli-rebase-and-the-workflow-unit-compiler-2026-07-18)
@@ -178,10 +198,15 @@ what a disagreement would mean.
 hooks that check every edit), a stamp secret, and a `CLAUDE.md` at your project's root that
 Claude Code loads automatically at session start — nothing to paste into your first message.
 Unlike §3a, this scaffold accepts `--boundary-url`/`--boundary-deployment` flags to point the new
-world at an already-running boundary service; omit them (the ordinary case for a brand-new world)
-and `./led`/`./pickup` refuse with the same exit-4 message §3a's own boundary-multiplex note
-shows, teaching `./legacy/led`/`./legacy/pickup` as the working verbs until a boundary service
-exists for this world. The full "what state lands where" table, every file this writes and
+world at an already-running boundary service; omit them and `./led`/`./pickup` refuse with the
+same exit-4 message §3a's own boundary-multiplex note shows. **Pass `--boundary-url`/
+`--boundary-deployment` (or use the setup wizard, `python3 -m tools.setup_tui.app`, which stands
+one up for you) rather than omitting them** (legacy-led-retirement, design/FABLE-LEGACY-LED-
+RETIREMENT-SPEC.md, ledger row 1149/1150): the boundary is now MANDATORY for a governed world --
+`./legacy/led` no longer exists as a working fallback (a one-line teaching-refusal stub, since
+`legacy-led.tmpl` is deleted outright); `./legacy/pickup`/`./legacy/asof-export`/
+`./legacy/distance-to-clean` remain real, working shims regardless. The full "what state lands
+where" table, every file this writes and
 whether you commit it, is [USER-CONFIGURATION.md's own reference
 table](USER-CONFIGURATION.md#what-state-lands-where); a slower, narrated walkthrough of the same
 scaffold (including how to tear a throwaway one down) is

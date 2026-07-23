@@ -1,5 +1,11 @@
 # The GPG trust layer — operator FAQ
 
+<!-- doc-attest-exempt: legacy-led-retirement inventory pass (2026-07-23, ledger row 1149/1150)
+     — the only change at this content hash is one example command's own path,
+     `<dest>/legacy/led commission ...` -> `<dest>/led commission ...`, mechanical fallout of
+     `bootstrap/templates/legacy-led.tmpl`'s deletion (the served path already covered
+     `commission`; the example just named the wrong, now-retired shim). No other prose touched. -->
+
 This page is written for an adopter — this page's own prose calls that reader "an operator,"
 the same role. It answers the question an operator actually has: **I've read
 [design/MAINT-GPG-TRUST-LAYER.md](../design/MAINT-GPG-TRUST-LAYER.md) and I understand WHY this project signs things —
@@ -336,7 +342,7 @@ page was run against.)
 **The four visible commands, in order** (the same shapes as §5's Steps 1–3, just run for you):
 
 ```sh
-$ <dest>/legacy/led commission '<your founding-commission statement>'
+$ <dest>/led commission '<your founding-commission statement>'
 led: row 7 written.
 
 $ gpg --homedir <scratch-or-your-GNUPGHOME> --batch --generate-key <keygen-batch-file>

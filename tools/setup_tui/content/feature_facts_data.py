@@ -133,8 +133,10 @@ RAW_ENTRIES: dict[str, dict[str, str]] = {
                     "family (kernel/lineage/s40-principal-identity-events.sql, kernel/lineage/"
                     "s41-principal-bindings-and-relations.sql), cited to "
                     "design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md.",
-        "external": "none -- drives this world's own <dest>/legacy/led and tools/role_charter.py, "
-                 "no new binary or package.",
+        "external": "none -- drives this world's own served <dest>/led and tools/role_charter.py, "
+                 "no new binary or package (legacy-led-retirement inventory pass, ledger row "
+                 "1149: was <dest>/legacy/led before the served path grew the whole `led "
+                 "principal *` family).",
     },
     "signed_genesis": {
         "key": "signed_genesis",

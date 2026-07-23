@@ -398,6 +398,13 @@ exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" \
     /home/bork/w/vdc/1/experience/autoharn/bootstrap/templates/led.tmpl "$@"
 ```
 
+**ADDENDUM (legacy-led-retirement, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
+1149/1150) — this section's own "which template" check is now MOOT for any checkout at or
+past this addendum:** `bootstrap/templates/legacy-led.tmpl` is DELETED outright; a fresh Step-3
+scaffold's `./legacy/led` is a one-line teaching refusal, never a second working template `cat
+led` could show by mistake. The history above (the 2026-07-22 stale-sibling incident and its
+fix) stands as written, unedited.
+
 `/home/bork/w/vdc/1/experience/autoharn` is a **separate, stale sibling checkout** — pinned at
 commit `fe70575` (2026-07-17), while the checkout you are running this runbook from (this one,
 `/home/bork/w/vdc/1/autoharn`) is at `016dccb` and counting: **298 commits ahead**

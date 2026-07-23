@@ -1897,24 +1897,25 @@ another:
   exactly this case. Exit 0 is the kernel-accepted case, likewise byte-identical to the legacy
   exit.
 
-**`./legacy/` is the recovery path — always, not just when the boundary happens to be down.** The
-direct-`psql` originals of the four rebased verbs move to `./legacy/led`, `./legacy/pickup`,
-`./legacy/asof-export`, `./legacy/distance-to-clean` — demoted by placement, never deleted, still
-executable, unchanged in capability. On a `bootstrap/new-project.sh --new-world` scaffold this
-directory is written automatically; run `./legacy/led` exactly like `./led`. WITNESSED, the same
-scratch deployment as above, with `./legacy/led` instead of `./led`:
-```
-$ ./legacy/led --recent 3
-(prints the recent rows — exit 0, no boundary involved at all)
-```
-**A genuine hazard this recipe's own verification found and fixed, named so it isn't
-rediscovered:** before this pass, `bootstrap/track-work.sh` (the *other* scaffold — see
-[USER-GUIDE.md §3a](USER-GUIDE.md#3a-just-track-your-work-bootstracktrack-worksh)) wrote the four
-rebased shims but never wrote `./legacy/` at all — so a freshly `track-work.sh`'d project's
-`./led` refused with the exit-4 message above, pointed the operator at `./legacy/led` for
-recovery, and that path simply did not exist. Fixed in this same pass (`bootstrap/track-work.sh`
-now writes `./legacy/` identically to `new-project.sh`); re-verified live against a fresh
-`faqwit0718doc` scratch deployment on the toy database, torn down with zero residue afterward.
+**`./legacy/` was the recovery path for `pickup`/`asof-export`/`distance-to-clean` — `led` is the
+one exception now.** legacy-led-retirement (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger
+row 1149/1150) DELETED `bootstrap/templates/legacy-led.tmpl` outright, once the served path grew
+full coverage (below) — `./legacy/led` is now a one-line teaching refusal, never a working CLI.
+`./legacy/pickup`/`./legacy/asof-export`/`./legacy/distance-to-clean` are unaffected: demoted by
+placement, still executable, unchanged in capability, written automatically by
+`bootstrap/new-project.sh --new-world`.
+
+**A genuine, still-OPEN hazard this retirement found in reach but did not unilaterally fix:**
+`bootstrap/track-work.sh` (the *other* scaffold — see
+[USER-GUIDE.md §3a](USER-GUIDE.md#3a-just-track-your-work-bootstracktrack-worksh)) deliberately
+writes NO `boundary_url`/`boundary_deployment` at all ("a standing work tracker runs no boundary
+service by design") — its own `./legacy/led` used to be the ONE working `led` such a deployment
+had. With `legacy-led.tmpl` deleted, a `track-work.sh`-scaffolded deployment has NO working `led`
+verb at all right now: `./led` refuses (no boundary, by design) and `./legacy/led` is the retired
+stub. Giving `track-work.sh` its own standing boundary service is a real architecture question
+outside this retirement's own mandate (the setup_tui/screen_boundary flow) — named and flagged,
+not silently patched. Use `./pickup` (read) and direct `psql` (write) for such a deployment's
+ledger until a maintainer decision resolves this.
 
 **How do I serve more than one project from one boundary?**
 `serving/boundary_service.py` used to take `--deployment deployment.json` (one process per
@@ -1956,29 +1957,23 @@ unknown-deployment refusal, malformed-config refusal, and per-deployment admissi
 respectively (the multiplex spec's own §7 names each in full) — is the project's own live witness
 suite for this mechanism, cited rather than re-run here.
 
-**Which `led` subcommands go over the boundary, and which still need `./legacy/led`?** The honest
-coverage split, verbatim from `bootstrap/templates/led.tmpl`'s own module docstring (its "SCOPE,
-HONESTLY NAMED" section — read that file directly for the authoritative, self-updating version):
-- **Covered** (served, `./led` works): `led --recent [N]` / `led current [N]` / `led show <id>`;
-  `led question-status` / `review-gap` / `stamp-distinctness` / `standing`; `led --json
-  <ledger|review|registration|obligation> <file|->`; the generic write path (`led [flags] <kind>
-  <statement...>`, including `-f`/`-e`/`--supersedes`/`--amends`/`--amends-scope`/`--answers`/
-  `--refs`/`--concern`/`--evidence`/`--confidence`/`--event-time`, and `decision`'s own `--grade`);
-  `led register-principal <name> <class>`; `led obligate <scope> <assigned-by> <obliged-actor>`;
-  `led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>`.
-- **NOT covered — `led work *` is over the boundary, at all, not yet.** `led obligate revoke`
-  (a raw, privilege-gated `DELETE`, structurally incompatible with the boundary's own "never falls
-  back to raw DML" charter — the same exclusion class §5 already names for `judge`, applied here
-  to one subcommand). `led decomposition-review-status`, `led briefing`, and **the entire `led
-  work *` family** (`work open`/`claim`/`close`/`depends`/`violations`/…) are UNEXERCISED by this
-  build — a real, disclosed scope boundary, not a structural incompatibility, and named rather
-  than silently dropped. The client-side statement-grammar pre-flight the legacy generic path runs
-  for `review:`/`review-done:`/`resource:`/`estimate:`/`taxon:`/`interface:` statements is also
-  omitted (a CLI-side convention check, not a kernel invariant — the kernel accepts any statement
-  text under those kinds regardless). **Practically: any `led work` command — which is most of what
-  a workflow-unit hydration/drive script below actually does — runs through `./legacy/led`, always,
-  today**; the workflow-unit compiler's own generated scripts default `--led ./legacy/led` for
-  exactly this reason, not as an oversight.
+**Which `led` subcommands go over the boundary?** As of legacy-led-retirement (ledger row
+1149/1150), ALL of them — read `bootstrap/templates/led.tmpl`'s own module docstring (its "SCOPE,
+HONESTLY NAMED" section) for the authoritative, self-updating coverage table. In brief: `led
+--recent`/`current`/`show`; every read view (`question-status`/`review-gap`/`stamp-distinctness`/
+`standing`); `led --json`; the generic write path with its full flag set and statement-grammar
+pre-flight (all eight prefixes); `register-principal`; `obligate` and `obligate revoke` (a typed
+kernel event now, kernel/lineage/s57-obligation-revocation-event.sql — the raw `DELETE` this used
+to be is retired); `review`; `decomposition-review-status`; `briefing`; the entire `led work *`
+family, all eleven sub-verbs; `led artifact put|get|stat`; and `led principal *`, all thirteen
+sub-verbs (`declare-standing`/`undeclare-standing`/`suspend`/`lift-suspension`/`revoke`/`relate`/
+`unrelate`/`bind-role`/`release-role`/`bind-key`/`revoke-key`/`grant-competence`/
+`withdraw-competence`) — the one family this inventory pass's own mechanical dispatch-diff found
+still missing, now closed. `./legacy/led` served none of this specially — it is deleted outright,
+a one-line teaching refusal in its place. The two disclosed read-shape divergences named
+throughout `led.tmpl`'s own SCOPE section (JSON-per-line listing for `led work list`; the
+supersession-aware `led work asof`) are the only remaining behavior differences from the
+(now-historical) direct-psql original.
 
 **How do I turn a fixed-shape workflow TOML into something that actually runs?**
 `tools/workflow_compile.py` reads one `design/workflows/*.toml` (the pipeline-dsl-v0 grammar —
@@ -2002,7 +1997,11 @@ blocker is the s39 `blocks-start` claim-time refusal; an obligation blocker is c
 visible in `review_gap`; a role constraint is whatever the claiming principal's own standing
 permits. WITNESSED, both polarities, compiled from `design/workflows/faq-abc-fixpoint-loop.toml`
 and hydrated/driven against a scratch `--new-world` scaffold (`faqwit0718wc` on the toy database,
-torn down with zero residue afterward) — claiming a dependent phase before its antecedent closed:
+torn down with zero residue afterward) — claiming a dependent phase before its antecedent closed
+(HISTORICAL transcript, captured via `./legacy/led` back when `led work *` ran through it; the
+generated driver's own default now runs the served `./led` instead, per legacy-led-retirement,
+ledger row 1149/1150 — the kernel-refusal TEXT below is unchanged either way, it is the SAME s43
+`write_verdict`):
 ```
 $ ./legacy/led work claim faq-abc-fixpoint-loop-demo2-fresh-context-review
 led: REFUSED by the kernel write boundary (SQLSTATE P0001; journaled as write_refused row 24 ...):
@@ -2038,9 +2037,12 @@ compiler's own **J2** heuristic (named for its position in `tools/workflow_compi
 here, J3/J4 cover obligation-act deduplication and close-disposition defaults) that decides "does
 this phase's `reviews` clause want an independent obligation act" is fit to the vocabulary of the
 four workflow specimens on file today, not a formal grammar — a future
-specimen it misjudges is a real gap to bring back to the compiler spec, not a silent miss; and (per
-the "which `led` subcommands" recipe just above) every `led work` call the driver makes runs
-through `./legacy/led`, because the served boundary doesn't cover `led work *` yet.
+specimen it misjudges is a real gap to bring back to the compiler spec, not a silent miss. (The
+driver used to route every `led work` call through `./legacy/led`, back when the served boundary
+did not yet cover `led work *` — that gap closed at legacy-led-retirement phase 1/1B, and
+`hydrate.sh`'s own generated default now runs the served `./led` instead, ledger row 1149/1150;
+`drive.py`'s own default is unchanged for a separate, still-open reason — see that generator's own
+comment, `tools/workflow_compile.py`.)
 
 ## Role charters and briefs (`tools/role_charter.py`, `tools/role_brief.py`)
 

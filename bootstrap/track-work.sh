@@ -312,14 +312,41 @@ done
 # directory this script never wrote, so a freshly track-work.sh'd project had NO working
 # led/pickup/asof-export/distance-to-clean at all (witnessed: `HARNESS_PGHOST=192.168.122.1
 # ./led --recent 3` against a fresh faqwit0718doc scratch deployment exited 4 with exactly that
-# message, and `ls legacy` reported "No such file or directory"). Mirrors new-project.sh's own
-# ./legacy/ stanza exactly (same four verbs, same legacy-<verb>.tmpl siblings, same
-# demoted-by-placement posture -- spec §5's own words: "operator recovery when the boundary is
-# down").
-echo "-- ./legacy/ (the four rebased verbs' direct-psql originals, demoted by placement, spec §5;"
-echo "   THIS deployment has no boundary service of its own, so these are the working verbs) --"
+# message, and `ls legacy` reported "No such file or directory").
+#
+# HAZARD FOUND IN REACH, NOT RESOLVED, FLAGGED (legacy-led-retirement inventory pass, ledger row
+# 1149/1150, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's retirement act): `legacy-led.tmpl` is
+# DELETED from this repository outright by that same pass -- this script's own `legacy/led`
+# was, by the comment block above's own account, THE ONE WORKING `led` a track-work.sh
+# deployment has (this script intentionally writes no boundary_url/boundary_deployment,
+# "a standing work tracker runs no boundary service by design"). Deleting legacy-led.tmpl
+# without ALSO giving track-work.sh deployments a real boundary would leave every such
+# deployment with NO working `led` verb at all (`./led` refuses by this script's own design;
+# `./legacy/led` would exec a file that no longer exists). This pass does NOT unilaterally
+# redesign track-work.sh to stand up a boundary service of its own (a real architectural
+# question -- does "standing, not world" preclude a boundary, or was that distinction always
+# about hooks/run-linearity/stamp-secrets, never about the HTTP layer? -- outside this pass's own
+# mandate, which is the setup_tui/screen_boundary flow, not this script). `led` alone is
+# special-cased below to a one-line teaching-refusal stub (matching new-project.sh's own
+# post-retirement shape, so at least invoking it fails LOUDLY, never execs a missing file
+# silently) -- pickup/asof-export/distance-to-clean are UNCHANGED, real shims, since their own
+# `legacy-<verb>.tmpl` originals are untouched by this retirement. THIS IS A NAMED, FLAGGED GAP,
+# not a fix: a track-work.sh-scaffolded deployment's `led` verb has no working path at all until
+# a maintainer decision resolves it (auto-provision a boundary here, or reinstate some other
+# recovery path) -- reported, not routed around.
+echo "-- ./legacy/ (pickup/asof-export/distance-to-clean's direct-psql originals; led is a teaching-refusal stub, retired -- see this script's own flagged gap above) --"
 mkdir -p "$PROJECT_ROOT/legacy"
-for verb in led pickup asof-export distance-to-clean; do
+cat > "$PROJECT_ROOT/legacy/led" <<'STUB'
+#!/bin/sh
+echo "legacy/led: RETIRED 2026-07 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md) -- this" >&2
+echo "  deployment has no boundary service (track-work.sh's own by-design choice), so there is" >&2
+echo "  NO WORKING led VERB for it right now -- a flagged, unresolved gap this retirement" >&2
+echo "  found in reach but did not unilaterally fix; see bootstrap/track-work.sh's own comment." >&2
+exit 1
+STUB
+chmod +x "$PROJECT_ROOT/legacy/led"
+echo "wrote legacy/led (RETIRED teaching-refusal stub -- FLAGGED GAP, see bootstrap/track-work.sh's own comment: this deployment has no working led verb until a maintainer decision resolves it)"
+for verb in pickup asof-export distance-to-clean; do
     cat > "$PROJECT_ROOT/legacy/$verb" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && cd .. && pwd)"

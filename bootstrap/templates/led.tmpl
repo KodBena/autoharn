@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """led -- REBASED onto the boundary service (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-
 SPEC.md §5, ratified ledger row 1631; design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified row
-1652). The direct-psql original is `legacy-led.tmpl` (`./legacy/led`) -- 5300+ lines covering a
-much larger subcommand surface than this rebase reaches; see the "SCOPE, HONESTLY NAMED" section
-below for exactly what does and does not run through the boundary here.
+1652). The direct-psql original, `legacy-led.tmpl` (`./legacy/led`), was 5300+ lines covering a
+larger subcommand surface than this rebase originally reached -- legacy-led-retirement (design/
+FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row 1149/1150) closed that gap and DELETED the
+original outright; `./legacy/led` is now a one-line teaching refusal. See the "SCOPE, HONESTLY
+NAMED" section below for the coverage table (universe: legacy's own dispatch-token diff).
 
 TRANSPORT: every read is a GET against `/rows/*`/`/views/*`/`/standing/principals` (paginated,
 walked to completion client-side, spec's own "no server-side filter grammar" discipline); every
@@ -1182,16 +1184,19 @@ def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
 
 def cmd_recent(cfg: bcc.ServedConfig, n: int, current_only: bool) -> int:
     """`led current [N]`: the legacy tool's own `ledger_current` reading, exactly. `led --recent
-    [N]`: the legacy tool additionally walks the RAW ledger (superseded rows included, visibly
+    [N]`: the legacy tool additionally walked the RAW ledger (superseded rows included, visibly
     marked) -- no boundary route serves the raw table (every route reads a KERNEL VIEW, spec §5's
     "no truth of its own" applied to routes too; a raw-ledger route is out of THIS amendment's own
     scope). Rather than silently narrowing --recent to look like `current`, this rebase says so
-    loudly on stderr and serves the SAME `/rows/current` reading -- `./legacy/led --recent` is the
-    byte-faithful original when the superseded-inclusive view is actually needed."""
+    loudly on stderr and serves the SAME `/rows/current` reading. DISCLOSED NARROWING, permanent
+    as of legacy-led-retirement (ledger row 1149/1150, legacy-led.tmpl deleted outright): the
+    superseded-inclusive raw read this NOTE used to point at `./legacy/led --recent` for has no
+    surviving recovery path at all -- named, not silently dropped."""
     if not current_only:
         print("led --recent: NOTE -- this rebase's --recent reads /rows/current (in-force rows "
-              "only, no raw-ledger route exists on the boundary) -- ./legacy/led --recent is "
-              "byte-faithful if you need the superseded-inclusive raw read.", file=sys.stderr)
+              "only, no raw-ledger route exists on the boundary, and no legacy recovery path "
+              "survives legacy-led.tmpl's own retirement) -- the superseded-inclusive raw read "
+              "is not available from any CLI in this repository anymore.", file=sys.stderr)
     rows = bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id")
     for r in sorted(rows, key=lambda r: -r["id"])[:n]:
         print(f"[{r['id']}] {r['kind']}: {r.get('statement', '')}")
@@ -2344,10 +2349,10 @@ def main(argv: list[str]) -> int:
             return cmd_work_resolve_violation(cfg, rest)
         if sub == "supersede-cascade":
             return cmd_work_supersede_cascade(cfg, rest)
-        print(f"led work {sub}: UNEXERCISED by the boundary rebase (legacy-led-retirement "
-              f"phase 1/1B covers open|claim|depends|close|list|violations|asof|review-gap|"
-              f"startable|resolve-violation|supersede-cascade -- eleven of eleven `led work *` "
-              f"sub-verbs) -- named, not silently dropped; use ./legacy/led work {sub} instead.",
+        print(f"led work {sub}: REFUSED -- not a recognized `led work` sub-verb (open|claim|"
+              f"depends|close|list|violations|asof|review-gap|startable|resolve-violation|"
+              f"supersede-cascade -- all eleven `led work *` sub-verbs are covered by this "
+              f"served path, legacy-led-retirement, ledger row 1149/1150).",
               file=sys.stderr)
         return 4
     if argv and argv[0] == "artifact":

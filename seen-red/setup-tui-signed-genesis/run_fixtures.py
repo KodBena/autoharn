@@ -17,9 +17,9 @@ keygen goes through `tools.setup_tui.signed_genesis.keygen_scripted`'s own scrat
       polarity, witnessed not assumed.
   WG3 the legitimate-weaker path: a SEPARATE scratch world with a FULL-mode (unsigned) founding
       commission already on the ledger; the operator SKIPS the ceremony -> checklist SKIPPED,
-      world fully functional (`legacy/led --recent` still works), `verify-commission` on the
-      founding commission returns UNSIGNED, exit 0 (the shipped verb's own contract, never
-      re-implemented here).
+      world fully functional (served `./led --recent` still works, legacy-led-retirement
+      inventory pass, ledger row 1149/1150), `verify-commission` on the founding commission
+      returns UNSIGNED, exit 0 (the shipped verb's own contract, never re-implemented here).
   WG4 dry-run: the ceremony under `--dry-run` (against WG1/WG2's own already-modified world, a
       STRONGER proof than a fresh one -- every act it computes has a live counterpart that
       provably WOULD have written something) -> zero filesystem delta (mechanical before/after
@@ -109,6 +109,20 @@ def stop_boundary_for(world: str) -> None:
 
 def sh(argv: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(argv, capture_output=True, text=True, **kw)
+
+
+def served_led(dest: str, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    """legacy-led-retirement inventory pass (ledger row 1149/1150): replaces a direct
+    `<dest>/legacy/led` invocation (now a teaching-refusal stub, legacy-led.tmpl deleted) --
+    `dest`'s own deployment.json already carries the served-shim's boundary_url/
+    boundary_deployment keys (`start_boundary_for` above writes them at birth time)."""
+    e = dict(os.environ)
+    if env:
+        e.update(env)
+    e["AUTOHARN"] = str(REPO)
+    e["PICKUP_DEPLOYMENT"] = os.path.join(dest, "deployment.json")
+    return sh([str(bs_fixtures.PYVENV), str(REPO / "bootstrap" / "templates" / "led.tmpl"),
+               *args], env=e)
 
 
 def run_scripted(answers: str, scratch: str, tag: str, extra_argv: list[str] | None = None,
@@ -305,9 +319,9 @@ def main() -> int:
         birth(pghost, world_b, dest_b)
         live_worlds.append((world_b, dest_b))
 
-        r3w = sh([os.path.join(dest_b, "legacy", "led"), "commission",
-                  "WG3 founding commission -- deliberately left unsigned."],
-                 env={**os.environ, "LED_ACTOR": "commissioner"})
+        r3w = served_led(dest_b, "commission",
+                         "WG3 founding commission -- deliberately left unsigned.",
+                         env={"LED_ACTOR": "commissioner"})
         assert r3w.returncode == 0, f"WG3 setup: commission write failed: {r3w.stdout}{r3w.stderr}"
         m3 = re.search(r"row (\d+) written\.", r3w.stdout)
         assert m3, f"WG3 setup: no row id in output: {r3w.stdout}"
@@ -329,12 +343,12 @@ def main() -> int:
             f"WG3: expected UNSIGNED, got {body3}: {(r3v.stdout + r3v.stderr)[-1500:]}")
         assert r3v.returncode == 0, f"WG3: expected exit 0, got {r3v.returncode}"
 
-        r3led = sh([os.path.join(dest_b, "legacy", "led"), "--recent", "3"])
+        r3led = served_led(dest_b, "--recent", "3")
         assert r3led.returncode == 0 and r3led.stdout.strip(), (
             f"WG3: world must remain fully functional after a skip: {r3led.stdout}{r3led.stderr}")
         print(f"WG3 ok: skip -> checklist SKIPPED, no .asc written, verify-commission UNSIGNED "
               f"exit 0 on the (still-unsigned) founding commission {wg3_id}, world fully "
-              f"functional (legacy/led --recent still works)")
+              f"functional (served ./led --recent still works)")
 
         teardown(pghost, world_b, dest_b)
         live_worlds.remove((world_b, dest_b))

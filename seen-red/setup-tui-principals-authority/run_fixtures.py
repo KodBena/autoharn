@@ -480,11 +480,15 @@ def main() -> int:
 
                 json.dump({"db": PGDB, "host": pghost, "kern": mid_kern,
                             "name": mid_schema, "role": mid_role, "schema": mid_schema}, f)
+            # legacy-led-retirement inventory pass (ledger row 1149/1150): matches
+            # bootstrap/new-project.sh's own real post-retirement shape -- a one-line teaching
+            # refusal, never a working direct-psql CLI (legacy-led.tmpl is deleted). Only the
+            # FILE's existence matters here (destination.py's AUTOHARN_COMPLETE classifier); WP4
+            # never actually invokes it as a real CLI (a read-only s41_status/list_principals
+            # check, both raw psql -- see this file's own module docstring).
             led_shim = (
-                "#!/bin/sh\n"
-                'HERE="$(cd "$(dirname "$0")" && cd .. && pwd)"\n'
-                f'exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" '
-                f'{os.path.join(REPO, "bootstrap", "templates", "legacy-led.tmpl")} "$@"\n'
+                '#!/bin/sh\necho "legacy/led: RETIRED 2026-07 -- every surface serves through '
+                './led now." >&2\nexit 1\n'
             )
             led_path = os.path.join(mid_dest, "legacy", "led")
             with open(led_path, "w") as f:

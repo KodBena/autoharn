@@ -6,9 +6,9 @@ kernel/, bootstrap/ (beyond reading the templates as fixtures), or any live worl
 
 WITNESSES (spec's own WA1..WA8 enumeration):
   WA1  put -> hash printed; get -> bytes byte-identical (round-trip); stat sane. Exercised BOTH
-       at the kernel.artifact_write function level AND through the real CLI
-       (bootstrap/templates/legacy-led.tmpl, as an actual subprocess -- the boundary-cli-rebase
-       precedent's own `run_cli` pattern).
+       at the kernel.artifact_write function level AND through the real CLI (bootstrap/
+       templates/led.tmpl, served, against a real boundary_service -- the boundary-cli-rebase
+       precedent's own `run_cli` pattern; legacy-led-retirement inventory pass, ledger row 1149).
   WA2  idempotent re-put of identical bytes -> same hash, no second row, verdict says
        already-present.
   WA3  size cap: a >1 MiB input -> artifact_too_large typed refusal, journaled digest-only,
