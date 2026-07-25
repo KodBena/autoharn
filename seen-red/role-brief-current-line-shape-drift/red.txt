@@ -59,3 +59,16 @@ all role-brief-current-line-shape-drift-real cases WITNESSED clean.
 (No new -real leg was added for the show-drift case itself -- the coordinator brief permits
 "mock and/or -real"; the mock leg above (R4-R6) is the primary witness, and this real re-run
 covers the "no regression on the existing -real family" requirement separately.)
+
+=== APPENDIX 2026-07-26, R7/R8 -- confirming review residual #1 (this module's own docstring
+names `principal_competence_activity`, a real >=28-char column, as the fix's central motivating
+case; nothing exercised it until now). New `show_longkey` scenario in mock_led.py; new R7/R8
+cases in run_fixtures.py:
+
+=== R7-post-fix-show-longkey-parses-and-renders ===
+  [ok] exit=0 brief-renders=True field-present-in-parsed-dict=True (parsed={'principal_competence_activity': 'onboarding-queue-triage'}) -- the module docstring's own named motivating case, now actually exercised
+
+=== R8-pre-show-fix-longkey-silently-dropped ===
+  [ok] field-absent-from-parsed-dict=True (pre-fix commit cc12b46) parsed={} -- the well-formed long-key line vanishes with no error at all, not even the `continue`-based skip surfacing anywhere; a caller reading this key back gets exactly the same shape as a genuinely null column
+
+all role-brief-current-line-shape-drift cases WITNESSED clean (R1-R8, full re-run).

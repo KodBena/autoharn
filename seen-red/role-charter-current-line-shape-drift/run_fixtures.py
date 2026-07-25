@@ -25,12 +25,29 @@ WITNESSES:
       offending `led show 7` line and command, exit 1.
   R6  POST-FIX CODE, `show_clean` scenario (same row 7, actor field at the correct width):
       `show` renders the real actor id, exit 0 -- the fix does not disturb the legitimate path.
+  R7  POST-FIX CODE, `show_longkey` scenario (this fix round's residual #1 -- served_shapes.py's
+      own module docstring names a real >=28-char column, `principal_competence_activity`
+      (29 chars), as its CENTRAL motivating case; nothing exercised it before this addendum):
+      row 7's `led show 7` output carries that column UNPADDED, exactly as cmd_show really
+      emits it, alongside its own correctly-padded `actor` line. `show editor` renders
+      end-to-end, exit 0 -- a well-formed line is never refused as a false SHAPE DRIFT.
+      Directly alongside: served_shapes.parse_served_show, called in-process against the exact
+      same line, returns the column IN its dict (the parse itself, not merely "nothing
+      crashed").
+  R8  RED-FIRST, PRE-FIX CODE (git cc12b46's own parse_served_show, loaded in-process from the
+      same temp checkout R4 already materializes above). Called directly on the IDENTICAL
+      `show_longkey` line: the fixed-slice `line[28:30] != ": "` check silently `continue`s past
+      it (29-char unpadded key means the real separator sits at columns 29-31, not 28-30) -- the
+      column is simply ABSENT from the returned dict, the silent-drop class this fix round
+      exists to kill, now shown on the module's own named motivating case rather than only on
+      R4's one-column actor-width drift.
 
 Usage: python3 seen-red/role-charter-current-line-shape-drift/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned; stdlib only.
 """
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -42,6 +59,23 @@ MOCK_LED = HERE / "mock_led.py"
 POST_FIX_ROLE_CHARTER = REPO / "tools" / "role_charter.py"
 PRE_FIX_COMMIT = "417b200"
 PRE_SHOW_FIX_COMMIT = "cc12b46"
+
+# R7/R8 below call served_shapes.parse_served_show directly (the post-fix module) rather than
+# only through a subprocess -- served_shapes.py is a pure stdlib parsing library with no side
+# effects, so a direct in-process call is the cheapest honest way to assert "the field is
+# actually IN the parsed dict" rather than merely "the CLI process didn't crash". Imported here,
+# at module top (CLAUDE.md's lazy-imports ban applies to this fixture script too -- gates/
+# no_lazy_imports.py does not exclude seen-red/), immediately after putting tools/ on sys.path.
+sys.path.insert(0, str(REPO / "tools"))
+import served_shapes
+
+# Shared with mock_led.py's own SHOW_ROWS["7"] `show_longkey` line -- the exact byte shape
+# cmd_show emits for a real, currently-schema'd >=28-char column, UNPADDED (see mock_led.py's
+# own LONGKEY_LINE for the citation). Duplicated here as a literal (not imported from mock_led,
+# whose own SCENARIO global is read once at import time off this process's own environment, not
+# the child subprocess's) so R7/R8's direct parse_served_show calls exercise byte-identical text
+# to what the `show_longkey` scenario's subprocess run actually receives.
+LONGKEY_LINE = "principal_competence_activity: onboarding-queue-triage\n"
 
 FAILURES: list[str] = []
 
@@ -172,6 +206,62 @@ def main() -> int:
         check("R6-post-fix-show-clean-actor-renders",
               r6.returncode == 0 and r6_actor_shown,
               f"exit={r6.returncode} actor-id-rendered={r6_actor_shown}\n  stdout={r6.stdout.strip()!r}")
+
+        # R7: POST-FIX code, `show_longkey` scenario -- the module docstring's own CENTRAL
+        # motivating case (residual #1): a real >=28-char column, unpadded, in an otherwise
+        # well-formed `led show`. `show editor` prints the raw `led show 7` text verbatim under
+        # its own "-- full ledger row --" banner (role_charter.py's own cmd_show), so the
+        # long-key line's LITERAL, unpadded appearance in stdout is direct rendered evidence, not
+        # just "nothing crashed". Alongside: the CURRENT, POST-FIX served_shapes.parse_served_show
+        # (same process, no subprocess needed -- a pure stdlib parsing library with no side
+        # effects), called on the identical line, must also return the column IN its dict.
+        r7 = run_show(POST_FIX_ROLE_CHARTER, "show_longkey")
+        r7_renders = "written by actor id '1'" in r7.stdout
+        r7_line_verbatim = LONGKEY_LINE.rstrip("\n") in r7.stdout
+        longkey_detail = served_shapes.parse_served_show(Exception, "<mock> show 7", LONGKEY_LINE)
+        r7_field_present = (longkey_detail.get("principal_competence_activity")
+                             == "onboarding-queue-triage")
+        check("R7-post-fix-show-longkey-parses-and-renders",
+              r7.returncode == 0 and r7_renders and r7_line_verbatim and r7_field_present,
+              f"exit={r7.returncode} show-renders={r7_renders} "
+              f"longkey-line-verbatim-in-stdout={r7_line_verbatim} "
+              f"field-present-in-parsed-dict={r7_field_present} "
+              f"(parsed={longkey_detail!r}) -- the module docstring's own named motivating "
+              f"case, now actually exercised")
+
+        # R8: RED-FIRST, PRE-FIX CODE (`cc12b46`'s own tools/role_charter.py, the exact temp
+        # checkout R4 already materialized above -- loaded in-process this time, since its
+        # parse_served_show took only `text` with no error_cls/label yet, see served_shapes.py's
+        # own header on the extraction). Called directly on the IDENTICAL `show_longkey` line:
+        # the fixed-slice `line[28:30] != ": "` check silently `continue`s past it (29-char
+        # unpadded key means the real separator sits at columns 29-31, not 28-30) -- the column
+        # is simply ABSENT from the returned dict, the silent-drop class this fix round exists
+        # to kill, now shown on the module's own named motivating case rather than only on R4's
+        # one-column actor-width drift.
+        pre_show_fix_src_r8 = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{PRE_SHOW_FIX_COMMIT}:tools/role_charter.py"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        with tempfile.NamedTemporaryFile("w", suffix="_role_charter_pre_show_fix_r8.py",
+                                          delete=False) as f:
+            f.write(pre_show_fix_src_r8)
+            pre_show_fix_path_r8 = Path(f.name)
+        try:
+            spec = importlib.util.spec_from_file_location("role_charter_cc12b46_r8",
+                                                            pre_show_fix_path_r8)
+            old_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(old_mod)
+            old_detail = old_mod.parse_served_show(LONGKEY_LINE)
+            r8_silently_dropped = "principal_competence_activity" not in old_detail
+            check("R8-pre-show-fix-longkey-silently-dropped",
+                  r8_silently_dropped,
+                  f"field-absent-from-parsed-dict={r8_silently_dropped} (pre-fix commit "
+                  f"{PRE_SHOW_FIX_COMMIT}) parsed={old_detail!r} -- the well-formed long-key "
+                  f"line vanishes with no error at all, not even the `continue`-based skip "
+                  f"surfacing anywhere; a caller reading this key back gets exactly the same "
+                  f"shape as a genuinely null column")
+        finally:
+            pre_show_fix_path_r8.unlink(missing_ok=True)
 
     if FAILURES:
         print(f"role-charter-current-line-shape-drift: {len(FAILURES)} case(s) FAILED: {FAILURES}")

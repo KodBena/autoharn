@@ -45,6 +45,26 @@ misparsed. A blank/whitespace-only line is tolerated in `parse_served_show` (cmd
 never emits one, but tolerating it costs nothing and keeps this parser from being pickier than
 the shape it documents).
 
+KNOWN BOUNDARY, DISCLOSED NOT FIXED (re-lap review residual #2): parse_served_show assumes every
+`led show` field VALUE is single-line -- it splits `text` on `splitlines()` and treats each line
+as one complete `key: value` record. Nothing in kernel lineage forbids an embedded newline inside
+a free-text `statement`/`purpose` column's VALUE, and this codebase already has direct evidence
+such values occur in practice: bootstrap/templates/legacy-pickup.tmpl's own `_fetch_estimate_rows`
+(and every sibling `_psql_tuples` read alongside it) runs `regexp_replace(statement, '[\n\r]+[
+\t]*', ' ', 'g')` SERVER-SIDE specifically to collapse embedded newlines before ITS OWN line-based
+parsing -- a different tool, hitting this same shape, choosing to scrub it upstream rather than
+parse around it. `cmd_show` (bootstrap/templates/led.tmpl) applies no such scrubbing before this
+module's `f"{k:28s}: {v}"` line; a `v` containing `\n` prints as multiple physical lines, and any
+CONTINUATION line that happens to contain `": "` at or after column 28 (plausible: free text is
+uncontrolled) is misread as the START of a brand-new, spurious key -- the real key's value is
+truncated at the embedded newline, and the continuation text is attributed to a key that was
+never actually served. This is NOT today's silent-drop bug (a genuine parse failure raises
+loudly); it is a MISPARSE that raises nothing at all, because the spurious key/continuation-text
+pair is itself shaped exactly like a well-formed line. No behavior change accompanies this
+disclosure -- the guard belongs on the EMITTING side (`cmd_show` itself would need to scrub or
+escape embedded newlines before printing, the same choice legacy-pickup.tmpl's server-side
+`regexp_replace` already made for its own reads), not bolted onto this parser as a heuristic.
+
 Lazy imports banned; stdlib only; no subprocess/`led` calls of its own -- pure text parsing over
 already-captured output, imported by both tools' top-of-file imports.
 """

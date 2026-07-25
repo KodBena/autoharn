@@ -42,6 +42,16 @@ Four scenarios, MOCK_LED_SCENARIO env var:
                   parse_current_line, still alive in parse_served_show at cc12b46.
   show_clean   -- the same row 7, actor field at the correct width -- confirms the fix does not
                   disturb the legitimate path: `show editor` renders the real actor id.
+  show_longkey -- served_shapes.py's own CENTRAL motivating case (its module docstring, and this
+                  fix round's residual #1): row 7's `led show 7` output (the row `show editor`
+                  actually reads, via find_current_registrations) carries an EXTRA line for a
+                  REAL, currently-schema'd >=28-char column, `principal_competence_activity` (29
+                  chars; kernel/lineage/s41-principal-bindings-and-relations.sql:312), UNPADDED
+                  exactly as cmd_show really emits it -- alongside row 7's own correctly-padded
+                  `actor` line (unaffected). Well-formed input, not corrupted -- confirms the fix
+                  parses AND renders `show editor` end-to-end (exit 0) when a real long-key line
+                  is present, the case the module docstring names but nothing exercised before
+                  this addendum.
 """
 import os
 import sys
@@ -60,6 +70,14 @@ CHARTER_LINE_CORRUPT = ("role-charter role=editor path=roles/editor/CHARTER.md s
 _ACTOR_LINE_CORRECT = "actor" + " " * 23 + ": 1\n"
 _ACTOR_LINE_DRIFT = "actor" + " " * 22 + ": 1\n"
 
+# The real >=28-char column this fix round's own module docstring names as the motivating case
+# (served_shapes.py header, s41-principal-bindings-and-relations.sql:312): 29 characters, so
+# cmd_show's `f"{k:28s}: {v}"` prints it UNPADDED -- the key runs straight into `": "` with no
+# intervening space at all. LONGKEY_LINE is the exact byte shape a real served `led show` would
+# emit for this column; both run_fixtures.py (direct parse_served_show call) and this row's own
+# `show_longkey` inclusion below share this one constant rather than each retyping the line.
+LONGKEY_LINE = "principal_competence_activity: onboarding-queue-triage\n"
+
 SHOW_ROWS = {
     "1": "id                          : 1\n"
          "kind                        : principal_registered\n"
@@ -68,7 +86,8 @@ SHOW_ROWS = {
           "kind                        : decision\n"
           "statement                   : role-charter registered: role=editor "
           "path=roles/editor/CHARTER.md sha256=" + "a" * 64 + "\n"
-          + (_ACTOR_LINE_DRIFT if SCENARIO == "show_corrupt" else _ACTOR_LINE_CORRECT)),
+          + (_ACTOR_LINE_DRIFT if SCENARIO == "show_corrupt" else _ACTOR_LINE_CORRECT)
+          + (LONGKEY_LINE if SCENARIO == "show_longkey" else "")),
 }
 
 
