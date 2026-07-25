@@ -1,4 +1,4 @@
-# ADR-0021 — The checked surface is the shipped surface (no proxy-surface verification)
+# ADR-0021 — Review reads the real object (the checked surface is the shipped surface; a comment asserting a property is a claim)
 
 <!-- doc-attest-exempt: DRAFT awaiting maintainer ratification; the real A:B:C legibility
 loop runs at (or before) the ratification pass and this marker is struck when its
@@ -26,7 +26,9 @@ persisted. ADR-0020 names the conservation proxy — *no content lost* standing 
 meaning changed*. This is its structural sibling: **a faithful check aimed at a sibling of
 the real surface**.
 
-## The rule
+## Rule A — the checked surface is the shipped surface
+
+Plainly: *a check that watches the wrong thing passes while the real thing breaks.*
 
 **A verification's object must be the artifact that ships — the bytes the commit embeds,
 the output the process emits, the store the write lands in — not a convenient sibling of
@@ -36,22 +38,30 @@ verdict line, docstring, or report that says which surface was observed and whic
 An unnamed proxy-surface check is a defect of the check, regardless of how honestly it
 runs — its green is a claim about a surface nobody examined.
 
-Two subsidiary clauses, each paid for on 2026-07-23:
+## Rule B — comments and code drift; a comment asserting a property is a claim
 
-1. **Fix-comments are claims.** A comment asserting a safety or concurrency property
-   ("belt-and-suspenders", "structurally impossible", "harmless no-op") is itself subject
-   to this rule and to the witness discipline: it is read against the code as adversarially
-   as the code is read against the spec. A fix to a race names its exclusivity primitive —
-   the mechanism that makes the interleaving impossible — and a timing argument (a sleep,
-   a grace window, an "in practice") is not one. (Witnessed twice in one axis: a grace-sleep
-   presented as a fix; an AND claimed over code that was an OR.)
-2. **Carve-outs state predicates, not names.** A special-case exemption states its
-   membership predicate (e.g. "any verb added after already-scaffolded deployments
-   existed") and mechanically enumerates the members satisfying it; the names are derived,
-   never authored. A carve-out granted to the one member the author happened to meet is
-   how `asof-export` stranded every pre-2026-07-18 deployment while `doctor`, with the
-   identical chronology, was exempted. (ADR-0000's quantification-universe discipline,
-   brought down to the humble compatibility case.)
+Plainly, in the maintainer's own reading at ratification time: *comments and code can
+drift — look out for it.* The reviewer's sharpened form:
+
+**A comment asserting a safety or concurrency property ("belt-and-suspenders",
+"structurally impossible", "harmless no-op", "this race is closed") is itself a claim
+under the witness discipline, and review reads it against the code as adversarially as
+the code is read against the spec.** Passing tests do not discharge it — both specimens
+below ran green. And specifically for races: a fix names its exclusivity primitive — the
+mechanism that makes the bad interleaving impossible (a lock, a bind, an O_EXCL create) —
+and a timing argument (a sleep, a grace window, an "in practice this is fast enough") is
+not one. Witnessed twice in one axis on 2026-07-23: a grace-sleep presented as closing a
+race it only narrowed, and a comment claiming "pid check AND re-probe" over code that was
+an OR.
+
+## Subsidiary clause — carve-outs state predicates, not names
+
+A special-case exemption states its membership predicate (e.g. "any verb added after
+already-scaffolded deployments existed") and mechanically enumerates the members
+satisfying it; the names are derived, never authored. A carve-out granted to the one
+member the author happened to meet is how `asof-export` stranded every pre-2026-07-18
+deployment while `doctor`, with the identical chronology, was exempted. (ADR-0000's
+quantification-universe discipline, brought down to the humble compatibility case.)
 
 ## Relation to neighbors
 
