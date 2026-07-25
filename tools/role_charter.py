@@ -116,7 +116,7 @@ def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
 _CURRENT_LINE_RE = re.compile(r"^\[(\d+)\] (\S+): (.*)$")
 
 
-def parse_current_line(line: str) -> tuple[int, str, str] | None:
+def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
     """One line of `led current <N>` output: `[id] kind: statement` -- bootstrap/templates/
     led.tmpl's own `cmd_recent` print shape.
 
@@ -127,10 +127,17 @@ def parse_current_line(line: str) -> tuple[int, str, str] | None:
     file's DEFAULT_LED already being "./led" (never end-to-end exercised before now).
     `actor_name` has NO served equivalent (`ledger_current` carries only the bare `actor`
     bigint id -- see tools/role_brief.py's own disclosed gap on the identical point); this
-    function now returns a 3-tuple. See `find_current_registrations` for `written_by`."""
+    function now returns a 3-tuple. See `find_current_registrations` for `written_by`.
+
+    Fix round (row 1295, mirrors role_brief.py's 417b200): used to return None on a non-match,
+    silently `continue`d past at both call sites -- a corrupted line could hide a real
+    registration row unnoticed. Now a SHAPE DRIFT, refused loudly, never silently skipped."""
     m = _CURRENT_LINE_RE.match(line)
     if not m:
-        return None
+        raise CharterError(
+            f"SHAPE DRIFT -- `{led_cmd_label}` line does not match the expected `[id] kind: "
+            f"statement` shape; got {line!r}. Refusing rather than silently skipping a row "
+            f"that could hide a real registration.")
     return int(m.group(1)), m.group(2), m.group(3)
 
 
@@ -153,15 +160,13 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
     than one is a real, loudly-reported anomaly (JC4's own hand-written-row caveat; the spec's
     "Honest limits" section names exactly this as uncaught at write time for a hand-authored
     row)."""
+    led_cmd_label = f"{led} current {scan_limit}"
     rc, out, err = run_led(led, ["current", str(scan_limit)])
     if rc != 0:
-        raise CharterError(f"'{led} current {scan_limit}' failed:\n{err.strip() or out.strip()}")
+        raise CharterError(f"'{led_cmd_label}' failed:\n{err.strip() or out.strip()}")
     found = []
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind != "decision":
             continue
         m = STATEMENT_RE.match(statement)
@@ -181,14 +186,12 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
 
 
 def principal_is_registered(led: str, role: str, scan_limit: int) -> bool:
+    led_cmd_label = f"{led} current {scan_limit}"
     rc, out, err = run_led(led, ["current", str(scan_limit)])
     if rc != 0:
-        raise CharterError(f"'{led} current {scan_limit}' failed:\n{err.strip() or out.strip()}")
+        raise CharterError(f"'{led_cmd_label}' failed:\n{err.strip() or out.strip()}")
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        _rid, kind, statement = parsed
+        _rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind != "principal_registered":
             continue
         m = PRINCIPAL_REGISTERED_RE.match(statement)

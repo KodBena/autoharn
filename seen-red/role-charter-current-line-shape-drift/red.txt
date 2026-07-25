@@ -1,0 +1,13 @@
+=== role-charter-current-line-shape-drift: seen-red witness ===
+
+=== R1-pre-fix-corrupt-silently-writes-duplicate-registration ===
+  [ok] exit=0 wrote-duplicate-registration=True (pre-fix commit 417b200, the exact code row 1295 named) -- this is the vacuous pass: an existing in-force registration is invisible because its corrupted `current` line was silently skipped, so JC4's double-registration refusal never fires and a second, conflicting registration is written, exit 0
+
+=== R2-post-fix-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-registration-written=True
+  stderr="role_charter: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-charter-current-line-shape-drift/mock_led.py current 100` line does not match the expected `[id] kind: statement` shape; got 'role-charter role=editor path=roles/editor/CHARTER.md sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a real registration."
+
+=== R3-post-fix-clean-existing-registration-correctly-refused ===
+  [ok] exit=1 names-existing-registration=True no-registration-written=True
+
+all role-charter-current-line-shape-drift cases WITNESSED clean.
