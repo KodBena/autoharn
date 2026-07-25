@@ -28,12 +28,11 @@ Usage:
 from __future__ import annotations
 
 import ast
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
+from _staged_read import read_source_text, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -111,8 +110,14 @@ def violations_in(path: Path, base: Path = REPO, use_tree: bool = False) -> list
 
 
 def tracked_py_files(root: Path) -> list[Path]:
-    r = subprocess.run(["git", "-C", str(root), "ls-files", "*.py"],
-                       capture_output=True, text=True, check=True)
+    """Every git-tracked *.py under `root`, filtered by EXCLUDE_*. Routed through
+    `_staged_read.run_git` (2026-07-26, gates-staged-vs-tree-blindness follow-up finding) rather
+    than a bare `subprocess.run(["git", ...])`, so an inherited GIT_DIR/GIT_WORK_TREE/GIT_PREFIX/
+    GIT_COMMON_DIR (a live pre-commit hook running inside a git WORKTREE) cannot silently
+    misresolve `-C root` the same way it demonstrably can for the staged-blob read this module's
+    READ MODE already fixed."""
+    r = run_git(["-C", str(root), "ls-files", "*.py"],
+                capture_output=True, text=True, check=True)
     files = []
     for line in r.stdout.splitlines():
         p = root / line

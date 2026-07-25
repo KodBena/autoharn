@@ -69,10 +69,18 @@ by default (gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursio
 pattern), falling back to the working-tree file only when a path is not staged at all. Otherwise:
 stage a FRAGMENT/HANDOFF-POSITIONAL defect, restore the previous clean text in the tree without
 re-staging, and this gate would pass on the clean tree bytes while the commit still embeds the
-defect. REPORT mode (whole-repo sweep, never blocking) is unaffected in spirit -- it still reads
-whatever text is presently on disk, since there is no "staged" concept for an unnamed, un-gated
-sweep of the back-catalog; `--tree` is available in gate mode for the same manual/fixture use
-deep_walk_recursion_guard.py's own flag serves.
+defect. REPORT mode (whole-repo sweep, never blocking) reads the WORKING TREE unconditionally, not
+staged bytes -- corrected 2026-07-26 (fresh-context review of this class's own fix caught the
+prior claim false: `main()` used to pass the SAME `use_tree` variable, defaulting False, to
+`check_file` in both modes, so an un-`--tree`'d report-mode run silently preferred whatever was
+staged over whatever was on disk, contradicting this very docstring's own words). Report mode has
+no commit to protect and no touched set of its own -- it exists so a human can see the standing
+back-catalog debt (Rule 4: migrates on touch, never by sweep), and a human reading a whole-repo
+sweep wants the text actually sitting in their working tree, not whatever happens to be staged in
+someone's half-finished `git add`. `main()` therefore forces `use_tree=True` whenever `gate_mode`
+is false, regardless of whether `--tree` was passed (harmless if it was: same effect, stated
+explicitly rather than left to rely on the flag). GATE mode is unchanged: `--tree` remains
+available there for the same manual/fixture use deep_walk_recursion_guard.py's own flag serves.
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """
 from __future__ import annotations
@@ -216,6 +224,13 @@ def main(argv: list[str]) -> int:
             targets.append(p)
     else:
         targets = _repo_markdown_files()
+        # Report mode reads the WORKING TREE unconditionally (module docstring's READ MODE
+        # section, corrected 2026-07-26): there is no touched set or pending commit to protect
+        # here, so a whole-repo sweep should show a human what is actually on disk, not whatever
+        # a half-finished `git add` happens to have staged. Overrides `--tree`'s own value (a
+        # no-op when it was already passed) rather than leaving report mode's correctness
+        # dependent on the caller remembering the flag.
+        use_tree = True
 
     all_violations: list[str] = []
     for p in targets:

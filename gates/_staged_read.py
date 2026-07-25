@@ -56,7 +56,10 @@ edge case reintroduces prefix sensitivity this fixture's own reproduction did no
 exercise.
 
 Every function here is a pure I/O primitive — no gate-specific policy, no violation logic. Each
-gate keeps its own AST/regex/JSON checks; only WHERE THE BYTES COME FROM moves here.
+gate keeps its own AST/regex/JSON checks; only WHERE THE BYTES COME FROM moves here. `run_git`
+(below `_subprocess_env`) is the same stripped-env guarantee extended to every OTHER git
+subprocess call a gate makes (file enumeration, submodule status), not only the staged-blob read
+-- see its own docstring for the finding that added it.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """
@@ -78,6 +81,28 @@ def _subprocess_env() -> dict[str, str]:
     subprocess this module spawns so `-C` governs repository discovery unambiguously, regardless
     of what an enclosing git hook invocation left in the environment."""
     return {k: v for k, v in os.environ.items() if k not in _STRIP_GIT_ENV}
+
+
+def run_git(args: list, **kwargs):
+    """`git <args>` run with THIS module's stripped env (`_subprocess_env()`) unless the caller
+    already supplies its own `env=` -- the shared runner for every OTHER git enumeration call in
+    the pre-commit chain, not just the staged-blob read above. Added 2026-07-26 closing a MINOR
+    finding from the fresh-context review of this class's own fix (gates-staged-vs-tree-blindness,
+    ledger row 1234): gates/link_integrity.py's `tracked_md`/`uninitialized_submodules`,
+    gates/no_lazy_imports.py's `tracked_py_files`, gates/max_lines.py's `tracked_scope_files`, and
+    gates/doc_attestation_presence.py's `_tracked_md` each ran their own `git -C <root> ls-files`
+    (or `submodule status`) enumeration via a bare `subprocess.run(["git", ...])` -- bypassing
+    this module's env stripping entirely. Harmless TODAY only by coincidence: none of those calls
+    happen to run in a context where an inherited GIT_DIR/GIT_WORK_TREE/GIT_PREFIX/GIT_COMMON_DIR
+    flips `-C`'s repository discovery the way the staged-blob read's own `rev-parse
+    --show-toplevel` call demonstrably does (see `read_staged_bytes`'s docstring and
+    seen-red/gates-staged-vs-tree-blindness/run_fixtures.py's GIT_DIR-worktree case) -- but it is
+    the SAME fragility class, closed here rather than left standing on that coincidence. Every
+    caller above (`read_staged_bytes` et al.) is left calling `subprocess.run` directly rather
+    than rerouted through this wrapper, to keep this change additive and their own already-
+    reviewed code untouched byte-for-byte."""
+    kwargs.setdefault("env", _subprocess_env())
+    return subprocess.run(["git", *args], **kwargs)
 
 
 def read_staged_bytes(path: Path) -> bytes | None:

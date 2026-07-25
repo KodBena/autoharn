@@ -102,12 +102,11 @@ staged bytes. Pass `--tree` to force the working-tree read unconditionally inste
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _staged_read import read_source_bytes  # noqa: E402  (gates/_staged_read.py, the shared home)
+from _staged_read import read_source_bytes, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -206,7 +205,13 @@ BASELINE: dict[str, int] = {
     # parameter and its own read-mode docstring paragraph explaining the fail-open direction this
     # closes. Genuinely new decision-boundary logic and its own reasoning, not padding. Written
     # plain, no golfing (ADR-0007's no-go clause); witnessed growth.
-    "gates/doc_attestation_presence.py":                873,
+    # Reconciled +27 to 900 (2026-07-26 fix round, fresh-context review of the above commission's
+    # own fix): `_tracked_md` routed through `_staged_read.run_git` (finding 4, a bypass-the-
+    # stripped-env hazard found in the same six-gate family this file belongs to); report mode's
+    # READ MODE docstring paragraph corrected and aligned with gates/doc_shapes.py's identical
+    # fix (finding 3); `main()`'s report-mode branch forces `use_tree=True`. Genuinely new
+    # decision logic and its own reasoning, not padding. Witnessed growth.
+    "gates/doc_attestation_presence.py":                900,
     # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
     # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
@@ -339,7 +344,12 @@ BASELINE: dict[str, int] = {
     # Genuinely new decision logic and its own reasoning, not padding. Written plain, no golfing
     # (ADR-0007's no-go clause); the exact count below is measured AFTER this comment is in
     # place, not guessed.
-    "gates/max_lines.py":                                425,
+    # Reconciled again, 2026-07-26 fix round (fresh-context review of the above commission's own
+    # fix): `tracked_scope_files` routed through `_staged_read.run_git` (finding 4) plus its own
+    # BASELINE entry and this comment for gates/doc_attestation_presence.py's parallel reconciling
+    # -- the same self-measuring-census cost paid again, one commission later. Exact count below
+    # measured AFTER every edit in this file is in place, not guessed.
+    "gates/max_lines.py":                                438,
 }
 
 
@@ -362,9 +372,12 @@ def evaluate(rel_path: str, count: int, baseline: dict[str, int] = BASELINE) -> 
 
 
 def tracked_scope_files(root: str) -> list[str]:
-    """Every git-tracked *.py path (relative to `root`) under SCOPE_PREFIXES, minus EXCLUDE_*."""
-    r = subprocess.run(["git", "-C", root, "ls-files", "*.py"],
-                       capture_output=True, text=True, check=True)
+    """Every git-tracked *.py path (relative to `root`) under SCOPE_PREFIXES, minus EXCLUDE_*.
+    Routed through `_staged_read.run_git` (2026-07-26 follow-up finding), not a bare
+    `subprocess.run(["git", ...])` -- an inherited GIT_DIR (a live worktree hook) must not
+    misresolve `-C root` the way it demonstrably can for the staged-blob read above."""
+    r = run_git(["-C", root, "ls-files", "*.py"],
+                capture_output=True, text=True, check=True)
     out: list[str] = []
     for line in r.stdout.splitlines():
         if not any(line.startswith(p) for p in SCOPE_PREFIXES):

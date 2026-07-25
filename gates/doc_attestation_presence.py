@@ -234,7 +234,21 @@ while the commit actually embeds the un-attested edit. `--tree` forces the worki
 the doc's bytes unconditionally instead (gate mode only; `classify()`/`discover_md()`, the
 deployment-facing three-way read used by `attest-doc check`/`distance-to-clean`, are unaffected
 -- those already read a DIFFERENT tree's bytes by design, a deployment with no git-staging
-concept of its own, see `discover_md`'s own docstring). The ATTESTATION LEDGER itself
+concept of its own, see `discover_md`'s own docstring).
+
+REPORT mode (repo-wide, never blocking) reads the WORKING TREE unconditionally, not staged bytes
+-- aligned 2026-07-26 with gates/doc_shapes.py's own identical correction, caught by the same
+fresh-context review pass: `main()` used to thread the SAME `use_tree` variable (defaulting False)
+into `check_file`/`_has_waiver` in BOTH gate and report mode, so an un-`--tree`'d report-mode
+sweep silently preferred a doc's staged bytes over its on-disk text whenever the two differed.
+This docstring never explicitly claimed report mode read the tree the way doc_shapes.py's prior
+text did -- so there was no FALSE claim here, only the same underlying behavioral mismatch -- but
+the reasoning for closing it is identical: report mode has no commit to protect and exists only
+so a human can see the standing attestation debt (Rule 4: migrates on touch, never by sweep), so
+it should show what is actually on disk, not a half-finished `git add`'s staged content. `main()`
+now forces `use_tree=True` whenever `gate_mode` is false, the same device doc_shapes.py uses; GATE
+mode is unchanged, `--tree` remains available there exactly as documented above. The ATTESTATION
+LEDGER itself
 (`attestations/doc-legibility-attestations.jsonl`) is deliberately left a plain working-tree
 read: a record is appended by `--record` as its own, separate, already-committed act (never
 staged in the SAME commit as the doc edit it attests, by this discipline's own two-step design),
@@ -253,7 +267,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _staged_read import read_source_bytes  # noqa: E402  (gates/_staged_read.py, the shared home)
+from _staged_read import read_source_bytes, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = REPO_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
@@ -308,8 +322,15 @@ ADJUDICATION_FIELDS = ("adjudicated_by", "disposition", "adjudicated_at")
 
 
 def _tracked_md() -> list[str]:
-    r = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "*.md"],
-                        capture_output=True, text=True, check=True)
+    """Every git-tracked *.md under REPO_ROOT (this repo's own commit-time universe -- see
+    `discover_md` above for the DEPLOYMENT-facing, non-git-required sibling). Routed through
+    `_staged_read.run_git` (2026-07-26): this call site was not itself named in the
+    gates-staged-vs-tree-blindness follow-up finding that flagged the sibling gates' own
+    `tracked_*` enumerations, but it is the identical bare `subprocess.run(["git", "-C",
+    ROOT, "ls-files", ...])` shape, in one of the SAME six converted gates -- routed here too
+    rather than left on the same coincidence the finding named for the others."""
+    r = run_git(["-C", str(REPO_ROOT), "ls-files", "*.md"],
+                capture_output=True, text=True, check=True)
     return [ln for ln in r.stdout.splitlines() if ln.strip()]
 
 
@@ -788,6 +809,12 @@ def main(argv: list[str]) -> int:
             targets.append(_rel(p))
     else:
         targets = _tracked_md()
+        # Report mode reads the WORKING TREE unconditionally (module docstring's READ MODE
+        # section, aligned 2026-07-26 with gates/doc_shapes.py's identical fix): no touched set,
+        # no commit to protect -- a whole-repo debt sweep should show what a human actually has
+        # on disk, not whatever a half-finished `git add` happens to have staged. Overrides
+        # `--tree`'s own value (a no-op if it was already passed).
+        use_tree = True
 
     scope = [t for t in targets if in_scope(t)]
     excluded = [t for t in targets if not in_scope(t)]

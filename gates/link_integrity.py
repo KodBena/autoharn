@@ -91,16 +91,27 @@ this gate finds `[text](target)` occurrences -- is read from its STAGED bytes by
 stage a doc edit that introduces a broken link, then restore the previous (clean) version in the
 tree without re-staging, and a tree-reading gate would pass on the clean bytes while the commit
 still embeds the broken link. Pass `--tree` to force the working-tree read of every scanned doc
-instead. The TARGET existence check (`os.path.exists(resolved)`) is deliberately left reading the
-literal filesystem in both modes: it answers "would a reader clicking this link, on the tree this
+instead. The TARGET existence check is primarily `os.path.exists(resolved)` -- the literal
+filesystem, in both modes: it answers "would a reader clicking this link, on the tree this
 commit produces, find something there" -- a question about the repository's LAYOUT after the
 commit lands, which is what the working tree (or, for a target that is itself staged content
 under a fresh path, the same tree once the commit is applied) actually is; there is no sound
-"staged existence" query for an arbitrary target path the way there is for one gate's own known
-subject file. Named residue, not silently glossed: a target path that is itself staged-but-not-
-yet-in-the-tree (a same-commit new file whose creation hasn't touched disk, e.g. content piped
-straight into `git add --edit`-style flows) is outside this gate's read-mode fix, same class as
-the already-declared `/local/`/uninitialized-submodule residues above.
+general "staged existence" query for an arbitrary target path the way there is for one gate's own
+known subject file (directories, gitignored `/local/` targets, and submodule gitlinks have no
+useful index-only existence signal of their own). ONE additional check rides on top of the disk
+check, closing a real DELETE-direction gap a fresh-context review reproduced (2026-07-26):
+`staged_deletions()` treats a target that is STAGED FOR REMOVAL (`git rm --cached target.md`,
+file still physically present, now untracked) as not-existing even though `os.path.exists` alone
+would say otherwise -- without this, the commit genuinely orphans the link while the gate reports
+clean. Named residue, not silently glossed, for the ADD direction (the disk check's remaining
+honest gap, not closed by the above): a target path that is itself staged-but-not-yet-in-the-tree
+(a same-commit new file whose creation hasn't touched disk, e.g. content piped straight into
+`git add --edit`-style flows) is outside this gate's read-mode fix, same class as the
+already-declared `/local/`/uninitialized-submodule residues above. The DELETE direction is closed
+(see `staged_deletions()`); the ADD direction is disclosed, not closed -- asymmetric on purpose:
+a staged deletion of an EXISTING target is common and mechanically detectable from `git diff
+--cached --diff-filter=D` alone, while a staged-but-never-touched-disk ADD is a rare plumbing
+pattern with no equally cheap general test.
 Lazy imports banned.
 """
 from __future__ import annotations
@@ -113,7 +124,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
+from _staged_read import read_source_text, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -147,10 +158,35 @@ _SCHEMES = {"http", "https", "mailto", "ftp", "ftps", "tel"}
 
 
 def tracked_md() -> list[str]:
-    """Every git-tracked *.md, repo-relative — the same universe doc-legibility.py settled on."""
-    r = subprocess.run(["git", "-C", ROOT, "ls-files", "*.md"],
-                        capture_output=True, text=True, check=True)
+    """Every git-tracked *.md, repo-relative — the same universe doc-legibility.py settled on.
+    Routed through `_staged_read.run_git` (2026-07-26, gates-staged-vs-tree-blindness follow-up
+    finding) rather than a bare `subprocess.run(["git", ...])`, so an inherited GIT_DIR/
+    GIT_WORK_TREE/GIT_PREFIX/GIT_COMMON_DIR (a live pre-commit hook running inside a git
+    WORKTREE) cannot silently misresolve `-C ROOT` the same way it demonstrably can for the
+    staged-blob read this module already fixed."""
+    r = run_git(["-C", ROOT, "ls-files", "*.md"],
+                capture_output=True, text=True, check=True)
     return [ln for ln in r.stdout.splitlines() if ln.strip()]
+
+
+def staged_deletions() -> set[str]:
+    """Repo-relative paths staged for deletion in this commit (`git diff --cached
+    --diff-filter=D --name-only`) -- closes the DELETE-direction staged-vs-tree gap a
+    fresh-context review caught (2026-07-26): `git rm --cached target.md` stages the removal of
+    a link's TARGET while the file remains physically on disk (now untracked) -- so
+    `os.path.exists(resolved)` alone reports "still there" even though the commit this gate is
+    guarding removes it from the repository the link points into. A link target is therefore
+    only treated as existing when it is BOTH present on disk (the existing check, still needed
+    for directories, gitignored-/local/, and uninitialized-submodule targets — none of which
+    have a meaningful "staged" existence of their own) AND not itself staged for removal.
+    Returns an empty set (nothing to additionally exclude) on any git error, same fail-open-to-
+    the-ordinary-disk-check posture as `uninitialized_submodules()` above for a repo with
+    nothing staged."""
+    r = run_git(["-C", ROOT, "diff", "--cached", "--diff-filter=D", "--name-only"],
+                capture_output=True, text=True)
+    if r.returncode != 0:
+        return set()
+    return {ln for ln in r.stdout.splitlines() if ln.strip()}
 
 
 def in_scope(rel: str) -> bool:
@@ -167,8 +203,8 @@ def uninitialized_submodules() -> set[str]:
     submodule; ` `/`+` mean populated (clean/dirty). Returns an empty set (nothing to flag) for
     a repo with no `.gitmodules` at all — `git submodule status` then exits nonzero or prints
     nothing, either way there is no gitlink to reason about."""
-    r = subprocess.run(["git", "-C", ROOT, "submodule", "status"],
-                        capture_output=True, text=True)
+    r = run_git(["-C", ROOT, "submodule", "status"],
+                capture_output=True, text=True)
     if r.returncode != 0:
         return set()
     paths = set()
@@ -264,6 +300,7 @@ def main() -> int:
     scope = [f for f in all_tracked if in_scope(f)]
     excluded = [f for f in all_tracked if not in_scope(f)]
     uninit_submodules = uninitialized_submodules()
+    staged_deleted = staged_deletions()
 
     broken: list[tuple[str, int, str]] = []      # (rel, line, target)
     anchor_flags: list[tuple[str, int, str]] = []  # (rel, line, target) — informational only
@@ -283,8 +320,13 @@ def main() -> int:
                 total_links += 1
                 path_part, anchor = classified
                 resolved = resolve(path, path_part)
-                if not os.path.exists(resolved):
-                    rel_to_root = os.path.relpath(resolved, ROOT)
+                rel_to_root = os.path.relpath(resolved, ROOT)
+                # A target staged for deletion (`git rm --cached target.md`) is treated as NOT
+                # existing even when the file is still physically on disk -- the commit this
+                # gate guards removes it from the tree the link's target lives in, so an
+                # on-disk-only check alone would silently clear a genuinely orphaning commit
+                # (DELETE-direction staged-vs-tree finding, 2026-07-26; see `staged_deletions()`).
+                if not os.path.exists(resolved) or rel_to_root in staged_deleted:
                     sm = under_submodule(rel_to_root, uninit_submodules)
                     if rel_to_root == "local" or rel_to_root.startswith("local" + os.sep):
                         local_flags.append((rel, ln, m.group(1)))
