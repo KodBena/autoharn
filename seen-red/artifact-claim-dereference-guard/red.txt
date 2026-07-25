@@ -99,3 +99,48 @@ against this fixture, both witnessed live against scratch (HARNESS_PGHOST=192.16
 
 Witnessed live, scratch only, all 8 cases green against the current (gap-carrying) CLI shape --
 see this commit's own message for the run's exact output.
+
+---
+
+2026-07-25 dated note (row 1245's own repair, this session): RED-FIRST capture against the
+served CLI BEFORE `_evidence_dereference_violation`/`_warn_path_shaped_in_statement` were added
+to bootstrap/templates/led.tmpl -- this is the fixture AS IT STOOD after the 2026-07-23
+REDISCOVERED-GAP rewrite above, run against the pre-repair led.tmpl (scratch, HARNESS_PGHOST=
+192.168.122.1):
+
+# REDISCOVERED-GAP-DEAD-EVIDENCE-PATH -- a dead --evidence path used to REFUSE; row 1245: the guard is gone, so it is now silently ACCEPTED. Named, not silenced.
+  [FAIL] OBSERVED: guard does NOT refuse (exit 0)
+  [FAIL] OBSERVED: a row WAS written (max id advanced by one) -- the gap, reproduced
+  [FAIL] OBSERVED: no teach-text about the 896-899 specimen class (nothing to cite -- the guard was never consulted)
+# REDISCOVERED-GAP-BARE-DIRECTORY-EVIDENCE -- a bare (no trailing slash) EXISTING directory used to REFUSE; row 1245: now silently ACCEPTED. Named, not silenced.
+  [ok] OBSERVED: guard does NOT refuse the bare directory (exit 0)
+  [ok] OBSERVED: a row WAS written (max id advanced by one) -- the gap, reproduced
+# REDISCOVERED-GAP-STATEMENT-PATH-NO-WARNING -- a dead path-shaped token in STATEMENT prose used to WARN-but-write; row 1245: it still writes, but the warning no longer fires at all (the scanner is gone). Named, not silenced.
+  [ok] write still succeeds (exit 0, unaffected)
+  [FAIL] OBSERVED: NO warning is printed at all (the scanner does not exist -- the gap, reproduced; this is NOT the guard correctly staying silent, it is the guard being absent)
+# REDISCOVERED-GAP-STATEMENT-MULTI-PATH-NO-WARNING -- THREE dead path-shaped tokens in one STATEMENT used to fire ONE preamble + a list (AUTOHARN_BACKFLOW finding 5's own fix); row 1245: now NO warning fires at all, for any count. Named, not silenced.
+  [ok] write still succeeds (exit 0, unaffected)
+  [FAIL] OBSERVED: NO preamble line fires (finding 5's own fix has nothing left to regress -- there is no warning mechanism left to over-print)
+  [FAIL] OBSERVED: none of the three tokens are echoed in a warning list (nothing scans for them)
+
+SPECIMEN INERT -- 6 check(s) failed against the OBSERVED CURRENT BEHAVIOR the fixture asserted
+at that point (the gap, faithfully reproduced): the guard/scanner were absent exactly as row
+1245 named.
+
+A SECOND, SEPARATE fixture bug was found and fixed in the SAME repair pass while banking this
+capture: the 2026-07-23 SCRATCH REWIRE had silently truncated the bare-directory probe's own
+value from the original fixture's "bootstrap/templates" (a real path with a "/", git show
+6361c82) down to a bare "bootstrap" -- which is not PATH-SHAPED at all by this guard's own rule
+(no leading `/`/`./`, no `/` anywhere), so that case's assertions were VACUOUS even before this
+row's repair (never actually exercising the directory-vs-file check either polarity). Fixed by
+switching to ".claude/logs", a real existing directory every `--new-world` scaffold carries that
+genuinely contains a "/". Re-run against the SAME pre-repair led.tmpl after that fixture fix:
+
+# REDISCOVERED-GAP-BARE-DIRECTORY-EVIDENCE -- (corrected probe value)
+  [ok] OBSERVED: guard does NOT refuse the bare directory (exit 0)
+  [ok] OBSERVED: a row WAS written (max id advanced by one) -- the gap, reproduced
+
+After the repair (guard/scanner reimplemented in cmd_generic/cmd_review), the SAME fixture (with
+its REDISCOVERED-GAP-* case bodies flipped to assert the guard holds, this session) goes fully
+green, all 8 cases, real led round-trips verified, scratch torn down to zero residue -- see this
+session's own commit for the green capture.

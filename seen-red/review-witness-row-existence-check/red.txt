@@ -1,0 +1,70 @@
+Banked RED evidence for ledger item `review-witness-row-existence-check` (row 1600's CLI-side
+sibling). Captured by running seen-red/review-witness-row-existence-check/run_fixtures.py against
+the PRE-FIX bootstrap/templates/led.tmpl (git HEAD as of this session's start, i.e. the version
+that already carries kernel/lineage/s48-review-witness-existence.sql wired into the birth chain,
+but no CLI-side pre-flight of any kind over --review-witness), scratch, HARNESS_PGHOST=
+192.168.122.1:
+
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+# CLI-EXISTENCE-REFUSE -- --review-witness citing a NONEXISTENT row:<id> (the exact 2026-07-18 incident shape) MUST REFUSE, before any write is attempted.
+  [ok] REFUSED (nonzero exit)
+  [FAIL] no row written at all (max id unchanged -- refused CLI-side, before the kernel is ever reached, unlike a kernel-level refusal which still journals a write_refused row and DOES advance the max id)
+  [ok] teach-text cites the missing id
+  [ok] teach-text cites s48/row 1600
+# CLI-SANITY-WRONG-KIND-REFUSE -- --review-witness citing an EXISTING row that is NOT a 'review' row (a work_opened row, here) MUST REFUSE -- the sanity leg s48 itself does not provide.
+  [FAIL] REFUSED (nonzero exit)
+  [FAIL] no row written at all (max id unchanged)
+  [FAIL] teach-text names the actual (wrong) kind
+# CLI-GREEN-VALID-REVIEW -- --review-witness citing a REAL, EXISTING 'review' row MUST ACCEPT.
+  [ok] ACCEPTED (exit 0)
+  [ok] a row WAS written (max id advanced)
+# CLI-GREEN-FREE-PROSE-UNTOUCHED -- --review-witness with NO row:<id> token (free prose) MUST ACCEPT, untouched -- the scope boundary (s48's own WK1-c sibling).
+  [ok] ACCEPTED (exit 0)
+  [ok] a row WAS written (max id advanced)
+# RESOLVE-VIOLATION-EXISTENCE-REFUSE -- the SAME existence check via `led work resolve-violation`'s own --review-witness (a genuine depends_on_unknown_slug violation, answered with a nonexistent row:<id>) MUST REFUSE.
+  [ok] REFUSED (nonzero exit)
+  [FAIL] no row written (max id unchanged)
+  [ok] teach-text cites the missing id
+# RESOLVE-VIOLATION-GREEN-VALID -- the same violation, answered with a REAL existing review row's id, MUST ACCEPT.
+  [ok] ACCEPTED (exit 0)
+  [ok] a row WAS written (max id advanced)
+
+SPECIMEN RED -- 5 check(s) failed: ['no row written at all (max id unchanged -- refused CLI-side,
+before the kernel is ever reached, unlike a kernel-level refusal which still journals a
+write_refused row and DOES advance the max id)', 'REFUSED (nonzero exit)', 'no row written at all
+(max id unchanged)', 'teach-text names the actual (wrong) kind', 'no row written (max id
+unchanged)']
+
+WHAT THIS SHOWS, HONESTLY:
+  - CLI-EXISTENCE-REFUSE: the EXISTENCE half was already caught (s48's kernel trigger refuses a
+    nonexistent row:<id>, a round trip away) -- but the max id STILL advances pre-fix, because a
+    kernel-level refusal is journaled as a committed write_refused row (s43's own typed-verdict
+    architecture); the CLI-side pre-flight this item adds catches it BEFORE any write is
+    attempted at all, so post-fix the max id does not move even by a write_refused row.
+  - CLI-SANITY-WRONG-KIND-REFUSE: this is the REAL, previously-unclosed gap -- s48 itself
+    deliberately checks EXISTENCE only ("this delta narrows WHICH OF THOSE ROWS are admitted, it
+    does not widen which kinds may carry the column" -- its own header), so citing an EXISTING
+    but wrong-kind row (a work_opened row, here) was SILENTLY ACCEPTED pre-fix, in full: exit 0,
+    a real work_closed row landed, citing an unrelated row's id as if it were a review. This is
+    the specific residual hazard this item's CLI-side sanity leg closes.
+  - RESOLVE-VIOLATION-EXISTENCE-REFUSE: same shape as CLI-EXISTENCE-REFUSE, exercised through the
+    sibling verb.
+
+A SECOND, SEPARATE fixture-authoring bug was found and fixed while capturing this red evidence:
+`led work resolve-violation <violating-act-id> ...`'s first positional is the VIOLATING ACT's own
+ledger row id (the work_depends_on edge's own id, matching `work_item_violations.target_id`) --
+NOT the work item's slug. An earlier draft of this fixture passed the slug there, which derives
+ZERO matching violation classes and refuses for an UNRELATED reason ("not currently an in-force
+work_item_violations member") before ever reaching the review-witness check at all -- caught and
+fixed (now threads the depends-edge's own row id) before this red capture was banked.
+
+A THIRD thing caught the same way: the FIRST draft of CLI-EXISTENCE-REFUSE/CLI-SANITY-WRONG-KIND-
+REFUSE closed a slug that was never opened/claimed -- `cmd_work_close`'s own PRE-EXISTING
+claim-before-close gate (`_slug_claimant`) refuses an unclaimed slug for a completely unrelated
+reason before the review-witness check is ever reached, which would have made those cases "pass"
+red for the wrong reason. Fixed by opening + claiming the slug being closed before each probe.
+
+After the fix (`_review_witness_violation` wired into both `cmd_work_close` and
+`cmd_work_resolve_violation`), the same fixture goes fully green, all 6 cases, real led
+round-trips verified, scratch torn down to zero residue -- see this session's own commit for the
+green capture.

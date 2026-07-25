@@ -125,6 +125,7 @@ REGISTRY: dict[str, str] = {
     "led-json-payload-mode":          "seen-red/led-json-payload-mode/run_fixtures.py",
     "led-work-list-state-filter":     "seen-red/led-work-list-state-filter/run_fixtures.py",
     "resolve-violation-class-ambiguity": "seen-red/resolve-violation-class-ambiguity/run_fixtures.py",
+    "review-witness-row-existence-check": "seen-red/review-witness-row-existence-check/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
     "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",
     "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",
