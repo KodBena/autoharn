@@ -1,0 +1,13 @@
+=== role-brief-current-line-shape-drift: seen-red witness ===
+
+=== R1-pre-fix-corrupt-silently-renders-active ===
+  [ok] exit=0 STANDING-shows-ACTIVE=True (pre-fix commit a2750f6, the exact code the fresh-context review examined) -- this is the vacuous-pass the review caught: a role suspended in the ledger renders as an ACTIVE, exit-0 brief because the corrupted line was silently skipped
+
+=== R2-post-fix-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-standing-rendered=True
+  stderr="role_brief: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-brief-current-line-shape-drift/mock_led.py current 100` line does not match the expected `[id] kind: statement` shape; got 's45 suspended (reason: scratch fixture) -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a standing change."
+
+=== R3-post-fix-clean-suspension-renders-at-top ===
+  [ok] exit=0 SUSPENDED-line-present=True STANDING-before-IN-FORCE-DECISIONS=True
+
+all role-brief-current-line-shape-drift cases WITNESSED clean.

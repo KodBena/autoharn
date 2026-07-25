@@ -165,6 +165,7 @@ REGISTRY: dict[str, str] = {
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "legacy-led-retirement-round1-fixes": "seen-red/legacy-led-retirement-round1-fixes/run_fixtures.py",
     "led-garbage-statement-guard":     "seen-red/led-garbage-statement-guard/run_fixtures.py",
+    "role-brief-current-line-shape-drift": "seen-red/role-brief-current-line-shape-drift/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "deep-walk-recursion-guard":       "seen-red/deep-walk-recursion-guard/run_fixtures.py",

@@ -114,13 +114,19 @@ def require_led(led: str, args: list[str]) -> str:
     return out
 
 
-def parse_current_line(line: str) -> tuple[int, str, str] | None:
-    """`led current <N>`/`led --recent <N>`: `[id] kind: statement` -- byte-identical to
-    role_charter.py's own parse_current_line (duplicated, no cross-import). No actor field
-    exists on this line -- see JB5."""
+def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
+    """`led current <N>`/`led --recent <N>`: `[id] kind: statement`. No actor field exists on
+    this line -- see JB5.
+
+    Fix round (fresh-context review, BLOCKS MERGE, SEVERE): used to return None on a non-match,
+    silently `continue`d past at every call site -- a corrupted line could hide a real SUSPENDED
+    row and render ACTIVE, exit 0 (F49). Now mirrors parse_json_lines: unrecognized shape is a
+    SHAPE DRIFT, refused loudly, never silently skipped."""
     m = _CURRENT_LINE_RE.match(line)
     if not m:
-        return None
+        raise BriefError(f"SHAPE DRIFT -- `{led_cmd_label}` line does not match the expected "
+                          f"`[id] kind: statement` shape; got {line!r}. Refusing rather than "
+                          f"silently skipping a row that could hide a standing change.")
     return int(m.group(1)), m.group(2), m.group(3)
 
 
@@ -177,13 +183,11 @@ def resolve_role_actor_id(led: str, role: str, scan_limit: int) -> int:
     (registration_write(): `principal_subject` IS the new principal's id; statement is the
     fixed "principal '<name>' registered (class <class>)" text). Permanent, never superseded,
     so at most one match is expected; the first encountered is used."""
+    led_cmd_label = f"{led} current {scan_limit}"
     out = require_led(led, ["current", str(scan_limit)])
     reg_row_id: int | None = None
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind != "principal_registered":
             continue
         m = PRINCIPAL_REGISTERED_RE.match(statement)
@@ -216,13 +220,11 @@ STANDING_TITLE = ("STANDING (leads: a suspension/revocation must be learned from
 
 
 def build_standing_section(led: str, role: str, scan_limit: int) -> str:
+    led_cmd_label = f"{led} current {scan_limit}"
     out = require_led(led, ["current", str(scan_limit)])
     newest_row: tuple[int, str] | None = None  # (id, disposition-text)
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind == "principal_suspended":
             m = SUSPENDED_RE.match(statement) or LIFTED_RE.match(statement)
             if m and m.group(1) == role:
@@ -259,13 +261,11 @@ def build_decisions_section(led: str, role: str, role_actor_id: int, scan_limit:
           f"carry no actor field (JB5): issues one `led show` per scanned row, up to "
           f"--scan-limit={scan_limit}. Pass a smaller --scan-limit on a large ledger if slow.",
           file=sys.stderr)
+    led_cmd_label = f"{led} current {scan_limit}"
     out = require_led(led, ["current", str(scan_limit)])
     lines = []
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         show_out = require_led(led, ["show", str(rid)])
         detail = parse_served_show(show_out)
         actor_id = _actor_id_from_show(detail, rid, f"{led} show {rid}")
