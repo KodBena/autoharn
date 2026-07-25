@@ -5,6 +5,16 @@ ledger row 1286; ADR-0018's no-front-loading deliberately varied BY the commissi
 maintainer — the sketch was received AS the thing to refute). Awaiting the maintainer's read.
 Removal condition: superseded by his disposition of rows 1285/1286. -->
 
+**Commissioning defect, disclosed 2026-07-25 (orchestrator, after the maintainer flagged
+it).** The commissioning brief carried the clause "CONSTRAINTS, exactly as the maintainer
+stated them and no further" — an orchestrator over-correction (swung from the row-1288
+contamination, where the brief had ADDED an unstated constraint) that clamped the
+consultant's own professional judgment about what constraints the evidence supports. The
+maintainer identified this as the malicious-compliance shape ADR-0013's 2026-06-24
+amendment names: the letter of his correction executed in a way that forecloses the good
+work it asked for. This document's analysis was produced under that clamp; whether it is
+readable as-is or the consult re-runs under a repaired brief is the maintainer's call.
+
 **Provenance.** Fresh-context Fable consult, 2026-07-25. Commission: ledger rows 1285/1286
 (the maintainer's sketch and his own request to destroy it, both verbatim there). Read-only
 consult; this file is the one write. Sources read this pass: CLAUDE.md; ADR-0014, 0018, 0020

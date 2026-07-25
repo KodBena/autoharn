@@ -772,6 +772,14 @@ claims.
    local ratifier judicious (ceiling 6 — governance).
 9. In a solo deployment both sides' records are written by machinery one operator
    controls — complete and attributed, not adversarially independent (s17's honesty).
+10. *(added 2026-07-25, from the final-round review)* Under genuine multi-writer
+    contention the s26 per-schema advisory lock serializes every ledger insert, so a
+    losing writer's wait can chain past its `statement_timeout` and surface as a raw
+    `QueryCanceled` rather than the typed teaching §2.4 promises — the exactly-once
+    property holds (never >1 accepted), but the loser's error is untaught in that
+    window. Witnessed in the 3-way race fixture, which accepts this outcome for a
+    loser explicitly; a typed teaching for the timeout path is a named follow-on,
+    not v1 scope.
 
 ## 13. Construction decisions the ratified text under-determined — THE ATTENTION POINTS
 
