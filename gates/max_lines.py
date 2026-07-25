@@ -88,14 +88,26 @@ Census-registered in gates/fixture_census.py under "max-lines".
 Exit 0 clean (prints a one-line summary); exit 1 listing every breach as
 `path: <N> lines (<reason>)`.
 
-Usage: python3 gates/max_lines.py [root]      # default: repo root, git-tracked *.py in SCOPE
+Usage: python3 gates/max_lines.py [root] [--tree]  # default: repo root, git-tracked *.py in SCOPE
 Lazy imports banned.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): line count is a property of a
+file's BYTES, so this gate reads each file's STAGED bytes by default
+(gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's own pattern),
+falling back to the working-tree file only when a path is not staged at all. Otherwise: stage a
+file that grows past its ratchet, restore a short version in the tree without re-staging, and
+this gate would pass on the tree's line count while the commit still embeds the over-ratchet
+staged bytes. Pass `--tree` to force the working-tree read unconditionally instead.
 """
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_bytes  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -188,7 +200,13 @@ BASELINE: dict[str, int] = {
     "engine/judgment_registry.py":                      889,
     "tools/experiments/compound_nominal_scan2.py":      869,
     "hooks/demurral_detect.py":                         837,
-    "gates/doc_attestation_presence.py":                837,
+    # Reconciled +36 to 873 (gates-staged-vs-tree-blindness, ledger row 1234, this commission):
+    # `check_file` now reads its STAGED bytes (`_content_sha256_for_commit`, threading `use_tree`
+    # through, plus the shared `_staged_read` import); `_has_waiver` gained the same `use_tree`
+    # parameter and its own read-mode docstring paragraph explaining the fail-open direction this
+    # closes. Genuinely new decision-boundary logic and its own reasoning, not padding. Written
+    # plain, no golfing (ADR-0007's no-go clause); witnessed growth.
+    "gates/doc_attestation_presence.py":                873,
     # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
     # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
@@ -311,6 +329,17 @@ BASELINE: dict[str, int] = {
     "tools/setup_tui/runner.py":                        405,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
+    # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
+    # gate's OWN file crossed 400 for the first time carrying its own read-mode conversion --
+    # `line_count` now reads STAGED bytes via `_staged_read.read_source_bytes` (with the
+    # errors="replace" decode preserved manually, since that helper makes no encoding
+    # assumption), `main()` grew the `--tree`/root-arg split, and this very row (plus its own
+    # explanatory comment) is the ratchet-bootstrapping cost every self-measuring census gate
+    # pays (gates/fixture_census.py's own registry carries the identical self-reference).
+    # Genuinely new decision logic and its own reasoning, not padding. Written plain, no golfing
+    # (ADR-0007's no-go clause); the exact count below is measured AFTER this comment is in
+    # place, not guessed.
+    "gates/max_lines.py":                                425,
 }
 
 
@@ -348,20 +377,24 @@ def tracked_scope_files(root: str) -> list[str]:
     return out
 
 
-def line_count(path: str) -> int:
-    with open(path, encoding="utf-8", errors="replace") as f:
-        return len(f.read().splitlines())
+def line_count(path: str, use_tree: bool = False) -> int:
+    # errors="replace" (the original tree-reading behavior) preserved via manual bytes-then-
+    # decode, since read_source_bytes (unlike read_source_text) makes no encoding assumption.
+    raw = read_source_bytes(Path(path), use_tree=use_tree)
+    return len(raw.decode("utf-8", errors="replace").splitlines())
 
 
 def main() -> int:
-    root = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else REPO
+    argv = [a for a in sys.argv[1:] if a != "--tree"]
+    use_tree = "--tree" in sys.argv[1:]
+    root = os.path.abspath(argv[0]) if argv else REPO
     files = tracked_scope_files(root)
     present = set(files)
 
     breaches: list[str] = []
     review_band = 0
     for rel in files:
-        n = line_count(os.path.join(root, rel))
+        n = line_count(os.path.join(root, rel), use_tree=use_tree)
         v = evaluate(rel, n)
         if v:
             breaches.append(v)

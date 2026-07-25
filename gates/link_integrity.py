@@ -84,6 +84,23 @@ verdict for autoharn's own docs while its own docs went unchecked -- AUTOHARN_BA
 autoharn-panel deployment, 2026-07-16). Pass --repo to check a different tree instead:
   python3 gates/link_integrity.py                    # scans THIS checkout (autoharn)
   python3 gates/link_integrity.py --repo /path/to/other/project   # scans that tree instead
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): the LINKING doc's own text -- where
+this gate finds `[text](target)` occurrences -- is read from its STAGED bytes by default
+(gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's own pattern):
+stage a doc edit that introduces a broken link, then restore the previous (clean) version in the
+tree without re-staging, and a tree-reading gate would pass on the clean bytes while the commit
+still embeds the broken link. Pass `--tree` to force the working-tree read of every scanned doc
+instead. The TARGET existence check (`os.path.exists(resolved)`) is deliberately left reading the
+literal filesystem in both modes: it answers "would a reader clicking this link, on the tree this
+commit produces, find something there" -- a question about the repository's LAYOUT after the
+commit lands, which is what the working tree (or, for a target that is itself staged content
+under a fresh path, the same tree once the commit is applied) actually is; there is no sound
+"staged existence" query for an arbitrary target path the way there is for one gate's own known
+subject file. Named residue, not silently glossed: a target path that is itself staged-but-not-
+yet-in-the-tree (a same-commit new file whose creation hasn't touched disk, e.g. content piped
+straight into `git add --edit`-style flows) is outside this gate's read-mode fix, same class as
+the already-declared `/local/`/uninitialized-submodule residues above.
 Lazy imports banned.
 """
 from __future__ import annotations
@@ -92,7 +109,11 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -238,6 +259,7 @@ def iter_raw_line_links(text: str):
 
 
 def main() -> int:
+    use_tree = "--tree" in sys.argv[1:]
     all_tracked = tracked_md()
     scope = [f for f in all_tracked if in_scope(f)]
     excluded = [f for f in all_tracked if not in_scope(f)]
@@ -251,7 +273,7 @@ def main() -> int:
 
     for rel in scope:
         path = os.path.join(ROOT, rel)
-        text = strip_fences(open(path, encoding='utf-8').read())
+        text = strip_fences(read_source_text(Path(path), use_tree=use_tree))
         for ln, line in enumerate(text.splitlines(), 1):
             scan = strip_inline_code(line)
             for m in LINK.finditer(scan):

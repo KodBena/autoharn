@@ -1,0 +1,7 @@
+case 1 (no_lazy_imports) ok: staged lazy import refused despite restored clean tree; --tree reads the clean tree
+case 2 (max_lines) ok: staged over-ceiling file refused despite restored short tree; --tree reads the short tree
+case 3 (link_integrity) ok: staged broken link refused despite restored clean tree; --tree reads the clean tree
+case 4 (doc_shapes) ok: staged FRAGMENT refused despite restored clean tree; use_tree=True reads the clean tree
+case 5 (doc_attestation_presence) ok: staged unreviewed edit refused (hash mismatch) despite a restored tree that hashes to an already-attested record; --tree hashes the restored tree and passes
+case 6 (setup_tui_purity_gate) ok: staged print(...) refused despite restored clean tree; use_tree=True reads the clean tree
+ALL CASES OK -- gates-staged-vs-tree-blindness (ledger row 1234), six converted gates, zero residue

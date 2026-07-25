@@ -49,6 +49,25 @@ MODES (mirrors gates/doc_shapes.py's own two-mode split):
 Exit codes: 0 clean (gate) / always (report) except a resolution error, 1 gate-mode violations,
 2 usage/target-resolution error. Lazy imports are banned (CLAUDE.md, 2026-07-02): everything
 below imports at module load.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): this gate blocks THIS repo's own
+commit only when `bootstrap/templates/apparatus.json` is itself part of the commit (see hooks/
+pre-commit's own conditional wiring) -- so `_load_apparatus` reads that TARGET file's STAGED
+bytes by default (gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's
+own pattern), falling back to the working-tree file only when the path is not staged at all (the
+GATE-mode case of pointing this gate at an external deployment's live `.claude/apparatus.json`,
+which this repo's own git index knows nothing about). `--tree` forces the working-tree read of
+the target apparatus.json unconditionally. NAMED RESIDUAL, not silently folded into this fix: the
+KNOWN-MECHANISM SET itself (`apparatus_registry.known_mechanisms()`) is derived by scanning
+hooks/*.py + bootstrap/templates/*.tmpl + tools/*.py's own WORKING-TREE source (filing/
+apparatus_registry.py, a shared module this gate does not own and that other, non-commit-time
+consumers -- report mode here, distance-to-clean -- also read); staging a new mechanism's hook
+code and this gate's own apparatus.json bump in the same commit, then restoring an OLDER hook
+file in the tree without re-staging, could make a legitimate new key look unknown (fail-closed,
+the safe direction) or a since-removed key look known (fail-open, the unsafe direction) depending
+on which side moved. Closing that fully means converting filing/apparatus_registry.py's own
+source-scan to staged reads too -- a change to shared infrastructure outside gates/, reported
+here rather than silently taken as part of this gate's own fix.
 """
 from __future__ import annotations
 
@@ -59,6 +78,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "filing"))
 import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the ONE home for the registry)
+sys.path.insert(0, str(REPO_ROOT / "gates"))
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 DEFAULT_REPORT_TARGET = REPO_ROOT / "bootstrap" / "templates" / "apparatus.json"
 
@@ -78,14 +99,15 @@ def _resolve_apparatus_path(target: str) -> Path | None:
     return None
 
 
-def _load_apparatus(path: Path) -> dict | None:
+def _load_apparatus(path: Path, use_tree: bool = False) -> dict | None:
     """Best-effort load — returns None on any read/parse failure rather than raising, so the
     caller can report a clean 'could not parse' message instead of a traceback; this gate cares
     about mechanism-key hygiene, not about being the canonical apparatus.json validator (that is
-    each hook's own `_load_apparatus_quiet`, deliberately mirrored here at arm's length)."""
+    each hook's own `_load_apparatus_quiet`, deliberately mirrored here at arm's length). Reads
+    STAGED bytes by default (see module docstring's READ MODE section), falling back to the
+    working-tree file when the path is not staged at all."""
     try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+        data = json.loads(read_source_text(path, use_tree=use_tree))
     except (OSError, json.JSONDecodeError) as e:
         print(f"apparatus_unknown_keys: could not read/parse {path}: {e}", file=sys.stderr)
         return None
@@ -95,7 +117,7 @@ def _load_apparatus(path: Path) -> dict | None:
     return data
 
 
-def check_target(target: str, known: frozenset[str]) -> tuple[list[str], bool]:
+def check_target(target: str, known: frozenset[str], use_tree: bool = False) -> tuple[list[str], bool]:
     """Returns (findings, resolved) for one TARGET. `resolved=False` means the target named no
     readable apparatus.json at all (a usage error, distinct from a clean sweep with zero
     findings)."""
@@ -103,7 +125,7 @@ def check_target(target: str, known: frozenset[str]) -> tuple[list[str], bool]:
     if path is None:
         return ([f"{target}: no apparatus.json found (checked as a direct file path and as "
                   f"<dir>/.claude/apparatus.json)"], False)
-    data = _load_apparatus(path)
+    data = _load_apparatus(path, use_tree=use_tree)
     if data is None:
         return ([f"{target}: apparatus.json present but unreadable/malformed — see stderr"], False)
     unknown = apparatus_registry.unknown_mechanism_keys(data, known)
@@ -113,6 +135,8 @@ def check_target(target: str, known: frozenset[str]) -> tuple[list[str], bool]:
 
 
 def main(argv: list[str]) -> int:
+    use_tree = "--tree" in argv
+    argv = [a for a in argv if a != "--tree"]
     known = apparatus_registry.known_mechanisms()
     print(f"apparatus_unknown_keys: known mechanism set ({len(known)}, derived from "
           f"hooks/*.py + bootstrap/templates/*.tmpl + tools/*.py): {sorted(known)}")
@@ -123,7 +147,7 @@ def main(argv: list[str]) -> int:
     all_findings: list[str] = []
     resolution_errors: list[str] = []
     for t in targets:
-        findings, resolved = check_target(t, known)
+        findings, resolved = check_target(t, known, use_tree=use_tree)
         if not resolved:
             resolution_errors.extend(findings)
         else:

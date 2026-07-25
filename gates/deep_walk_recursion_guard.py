@@ -65,6 +65,15 @@ file directly instead, unconditionally, bypassing git entirely -- the mode the s
 below uses, since its synthetic specimens are throwaway tempfiles that were never staged into
 (and in general are not even inside) this repository's git index.
 
+READ PRIMITIVE, SHARED (gates-staged-vs-tree-blindness, ledger row 1234): the census this gate's
+own read-mode fix motivated found the identical tree-reading defect latent in every OTHER
+content-checking gate in hooks/pre-commit's chain. `_read_staged_bytes`/`_read_source` below were
+the FIRST instance of the fix (2026-07-23); they now live in gates/_staged_read.py as the ONE
+shared home (ADR-0012 P1) so gates/no_lazy_imports.py, gates/max_lines.py,
+gates/setup_tui_purity_gate.py, gates/link_integrity.py, gates/doc_shapes.py, and
+gates/doc_attestation_presence.py read the same way instead of re-deriving it. This gate imports
+that shared module rather than keeping its own private copy.
+
 What it DOES mechanically guarantee: if a site in this file catches RecursionError at all, it
 does so through the one shared helper, never through a second, independently-authored net --
 whether that second net names `RecursionError` directly or reaches it by catching one of its
@@ -83,9 +92,11 @@ Usage:
 from __future__ import annotations
 
 import ast
-import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_TARGET = REPO / "serving" / "boundary_service.py"
@@ -184,47 +195,8 @@ def _handler_has_waiver(handler: ast.ExceptHandler, lines: list[str]) -> bool:
     return False
 
 
-def _read_staged_bytes(path: Path) -> str | None:
-    """The STAGED content of `path` as `git show :./<name>` would print it -- the bytes the next
-    commit will actually embed, per the index, regardless of whatever the working tree currently
-    holds. Resolved via `git -C <path.parent> show :./<path.name>` -- the `:./<name>` pathspec is
-    relative to `-C`'s cwd, so this finds the RIGHT repository for `path` (whichever one it
-    actually lives in) rather than assuming it is always this gate's own repo -- load-bearing
-    for the fixture below, which stages its reproduction in a throwaway git repo, not this one.
-    Returns None (never raises) when `path`'s directory is not inside a git work tree at all or
-    the path is not tracked/staged there -- callers fall back to the working-tree file in those
-    cases. (If the `git` executable itself is absent from PATH, subprocess.run raises
-    FileNotFoundError and the gate crashes loudly -- unreachable in the pre-commit context,
-    which only ever runs under git, and deliberately not papered over here.)"""
-    result = subprocess.run(
-        ["git", "-C", str(path.parent), "show", f":./{path.name}"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout
-
-
-def _read_source(path: Path, use_tree: bool) -> str:
-    """The source text this gate should judge. Pre-commit's contract is about what the COMMIT
-    will embed -- the STAGED bytes (`git show :./<name>`), not whatever the working tree happens
-    to hold when the gate runs (Finding A, 2026-07-23): `git add` a violating change, then
-    restore the clean file in the tree WITHOUT re-staging, and a tree-reading gate passes on the
-    clean bytes while the staged (about-to-be-committed) bytes still carry the violation. So by
-    default this reads the staged bytes, falling back to the working-tree file only when the
-    path is not staged at all (untracked, not inside any git work tree, or `git` unavailable --
-    e.g. a fixture's tempfile in /tmp). `use_tree=True` (the gate's `--tree` flag) forces the
-    working-tree read unconditionally, bypassing git entirely -- the mode manual/fixture use
-    wants when pointing this gate at a synthetic file that was never staged."""
-    if not use_tree:
-        staged = _read_staged_bytes(path)
-        if staged is not None:
-            return staged
-    return path.read_text(encoding="utf-8")
-
-
 def violations_in(path: Path, base: Path = REPO, use_tree: bool = False) -> list[str]:
-    source = _read_source(path, use_tree)
+    source = read_source_text(path, use_tree=use_tree)
     try:
         tree = ast.parse(source, filename=str(path))
     except (SyntaxError, UnicodeDecodeError) as e:
