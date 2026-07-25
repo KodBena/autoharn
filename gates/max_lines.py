@@ -306,6 +306,15 @@ BASELINE: dict[str, int] = {
     # flagged), not grandfathered debt -- the ratchet working, same shape as durable_decisions.py
     # above.
     "hooks/pretooluse_sql_block.py":                    420,
+    # NEW to BASELINE 2026-07-26 (merge 9a2c672, workflow-drive line x main line): this file's
+    # own merge union landed at 404 -- both branches grew it independently (main's growth vs
+    # the branch's baseline-bump comments), the union crossed the ceiling by 4, and with no
+    # self-entry the gate refused EVERY commit on main outright (witnessed live, spec-only
+    # commit blocked). Baselined at 413 -- the merged 404 plus this entry's own nine lines
+    # (the reconciliation that unblocks main must count itself) -- rather than golfed under;
+    # the ratchet forbids growth from here. Same cross-branch same-file contention class as
+    # the concurrent-builders ruling (2026-07-21), now witnessed on the gate's own file.
+    "gates/max_lines.py":                               413,
     # NEW to BASELINE 2026-07-23 (integration merge, TUI-rebuild line x retirement line):
     # 406 lines -- both sides' own docstrings (the rebuild's P10 CONTENT SPLIT note, the
     # retirement's SCREEN POSITION AND VERB CHOICE re-sequencing note) are genuinely independent
