@@ -1898,8 +1898,8 @@ meaning). Read `serving/boundary_cli_client.py`'s own module docstring for the e
 distinct failure shapes, and they carry three distinct exit codes so you never mistake one for
 another:
 - **Exit 4 — boundary unreachable / `deployment.json` missing the two keys.** WITNESSED against a
-  fresh `bootstrap/track-work.sh` deployment (a standing work tracker, which runs no boundary
-  service of its own by design, so it never gets these keys):
+  `deployment.json` with the two keys deliberately stripped out (a `--profile tracker` deployment,
+  the modern standing work tracker, gets both keys automatically now — see below):
   ```
   $ ./led --recent 3
   led: deployment record at .../deployment.json is missing required-for-the-served-shim
@@ -1927,17 +1927,19 @@ full coverage (below) — `./legacy/led` is now a one-line teaching refusal, nev
 placement, still executable, unchanged in capability, written automatically by
 `bootstrap/new-project.sh --new-world`.
 
-**A genuine, still-OPEN hazard this retirement found in reach but did not unilaterally fix:**
-`bootstrap/track-work.sh` (the *other* scaffold — see
-[USER-GUIDE.md §3a](USER-GUIDE.md#3a-just-track-your-work-bootstracktrack-worksh)) deliberately
-writes NO `boundary_url`/`boundary_deployment` at all ("a standing work tracker runs no boundary
-service by design") — its own `./legacy/led` used to be the ONE working `led` such a deployment
-had. With `legacy-led.tmpl` deleted, a `track-work.sh`-scaffolded deployment has NO working `led`
-verb at all right now: `./led` refuses (no boundary, by design) and `./legacy/led` is the retired
-stub. Giving `track-work.sh` its own standing boundary service is a real architecture question
-outside this retirement's own mandate (the setup_tui/screen_boundary flow) — named and flagged,
-not silently patched. Use `./pickup` (read) and direct `psql` (write) for such a deployment's
-ledger until a maintainer decision resolves this.
+**RESOLVED 2026-07-25 (ledger row 1271) — the standing-tracker `led` gap this retirement once
+flagged here as open.** `bootstrap/track-work.sh` (the *other* scaffold) is now a one-line
+teaching-refusal stub; its offering lives on as `bootstrap/new-project.sh --profile tracker` (see
+[USER-GUIDE.md §3a](USER-GUIDE.md#3a-just-track-your-work-bootstrapnew-projectsh---profile-tracker)
+and
+[`TRACK-WORK-RETIREMENT-HERITAGE.md`](TRACK-WORK-RETIREMENT-HERITAGE.md)), which DOES write
+`boundary_url`/`boundary_deployment` (a picked free port + `boundary-multiplex.toml`) — the
+service just isn't STARTED at scaffold time. `serving/ensure_running.py`'s
+`ensure_running_or_leave_unreachable`, already wired into every served shim, spawns it as a
+detached child on this deployment's first `./led`/`./pickup`/etc call, dissolving the "a standing
+tracker runs no boundary service by design" rationale that produced the original gap: standing
+one up no longer requires an operator action at all, so there is no longer a reason for a
+standing tracker to omit the two keys. `./led` works out of the box in this profile.
 
 **How do I serve more than one project from one boundary?**
 `serving/boundary_service.py` used to take `--deployment deployment.json` (one process per

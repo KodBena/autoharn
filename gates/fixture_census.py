@@ -94,9 +94,26 @@ REGISTRY: dict[str, str] = {
     "hook-payload-contract":          "seen-red/hook-payload-contract/check_contract.py",
     "model-sql-block":                "seen-red/model-sql-block/run_fixtures.py",
     "s25-commission-kind":            "seen-red/s25-commission-kind/run_fixtures.py",
-    "track-work":                     "seen-red/track-work/run_fixtures.py",
+    # RETIRED-SCAFFOLD (bootstrap/track-work.sh retirement arc, 2026-07-25, ledger row 1271):
+    # every entry marked "RETIRED-SCAFFOLD" below scaffolded its own scratch project via
+    # `bootstrap/track-work.sh` (now a one-line teaching-refusal stub); the registry entry, the
+    # seen-red/<dir>/ directory, and its banked red.txt all stay, unremoved (the fixture is not
+    # orphaned, not deleted — this is a DIFFERENT idiom from the setup-tui-*/panel-disposition
+    # deregistrations elsewhere in this file, which removed dead subject matter entirely). Each
+    # fixture's own `run_fixtures.py` now exits 0 printing a dated retirement note instead of
+    # running its original ADOPT-via-track-work.sh body (left in place, unreachable, as the
+    # historical record of what was proven) — see each file's own `_retired_track_work_arc()`.
+    # Each retired fixture's own note states whether its SUBJECT (as opposed to its scaffolding
+    # convenience) is still live behavior reachable through a normal deployment, and points at
+    # `bootstrap/new-project.sh --profile tracker`/`--new-world` as where that coverage should
+    # someday be rebuilt (not attempted by this arc). `led-work-list-state-filter` was checked
+    # against this same list and found to have ALREADY migrated its own ADOPT step onto
+    # `--new-world` (a stale docstring line was the only trace of track-work.sh; fixed in
+    # passing) — it needed no retirement treatment and is NOT marked below.
+    "track-work":                     "seen-red/track-work/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "minimal-profile-tracker":        "seen-red/minimal-profile-tracker/run_fixtures.py",
     "extract-context":                "seen-red/extract-context/run_fixtures.py",
-    "resource-registry":              "seen-red/resource-registry/run_fixtures.py",
+    "resource-registry":              "seen-red/resource-registry/run_fixtures.py",  # RETIRED-SCAFFOLD
     "track-experiments":              "seen-red/track-experiments/run_fixtures.py",
     "attest-tags":                    "seen-red/attest-tags/run_fixtures.py",
     "verify-commission":              "seen-red/verify-commission/run_fixtures.py",
@@ -119,21 +136,21 @@ REGISTRY: dict[str, str] = {
     "apparatus-unknown-keys":         "seen-red/apparatus-unknown-keys/run_fixtures.py",
     "worktree-ledgering":             "seen-red/worktree-ledgering/run_fixtures.py",
     "world-descriptor-registry":      "seen-red/world-descriptor-registry/run_fixtures.py",
-    "led-refs-flag-order-parser-bug": "seen-red/led-refs-flag-order-parser-bug/run_fixtures.py",
-    "led-work-depends-default-type-advisory": "seen-red/led-work-depends-default-type-advisory/run_fixtures.py",
+    "led-refs-flag-order-parser-bug": "seen-red/led-refs-flag-order-parser-bug/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "led-work-depends-default-type-advisory": "seen-red/led-work-depends-default-type-advisory/run_fixtures.py",  # RETIRED-SCAFFOLD
     "led-help-token-closure":         "seen-red/led-help-token-closure/run_fixtures.py",
-    "led-json-payload-mode":          "seen-red/led-json-payload-mode/run_fixtures.py",
+    "led-json-payload-mode":          "seen-red/led-json-payload-mode/run_fixtures.py",  # RETIRED-SCAFFOLD
     "led-work-list-state-filter":     "seen-red/led-work-list-state-filter/run_fixtures.py",
     "resolve-violation-class-ambiguity": "seen-red/resolve-violation-class-ambiguity/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",
-    "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",
-    "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",
+    "resource-intake-validation":     "seen-red/resource-intake-validation/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "content-free-review-audit":      "seen-red/content-free-review-audit/run_fixtures.py",  # RETIRED-SCAFFOLD
     "decomposition-review-blocker":   "seen-red/decomposition-review-blocker/run_fixtures.py",
     "registry-ordering":              "seen-red/registry-ordering/run_fixtures.py",
-    "estimate-intake-validation":     "seen-red/estimate-intake-validation/run_fixtures.py",
+    "estimate-intake-validation":     "seen-red/estimate-intake-validation/run_fixtures.py",  # RETIRED-SCAFFOLD
     "apparatus-flip":                 "seen-red/apparatus-flip/run_fixtures.py",
-    "taxonomy-intake-validation":     "seen-red/taxonomy-intake-validation/run_fixtures.py",
-    "accounting-forbidden-tier":      "seen-red/accounting-forbidden-tier/run_fixtures.py",
+    "taxonomy-intake-validation":     "seen-red/taxonomy-intake-validation/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "accounting-forbidden-tier":      "seen-red/accounting-forbidden-tier/run_fixtures.py",  # RETIRED-SCAFFOLD
     "s28-work-parent-edge":           "seen-red/s28-work-parent-edge/run_fixtures.py",
     "s29-obligation-item-key-and-typed-close": "seen-red/s29-obligation-item-key-and-typed-close/run_fixtures.py",
     "s29-migration-epoch":            "seen-red/s29-migration-epoch/run_fixtures.py",
@@ -176,9 +193,9 @@ REGISTRY: dict[str, str] = {
     "column-complete-gate":           "seen-red/column-complete-gate/run_fixtures.py",
     "freeze-at-stamp":                "seen-red/freeze-at-stamp/run_fixtures.py",
     "verify-chain-error-conflation":  "seen-red/verify-chain-error-conflation/run_fixtures.py",
-    "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",
-    "outcome-intake-validation":      "seen-red/outcome-intake-validation/run_fixtures.py",
-    "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",
+    "actual-intake-validation":       "seen-red/actual-intake-validation/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "outcome-intake-validation":      "seen-red/outcome-intake-validation/run_fixtures.py",  # RETIRED-SCAFFOLD
+    "review-queue-intake":            "seen-red/review-queue-intake/run_fixtures.py",  # RETIRED-SCAFFOLD
     "adr-portability-terms":          "seen-red/adr-portability-terms/run_fixtures.py",
     "adr-bare-p-label":               "seen-red/adr-bare-p-label/run_fixtures.py",
     "doc-tables":                     "seen-red/doc-tables/red-specimen.py",
@@ -191,7 +208,7 @@ REGISTRY: dict[str, str] = {
     "scaffold-orchlog-wrapper":     "seen-red/scaffold-orchlog-wrapper/run_fixtures.py",
     "kind-shape-manifest-gate":     "seen-red/kind-shape-manifest-gate/run_fixtures.py",
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
-    "asof-export":                  "seen-red/asof-export/run_fixtures.py",
+    "asof-export":                  "seen-red/asof-export/run_fixtures.py",  # RETIRED-SCAFFOLD
     "watchdog-liveness":            "seen-red/watchdog-liveness/run_fixtures.py",
     # setup-tui-* (design/FABLE-SETUP-TUI-REBUILD-SPEC.md, 2026-07-22 wholesale rebuild): the
     # teletype-shaped fixtures (scripted-smoke, navigation, textual-shell, typed-elements,

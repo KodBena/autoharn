@@ -196,5 +196,22 @@ def main() -> int:
     return 0
 
 
+def _retired_track_work_arc() -> int:
+    """RETIRED 2026-07-25 (ledger row 1271, bootstrap/track-work.sh retirement arc): this
+    fixture's own subject, bootstrap/track-work.sh itself, is now a one-line teaching-refusal
+    stub (git history keeps its original body). Red evidence stays banked (red.txt, untouched);
+    main() above -- the original both-polarity proof -- is left in place, unreachable from this
+    entry point, as the historical record of what was proven while the script was live. Coverage
+    for the STANDING-work-tracker offering itself is superseded, not silently dropped: it lives on
+    at seen-red/minimal-profile-tracker/ (bootstrap/new-project.sh --profile tracker's own
+    both-polarity proof, gates/fixture_census.py REGISTRY entry "minimal-profile-tracker")."""
+    print("seen-red/track-work/run_fixtures.py: RETIRED 2026-07-25 (ledger row 1271) -- ")
+    print("  bootstrap/track-work.sh is now a one-line teaching-refusal stub; this fixture's")
+    print("  main() (the original both-polarity proof) is left in place, unreachable from here,")
+    print("  as the historical record. See seen-red/minimal-profile-tracker/ for the modern")
+    print("  equivalent's own both-polarity proof (bootstrap/new-project.sh --profile tracker).")
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_retired_track_work_arc())

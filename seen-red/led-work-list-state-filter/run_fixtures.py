@@ -24,7 +24,12 @@ scratch deployment the GREEN cases use, without touching led.tmpl on disk.
 CASES (all live subprocess runs of the real `./led` -- or, for RED, a targeted-reverted copy of
 led.tmpl -- against one real scratch deployment):
 
-  ADOPT                -- bootstrap/track-work.sh stands up the scratch deployment.
+  ADOPT                -- new-project.sh --new-world stands up the scratch deployment (this
+                          docstring line previously said track-work.sh -- stale; the code below
+                          has used --new-world since this fixture was written, see the ADOPT
+                          block's own comment; fixed in passing, bootstrap/track-work-retirement
+                          arc, 2026-07-25, ledger row 1271 -- this fixture needed no other change,
+                          it was never actually track-work-scaffolded).
   GREEN-DEFAULT-EXCLUDES-CLOSED -- two work items opened, one claimed+closed; plain
                           `led work list` includes the open one, excludes the closed one.
   GREEN-ALL-INCLUDES-CLOSED     -- `led work list --all` includes BOTH.

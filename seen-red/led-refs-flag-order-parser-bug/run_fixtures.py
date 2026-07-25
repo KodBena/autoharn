@@ -211,5 +211,21 @@ def main() -> int:
     return 0
 
 
+def _retired_track_work_arc() -> int:
+    """RETIRED-SCAFFOLD 2026-07-25 (ledger row 1271, bootstrap/track-work.sh retirement arc):
+    this fixture's own ADOPT step scaffolded its scratch project via bootstrap/track-work.sh,
+    now a one-line teaching-refusal stub. Red evidence stays banked (red.txt, untouched); main()
+    above is left in place, unreachable from here, as the historical record of what was proven.
+    The `--refs` flag-order parser fix itself is still live, current behavior on any normal
+    deployment -- this fixture's coverage should someday be rebuilt on
+    `bootstrap/new-project.sh --profile tracker` (or `--new-world`), not silently dropped; no
+    rebuild attempted here."""
+    print("seen-red/led-refs-flag-order-parser-bug/run_fixtures.py: RETIRED-SCAFFOLD 2026-07-25")
+    print("  (ledger row 1271) -- this fixture's ADOPT step used bootstrap/track-work.sh, now a")
+    print("  teaching-refusal stub. The parser fix itself is still live; rebuild this fixture's")
+    print("  coverage on --profile tracker someday (not attempted here).")
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_retired_track_work_arc())

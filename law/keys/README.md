@@ -21,7 +21,7 @@ key it revokes).
 
 **This directory has no bearing on any deployment's own signing.** A scaffolded deployment —
 a world (`bootstrap/new-project.sh --new-world`) or a standing project
-(`bootstrap/track-work.sh`) — carries its OWN `keys/` directory next to its own
+(`bootstrap/new-project.sh --profile tracker`) — carries its OWN `keys/` directory next to its own
 `deployment.json`, used for SIGNED **commissions** — a commission is the ledger row recording
 an operator's ask (see [the operator FAQ](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) §5 for the full
 definition and the LAZY/FULL/SIGNED ladder) — the spec's §3, Rung 2, verified by

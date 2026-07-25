@@ -141,7 +141,7 @@ verb that reads this directory, ever.
 **3b. Signing a DEPLOYMENT's own commissions and chain heads** (Rung 2 and Rung 3 — SIGNED
 commissions, §5 below, and the signed chain head, §6 below). Anyone who scaffolds a
 deployment — a world (`bootstrap/new-project.sh --new-world`) or a standing project
-(`bootstrap/track-work.sh`) — does this **in that deployment**, never in autoharn itself:
+(`bootstrap/new-project.sh --profile tracker`) — does this **in that deployment**, never in autoharn itself:
 
 ```sh
 gpg --armor --export <FINGERPRINT> > <deployment-dir>/keys/maintainer.asc

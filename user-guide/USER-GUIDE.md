@@ -60,123 +60,78 @@ below was run for real against a throwaway target and torn down with zero residu
 page was written — confirmed live, not a transcript reused from elsewhere. Condensed output is
 shown below; the full transcripts live in the pages each section links to.
 
-### 3a. Just track your work: `bootstrap/track-work.sh`
+### 3a. Just track your work: `bootstrap/new-project.sh --profile tracker`
 
-The lightest of the three is a standing, Postgres-backed replacement for a hand-edited TODO file.
-It needs no hooks and no session governance, and it works in any directory — it doesn't need to
-be a git repository or a Claude Code project at all.
+**UPDATED 2026-07-25 (ledger row 1271) — this used to be `bootstrap/track-work.sh`, its own
+separate script; that script is now a one-line teaching-refusal stub** (git history keeps its
+original body; see
+[`user-guide/TRACK-WORK-RETIREMENT-HERITAGE.md`](TRACK-WORK-RETIREMENT-HERITAGE.md) for the full
+account of what it was and why its serviceless shape retired). The offering itself —
+lightest of the three, a standing, Postgres-backed replacement for a hand-edited TODO file, no
+hooks, no session governance, works in any directory (doesn't need to be a git repository or a
+Claude Code project at all) — is unchanged and now lives as a mode on the one normal scaffold:
 
 ```sh
 cd /path/to/your/autoharn-checkout
-bootstrap/track-work.sh /path/to/your-project --name yourproject --db <db> --host <host>
+bootstrap/new-project.sh /path/to/your-project --profile tracker --name yourproject --db <db> --host <host>
 ```
 
-**What you should see** (condensed from a real run against a throwaway schema — **dated
-transcript, 2026-07-18, superseded by the current shim count**: `./doctor` was added to
-`bootstrap/track-work.sh`'s own shim-writing loop after this transcript was captured, so it does
-not show a `wrote doctor` line; the script's own loop is the current source of truth, quoted
-below the transcript, not this capture):
+**What you should see** (condensed from a real run against a throwaway schema, WITNESSED live
+during this profile's own build): the full current kernel lineage applies (not a fixed-era cap —
+whatever this checkout's current lineage head is), the stamp-secret/genesis-seed/principal birth
+sequence runs (the same shared code path `--new-world` uses), then:
 
 ```
-   'reviewer' + 'commissioner' principals registered ('author' was already seeded by s15-schema.sql)
+-- --profile tracker: boundary via ensure-running (no daemon started now) --
+   wrote /path/to/your-project/boundary-multiplex.toml (port <picked>, section [deployments.yourproject])
 -- deployment.json --
 wrote /path/to/your-project/deployment.json
+-- keys/ (this deployment's OWN GPG keyring; never autoharn's law/keys/) --
+-- attestations/ (this deployment's OWN ADR-0017 A:B:C attestation ledger; never autoharn's) --
+-- roles/ (this deployment's OWN role-charter directory; empty at birth, register-before-binding) --
+-- the ten project-local shims ... (SHIM_VERBS_ALL, bootstrap/shim-verbs.sh) --
 wrote led (shim -> .../bootstrap/templates/led.tmpl)
-wrote judge (shim -> .../bootstrap/templates/judge.tmpl)
-wrote pickup (shim -> .../bootstrap/templates/pickup.tmpl)
-wrote audit (shim -> .../bootstrap/templates/audit.tmpl)
-wrote distance-to-clean (shim -> .../bootstrap/templates/distance-to-clean.tmpl)
-wrote verify-commission (shim -> .../bootstrap/templates/verify-commission.tmpl)
-wrote verify-chain (shim -> .../bootstrap/templates/verify-chain.tmpl)
-wrote attest-doc (shim -> .../bootstrap/templates/attest-doc.tmpl)
-wrote asof-export (shim -> .../bootstrap/templates/asof-export.tmpl)
--- ./legacy/ (pickup/asof-export/distance-to-clean's direct-psql originals, demoted by
-   placement, spec §5; THIS deployment has no boundary service of its own, so these three are
-   the working verbs) --
-wrote legacy/led (RETIRED teaching-refusal stub -- see FLAGGED GAP note below)
-wrote legacy/pickup (shim -> .../bootstrap/templates/legacy-pickup.tmpl)
-wrote legacy/asof-export (shim -> .../bootstrap/templates/legacy-asof-export.tmpl)
-wrote legacy/distance-to-clean (shim -> .../bootstrap/templates/legacy-distance-to-clean.tmpl)
+... (and the other nine, same shape, one line each) ...
+-- .claude/ wiring / CLAUDE.md / LAW section: SKIPPED (--profile tracker) --
+   'a standing project is not a governed world' (bootstrap/track-work.sh's own words, preserved)
 == done ==
 ```
 
-`bootstrap/track-work.sh`'s own current shim-writing loop (the live source of truth this
-transcript predates): `led judge pickup audit distance-to-clean verify-commission verify-chain
-attest-doc asof-export doctor` — ten shims, its own echoed header text calls them "the ten
-project-local shims."
-
-**FLAGGED GAP (legacy-led-retirement, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row
-1149/1150) — `led` specifically has no working path for a `track-work.sh` deployment right
-now.** `bootstrap/templates/legacy-led.tmpl` is deleted outright as part of that retirement;
-`./legacy/led` is now a one-line teaching refusal, never a working CLI, and `./led` (the served
-shim) refuses too — this deployment shape deliberately writes no `boundary_url`/
-`boundary_deployment` ("a standing work tracker runs no boundary service by design," this
-script's own header). This is a genuine, unresolved gap the retirement found in reach and
-named rather than silently shipped or unilaterally patched (giving `track-work.sh` its own
-standing boundary service is a real architecture question outside that pass's own mandate).
-`judge`/`pickup`/`audit`/`distance-to-clean`/the signing verbs are unaffected. Until a
-maintainer decision resolves this, treat a `track-work.sh` deployment's own ledger as
-read/write via `./pickup` and direct `psql`, not `./led`.
-
-**What landed where:** `deployment.json` (which database/schema this project points at) and ten
-small command files (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`, `verify-commission`,
-`verify-chain`, `attest-doc`, `asof-export`, `doctor`) in your project directory — nothing
-written back into the autoharn checkout.
-
-**UPDATED 2026-07-18 — `./led`/`./pickup`/`./asof-export`/`./distance-to-clean` now talk HTTP to
-a boundary service by default** — a "boundary service" is `serving/boundary_service.py`, a
-FastAPI server this repository ships that translates HTTP calls into the same reads and writes
-against the Postgres database (this guide's "record"/"ledger," §1 above) these verbs always made,
-so a project's ledger can be reached from more than one process without each one shelling out to
-`psql` directly
-([design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md](../design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md)
-§5, ratified row 1631; the full recipe is in
-[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18),
-linked again below). **This scaffold runs no boundary service of its own** — a standing work
-tracker is a perpetual, hookless store for a project's whole lifetime, never a run-scoped,
-hook-wired session (`bootstrap/track-work.sh`'s own header comment states this contrast under the
-heading "STANDING vs WORLD" — see that file directly for the full text). WITNESSED live: those
-four shims refuse with exit 4 out of the box
-(`led: deployment record at .../deployment.json is missing required-for-the-served-shim
-field(s): boundary_url, boundary_deployment ...`). The scaffold writes `./legacy/pickup`/
-`./legacy/asof-export`/`./legacy/distance-to-clean` for exactly this reason — the direct-`psql`
-originals, demoted by placement, not deleted — so "try it immediately" below uses those.
-**`led` is the ONE exception, and a currently-open gap** (legacy-led-retirement,
-design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, ledger row 1149/1150): its own direct-psql
-original, `legacy-led.tmpl`, is deleted outright, and `./legacy/led` is now a one-line teaching
-refusal — a `track-work.sh` deployment has no working `led` verb at all right now (see §3a's own
-FLAGGED GAP note above). Use `./pickup` to read, and a direct `psql` session against this
-deployment's own schema (named in its `deployment.json`) to write, until a maintainer decision
-resolves this:
+**`led` now works out of the box in this profile — no flagged gap.** The boundary is configured
+(a free port, `boundary-multiplex.toml`) but **no daemon is started at scaffold time**:
+`serving/ensure_running.py`'s `ensure_running_or_leave_unreachable` (wired into every served shim
+already) spawns it as a detached child, automatically, on this deployment's first `./led`/
+`./pickup`/etc call — the mechanism that dissolved the old `legacy/led` gap `bootstrap/
+track-work.sh` used to carry (that script's own no-boundary-by-design rationale no longer holds
+once standing one up requires no operator action at all). WITNESSED live:
 
 ```sh
 cd /path/to/your-project
-./pickup
+./led work open first-item "Describe the first thing to track"
+# led: boundary at http://127.0.0.1:<port> was unreachable -- spawned it (pid <pid>, logs at
+# /path/to/your-project/service.log); proceeding.
+# led: row <n> written.
+./pickup            # live resume brief, including every open work item in full
+./distance-to-clean # composed closure-debt read
+./doctor            # is this deployment set up right? (witnessed lines)
 ```
 
-`./pickup` prints your open work back to you — confirmed live during this page's own
-verification pass, back when `./legacy/led work open` was still the working write path (now
-retired; the read side, `./pickup`, is unaffected). (If you later stand up a boundary service for
-this deployment and add its
-`boundary_url`/`boundary_deployment` to `deployment.json` by hand, the un-prefixed `./led`/
-`./pickup` start working too — see
-[USER-RECIPES-FAQ.md's boundary-multiplex section](USER-RECIPES-FAQ.md#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18)
-for what those two keys are and the exit-code split the served shims use.)
+**What landed where:** `deployment.json`, `boundary-multiplex.toml`, `keys/`, `attestations/`,
+`roles/`, and the ten operator verbs (`led`, `judge`, `pickup`, `audit`, `distance-to-clean`,
+`verify-commission`, `verify-chain`, `attest-doc`, `asof-export`, `doctor`) plus `./legacy/` and
+`./orchlog` — nothing written back into the autoharn checkout, and **no `.claude/` hooks wiring,
+no root `CLAUDE.md`, no portable-ADR LAW section** — "a standing project is not a governed
+world," this profile's own scaffold output states this explicitly, in the retired script's own
+words.
 
-**A served shim's version check is per-invocation, not per-restart.** Each `./led`/`./pickup`/
-`./asof-export`/`./distance-to-clean` call checks the boundary's own wire-protocol version once,
-the first time it talks to a given boundary URL in that process, and trusts the answer for the
-rest of that SAME invocation (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §3). Most invocations
-are short (one command, one exit) so this is invisible in practice — but a long-running
-invocation that spans an actual restart of the boundary service to a new, incompatible version
-(rare — an operator upgrading the boundary mid-session) will keep talking to the version it
-checked at its own start, unchecked, for the remainder of that one call. There is no cross-
-invocation cache to go stale here (a fresh process re-checks from scratch); the remedy, if you
-ever suspect this, is simply to re-run the verb.
+Rows written here via `./led` land UNSTAMPED (`stamp_agent`/`stamp_session`/`stamp_hmac` all
+NULL, `stamp_verified=false`) — visible in `./led --recent`, not hidden — until a separate,
+deliberate act wires hooks (copy `new-project.sh`'s own `.claude/` wiring stanzas by hand, or
+re-scaffold with `--new-world` instead).
 
-For the full detail —
-the exact command shape, and how this option differs from §3b's below — read
-[design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md)
+For the full detail — the exact command shape, and how this option differs from §3b's below —
+read [USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) (the founding closure record,
+now carrying a forward pointer to the heritage doc above)
 and [USER-CONFIGURATION.md's own
 section](USER-CONFIGURATION.md#bootstraptrack-worksh--a-standing-work-tracker-not-a-governed-world).
 
@@ -494,7 +449,7 @@ The pages this guide ordered into a journey, gathered here as one map:
 - [design/USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) — the signing layer's
   full ceremony, key generation through rotation.
 - [design/USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) — the work-tracking
-  offering [§3a](#3a-just-track-your-work-bootstraptrack-worksh) uses, and why BACKLOG.md is a
+  offering [§3a](#3a-just-track-your-work-bootstrapnew-projectsh---profile-tracker) uses, and why BACKLOG.md is a
   findings journal rather than a work tracker as of 2026-07-11.
 - [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md) — the operator-facing reference for the ten
   verbs, resuming a project, and how to decide whether a future fix to autoharn's own database

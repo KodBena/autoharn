@@ -5,6 +5,16 @@
 
 Audience: adopter
 
+**CLOSURE NOTE (2026-07-25, ledger row 1271):** `bootstrap/track-work.sh` — this document's own
+offering — is now a **teaching-refusal stub**; it retired to `bootstrap/new-project.sh --profile
+tracker` (full current kernel lineage rather than this document's own s25-era cap, and the
+boundary served via `ensure-running` rather than the no-service-by-design gap this document's
+"Related" section names below). See
+[`user-guide/TRACK-WORK-RETIREMENT-HERITAGE.md`](TRACK-WORK-RETIREMENT-HERITAGE.md) for the full
+account (what this offering was, why its serviceless shape retired, and the exact modern
+invocation) — this document itself is left otherwise unedited as the historical closure record it
+already was.
+
 This document answers a question this project has opened and re-closed at least three times
 without ever shipping an answer: "how does a project track its own open work?" It describes a
 new, project-agnostic tool — `bootstrap/track-work.sh` — that gives any directory a

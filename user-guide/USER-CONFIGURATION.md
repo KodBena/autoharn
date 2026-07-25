@@ -38,8 +38,8 @@ work log — lives in **your** directory, never in autoharn's.
 
 This is a deliberate boundary, not an accident of how the scaffold happened to be written: **an
 adopter's project owns all of its own state; autoharn owns none of it.** Concretely, and checked
-against the actual scaffold code (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`) rather
-than asserted:
+against the actual scaffold code (`bootstrap/new-project.sh`, classic/`--new-world`/`--profile
+tracker` modes alike) rather than asserted:
 
 - Your database connection facts (`deployment.json`), your per-mechanism switchboard
   (`.claude/apparatus.json`), your governed-file patterns (`.claude/governed_files.json`), your
@@ -73,7 +73,7 @@ preamble `CLAUDE.md`, and writes `led`/`judge`/`pickup`/`audit`/`distance-to-cle
 the governance preamble auto-loads. If you already have a project and only want the
 [permit-to-work](../GLOSSARY.md#permit-to-work)-free, non-governed cousin of this — a standing work
 tracker with no hooks, no kernel-delta regime, usable by a script or an occasional session — see
-[`bootstrap/track-work.sh`](#bootstraptrack-worksh--a-standing-work-tracker-not-a-governed-world) below
+[`bootstrap/new-project.sh --profile tracker`](#bootstrapnew-projectsh---profile-tracker--a-standing-work-tracker-not-a-governed-world) below
 instead; the two scaffolds are deliberately different tools for different commitments.
 
 ## What state lands where
@@ -229,31 +229,42 @@ your own schema/kern/role yourself first (`kernel/lineage/`, see `kernel/lineage
 scaffold. `--new-world` is the one-command path; classic mode is for a schema you are managing by
 hand for another reason.
 
-### `bootstrap/track-work.sh` — a standing work tracker, not a governed world
+### `bootstrap/new-project.sh --profile tracker` — a standing work tracker, not a governed world
 
-The command shape — deliberately shorter than `new-project.sh`'s, because this scaffold applies
-no kernel lineage and wires no hooks at all (see below):
+**UPDATED 2026-07-25 (ledger row 1271):** this used to be a separate script,
+`bootstrap/track-work.sh`; that script is now a one-line teaching-refusal stub (git history keeps
+its original body). The offering is unchanged and is now a mode on the one normal scaffold:
 
 ```
-bootstrap/track-work.sh <project-dir> --name <name> --db <db> --host <host> \
+bootstrap/new-project.sh <project-dir> --profile tracker --name <name> --db <db> --host <host> \
     [--schema <schema>] [--kern <kern>] [--role <role>] [--force]
 ```
 
 Gives **any** directory — it need not be a git repository, need not be a Claude Code project, need
 not ever run a governed Claude Code session — a standing, indefinite-lifetime work-tracking
-deployment: `deployment.json` plus five read/write verb shims (`led`, `pickup`,
-`distance-to-clean`, `judge`, `audit`) and the three standard principals, with **no hooks wired,
-no kernel-delta regime, no [runs-are-linear](../GLOSSARY.md#run) posture**. Where
-`bootstrap/new-project.sh --new-world` stands up a habitat for *one governed run*,
-`track-work.sh` stands up a Postgres-backed replacement for a hand-edited `TODO.md` — usable by a
-human, a script, or an occasionally-governed agent, for a project's whole lifetime. `--name` is
-required (unlike `new-project.sh`'s optional `--name`): it derives `--schema`/`--kern`/`--role`
-from one value the same way `new-project.sh --new-world` does, so the three names that must agree
-stay in agreement by construction.
+deployment: `deployment.json`, `boundary-multiplex.toml`, this deployment's own `keys/`, the FULL
+CURRENT kernel lineage (not a fixed-era cap), the current ten-verb shim set (`SHIM_VERBS_ALL`,
+`bootstrap/shim-verbs.sh`), and the three standard principals, with **no hooks wired, no
+governance `CLAUDE.md` preamble, no [runs-are-linear](../GLOSSARY.md#run) posture**. Where
+`bootstrap/new-project.sh --new-world` stands up a habitat for *one governed run*, this profile
+stands up a Postgres-backed replacement for a hand-edited `TODO.md` — usable by a human, a
+script, or an occasionally-governed agent, for a project's whole lifetime. `--name` is required
+(unlike `new-project.sh`'s optional `--name`): it derives `--schema`/`--kern`/`--role` from one
+value the same way `--new-world` does, so the three names that must agree stay in agreement by
+construction — and it must match `[a-z0-9]+` in this mode specifically (the intersection of the
+SQL-identifier allowlist and the boundary service's own stricter `[a-z0-9-]{1,64}` deployment-name
+contract, since `--name` derives `boundary_deployment` too).
+
+The boundary is configured (a free port, `boundary-multiplex.toml`) but **not started** at
+scaffold time: `serving/ensure_running.py` spawns it as a detached child, automatically, on this
+deployment's first `./led`/`./pickup`/etc call — no standing daemon to launch by hand. See
+[`TRACK-WORK-RETIREMENT-HERITAGE.md`](TRACK-WORK-RETIREMENT-HERITAGE.md) for the full account of
+what the retired script was and why its serviceless shape retired.
 
 ### `bootstrap/track-experiments.sh` — a standing recording surface for the research ledger
 
-A third, narrower scaffold, alongside `new-project.sh` and `track-work.sh` above: this one wires
+A third, narrower scaffold, alongside `new-project.sh`'s classic/`--new-world`/`--profile tracker`
+modes above: this one wires
 a project to `stores/001_research_ledger.sql`, the project-agnostic measurement-provenance ledger
 that separates a raw *measurement* (`research.reading`, immutable once written) from an authored
 *interpretation* of it (`research.finding`, supersedable, never silently overwritten) — the record
