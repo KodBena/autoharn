@@ -126,7 +126,7 @@ brackets (the recursive-descent JSON parser raises `RecursionError`, which subcl
 `RuntimeError` -- exactly why the A2.4 handler had to narrow to `PsqlInfraFailure` rather than
 catching `RuntimeError`, or this class would silently wear the wrong typed shape again). All
 three are caught as `except (ValueError, RecursionError)` around the explicit decode+parse and
-turned into one typed 422 that names WHICH axis failed (encoding / value magnitude / structure)
+turned into one typed 422 that names WHICH axis failed (encoding / value / structure)
 -- never echoing the raw body bytes back to the client (the body is untrusted and may not even
 be valid UTF-8).
 
@@ -315,6 +315,35 @@ same-or-shallower depth on this CPython build; no caller input reaches it today.
 safety now replaces that accidental safety: the call gains `except RecursionError`, joining the
 SAME typed 422 structure-axis refusal A7 already gave the adjacent post-parse traversal -- one
 clause, same message family, no behavior change for any input that parses today.
+
+ONE GUARDED-TRAVERSAL HELPER, NOT THREE INDEPENDENT NETS (ledger row 1628 / work item
+boundary-recursion-net-single-invariant, re-asserted from autoharn1, filed against A13's own
+independent out-of-frame review). A3.2, A13, and A7 above each added their OWN
+`except RecursionError` clause -- three independently-authored except clauses sharing only the
+`_classify_parse_failure` classifier by convention, not by any structural guarantee. Nothing
+stopped a fourth deep-walk site (a payload traversal added later) from being written without
+routing through that classifier, or from open-coding its own bypassing `except RecursionError`.
+`_guard_recursion` below is now the ONE home every deep-walk call site in this module routes
+through -- `json.loads` (A3.2, both write routes), `json.dumps(..., allow_nan=False)` (A13), and
+`_representability_axis_failure`'s `_iter_strings` walk (A7, both write routes) all call through
+it rather than opening their own `except RecursionError`. `gates/deep_walk_recursion_guard.py`
+enforces this mechanically: it refuses any `except ... RecursionError ...` clause in this file
+OUTSIDE `_guard_recursion`'s own body, so a fourth site that bypasses the helper is caught at
+gate time, not left to review discipline alone. Same behavior for every input that already
+classified correctly (A3.2/A13/A7's own three sites), by construction -- the classifier itself
+(`_classify_parse_failure`) is unchanged, only WHERE it is reached from is unified.
+
+AXIS-LABEL VOCABULARY, UNIFIED (same ledger item's second residual): `_classify_parse_failure`'s
+oversized-integer-literal leg used to return the axis name `"value magnitude"`, while the
+non-finite-number check (`_reserialize_or_value_axis_failure`, A4.1(a)) and every other value-ish
+refusal in this module use the single word `"value"` (matching the sibling one-word axis names
+`"encoding"`/`"structure"`/`"representability"`, and the extensively-fixture-covered "value axis"
+phrasing README.md and seen-red/boundary-service/run_fixtures.py already use for W15/W26). Two
+spellings for one conceptual axis, sitting beside genuinely new code, is exactly the kind of
+inconsistency ADR-0012's "one vocabulary, one home" spirit flags -- `"value magnitude"` is
+retired; the oversized-integer leg now also reports axis `"value"`. No consumer distinguished the
+two spellings before this (the client-visible DETAIL text, not the axis label, already carried
+the specific "too large to parse" wording) -- the only visible change is the axis word itself.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
@@ -1243,7 +1272,7 @@ class _BodyTooLarge(Exception):
 
 def _classify_parse_failure(exc: Exception) -> tuple[str, str]:
     """A3.2's parse closure: classify a body decode/parse failure by the axis it violates --
-    encoding / value magnitude / structure -- WITHOUT ever echoing the raw body bytes back (the
+    encoding / value / structure -- WITHOUT ever echoing the raw body bytes back (the
     body is untrusted and, in the encoding-axis case, may not even be valid UTF-8 to echo).
     `json.loads` on `bytes` decodes internally, so `UnicodeDecodeError` (a `ValueError`
     subclass), an oversized-integer-literal `ValueError` (CPython's int-string conversion
@@ -1259,8 +1288,40 @@ def _classify_parse_failure(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, json.JSONDecodeError):
         return "structure", f"the request body is not well-formed JSON ({exc})"
     if isinstance(exc, ValueError):
-        return "value magnitude", f"a numeric literal in the request body is too large to parse ({exc})"
+        return "value", f"a numeric literal in the request body is too large to parse ({exc})"
     return "structure", f"the request body could not be parsed ({exc})"  # pragma: no cover
+
+
+def _guard_recursion(callable_, *args, exceptions: tuple[type[BaseException], ...] = (RecursionError,), **kwargs):
+    """THE single guarded-traversal helper (ledger row 1628 / work item
+    boundary-recursion-net-single-invariant): every deep-walk call site in this module -- a
+    call whose own recursion depth is driven by caller-supplied payload nesting, not this
+    module's own bounded logic -- routes its `RecursionError` exposure through THIS ONE
+    function, never an open-coded `except RecursionError` at the call site. Before this fix,
+    A3.2 (`json.loads`), A13 (`json.dumps(..., allow_nan=False)`), and A7
+    (`_representability_axis_failure`'s `_iter_strings` walk) each carried their OWN except
+    clause -- three independently-authored nets sharing only the `_classify_parse_failure`
+    classifier by convention, not by any structural guarantee a fourth traversal site added
+    later would also route through it. `gates/deep_walk_recursion_guard.py` enforces the
+    invariant mechanically: it refuses any `except ... RecursionError ...` clause anywhere in
+    this file OUTSIDE this function's own body.
+
+    Calls `callable_(*args, **kwargs)` and returns `(result, None, None)` on success. If it
+    raises one of `exceptions` (default: `RecursionError` alone -- the recursion net's own
+    scope; a caller may widen this to also fold in `ValueError`, e.g. the `json.loads` sites,
+    where `_classify_parse_failure` already gives BOTH exception families the same typed-422
+    treatment), returns `(None, axis, detail)` via `_classify_parse_failure`. Any OTHER
+    exception propagates unchanged -- this helper's only job is the recursion net (and,
+    optionally, whatever other exception types a caller explicitly opts into folding through
+    the SAME classifier), never the full exception taxonomy each call site's OWN business
+    logic still classifies for itself (e.g. `_reserialize_or_value_axis_failure`'s distinct
+    "non-finite number" `ValueError` handling, which is NOT the same condition as a parse-time
+    oversized-integer `ValueError` and keeps its own message)."""
+    try:
+        return callable_(*args, **kwargs), None, None
+    except exceptions as e:
+        axis, detail = _classify_parse_failure(e)
+        return None, axis, detail
 
 
 def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
@@ -1274,28 +1335,34 @@ def _reserialize_or_value_axis_failure(payload: dict[str, Any]) -> tuple[str | N
     emitting the non-standard `Infinity`/`NaN`/`-Infinity` tokens psql would then choke on with
     an opaque, unclassified SQL error.
 
-    A13 (post-fixpoint microamendment, ledger row 1621): this `json.dumps` call also gains
-    `except RecursionError`, the same typed structure-axis refusal A7 already gave the
-    adjacent post-parse traversal (`_iter_strings`/`_representability_axis_failure`). Before
-    this, a deeply nested object reaching THIS call was protected only by the accident that
-    `json.loads` overflows at the same-or-shallower depth on this CPython build -- not by any
-    designed guarantee of this call's own. No caller input reaches this branch today (the
-    loads-side guard fires first for every payload that ever parses); this replaces that
-    accidental safety with a designed net, same message family as A7.
+    A13 (post-fixpoint microamendment, ledger row 1621): this `json.dumps` call also routes its
+    `RecursionError` exposure through `_guard_recursion` (row 1628's single-helper fix), the
+    same typed structure-axis refusal A7 already gave the adjacent post-parse traversal
+    (`_iter_strings`/`_representability_axis_failure`). Before A13, a deeply nested object
+    reaching THIS call was protected only by the accident that `json.loads` overflows at the
+    same-or-shallower depth on this CPython build -- not by any designed guarantee of this
+    call's own. No caller input reaches this branch today (the loads-side guard fires first for
+    every payload that ever parses); this replaces that accidental safety with a designed net,
+    same message family as A7.
 
     Returns `(payload_json, None, None)` on success; on refusal, `(None, axis, detail)` naming
-    WHICH axis failed -- `"value"` for a non-finite number (A4.1(a)), `"structure"` for A13's
-    recursion net -- and the detail text, never echoing the payload back."""
+    WHICH axis failed -- `"value"` for a non-finite number (A4.1(a)) or A13's recursion net
+    alike (row 1628 unified the axis vocabulary too -- see this module's own docstring), or
+    `"structure"` if `_guard_recursion` ever reclassifies a `RecursionError` that way -- and
+    the detail text, never echoing the payload back. The non-finite-number `ValueError` is
+    NOT routed through `_guard_recursion` (it is a distinct condition from A3.2's parse-time
+    oversized-integer `ValueError`, with its own message) -- only the `RecursionError` exposure
+    is unified."""
     try:
-        return json.dumps(payload, allow_nan=False), None, None
+        payload_json, axis, detail = _guard_recursion(json.dumps, payload, allow_nan=False)
     except ValueError as e:
         return None, "value", (
             f"the payload contains a non-finite number (Infinity/NaN, or a numeric "
             f"literal magnitude too large to represent as a finite float) that "
             f"JSON/jsonb cannot represent ({e})")
-    except RecursionError as e:
-        axis, detail = _classify_parse_failure(e)
+    if axis is not None:
         return None, axis, detail
+    return payload_json, None, None
 
 
 def _iter_strings(value: Any):
@@ -2065,18 +2132,23 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                     f"writes SQL DML').")
 
             # A3.2 parse closure: `json.loads` on `bytes` decodes internally, so this ONE
-            # explicit call's `except` clause is where ALL three A3.2 axes are caught --
-            # encoding (UnicodeDecodeError, a ValueError subclass), value magnitude (an
-            # oversized integer literal, ValueError), and structure (JSONDecodeError, also
-            # ValueError; or RecursionError on deep nesting, which subclasses RuntimeError --
-            # exactly why the app's infra handler is narrowed to PsqlInfraFailure and cannot
-            # accidentally swallow this). Never echoes raw_body back to the client.
-            try:
-                payload = json.loads(raw_body) if raw_body else None
-            except (ValueError, RecursionError) as e:
-                axis, detail = _classify_parse_failure(e)
-                return JSONResponse(status_code=422, content={
-                    "detail": f"malformed write payload -- {axis} axis: {detail}"})
+            # explicit call is where ALL three A3.2 axes are caught -- encoding
+            # (UnicodeDecodeError, a ValueError subclass), value (an oversized integer literal,
+            # ValueError), and structure (JSONDecodeError, also ValueError; or RecursionError on
+            # deep nesting, which subclasses RuntimeError -- exactly why the app's infra handler
+            # is narrowed to PsqlInfraFailure and cannot accidentally swallow this). Routed
+            # through `_guard_recursion` (row 1628's single guarded-traversal helper) with
+            # ValueError explicitly folded in alongside RecursionError -- `_classify_parse_failure`
+            # already gives both exception families the same typed-422 treatment here. Never
+            # echoes raw_body back to the client.
+            if raw_body:
+                payload, axis, detail = _guard_recursion(
+                    json.loads, raw_body, exceptions=(ValueError, RecursionError))
+                if axis is not None:
+                    return JSONResponse(status_code=422, content={
+                        "detail": f"malformed write payload -- {axis} axis: {detail}"})
+            else:
+                payload = None
             if not isinstance(payload, dict):
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
@@ -2108,14 +2180,13 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             # above). A7: this scan's own traversal (_iter_strings) is recursive and inherits
             # none of A3.2's parse-time recursion-depth protection -- a well-formed body nested
             # deeply enough (under every size/structure bound already checked above) overflows
-            # HERE, after parse, rather than inside json.loads. Caught the same way A3.2 catches
-            # it -- same classifier, same typed-422 shape, same structure axis -- because to the
-            # caller this is observably the same "body nests too deeply" class, just a different
-            # Python frame overflowing first.
-            try:
-                repr_detail = _representability_axis_failure(payload)
-            except RecursionError as e:
-                axis, detail = _classify_parse_failure(e)
+            # HERE, after parse, rather than inside json.loads. Routed through the SAME
+            # `_guard_recursion` helper (row 1628) A3.2/A13 above use -- same classifier, same
+            # typed-422 shape, same structure axis -- because to the caller this is observably
+            # the same "body nests too deeply" class, just a different Python frame overflowing
+            # first.
+            repr_detail, axis, detail = _guard_recursion(_representability_axis_failure, payload)
+            if axis is not None:
                 return JSONResponse(status_code=422, content={
                     "detail": f"malformed write payload -- {axis} axis: {detail}"})
             if repr_detail is not None:
@@ -2256,12 +2327,14 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         cap_err = _artifact_capability_absent(cfg)
         if cap_err is not None:
             return cap_err
-        try:
-            payload = json.loads(raw_body) if raw_body else None
-        except (ValueError, RecursionError) as e:
-            axis, detail = _classify_parse_failure(e)
-            return JSONResponse(status_code=422, content={
-                "detail": f"malformed write payload -- {axis} axis: {detail}"})
+        if raw_body:
+            payload, axis, detail = _guard_recursion(
+                json.loads, raw_body, exceptions=(ValueError, RecursionError))
+            if axis is not None:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"malformed write payload -- {axis} axis: {detail}"})
+        else:
+            payload = None
         if not isinstance(payload, dict):
             return JSONResponse(status_code=422, content={
                 "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
@@ -2272,10 +2345,8 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if payload_json is None:
             return JSONResponse(status_code=422, content={
                 "detail": f"malformed write payload -- {reser_axis} axis: {reser_detail}"})
-        try:
-            repr_detail = _representability_axis_failure(payload)
-        except RecursionError as e:
-            axis, detail = _classify_parse_failure(e)
+        repr_detail, axis, detail = _guard_recursion(_representability_axis_failure, payload)
+        if axis is not None:
             return JSONResponse(status_code=422, content={
                 "detail": f"malformed write payload -- {axis} axis: {detail}"})
         if repr_detail is not None:

@@ -841,10 +841,11 @@ def main() -> int:
         invalid_utf8_body = b'{"kind": "note", "statement": "bad utf8 \xff\xfe here", "actor": 1}'
         st13a, body13a = _post_raw("/write/ledger", invalid_utf8_body)
 
-        # Leg (b) value magnitude: an integer literal past CPython's int-string conversion
-        # guard (default 4300 digits) -- built as raw TEXT, never as a Python int object (
-        # constructing the int itself would hit the identical guard on THIS side of the wire,
-        # not exercise the server's).
+        # Leg (b) value axis: an integer literal past CPython's int-string conversion guard
+        # (default 4300 digits) -- built as raw TEXT, never as a Python int object (constructing
+        # the int itself would hit the identical guard on THIS side of the wire, not exercise
+        # the server's). Ledger row 1628: this leg's axis label used to read "value magnitude",
+        # now unified to plain "value" (the SAME word W15/W26 below already use).
         huge_digits = 4301
         huge_int_body = ('{"kind": "note", "actor": 1, "n": ' + ("9" * huge_digits) + '}').encode()
         st13b, body13b = _post_raw("/write/ledger", huge_int_body)
@@ -860,7 +861,7 @@ def main() -> int:
         check("w13-parse-closure-legs-typed-422-server-alive",
               up_b
               and st13a == 422 and "encoding" in body13a.get("detail", "")
-              and st13b == 422 and "value magnitude" in body13b.get("detail", "")
+              and st13b == 422 and "value axis" in body13b.get("detail", "")
               and st13c == 422 and "structure" in body13c.get("detail", "")
               and st13h == 200 and body13h.get("world") == world_b,
               f"leg (a) invalid UTF-8: status={st13a} body={body13a}; "

@@ -15,7 +15,8 @@
 # since its own idiom (a same-shaped pipe-and-echo-and-exit-1 block) made the addition mechanical;
 # the sibling setup_tui purity-gate wiring queued at ledger row 1847: DISCHARGED 2026-07-22 in the
 # session-boundary batch, unrelated to whether THIS gate's wiring was mechanical):
-# staging_guard -> no_lazy_imports -> fixture_census -> max_lines -> link_integrity ->
+# staging_guard -> no_lazy_imports -> fixture_census -> deep_walk_recursion_guard -> max_lines ->
+# link_integrity ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
 # doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
 # as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
@@ -73,6 +74,25 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 "$PY" "$REPO_ROOT/gates/fixture_census.py" || {
     echo "" >&2
     echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
+    exit 1
+}
+
+# deep_walk_recursion_guard — the single guarded-traversal invariant over
+# serving/boundary_service.py (boundary-recursion-net-single-invariant, ledger row 1628). Wired
+# 2026-07-23 (review finding against commit d5f809e: the gate existed, seen-red both polarities,
+# but was invoked by NOTHING here -- a fourth deep-walk site reintroducing the defect landed
+# clean through git commit; the commit message's "mechanically enforces" claim was false as
+# delivered until this stanza). Same house INVOCATION shape as no_lazy_imports/fixture_census
+# above, but DIFFERENT read semantics, deliberately: this gate judges the STAGED bytes
+# (git show :./path) -- what the commit will actually embed -- while its neighbors read the
+# working tree. Do not "harmonize" it back to tree-reads for uniformity: the staged/tree gap
+# is a witnessed silent false-success (stage a violation, restore the tree, neighbors pass).
+# The rest of the chain's staged-vs-tree census is tracked as its own ledger work item.
+"$PY" "$REPO_ROOT/gates/deep_walk_recursion_guard.py" || {
+    echo "" >&2
+    echo "pre-commit: deep-walk recursion guard FAILED — commit refused (a RecursionError catch" >&2
+    echo "outside _guard_recursion, or a superclass-catch evasion, in serving/boundary_service.py;" >&2
+    echo "see gates/deep_walk_recursion_guard.py's own docstring)." >&2
     exit 1
 }
 

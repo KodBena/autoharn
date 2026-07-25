@@ -1,0 +1,14 @@
+GREEN ok: serving/boundary_service.py passes -- _guard_recursion is the only except-RecursionError site
+RED  ok: synthetic fourth bypassing site refused:
+  /tmp/deep-walk-recursion-guard-red-dyo_dm4d.py:2437: `except ... RecursionError ...` OUTSIDE `_guard_recursion` — a deep-walk site bypassing the single guarded-traversal helper (boundary-recursion-net-single-invariant, ledger row 1628)
+RED  ok: superclass-catch evasions (except RuntimeError / bare except) refused, waived site and unrelated except-Exception stayed clean:
+  /tmp/deep-walk-recursion-guard-red-superclass-5b7baoei.py:2437: `except RuntimeError` wraps a deep-walk call -- catching RuntimeError catches RecursionError by inheritance -- name RecursionError and route through _guard_recursion, or annotate why not (# deep-walk-recursion-guard-superclass-reviewed: <reason> on the except line)
+  /tmp/deep-walk-recursion-guard-red-superclass-5b7baoei.py:2446: bare `except:` wraps a deep-walk call -- catching RuntimeError catches RecursionError by inheritance -- name RecursionError and route through _guard_recursion, or annotate why not (# deep-walk-recursion-guard-superclass-reviewed: <reason> on the except line)
+RED  ok: attribute-qualified superclass evasion (except builtins.RuntimeError) refused:
+  /tmp/deep-walk-recursion-guard-red-attr-n7n0o5qf.py:2440: `except builtins.RuntimeError` wraps a deep-walk call -- catching RuntimeError catches RecursionError by inheritance -- name RecursionError and route through _guard_recursion, or annotate why not (# deep-walk-recursion-guard-superclass-reviewed: <reason> on the except line)
+DOCUMENTED-GAP ok: aliased-exception evasion (E = RuntimeError; except E:) still passes silently -- named in the gate's own docstring, not closed here
+GREEN ok: multi-line except-clause waiver (comment before the handler body's first statement, not on the `except` keyword's own line) recognized
+RED  ok: staged-vs-tree -- violation staged, tree restored clean, default (no --tree) read still refuses on the STAGED bytes:
+  /tmp/deep-walk-recursion-guard-staged-vs-tree-fha61hlg/serving/boundary_service.py:2437: `except ... RecursionError ...` OUTSIDE `_guard_recursion` — a deep-walk site bypassing the single guarded-traversal helper (boundary-recursion-net-single-invariant, ledger row 1628)
+     ok: --tree (working-tree mode) reads the restored clean file and passes -- the two read modes genuinely differ
+ALL CASES OK -- deep-walk-recursion-guard both polarities, zero residue
