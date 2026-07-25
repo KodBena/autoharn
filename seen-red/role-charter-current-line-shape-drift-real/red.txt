@@ -1,0 +1,9 @@
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+=== REAL-CLEAN-existing-registration-correctly-refused-real-infra ===
+  [ok] exit=1 names-existing-registration=True no-registration-written=True (real scratch world, real served led, no proxy)
+
+=== REAL-CORRUPTED-refuses-loudly-real-infra ===
+  [ok] exit=1 names-shape-drift=True no-registration-written=True (real scratch world, real served led underneath, one current-line corrupted by the proxy on top of the real row)
+  stderr="role_charter: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-charter-current-line-shape-drift-real/corrupt_led_proxy.py current 200` line does not match the expected `[id] kind: statement` shape; got 'role-charter registered: role=editor path=/tmp/role-charter-current-line-shape-drift-real-paf1h530/CHARTER.md sha256=b4ce1f5244fc354ddbf5b4bc3c0bd424fc35433a658b36fca2d47b387faa2651 -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a real registration."
+
+all role-charter-current-line-shape-drift-real cases WITNESSED clean.

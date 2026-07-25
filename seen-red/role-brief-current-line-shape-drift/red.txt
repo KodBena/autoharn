@@ -1,0 +1,74 @@
+=== role-brief-current-line-shape-drift: seen-red witness ===
+
+=== R1-pre-fix-corrupt-silently-renders-active ===
+  [ok] exit=0 STANDING-shows-ACTIVE=True (pre-fix commit a2750f6, the exact code the fresh-context review examined) -- this is the vacuous-pass the review caught: a role suspended in the ledger renders as an ACTIVE, exit-0 brief because the corrupted line was silently skipped
+
+=== R2-post-fix-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-standing-rendered=True
+  stderr="role_brief: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-brief-current-line-shape-drift/mock_led.py current 100` line does not match the expected `[id] kind: statement` shape; got 's45 suspended (reason: scratch fixture) -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a standing change."
+
+=== R3-post-fix-clean-suspension-renders-at-top ===
+  [ok] exit=0 SUSPENDED-line-present=True STANDING-before-IN-FORCE-DECISIONS=True
+
+all role-brief-current-line-shape-drift cases WITNESSED clean.
+
+=== APPENDIX 2026-07-26 -- re-lap review finding: parse_served_show carried the same silent-drop
+class R1/R2/R3 above already killed in parse_current_line, untouched by that earlier fix round
+(byte-identical duplicate copy in tools/role_charter.py too -- both files' fix and extraction
+into tools/served_shapes.py are covered by this same appendix; see that module's own header).
+R4-R6 added below, same mock, same run_fixtures.py, full re-run: ===
+
+=== role-brief-current-line-shape-drift: seen-red witness ===
+
+=== R1-pre-fix-corrupt-silently-renders-active ===
+  [ok] exit=0 STANDING-shows-ACTIVE=True (pre-fix commit a2750f6, the exact code the fresh-context review examined) -- this is the vacuous-pass the review caught: a role suspended in the ledger renders as an ACTIVE, exit-0 brief because the corrupted line was silently skipped
+
+=== R2-post-fix-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-standing-rendered=True
+  stderr="role_brief: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-brief-current-line-shape-drift/mock_led.py current 100` line does not match the expected `[id] kind: statement` shape; got 's45 suspended (reason: scratch fixture) -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a real change."
+
+=== R3-post-fix-clean-suspension-renders-at-top ===
+  [ok] exit=0 SUSPENDED-line-present=True STANDING-before-IN-FORCE-DECISIONS=True
+
+=== R4-pre-show-fix-corrupt-actor-silently-drops-row ===
+  [ok] exit=0 row-2-absent=True decisions-section-empty=True (pre-fix commit cc12b46, this branch's own tip before this addendum) -- a real in-force decision row silently vanishes from IN-FORCE DECISIONS because its `led show`'s width-drifted actor line was silently skipped, exactly the silent-drop class this branch's earlier fixes killed in parse_current_line, still alive in parse_served_show
+
+=== R5-post-fix-show-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-brief-rendered=True
+  stderr="role_brief: NOTE -- IN-FORCE DECISIONS filters by actor id; `current`/`--recent` carry no actor field (JB5): issues one `led show` per scanned row, up to --scan-limit=100. Pass a smaller --scan-limit on a large ledger if slow.\nrole_brief: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-brief-current-line-shape-drift/mock_led.py show 2` show output line 4 does not match the expected `key: value` shape (a key, padded to at least 28 columns, then ': '); got 'actor                      : 42'. Refusing rather than silently dropping a field that could hide a real value."
+
+=== R6-post-fix-show-clean-row-renders ===
+  [ok] exit=0 row-2-in-decisions=True
+
+all role-brief-current-line-shape-drift cases WITNESSED clean.
+
+=== APPENDIX 2026-07-26, ALSO WITNESSED: the sibling -real family (seen-red/role-brief-current-
+line-shape-drift-real/run_fixtures.py) re-run end to end against real infra (HARNESS_PGHOST=
+192.168.122.1, scratch schema, dropped after) to confirm no regression from this fix round:
+
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+=== REAL-CLEAN-suspension-renders-at-top-real-infra ===
+  [ok] exit=0 SUSPENDED-line-present=True STANDING-before-IN-FORCE-DECISIONS=True (real scratch world, real served led, no proxy)
+
+=== REAL-CORRUPTED-refuses-loudly-real-infra ===
+  [ok] exit=1 names-shape-drift=True no-brief-rendered=True (real scratch world, real served led underneath, one current-line corrupted by the proxy on top of the real row)
+  stderr='role_brief: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-brief-current-line-shape-drift-real/corrupt_led_proxy.py current 200` line does not match the expected `[id] kind: statement` shape; got "principal \'briefrole\' suspended -- standing withdrawn: scratch fixture suspension -- TRUNCATED ROW, MISSING [id] kind: PREFIX". Refusing rather than silently skipping a row that could hide a real change.'
+
+all role-brief-current-line-shape-drift-real cases WITNESSED clean.
+
+(No new -real leg was added for the show-drift case itself -- the coordinator brief permits
+"mock and/or -real"; the mock leg above (R4-R6) is the primary witness, and this real re-run
+covers the "no regression on the existing -real family" requirement separately.)
+
+=== APPENDIX 2026-07-26, R7/R8 -- confirming review residual #1 (this module's own docstring
+names `principal_competence_activity`, a real >=28-char column, as the fix's central motivating
+case; nothing exercised it until now). New `show_longkey` scenario in mock_led.py; new R7/R8
+cases in run_fixtures.py:
+
+=== R7-post-fix-show-longkey-parses-and-renders ===
+  [ok] exit=0 brief-renders=True field-present-in-parsed-dict=True (parsed={'principal_competence_activity': 'onboarding-queue-triage'}) -- the module docstring's own named motivating case, now actually exercised
+
+=== R8-pre-show-fix-longkey-silently-dropped ===
+  [ok] field-absent-from-parsed-dict=True (pre-fix commit cc12b46) parsed={} -- the well-formed long-key line vanishes with no error at all, not even the `continue`-based skip surfacing anywhere; a caller reading this key back gets exactly the same shape as a genuinely null column
+
+all role-brief-current-line-shape-drift cases WITNESSED clean (R1-R8, full re-run).

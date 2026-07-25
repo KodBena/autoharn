@@ -80,6 +80,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from served_shapes import parse_current_line as _parse_current_line
+from served_shapes import parse_served_show as _parse_served_show
+
 DEFAULT_LED = "./led"
 DEFAULT_SCAN_LIMIT = 100000
 
@@ -113,38 +116,20 @@ def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout, proc.stderr
 
 
-_CURRENT_LINE_RE = re.compile(r"^\[(\d+)\] (\S+): (.*)$")
-
-
-def parse_current_line(line: str) -> tuple[int, str, str] | None:
+def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
     """One line of `led current <N>` output: `[id] kind: statement` -- bootstrap/templates/
-    led.tmpl's own `cmd_recent` print shape.
-
-    legacy-led-retirement inventory pass (ledger row 1149): FIXED here, a real regression this
-    pass's own live exercise of role_charter.py (seen-red/s51-artifact-store's WA8, migrated off
-    legacy-led.tmpl onto the served path) caught failing -- this parser was still written
-    against the RETIRED legacy pipe-delimited `id|kind|statement|actor_name` shape despite this
-    file's DEFAULT_LED already being "./led" (never end-to-end exercised before now).
-    `actor_name` has NO served equivalent (`ledger_current` carries only the bare `actor`
-    bigint id -- see tools/role_brief.py's own disclosed gap on the identical point); this
-    function now returns a 3-tuple. See `find_current_registrations` for `written_by`."""
-    m = _CURRENT_LINE_RE.match(line)
-    if not m:
-        return None
-    return int(m.group(1)), m.group(2), m.group(3)
+    led.tmpl's own `cmd_recent` print shape. Thin wrapper over served_shapes.parse_current_line,
+    binding this tool's own CharterError as the raised type (role_brief.py binds BriefError
+    instead -- same shared parser, extracted this fix round into tools/served_shapes.py; see
+    that module's own header for the fix-round finding and provenance)."""
+    return _parse_current_line(CharterError, led_cmd_label, line)
 
 
-def parse_served_show(text: str) -> dict[str, str]:
+def parse_served_show(led_cmd_label: str, text: str) -> dict[str, str]:
     """`led show <id>`'s served format: one `f"{k:28s}: {v}"` line per non-null field
-    (bootstrap/templates/led.tmpl's own `cmd_show`) -- fixed-width key (28 chars, left-padded
-    with spaces) then literal `": "` then the value verbatim (a value may itself contain ':
-    ', so this splits on POSITION, never on the first colon in the line)."""
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        if len(line) < 30 or line[28:30] != ": ":
-            continue
-        out[line[:28].strip()] = line[30:]
-    return out
+    (bootstrap/templates/led.tmpl's own `cmd_show`). Thin wrapper over
+    served_shapes.parse_served_show, binding CharterError as the raised type."""
+    return _parse_served_show(CharterError, led_cmd_label, text)
 
 
 def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dict]:
@@ -153,15 +138,13 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
     than one is a real, loudly-reported anomaly (JC4's own hand-written-row caveat; the spec's
     "Honest limits" section names exactly this as uncaught at write time for a hand-authored
     row)."""
+    led_cmd_label = f"{led} current {scan_limit}"
     rc, out, err = run_led(led, ["current", str(scan_limit)])
     if rc != 0:
-        raise CharterError(f"'{led} current {scan_limit}' failed:\n{err.strip() or out.strip()}")
+        raise CharterError(f"'{led_cmd_label}' failed:\n{err.strip() or out.strip()}")
     found = []
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind != "decision":
             continue
         m = STATEMENT_RE.match(statement)
@@ -173,7 +156,15 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
         written_by = "(unknown)"
         src, _out2, _err2 = run_led(led, ["show", str(rid)])
         if src == 0:
-            detail = parse_served_show(_out2)
+            # JUDGMENT CALL (this fix round): this call site is this file's own disclosed
+            # best-effort DISPLAY read (line 175's comment, unchanged) -- a malformed line here
+            # never affects WHICH row is the in-force registration (that match is already
+            # decided above, off `current`'s own kind/statement), only the human-readable
+            # written-by annotation. Even so, this fix applies the SAME class-not-instance
+            # posture parse_current_line already carries (ADR-0000): a malformed `led show` line
+            # is refused loudly here too, uncaught, rather than downgraded to a quieter, silent
+            # "(unknown)" -- a corrupted line is corrupted regardless of which section reads it.
+            detail = parse_served_show(f"{led} show {rid}", _out2)
             written_by = detail.get("actor", written_by)
         found.append({"id": rid, "role": role, "path": m.group("path"),
                        "sha256": m.group("sha256"), "written_by": written_by})
@@ -181,14 +172,12 @@ def find_current_registrations(led: str, role: str, scan_limit: int) -> list[dic
 
 
 def principal_is_registered(led: str, role: str, scan_limit: int) -> bool:
+    led_cmd_label = f"{led} current {scan_limit}"
     rc, out, err = run_led(led, ["current", str(scan_limit)])
     if rc != 0:
-        raise CharterError(f"'{led} current {scan_limit}' failed:\n{err.strip() or out.strip()}")
+        raise CharterError(f"'{led_cmd_label}' failed:\n{err.strip() or out.strip()}")
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        _rid, kind, statement = parsed
+        _rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind != "principal_registered":
             continue
         m = PRINCIPAL_REGISTERED_RE.match(statement)

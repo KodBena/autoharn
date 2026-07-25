@@ -1,106 +1,99 @@
 #!/usr/bin/env python3
 """role_brief.py -- print a role's derived BRIEF (the dynamic half of
-design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md's "two halves"). Commission: ledger row 1663.
+design/FABLE-ROLE-CHARTERS-AND-BRIEFS-SPEC.md's "two halves"). Commission: ledger row 1663;
+served-parser rebuild commission: ledger row 1224.
 
-WHAT A "BRIEF" IS, per the governing spec: never authored, always COMPUTED at instantiation
-time from the world's own views, scoped to the role's principal -- its in-force decisions, its
-obligation debt (review_gap / work_review_gap where it is the obliged actor), open questions in
-its concerns, its claimable work, and its standing (an ACTIVE line normally; a suspension is
-surfaced LOUDLY with the suspending row's teaching -- an instance must learn it is suspended
-from its own brief, not from its first refusal). "The brief is a read -- it grants nothing;
-authority remains entirely the kernel's standing/binding facts" (spec's own "Honest limits").
+A BRIEF is never authored, always COMPUTED at instantiation from the world's own views, scoped
+to the role's principal: in-force decisions, obligation debt (review_gap/work_review_gap where
+it is the obliged actor), open questions in its concerns, claimable work, and standing (a
+suspension surfaces LOUDLY, with teaching, so an instance learns it is suspended from its own
+brief, never only from its first refusal). "The brief is a read -- it grants nothing."
 
-NO RAW SQL: every section below is derived by parsing `led`'s own CLI text output (the aligned
-`psql -c` table format for multi-row views, the expanded `psql -x` format for `led show`, and
-the `|`-delimited `psql -tA` format for `led current`) -- never a direct psql connection. This
-is the SAME "CLI-side derivation over objects that already exist" posture tools/role_charter.py
-documents; see that file's own header for the shared parsing/scan-limit conventions this file
-reuses (parse_current_line, STATEMENT scanning) without re-importing role_charter.py itself
-(kept a standalone stdlib script per the spec's "Deliverables" list -- two files, not one with
-a lazy cross-import).
+NO RAW SQL, NO DIRECT HTTP: every section is parsed off `led`'s own CLI text -- the same
+CLI-side-derivation posture tools/role_charter.py documents (parse_current_line/JC1's
+scan-limit discipline reused here without a cross-import -- two standalone deliverables).
 
-TRANSPORT HONESTY (spec, deliverable 2): `--led` is ONE knob for every section. It defaults to
-"./legacy/led", not the served "./led" -- STILL NOT FIXED as of the legacy-led-retirement
-INVENTORY pass (ledger row 1149, which deletes `legacy-led.tmpl` from the repo outright): this
-file's own PARSERS (`parse_current_line`'s pipe format; the `psql -x`-shaped expanded-record
-scanner) are written against legacy-led.tmpl's specific OUTPUT SHAPES -- served led.tmpl prints
-a DIFFERENT shape (`[id] kind: statement`, no `actor_name` at all; `key : value` lines for
-`show`; JSON-per-line for `/views/*`) these parsers do not recognize. Pointing this tool at
-`./led` today would SILENTLY MISPARSE (every section reading empty), the vacuous-pass class
-this project's doctrine (F49) exists to catch. A correct fix needs either a new served
-mechanism resolving an actor id to its principal NAME (`build_decisions_section`'s per-role
-filter needs exactly that; no existing route does it in bulk) or an honest narrowing to
-id-based filtering -- real, scoped work this pass's own mandate (migrate executable-reference
-SITES, not redesign a consumer's filtering semantics) does not license doing as a rushed side
-effect. Left AS IS, with one direct consequence of THIS pass's own deletion flagged: `--led`
-still defaults to "./legacy/led", which post-deletion resolves to `legacy/led`'s teaching-
-refusal stub, never legacy-led.tmpl (gone) -- every default invocation now REFUSES LOUDLY with
-that stub's text instead of running legacy's original. That is the SAFE failure mode versus
-the alternative (pointing the default at `./led` today, which silently misparses) -- a loud
-refusal beats a vacuous pass. `--led ./led` remains explicitly supported for the served-covered
-sections (STANDING, IN-FORCE DECISIONS minus true actor-name filtering, the review_gap half of
-OBLIGATION DEBT, OPEN QUESTIONS); work-family sections still fail loudly rather than serve a
-false empty section. Named here as an unresolved gap needing its own scoped follow-on spec.
+TRANSPORT, AS OF THIS REBUILD (row 1224): `--led` defaults to "./led" (served,
+bootstrap/templates/led.tmpl), matching role_charter.py. Parsers here are written against
+led.tmpl's ACTUAL served shapes (read in full before this rewrite), never the retired direct-
+psql shapes:
+  - `led current <N>`/`--recent <N>`: `f"[{id}] {kind}: {statement}"` -- NO actor field at all
+    (serving/boundary_service.py's /rows/current serves bare `ledger l.*`, no actor-name join;
+    "no truth of its own").
+  - `led show <id>`: `f"{k:28s}: {v}"` per non-null column, split on POSITION (identical to
+    role_charter.py's own parse_served_show). Carries the raw `actor` id (never a name).
+  - `led question-status`/`review-gap`/`work review-gap`/`work startable`: one
+    `json.dumps(row, sort_keys=True)` line per row, NOT a psql table. `review_gap` carries
+    `actor` direct (kernel/lineage/s57, unchanged since s32); `work_review_gap` carries
+    `closer` direct (s31) -- neither needs a per-row `led show` to learn its actor (JB3).
+    `question_status` (s31) carries NO actor at all -- a per-open-row `led show` is the only
+    route (JB2), bounded by open-question count, not --scan-limit.
 
-JUDGMENT CALLS THIS TOOL MAKES WHERE THE SPEC IS SILENT ON MECHANICS (mirroring
-tools/workflow_compile.py's own J-notes and tools/role_charter.py's own JC-notes):
+Every parser refuses LOUDLY, naming the missing/malformed field and the producing command, on
+any shape it does not recognize -- never a silent empty section (F49's vacuous-pass class).
 
-  JB1. CLAIMABLE WORK IS UNFILTERED. The spec's own text asks for "work_startable
-       INTERSECTED WITH what the TOML/charter assigns it" -- but no kernel view or column ties a
-       work_startable slug to an assignee principal at all (work_startable carries only
-       slug/title; assignment only exists ephemerally, inside a COMPILED workflow-unit driver's
-       own --role-map, never written back to the kernel). Silently narrowing this section by an
-       invented heuristic (e.g. slug-text matching) would be exactly the kind of hazard CLAUDE.md
-       asks to be named rather than routed around: a role could be shown LESS claimable work than
-       actually exists, on the strength of a guess. This tool shows work_startable UNFILTERED and
-       says so in the section header -- an honest full view, not a silently-narrowed false one.
-       Revisit once a real slug-to-role assignment mechanism exists (a natural companion to a
-       future ADR-0011 charter-registration kind).
-  JB2. "OPEN QUESTIONS IN ITS CONCERNS" IS READ AS "OPEN QUESTIONS THIS ROLE ITSELF RAISED".
-       The ledger's `concern` column is a coarse GLOBAL taxonomy (design|enactment|process|other),
-       never principal-scoped -- nothing ties a concern category to a role. The only role-scoped
-       reading question_status supports is by ACTOR (who raised the question), so that is what
-       this section filters on: open (unanswered) `kind=question` rows whose actor is <role>.
-  JB3. OBLIGATION-DEBT ROWS ARE RESOLVED TO AN ACTOR NAME VIA `led show`, NOT A NAME-TO-ID
-       LOOKUP. `review_gap`/`work_review_gap` expose only the debt row's bigint actor id (no
-       `led` verb resolves a bare name to an id) -- rather than inventing a second, unverified
-       name<->id mapping, each candidate debt row is re-fetched with `led show <id>`, which
-       already joins to the principal name (`actor_name`) the same way `led current` does. One
-       extra `led show` call per debt row, bounded by how much debt exists, not by --scan-limit.
-  JB4. STANDING IS DERIVED FROM STATEMENT TEXT, NOT A DEDICATED VIEW. No `led` verb exposes
-       `principal_standing_current` (kernel/lineage/s40-principal-identity-events.sql's own
-       human/SPA read surface) -- it is outside both the legacy tool's own subcommand surface and
-       the served boundary's fourteen-route allowlist. This tool instead scans `led current
-       <scan-limit>` for the newest (already supersession-resolved) `principal_suspended`/
-       `principal_revoked` row whose fixed statement text names <role>
-       ("principal '<role>' suspended -- standing withdrawn" / "principal '<role>' suspension
-       lifted[: reason]" / a revoke's own statement) -- the exact statement shapes
-       bootstrap/templates/legacy-led.tmpl's own suspend/lift-suspension/revoke branches write,
-       verbatim. Bounded by --scan-limit exactly like tools/role_charter.py's own JC1.
+JUDGMENT CALLS (mirroring role_charter.py's own JC-notes):
 
-Usage:
-    python3 tools/role_brief.py brief <role> [--led PATH] [--scan-limit N]
+  JB1. CLAIMABLE WORK IS UNFILTERED -- no kernel mechanism ties a work_startable slug to an
+       assignee (assignment lives only ephemerally in a compiled workflow-unit's --role-map).
+       Guessing by slug-text could show a role LESS work than exists; shown unfiltered, stated.
+  JB2. "OPEN QUESTIONS IN ITS CONCERNS" = questions THIS ROLE RAISED. `concern` is a coarse
+       global taxonomy, never principal-scoped; the only role-scoped read is by ACTOR, via
+       `led show` per open row, compared to the role's resolved actor id (JB5).
+  JB3. OBLIGATION-DEBT FILTERED BY ACTOR ID DIRECTLY OFF THE VIEW -- review_gap/work_review_gap
+       already carry a bigint actor id (actor/closer); the legacy port's extra `led show`-per-
+       candidate to LEARN an actor is gone. `led show` still runs per MATCHED row, but only for
+       kind/statement DISPLAY, never the match itself.
+  JB4. STANDING FROM STATEMENT TEXT, NOT A DEDICATED VIEW -- no `led` verb exposes
+       principal_standing_current; scans `led current <scan-limit>` for the newest
+       principal_suspended/principal_revoked row naming <role>, the exact fixed statement
+       shapes led.tmpl's suspend/lift-suspension/revoke branches write (confirmed against
+       source). Bounded by --scan-limit like role_charter.py's own JC1.
+  JB5. RESOLVING <role> TO ITS ACTOR ID -- THE REAL GAP THIS REBUILD CLOSES. Every actor-scoped
+       filter needs the role's bigint id; the served surface has no actor-name join anywhere.
+       Real route: registration_write() writes each principal's birth event as a
+       `principal_registered` row whose `principal_subject` IS the new principal's id,
+       statement `"principal '<name>' registered (class <class>)"` (verified against source;
+       matches role_charter.py's own principal_is_registered regex). resolve_role_actor_id
+       scans `current` for that row (permanent, never superseded) then one `led show` for
+       `principal_subject`. Replaces the retired parsers' silently-broken `actor_name` string
+       comparison (a field the served surface never emits -- always False, collapsing every
+       actor-scoped section to empty). No `principal_registered` event found is a REFUSAL
+       (BriefError), not an empty brief.
+       COST, DISCLOSED: build_decisions_section has no view/line carrying actor at all --
+       filtering it costs ONE `led show` per scanned `current` row (O(scan-limit) round trips),
+       flagged via a one-line stderr NOTE before the section runs. Real ledgers to date run low
+       thousands of rows (seconds, not minutes); pass a smaller --scan-limit on an unusually
+       large one.
 
-Exit 0 on success (even when every section is empty -- "a role with nothing pending gets honest
-empty sections, not absence", spec WB2). Exit 1 if a REQUIRED `led` read itself fails (relayed
-verbatim). Exit 2 on a local usage error. Lazy imports banned; stdlib only.
+Usage: python3 tools/role_brief.py brief <role> [--led PATH] [--scan-limit N]
+
+Exit 0 on success (empty sections are honest, not absence). Exit 1 if a REQUIRED `led` read
+fails, or a served shape does not match what a parser expects (never misparsed). Exit 2 on a
+local usage error. Lazy imports banned; stdlib only.
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
 
-DEFAULT_LED = "./legacy/led"
+from served_shapes import parse_current_line as _parse_current_line
+from served_shapes import parse_served_show as _parse_served_show
+
+DEFAULT_LED = "./led"
 DEFAULT_SCAN_LIMIT = 100000
 
 SUSPENDED_RE = re.compile(r"^principal '([^']+)' suspended")
 LIFTED_RE = re.compile(r"^principal '([^']+)' suspension lifted")
 REVOKED_RE = re.compile(r"^principal '([^']+)' revoked")
+PRINCIPAL_REGISTERED_RE = re.compile(r"^principal '([^']+)' registered")
 
 
 class BriefError(Exception):
-    """Raised with a message explaining exactly why a required `led` read failed."""
+    """Explains exactly why a required `led` read failed, or why a served shape did not match
+    what this tool expected -- a loud, named refusal, never a silent misparse."""
 
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
@@ -120,57 +113,90 @@ def require_led(led: str, args: list[str]) -> str:
     return out
 
 
-def parse_current_line(line: str) -> tuple[int, str, str, str] | None:
-    """id|kind|statement|actor_name -- the same `led current`/`led --recent` line shape
-    tools/role_charter.py's own parse_current_line documents; duplicated rather than imported
-    per this file's own header note (two standalone deliverables, no cross-import)."""
-    parts = line.split("|")
-    if len(parts) < 4:
-        return None
-    rid_s, kind, statement, actor_name = parts[0], parts[1], parts[2], "|".join(parts[3:])
-    if not rid_s.isdigit():
-        return None
-    return int(rid_s), kind, statement, actor_name
+def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
+    """`led current <N>`/`led --recent <N>`: `[id] kind: statement`. No actor field exists on
+    this line -- see JB5. Thin wrapper over served_shapes.parse_current_line, binding this
+    tool's own BriefError as the raised type (role_charter.py binds CharterError instead --
+    same shared parser, see tools/served_shapes.py)."""
+    return _parse_current_line(BriefError, led_cmd_label, line)
 
 
-def parse_psql_table(text: str) -> list[dict]:
-    """Generic parser for `psql -c`'s default aligned table output (header row, a '-'/'+'
-    separator row, data rows, a trailing '(N rows)' footer) -- shared by every multi-row `led`
-    view read this file performs (review-gap, work review-gap, question-status, work startable).
-    Never touches SQL; parses only `led`'s own already-printed CLI text."""
+def parse_served_show(led_cmd_label: str, text: str) -> dict[str, str]:
+    """`led show <id>`: one `f"{k:28s}: {v}"` line per non-null field. Thin wrapper over
+    served_shapes.parse_served_show (extracted this fix round -- see that module's own header
+    for the fix-round finding and the long-key-name edge case this parser now handles), binding
+    BriefError as the raised type."""
+    return _parse_served_show(BriefError, led_cmd_label, text)
+
+
+def parse_json_lines(led_cmd_label: str, text: str) -> list[dict]:
+    """Served view/list commands print one `json.dumps(row, sort_keys=True)` object per line --
+    NOT a psql aligned table (the retired tool's own shape these parsers used to assume). A line
+    that fails to decode as a JSON object is a SHAPE DRIFT refused loudly, naming the offending
+    command and line, rather than silently treating the section as empty."""
     rows: list[dict] = []
-    header: list[str] | None = None
-    for raw_line in text.splitlines():
-        line = raw_line.rstrip("\n")
-        stripped = line.strip()
-        if not stripped:
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line:
             continue
-        if stripped.startswith("(") and (stripped.endswith("row)") or stripped.endswith("rows)")):
-            continue
-        if set(stripped) <= set("-+"):
-            continue
-        cells = [c.strip() for c in line.split("|")]
-        if header is None:
-            header = cells
-            continue
-        if len(cells) != len(header):
-            continue
-        rows.append(dict(zip(header, cells)))
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise BriefError(f"SHAPE DRIFT -- `{led_cmd_label}` line {lineno} is not valid JSON "
+                              f"(expected one JSON object per line); got {line!r}: {exc}")
+        if not isinstance(obj, dict):
+            raise BriefError(f"SHAPE DRIFT -- `{led_cmd_label}` line {lineno} decoded to a "
+                              f"{type(obj).__name__}, not a JSON object: {obj!r}")
+        rows.append(obj)
     return rows
 
 
-def parse_psql_expanded(text: str) -> dict:
-    """`psql -x`'s expanded output (led show's own format): '-[ RECORD 1 ]---' header line,
-    then 'key | value' lines."""
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        if line.startswith("-["):
+def _actor_id_from_show(detail: dict[str, str], row_id, led_cmd_label: str) -> int | None:
+    """The served `led show <id>`'s own `actor` column (a bigint FK), out of an already-parsed
+    parse_served_show dict. None when the row genuinely has no actor (cmd_show prints only
+    NON-NULL fields, so an absent key means a null column, not a shape drift). Raises
+    BriefError if the field is PRESENT but not an integer -- a real shape drift."""
+    if "actor" not in detail:
+        return None
+    raw = detail["actor"]
+    if not raw.strip().lstrip("-").isdigit():
+        raise BriefError(f"SHAPE DRIFT -- `{led_cmd_label}` row {row_id}'s 'actor' field is not an "
+                          f"integer (got {raw!r}); 'actor' is a bigint FK. Refusing rather than "
+                          f"silently skipping this row.")
+    return int(raw)
+
+
+def resolve_role_actor_id(led: str, role: str, scan_limit: int) -> int:
+    """JB5: the role's OWN principal id, off its `principal_registered` birth event
+    (registration_write(): `principal_subject` IS the new principal's id; statement is the
+    fixed "principal '<name>' registered (class <class>)" text). Permanent, never superseded,
+    so at most one match is expected; the first encountered is used."""
+    led_cmd_label = f"{led} current {scan_limit}"
+    out = require_led(led, ["current", str(scan_limit)])
+    reg_row_id: int | None = None
+    for line in out.splitlines():
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
+        if kind != "principal_registered":
             continue
-        if "|" not in line:
-            continue
-        k, _, v = line.partition("|")
-        out[k.strip()] = v.strip()
-    return out
+        m = PRINCIPAL_REGISTERED_RE.match(statement)
+        if m and m.group(1) == role:
+            reg_row_id = rid
+            break
+    if reg_row_id is None:
+        raise BriefError(
+            f"role '{role}' has no `principal_registered` event in the last {scan_limit} "
+            f"ledger_current rows -- a brief cannot be scoped to a principal the ledger has "
+            f"never actually registered (JB5; older than --scan-limit rows ago?). Register it "
+            f"first:\n  {led} register-principal {role} <human|model|subagent|tool> --purpose \"...\"")
+    show_cmd_label = f"{led} show {reg_row_id}"
+    show_out = require_led(led, ["show", str(reg_row_id)])
+    detail = parse_served_show(show_cmd_label, show_out)
+    subj = detail.get("principal_subject")
+    if subj is None or not subj.strip().lstrip("-").isdigit():
+        raise BriefError(f"SHAPE DRIFT -- `{led} show {reg_row_id}` (principal_registered naming "
+                          f"'{role}') carries no usable 'principal_subject' field (got {subj!r}); "
+                          f"refusing rather than treating this role as having no actor id.")
+    return int(subj)
 
 
 def section(title: str, provenance: str, lines: list[str]) -> str:
@@ -178,14 +204,16 @@ def section(title: str, provenance: str, lines: list[str]) -> str:
     return f"## {title}\n(source: {provenance})\n{body}\n"
 
 
+STANDING_TITLE = ("STANDING (leads: a suspension/revocation must be learned from the brief, "
+                   "never only from a write refusal)")
+
+
 def build_standing_section(led: str, role: str, scan_limit: int) -> str:
+    led_cmd_label = f"{led} current {scan_limit}"
     out = require_led(led, ["current", str(scan_limit)])
     newest_row: tuple[int, str] | None = None  # (id, disposition-text)
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement, _actor = parsed
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
         if kind == "principal_suspended":
             m = SUSPENDED_RE.match(statement) or LIFTED_RE.match(statement)
             if m and m.group(1) == role:
@@ -194,149 +222,123 @@ def build_standing_section(led: str, role: str, scan_limit: int) -> str:
         elif kind == "principal_revoked":
             m = REVOKED_RE.match(statement)
             if m and m.group(1) == role:
-                lines = [
-                    f"REVOKED (row {rid}, TERMINAL -- dominates any suspension): {statement}",
-                    f"  No lift path exists for a revocation (s40 Sec.3.4: revoked dominates "
-                    f"suspended); this is a standing fact, not a refusal this tool issued.",
-                ]
-                return section(
-                    "STANDING (leads: a suspension/revocation must be learned from the brief, "
-                    "never only from a write refusal)",
-                    f"ledger kind=principal_revoked, statement naming '{role}', via `led current "
-                    f"{scan_limit}` (JB4)",
-                    lines,
-                )
-    provenance = (
-        f"ledger kind=principal_suspended (suspend AND lift-suspension both write this kind, "
-        f"same-kind supersession, s45), statement naming '{role}', current row via `led current "
-        f"{scan_limit}` (JB4)"
-    )
+                lines = [f"REVOKED (row {rid}, TERMINAL -- dominates any suspension): {statement}",
+                         "  No lift path exists for a revocation (s40 Sec.3.4); a standing fact, "
+                         "not a refusal this tool issued."]
+                return section(STANDING_TITLE,
+                                f"ledger kind=principal_revoked, statement naming '{role}', via "
+                                f"`led current {scan_limit}` (JB4)", lines)
+    provenance = (f"ledger kind=principal_suspended (suspend/lift-suspension share this kind, "
+                  f"s45), statement naming '{role}', current row via `led current {scan_limit}` "
+                  f"(JB4)")
     if newest_row is None:
-        return section(
-            "STANDING (leads: a suspension must be learned from the brief, never only from a "
-            "write refusal)",
-            provenance,
-            [f"ACTIVE -- no suspend/lift/revoke event found for '{role}' in the last "
-              f"{scan_limit} ledger_current rows."],
-        )
+        return section(STANDING_TITLE, provenance,
+                        [f"ACTIVE -- no suspend/lift/revoke event found for '{role}' in the last "
+                         f"{scan_limit} ledger_current rows."])
     rid, statement = newest_row
     if SUSPENDED_RE.match(statement):
-        lines = [
-            f"SUSPENDED (row {rid}): {statement}",
-            f"Writes under '{role}' are refused by the kernel until this is lifted. Lift path "
-            f"(s45, by a DIFFERENT active principal): {led} principal lift-suspension {role}",
-        ]
+        lines = [f"SUSPENDED (row {rid}): {statement}",
+                 f"Writes under '{role}' are refused until this is lifted. Lift path (s45, by a "
+                 f"DIFFERENT active principal): {led} principal lift-suspension {role}"]
     else:
         lines = [f"ACTIVE (lifted at row {rid}): {statement}"]
-    return section(
-        "STANDING (leads: a suspension must be learned from the brief, never only from a write "
-        "refusal)",
-        provenance,
-        lines,
-    )
+    return section(STANDING_TITLE, provenance, lines)
 
 
-def build_decisions_section(led: str, role: str, scan_limit: int) -> str:
+def build_decisions_section(led: str, role: str, role_actor_id: int, scan_limit: int) -> str:
+    print(f"role_brief: NOTE -- IN-FORCE DECISIONS filters by actor id; `current`/`--recent` "
+          f"carry no actor field (JB5): issues one `led show` per scanned row, up to "
+          f"--scan-limit={scan_limit}. Pass a smaller --scan-limit on a large ledger if slow.",
+          file=sys.stderr)
+    led_cmd_label = f"{led} current {scan_limit}"
     out = require_led(led, ["current", str(scan_limit)])
     lines = []
     for line in out.splitlines():
-        parsed = parse_current_line(line)
-        if not parsed:
-            continue
-        rid, kind, statement, actor_name = parsed
-        if actor_name == role:
+        rid, kind, statement = parse_current_line(led_cmd_label, line)
+        show_cmd_label = f"{led} show {rid}"
+        show_out = require_led(led, ["show", str(rid)])
+        detail = parse_served_show(show_cmd_label, show_out)
+        actor_id = _actor_id_from_show(detail, rid, show_cmd_label)
+        if actor_id == role_actor_id:
             lines.append(f"row {rid} [{kind}]: {statement}")
     lines.sort(key=lambda ln: int(ln.split()[1]))
-    return section(
-        "IN-FORCE DECISIONS (rows where this role is the actor)",
-        f"ledger_current via `led current {scan_limit}`, filtered actor='{role}'",
-        lines,
-    )
+    return section("IN-FORCE DECISIONS (rows where this role is the actor)",
+                    f"ledger_current via `led current {scan_limit}`, each row's actor resolved "
+                    f"via `led show <id>` vs. '{role}''s own resolved actor id (JB5) -- served "
+                    f"`current` carries no actor field to filter on directly", lines)
 
 
-def build_obligation_section(led: str, role: str, scan_limit: int) -> str:
+def build_obligation_section(led: str, role: str, role_actor_id: int, scan_limit: int) -> str:
     lines = []
     rg_out = require_led(led, ["review-gap"])
-    for row in parse_psql_table(rg_out):
+    for row in parse_json_lines(f"{led} review-gap", rg_out):
+        if row.get("actor") != role_actor_id:
+            continue
         rid = row.get("id")
-        if not rid or not rid.isdigit():
-            continue
-        show_out = require_led(led, ["show", rid])
-        detail = parse_psql_expanded(show_out)
-        if detail.get("actor_name") != role:
-            continue
-        lines.append(
-            f"review_gap: row {rid} [{detail.get('kind', '?')}] undischarged "
-            f"(scope={row.get('scope', '?')}, statement: {detail.get('statement', '?')})"
-        )
+        kind, statement = "?", "?"
+        if rid is not None:
+            detail = parse_served_show(f"{led} show {rid}", require_led(led, ["show", str(rid)]))
+            kind, statement = detail.get("kind", "?"), detail.get("statement", "?")
+        lines.append(f"review_gap: row {rid} [{kind}] undischarged (scope={row.get('scope', '?')}, "
+                     f"assigned_by actor={row.get('assigned_by', '?')}, statement: {statement})")
     wrg_out = require_led(led, ["work", "review-gap"])
-    for row in parse_psql_table(wrg_out):
+    for row in parse_json_lines(f"{led} work review-gap", wrg_out):
+        if row.get("closer") != role_actor_id:
+            continue
         close_id = row.get("close_id")
-        if not close_id or not close_id.isdigit():
-            continue
-        show_out = require_led(led, ["show", close_id])
-        detail = parse_psql_expanded(show_out)
-        if detail.get("actor_name") != role:
-            continue
-        lines.append(
-            f"work_review_gap: slug={row.get('slug', '?')} close row {close_id} deferred and "
-            f"undischarged (statement: {detail.get('statement', '?')})"
-        )
-    return section(
-        "OBLIGATION DEBT",
-        f"review_gap via `led review-gap` + work_review_gap via `led work review-gap`, each row "
-        f"cross-resolved to actor_name='{role}' via `led show` (JB3)",
-        lines,
-    )
+        statement = "?"
+        if close_id is not None:
+            statement = parse_served_show(
+                f"{led} show {close_id}", require_led(led, ["show", str(close_id)])
+            ).get("statement", "?")
+        lines.append(f"work_review_gap: slug={row.get('slug', '?')} close row {close_id} deferred "
+                     f"and undischarged (statement: {statement})")
+    return section("OBLIGATION DEBT",
+                    f"review_gap (actor, direct) + work_review_gap (closer, direct) filtered "
+                    f"against '{role}''s own resolved actor id (JB5); matched rows re-fetched via "
+                    f"`led show` for kind/statement display only (JB3)", lines)
 
 
-def build_questions_section(led: str, role: str, scan_limit: int) -> str:
+def build_questions_section(led: str, role: str, role_actor_id: int, scan_limit: int) -> str:
     qs_out = require_led(led, ["question-status"])
     lines = []
-    for row in parse_psql_table(qs_out):
+    for row in parse_json_lines(f"{led} question-status", qs_out):
+        if row.get("answered") is not False:
+            continue
         qid = row.get("question_id")
-        answered = row.get("answered")
-        if not qid or not qid.isdigit() or answered != "f":
+        if qid is None:
+            raise BriefError(f"SHAPE DRIFT -- `{led} question-status` row has no 'question_id': {row!r}")
+        show_cmd_label = f"{led} show {qid}"
+        detail = parse_served_show(show_cmd_label, require_led(led, ["show", str(qid)]))
+        if _actor_id_from_show(detail, qid, show_cmd_label) != role_actor_id:
             continue
-        show_out = require_led(led, ["show", qid])
-        detail = parse_psql_expanded(show_out)
-        if detail.get("actor_name") != role:
-            continue
-        lines.append(
-            f"row {qid} [{row.get('question_kind', '?')}] OPEN, concern={detail.get('concern') or '(none)'}: "
-            f"{detail.get('statement', '?')}"
-        )
-    return section(
-        "OPEN QUESTIONS IN ITS CONCERNS (read as: open questions this role itself raised -- JB2, "
-        "no principal-scoped concern mechanism exists in the kernel schema)",
-        f"question_status via `led question-status`, filtered answered=false and (via `led show`) "
-        f"actor_name='{role}'",
-        lines,
-    )
+        lines.append(f"row {qid} [{row.get('question_kind', '?')}] OPEN, "
+                     f"concern={detail.get('concern') or '(none)'}: {detail.get('statement', '?')}")
+    return section("OPEN QUESTIONS IN ITS CONCERNS (read as: open questions this role itself "
+                    "raised -- JB2, no principal-scoped concern mechanism exists)",
+                    f"question_status (answered=false rows), each open row's actor resolved via "
+                    f"`led show` vs. '{role}''s own resolved actor id (JB5) -- question_status "
+                    f"itself carries no actor column", lines)
 
 
 def build_claimable_work_section(led: str, role: str, scan_limit: int) -> str:
-    out = require_led(led, ["work", "startable"])
-    lines = [f"{row.get('slug', '?')}: {row.get('title', '?')}" for row in parse_psql_table(out)]
-    return section(
-        "CLAIMABLE WORK (UNFILTERED -- JB1: no kernel mechanism ties a work_startable slug to a "
-        "role assignment; shown in full rather than silently narrowed by a guess)",
-        "work_startable via `led work startable`",
-        lines,
-    )
+    rows = parse_json_lines(f"{led} work startable", require_led(led, ["work", "startable"]))
+    lines = [f"{row.get('slug', '?')}: {row.get('title', '?')}" for row in rows]
+    return section("CLAIMABLE WORK (UNFILTERED -- JB1: no kernel mechanism ties a work_startable "
+                    "slug to a role assignment; shown in full rather than narrowed by a guess)",
+                    "work_startable via `led work startable`", lines)
 
 
 def cmd_brief(role: str, led: str, scan_limit: int) -> int:
-    header = f"# BRIEF -- role '{role}' (computed now, via {led}, scan-limit={scan_limit})\n"
-    sections = [
-        build_standing_section(led, role, scan_limit),
-        build_decisions_section(led, role, scan_limit),
-        build_obligation_section(led, role, scan_limit),
-        build_questions_section(led, role, scan_limit),
-        build_claimable_work_section(led, role, scan_limit),
-    ]
-    print(header)
-    for s in sections:
+    print(f"# BRIEF -- role '{role}' (computed now, via {led}, scan-limit={scan_limit})\n")
+    standing = build_standing_section(led, role, scan_limit)
+    # JB5: every remaining section is actor-id-scoped -- resolve ONCE, up front, so an
+    # unregistered role refuses loudly before any section runs, not partway through the brief.
+    role_actor_id = resolve_role_actor_id(led, role, scan_limit)
+    for s in (standing, build_decisions_section(led, role, role_actor_id, scan_limit),
+              build_obligation_section(led, role, role_actor_id, scan_limit),
+              build_questions_section(led, role, role_actor_id, scan_limit),
+              build_claimable_work_section(led, role, scan_limit)):
         print(s)
     return 0
 
@@ -344,10 +346,8 @@ def cmd_brief(role: str, led: str, scan_limit: int) -> int:
 def usage(msg: str | None = None) -> int:
     if msg:
         print(f"role_brief: {msg}", file=sys.stderr)
-    print(
-        "usage: python3 tools/role_brief.py brief <role> [--led PATH] [--scan-limit N]",
-        file=sys.stderr,
-    )
+    print("usage: python3 tools/role_brief.py brief <role> [--led PATH] [--scan-limit N]",
+          file=sys.stderr)
     return 2
 
 
