@@ -129,6 +129,74 @@ above or below, and it is exactly as much a REFUSAL as if the append always ran 
 (fail-closed) side of the ambiguity coincides with the flagged side, for every case, by
 construction.
 
+FIX-ROUND 4 (fresh-context strengthened-tier review of round 3; CENSUS FAIL-CLOSED, see
+gates/fixture_deployment_pin_guard.py's own POSTURE section for the full account, including the
+MEASUREMENT record for why this round does NOT implement the brief's rule B/C in their full
+sensitivity-independent form). Every specimen below is one lap-4 finding, banked so it can never
+silently regress again:
+
+RED (finding 1, chained assign): `x = y = [str(REPO / "led"), "status"]` then `subprocess.run(y)`
+-- `analyze_names`' own Assign case required `len(targets) == 1`, so BOTH names were invisible;
+refused now (census sweep contaminates every target of a chained assign).
+
+RED (finding 2, tuple-unpack): `cmd, other = str(REPO / "led"), "status"` then
+`subprocess.run(cmd)` -- only a bare `Name`/`Subscript(Name)` target was ever modeled; refused now.
+
+RED (finding 2, for-loop target): `for cmd in (str(REPO / "led"), "status"): pass` then
+`subprocess.run(cmd)` -- refused now (census sweep's for-target contamination).
+
+RED (finding 2, tuple-swap): `a = ["status"]; b = [str(REPO / "led")]; a, b = b, a` then
+`subprocess.run(a)` -- `a`'s OWN literal binding (`["status"]`) was, and remains, innocuous; the
+swap is what makes `a` unprovable (it may now hold what `b` held). The census sweep records the
+swap as a mutual ALIAS (not a payload copy -- a bare Name isn't itself verb-shaped), and the
+existing union-find alias step does the rest: `a`'s component merges with `b`'s, which IS
+sensitive, so both come back UNPROVEN together.
+
+RED (finding 3, walrus): `if (cmd := [str(REPO / "led"), "status"]): subprocess.run(cmd)` --
+`ast.NamedExpr` was swept by no prior round at all; refused now.
+
+RED (finding 4, bare verb literal, no REPO join): `subprocess.run(["led", "status"])` -- the
+leak class's most literal spelling, invisible to every prior round (all of which only ever looked
+for a REPO-ROOTED PATH); refused now, naming the bare literal directly.
+
+RED (finding 4, bare verb literal with a leading `./`): `subprocess.run(["./led", "status"])` --
+same shape, `./`-prefixed; refused now.
+
+RED (finding 5, getattr-based mutation): `cmd = ["status"]; getattr(cmd, "append")(str(REPO /
+"led")); subprocess.run(cmd)` -- `getattr(cmd, "append")(...)` never spells `cmd.append(...)`, so
+the mutator-method sweep never saw it, and the append's own argument was never captured as a
+payload element (some OTHER, unrelated event may have fired against `cmd`, but the appended
+element itself was dropped before the provable/unproven branch ever looked at it); refused now
+(the census sweep's own getattr-based-mutation detector, keyed by the exact same construct).
+
+RED (finding 5, globals()-based mutation): `cmd = ["status"]` at module level,
+`globals()["cmd"].append(str(REPO / "led"))` inside a function -- no `Name` node spells `cmd` at
+the mutation site at all, so no event of any kind ever touched `cmd`'s facts; refused now (the
+census sweep's globals()-based-mutation detector, keyed by the string literal).
+
+RED (finding 6, Starred unpacking a literal list carrying the verb): `subprocess.run([*[str(REPO
+/ "led")], "status"])` -- the `Starred` element wraps its OWN inline List literal, invisible to a
+matcher that only ever looked at each element directly; refused now (CHECK 1 unpacks a
+`Starred(List/Tuple literal)` in place before inspecting elements -- a `Starred` wrapping anything
+else, e.g. `*args`, is untouched, see MEASUREMENT for why).
+
+RED (finding 6, IfExp on a join's tail): `subprocess.run([str(REPO / ("led" if flag else
+"pickup")), "status"])` -- the join chain's RIGHTMOST hop is an `IfExp`, not a plain constant;
+refused now (every candidate string at the tail hop is tried against the verb roster).
+
+RED (finding 6, f-string with a nested `str(REPO)` call): `subprocess.run([f"{str(REPO)}/led",
+"status"])` -- only a bare `{REPO}` FormattedValue was recognized before; refused now (the
+FormattedValue's own value is unwrapped through `str(...)` first, same as every other shape here).
+
+GREEN (round-3 deliberate-pass case, RECONFIRMED, not flipped): a Name-bound argv mutated with an
+ordinary, non-sensitive event and never touching a repo verb (`cmd = ["git", "status"]; cmd +=
+["-v"]; subprocess.run(cmd)`) stays GREEN under this round too -- this is the brief's own rule B
+asking for a sensitivity-independent refusal here (the mutation alone, with no verb ever in
+sight, would refuse), which this round's MEASUREMENT section declines to implement (measured
+~75 real files using this exact non-sensitive-mutation/wrapper-parameter idiom, the corpus's
+dominant convention -- see gates/fixture_deployment_pin_guard.py's own docstring). Kept GREEN
+here, deliberately, rather than silently narrowing the brief without saying so.
+
 Runs against throwaway tempfile copies; zero residue in the repo itself."""
 from __future__ import annotations
 
@@ -437,6 +505,162 @@ def run_it(flag):
 '''
 
 
+# --- fix-round-4 RED specimens (fresh-context strengthened-tier review of round 3; census
+# fail-closed, see gate module docstring's POSTURE section) -- one per lap-4 finding. -----------
+
+RED_CHAINED_ASSIGN = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    x = y = [str(REPO / "led"), "status"]
+    return subprocess.run(y, capture_output=True, text=True)
+'''
+
+RED_TUPLE_UNPACK = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    cmd, other = str(REPO / "led"), "status"
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_FOR_TARGET = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    cmd = "unused"
+    for cmd in (str(REPO / "led"), "status"):
+        pass
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_TUPLE_SWAP = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    a = ["status"]
+    b = [str(REPO / "led")]
+    a, b = b, a
+    return subprocess.run(a, capture_output=True, text=True)
+'''
+
+RED_WALRUS = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    if (cmd := [str(REPO / "led"), "status"]):
+        return subprocess.run(cmd, capture_output=True, text=True)
+    return None
+'''
+
+RED_BARE_LED = '''\
+import subprocess
+
+
+def run_it():
+    return subprocess.run(["led", "status"], capture_output=True, text=True)
+'''
+
+RED_BARE_DOT_LED = '''\
+import subprocess
+
+
+def run_it():
+    return subprocess.run(["./led", "status"], capture_output=True, text=True)
+'''
+
+RED_GETATTR_APPEND = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    cmd = ["status"]
+    getattr(cmd, "append")(str(REPO / "led"))
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_GLOBALS_APPEND = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+cmd = ["status"]
+
+
+def run_it():
+    globals()["cmd"].append(str(REPO / "led"))
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_STARRED_LITERAL = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run([*[str(REPO / "led")], "status"], capture_output=True, text=True)
+'''
+
+RED_IFEXP_JOIN = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it(flag=True):
+    return subprocess.run([str(REPO / ("led" if flag else "pickup")), "status"],
+                          capture_output=True, text=True)
+'''
+
+RED_FSTRING_STR_CALL = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run([f"{str(REPO)}/led", "status"], capture_output=True, text=True)
+'''
+
+GREEN_MUTATED_NON_SENSITIVE = '''\
+import subprocess
+
+
+def run_it():
+    cmd = ["git", "status"]
+    cmd += ["-v"]
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+
 def _run_gate(*paths: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(GATE), *[str(p) for p in paths]],
                            capture_output=True, text=True)
@@ -480,6 +704,21 @@ def main() -> int:
             "red-opaque-before-sensitive.py": (RED_OPAQUE_BEFORE_SENSITIVE, True, "provable"),
             "red-alias-append.py": (RED_ALIAS_APPEND, True, "provable"),
             "red-branch-order-dissolved.py": (RED_BRANCH_ORDER_DISSOLVED, True, "provable"),
+            # --- fix-round-4 specimens (fresh-context strengthened-tier review of round 3;
+            # census fail-closed) -- one per lap-4 finding, see module docstring above. ----------
+            "red-chained-assign.py": (RED_CHAINED_ASSIGN, True, "provable"),
+            "red-tuple-unpack.py": (RED_TUPLE_UNPACK, True, "provable"),
+            "red-for-target.py": (RED_FOR_TARGET, True, "provable"),
+            "red-tuple-swap.py": (RED_TUPLE_SWAP, True, "provable"),
+            "red-walrus.py": (RED_WALRUS, True, "provable"),
+            "red-bare-led.py": (RED_BARE_LED, True, "led"),
+            "red-bare-dot-led.py": (RED_BARE_DOT_LED, True, "led"),
+            "red-getattr-append.py": (RED_GETATTR_APPEND, True, "provable"),
+            "red-globals-append.py": (RED_GLOBALS_APPEND, True, "provable"),
+            "red-starred-literal.py": (RED_STARRED_LITERAL, True, "led"),
+            "red-ifexp-join.py": (RED_IFEXP_JOIN, True, "led"),
+            "red-fstring-str-call.py": (RED_FSTRING_STR_CALL, True, "led"),
+            "green-mutated-non-sensitive.py": (GREEN_MUTATED_NON_SENSITIVE, False, None),
         }
         for fname, (content, should_be_bad, verb) in specimens.items():
             spath = tmp_path / fname
