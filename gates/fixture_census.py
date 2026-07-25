@@ -228,6 +228,14 @@ REGISTRY: dict[str, str] = {
     # layout fix (ledger row 1138's reopened-loop major).
     "setup-tui-rehearsal-mid-cancel":  "seen-red/setup-tui-rehearsal-mid-cancel/run_fixtures.py",
     "setup-tui-control-help-split":    "seen-red/setup-tui-control-help-split/run_fixtures.py",
+    # MISSIVES kernel family (kernel/lineage/s58-missive-substrate.sql, s59-missive-views.sql,
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263, AMENDMENT 1 2026-07-25): red.txt
+    # banks the historical pre-amendment defect (regards reused for missive_disposed, refused by
+    # s15's validate_review -- the build's own primary finding, resolved by the new dedicated
+    # missive_regards column) plus the live refusal set this run_fixtures.py exercises against a
+    # real scratch schema pair (missive_regards kind-shape/existence, courier scope, dedup; one
+    # green control).
+    "missives-kernel-family":          "seen-red/missives-kernel-family/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

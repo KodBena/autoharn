@@ -1,9 +1,14 @@
 -- s58 MISSIVE SUBSTRATE (design/FABLE-MISSIVES-KERNEL-SPEC.md -- Fable-authored, OUT OF FRAME,
 -- maintainer-ratified AS IT STANDS 2026-07-25, ledger row 1263, including every §13 construction
--- decision). Sonnet-executed per the standing delegation contract, from this Fable-authored,
--- maintainer-ratified spec. This delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to any
--- live/existing world is the maintainer's act at a FUTURE world's birth (runs-are-strictly-linear,
--- 2026-07-11) -- never taken here.
+-- decision, AS AMENDED by AMENDMENT 1 (2026-07-25, maintainer-ratified "yes to the column"):
+-- missive_disposed's subject moved from the base-schema `regards` column (trigger-locked to
+-- kind='review' by s15's validate_review, witnessed live: "Ledger policy: regards is reserved
+-- for kind=review.") to a NEW dedicated column, missive_regards -- see ELEMENT 3's own note and
+-- the new validate_missive_regards trigger, ELEMENT 4 item 6. Sonnet-executed per the standing
+-- delegation contract, from this Fable-authored, maintainer-ratified spec (as amended). This
+-- delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to any live/existing world is the
+-- maintainer's act at a FUTURE world's birth (runs-are-strictly-linear, 2026-07-11) -- never
+-- taken here.
 --
 -- PREREQUISITE: s57 (kernel/lineage/s57-obligation-revocation-event.sql) -- a HARD dependency:
 -- this delta re-issues s57's own head texts (ledger_kind_check, compute_row_hash, ledger_current,
@@ -58,23 +63,26 @@
 -- ELEMENT 8) -- the s53 ELEMENT 3 idiom, vacuous and (mostly) classifier-invisible on every
 -- non-missive row.
 --
--- ELEMENT 4 -- FIVE NEW REFUSAL TRIGGERS (spec §2.4), beside the existing validate_* family
--- (never folded into a dispatcher, ADR-0012 P1): validate_missive_identity (world_identity
--- resolution + empty-table loud abort), validate_missive_dedup (received-side AND sent-side
--- (author_world/thread/seq) uniqueness, raw-ledger HISTORY-typed reads -- a superseded receipt
--- still blocks re-receipt), validate_missive_tokens (missive_cites token shape+existence, the
--- s48/s52 mechanism reused verbatim; xrow: tokens shape-checked only, foreign-ledger existence
--- deliberately NOT checked at write time -- isolation is founding, spec §2.4 item 3),
--- validate_missive_courier_scope (THE load-bearing type of the family, Q3/ADR-0000 Rule 2(a):
--- the courier principal can write missive_received and NOTHING else -- fires on EVERY insert),
--- validate_missive_disposition (regards must name an existing missive_received row; refuses
--- dispositioning an acknowledgment receipt -- no ack-of-ack regress; refuses a second
--- disposition of the same receipt unless it is the ratified same-kind re-disposition).
+-- ELEMENT 4 -- SIX NEW REFUSAL TRIGGERS (spec §2.4, AMENDMENT 1 adds the sixth), beside the
+-- existing validate_* family (never folded into a dispatcher, ADR-0012 P1): validate_missive_
+-- identity (world_identity resolution + empty-table loud abort), validate_missive_dedup
+-- (received-side AND sent-side (author_world/thread/seq) uniqueness, raw-ledger HISTORY-typed
+-- reads -- a superseded receipt still blocks re-receipt), validate_missive_tokens (missive_cites
+-- token shape+existence, the s48/s52 mechanism reused verbatim; xrow: tokens shape-checked only,
+-- foreign-ledger existence deliberately NOT checked at write time -- isolation is founding, spec
+-- §2.4 item 3), validate_missive_courier_scope (THE load-bearing type of the family, Q3/
+-- ADR-0000 Rule 2(a): the courier principal can write missive_received and NOTHING else --
+-- fires on EVERY insert), validate_missive_disposition (missive_regards must name an existing
+-- missive_received row; refuses dispositioning an acknowledgment receipt -- no ack-of-ack
+-- regress; refuses a second disposition of the same receipt unless it is the ratified same-kind
+-- re-disposition), validate_missive_regards (AMENDMENT 1, s58's own object: the two-way KIND
+-- correlation on missive_regards -- the named row must be an in-world missive_received row).
 -- ALPHABETICAL FIRING ORDER NOTE (spec §2.4 preamble): set_actor (s < v) fires before every
 -- validate_*, so NEW.actor is resolved when validate_missive_courier_scope reads it;
 -- zz_set_row_hash still fires last (the s26 mechanism, preserved -- every new trigger name here
 -- (validate_missive_*) sorts between set_actor and zz_set_row_hash alphabetically, unchanged
--- ordering discipline).
+-- ordering discipline; validate_missive_regards sorts between validate_missive_identity and
+-- validate_missive_tokens).
 --
 -- ELEMENT 5 -- validate_supersession_target RE-ISSUED (FOURTH re-issue; base = s53's own head
 -- text -- s43 write_refused block + s45 standing-lifecycle block + s53 belief block, verified
@@ -108,25 +116,28 @@
 -- acknowledgment state is unrepresentable through this path, the review_write atomicity
 -- argument).
 --
--- ELEMENT 8 -- SAME-COMMIT SET (the s53 ELEMENT 6 idiom): (a) compute_row_hash re-issued to 87
--- columns (ten appended in catalog ordinal order, s42's law); (b) ledger_current/
--- countersigned_in_force re-issued +10 appended at end (the s20 lesson); (c) kind CHECK to 30;
--- (d) refusal_surface_check widened to seven members ('missive_dispose'); (e)
--- gates/kind_shape_manifest_gate.py: MANDATORY-ON-KIND is a GENUINELY NEW kind-shape idiom this
--- codebase had none of before (spec's own text says "extended... to parse it" naming the
--- TWO-MEMBER-KIND-SET two-way idiom specifically -- verified LIVE at this delta's own authoring
--- time that the existing _TWO_WAY_RE/_KIND_ANY_RE pair ALREADY parses `(kind IN (...)) = (col IS
--- NOT NULL)` with zero classifier edits, because Postgres canonicalizes `kind IN (a,b)` to
--- `kind = ANY (ARRAY[...])`, which _KIND_ANY_RE already reads, and _TWO_WAY_RE is a bare
--- substring search with no anchor on the LEFT side of `=` -- so the spec's own anticipated
--- classifier edit for THAT idiom turned out unnecessary, disclosed here rather than silently
--- carried out anyway; the missive_disposition mandatory-on-missive_disposed CHECK, however, IS a
--- genuinely new idiom (MANDATORY-ON-KIND, `kind <> 'K' OR col IS NOT NULL` -- the mirror image of
--- s43's own FORBIDDEN-ON-KIND, `col IS NULL OR kind <> 'K'`) and the classifier IS extended for
--- it, its own manifest added, both witnessed both-polarity in gates/kind_shape_manifest_gate.py's
--- own scratch harness (this same commit); ten new MANIFEST rows for the nine plain-shaped
--- columns plus missive_provenance's single-kind two-way row; (f)
--- gates/ledger_reader_allowlist.py: entries for validate_missive_dedup/
+-- ELEMENT 8 -- SAME-COMMIT SET (the s53 ELEMENT 6 idiom): (a) compute_row_hash re-issued to 88
+-- columns (eleven appended in catalog ordinal order -- the original ten plus AMENDMENT 1's
+-- missive_regards, s42's law); (b) ledger_current/countersigned_in_force re-issued +11 appended
+-- at end (the s20 lesson); (c) kind CHECK to 30; (d) refusal_surface_check widened to seven
+-- members ('missive_dispose'); (e) gates/kind_shape_manifest_gate.py: MANDATORY-ON-KIND is a
+-- GENUINELY NEW kind-shape idiom this codebase had none of before (spec's own text says
+-- "extended... to parse it" naming the TWO-MEMBER-KIND-SET two-way idiom specifically --
+-- verified LIVE at this delta's own authoring time that the existing _TWO_WAY_RE/_KIND_ANY_RE
+-- pair ALREADY parses `(kind IN (...)) = (col IS NOT NULL)` with zero classifier edits, because
+-- Postgres canonicalizes `kind IN (a,b)` to `kind = ANY (ARRAY[...])`, which _KIND_ANY_RE
+-- already reads, and _TWO_WAY_RE is a bare substring search with no anchor on the LEFT side of
+-- `=` -- so the spec's own anticipated classifier edit for THAT idiom turned out unnecessary,
+-- disclosed here rather than silently carried out anyway; the missive_disposition mandatory-on-
+-- missive_disposed CHECK, however, IS a genuinely new idiom (MANDATORY-ON-KIND, `kind <> 'K' OR
+-- col IS NOT NULL` -- the mirror image of s43's own FORBIDDEN-ON-KIND, `col IS NULL OR kind <>
+-- 'K'`) and the classifier IS extended for it, its own manifest added, both witnessed
+-- both-polarity in gates/kind_shape_manifest_gate.py's own scratch harness; ELEVEN new MANIFEST
+-- rows total (the nine plain-shaped columns, missive_provenance's single-kind two-way row, and
+-- AMENDMENT 1's missive_regards single-kind two-way row -- the (regards, missive_disposed)
+-- MANDATORY_ON_KIND_MANIFEST row this delta ORIGINALLY carried, documenting the conflict, is
+-- REMOVED by the amendment: regards is untouched, no MANDATORY-ON-KIND fact about it remains);
+-- (f) gates/ledger_reader_allowlist.py: entries for validate_missive_dedup/
 -- validate_missive_courier_scope/validate_missive_disposition and the re-issued
 -- validate_supersession_target (raw-ledger row-addressed/HISTORY-typed reads); (g)
 -- gates/hash_coverage_gate.py: no manual edit owed (mechanical chain derivation); (h)
@@ -140,10 +151,13 @@
 -- three new blocks gate on target kinds born here -- unreachable on any prior chain;
 -- kernel.missive_dispose and kernel.world_identity are new objects with no pre-existing
 -- reader/caller; the surface widening (refusal_surface_check) is pure vocabulary addition; the
--- ten columns/hash/two column-complete views follow the standing additive arguments (the s20/s42
--- lessons, applied again). NOT class-ratified fail-safe despite the additive shape -- it mints
--- ecosystem vocabulary (the s53 routing restated, spec HISTORY paragraph); ships only under
--- design/FABLE-MISSIVES-KERNEL-SPEC.md's own maintainer ratification (ledger row 1263).
+-- eleven columns/hash/two column-complete views follow the standing additive arguments (the
+-- s20/s42 lessons, applied again). AMENDMENT 1's missive_regards is likewise additive: no
+-- missive_disposed row exists anywhere (the pre-amendment defect made writing one impossible),
+-- so the new column/CHECK/trigger validate vacuously. NOT class-ratified fail-safe despite the
+-- additive shape -- it mints ecosystem vocabulary (the s53 routing restated, spec HISTORY
+-- paragraph); ships only under design/FABLE-MISSIVES-KERNEL-SPEC.md's own maintainer
+-- ratification (ledger row 1263, AMENDMENT 1 2026-07-25).
 --
 -- CLOSURE STATEMENT (ADR-0000 Rule 2(a)): this delta's own slice of the spec's own §10, which is
 -- the family-intended closure (s58+s59 together) -- reproduced faithfully in slice here for s58's
@@ -370,10 +384,24 @@ ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS missive_disposition_manda
 ALTER TABLE :"schema".ledger ADD CONSTRAINT missive_disposition_mandatory_on_ack CHECK (
     missive_act IS DISTINCT FROM 'acknowledgment' OR missive_disposition IS NOT NULL);
 
--- missive_disposed requires its subject (one-way on the core `regards` column):
-ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS missive_disposed_regards_kind_shape;
-ALTER TABLE :"schema".ledger ADD CONSTRAINT missive_disposed_regards_kind_shape CHECK (
-    kind <> 'missive_disposed' OR regards IS NOT NULL);
+-- missive_disposed requires its subject -- AMENDMENT 1 (2026-07-25, maintainer-ratified "yes to
+-- the column"): a DEDICATED column, missive_regards, NOT the core `regards` column (regards is
+-- trigger-locked by s15's validate_review to kind='review' ONLY -- witnessed live, both at the
+-- SQL boundary function and the HTTP boundary: "Ledger policy: regards is reserved for
+-- kind=review."; validate_review is untouched, missives get their own home, ADR-0012 P1 on both
+-- sides). Two-way: FORBIDDEN on every kind except missive_disposed, MANDATORY there.
+ALTER TABLE :"schema".ledger ADD COLUMN IF NOT EXISTS missive_regards bigint
+    REFERENCES :"schema".ledger(id);
+COMMENT ON COLUMN :"schema".ledger.missive_regards IS
+  'AMENDMENT 1 (design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263): the missive_received
+   row a missive_disposed event regards -- mirrors the review/regards design rather than
+   squatting on it. Two-way: mandatory on missive_disposed, forbidden elsewhere. Self-FK to
+   ledger(id) for structural existence; validate_missive_regards enforces the KIND correlation
+   (must be missive_received) with the same friendly nonexistent-target teach-text.
+   kernel/lineage/s58-missive-substrate.sql.';
+ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS missive_regards_kind_shape;
+ALTER TABLE :"schema".ledger ADD CONSTRAINT missive_regards_kind_shape CHECK (
+    (kind = 'missive_disposed') = (missive_regards IS NOT NULL));
 
 -- value CHECKs (no kind test -- out of the kind-shape manifest's scope, the attest_grade_check
 -- precedent):
@@ -432,7 +460,7 @@ COMMENT ON CONSTRAINT missive_disposition_mandatory_on_ack ON :"schema".ledger I
    kernel/lineage/s58-missive-substrate.sql.';
 
 -- ============================================================================================
--- ELEMENT 4 -- FIVE NEW REFUSAL TRIGGERS (spec §2.4).
+-- ELEMENT 4 -- SIX NEW REFUSAL TRIGGERS (spec §2.4, AMENDMENT 1).
 -- ============================================================================================
 
 -- 1. validate_missive_identity -- world_identity resolution; empty table = loud abort.
@@ -561,8 +589,9 @@ COMMENT ON FUNCTION :"schema".validate_missive_courier_scope() IS
    -> nothing to scope). Fires on EVERY insert, ahead of every other validate_* (alphabetical
    firing order: set_actor < validate_missive_courier_scope < zz_set_row_hash).';
 
--- 5. validate_missive_disposition -- regards must name an existing missive_received row; no
---    ack-of-ack; re-disposition only via same-kind supersession.
+-- 5. validate_missive_disposition -- missive_regards must name an existing missive_received
+--    row (AMENDMENT 1: was `regards`, moved to the dedicated column); no ack-of-ack;
+--    re-disposition only via same-kind supersession.
 CREATE OR REPLACE FUNCTION :"schema".validate_missive_disposition() RETURNS trigger
     LANGUAGE plpgsql SET search_path = :"schema", :"kern", pg_temp AS $fn$
 DECLARE
@@ -571,20 +600,20 @@ DECLARE
 BEGIN
   IF NEW.kind = 'missive_disposed' THEN
     SELECT l.kind, l.missive_act INTO v_tgt_kind, v_tgt_act
-      FROM ledger l WHERE l.id = NEW.regards;
+      FROM ledger l WHERE l.id = NEW.missive_regards;
     IF v_tgt_kind IS NULL THEN
-      RAISE EXCEPTION 'missive policy: regards row % does not exist (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5). Nothing was recorded.', NEW.regards;
+      RAISE EXCEPTION 'missive policy: missive_regards row % does not exist (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, AMENDMENT 1). Nothing was recorded.', NEW.missive_regards;
     ELSIF v_tgt_kind <> 'missive_received' THEN
-      RAISE EXCEPTION 'missive policy: regards row % (kind ''%'') is not a missive_received row -- a disposition regards a RECEIPT, nothing else (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5).', NEW.regards, v_tgt_kind;
+      RAISE EXCEPTION 'missive policy: missive_regards row % (kind ''%'') is not a missive_received row -- a disposition regards a RECEIPT, nothing else (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, AMENDMENT 1).', NEW.missive_regards, v_tgt_kind;
     ELSIF v_tgt_act = 'acknowledgment' THEN
-      RAISE EXCEPTION 'missive policy: row % is an acknowledgment receipt -- acknowledgments are consumed mechanically by missive_delivery_audit; dispositioning one would mint an ack-of-ack regress (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5). Nothing was recorded.', NEW.regards;
+      RAISE EXCEPTION 'missive policy: row % is an acknowledgment receipt -- acknowledgments are consumed mechanically by missive_delivery_audit; dispositioning one would mint an ack-of-ack regress (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5). Nothing was recorded.', NEW.missive_regards;
     ELSIF EXISTS (
       SELECT 1 FROM ledger d
-      WHERE d.kind = 'missive_disposed' AND d.regards = NEW.regards
+      WHERE d.kind = 'missive_disposed' AND d.missive_regards = NEW.missive_regards
         AND NOT EXISTS (SELECT 1 FROM ledger s2 WHERE s2.supersedes = d.id)
         AND (NEW.supersedes IS NULL OR NEW.supersedes <> d.id)
     ) THEN
-      RAISE EXCEPTION 'missive policy: receipt % already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.', NEW.regards;
+      RAISE EXCEPTION 'missive policy: receipt % already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.', NEW.missive_regards;
     END IF;
   END IF;
   RETURN NEW;
@@ -594,9 +623,45 @@ CREATE TRIGGER validate_missive_disposition BEFORE INSERT ON :"schema".ledger
     FOR EACH ROW EXECUTE FUNCTION :"schema".validate_missive_disposition();
 
 COMMENT ON FUNCTION :"schema".validate_missive_disposition() IS
-  'kernel/lineage/s58-missive-substrate.sql §2.4 item 5: regards must name an existing
-   missive_received row, not itself an acknowledgment; refuses a second in-force disposition of
-   the same receipt unless this write supersedes exactly the prior one (re-disposition).';
+  'kernel/lineage/s58-missive-substrate.sql §2.4 item 5 (AMENDMENT 1): missive_regards must name
+   an existing missive_received row, not itself an acknowledgment; refuses a second in-force
+   disposition of the same receipt unless this write supersedes exactly the prior one
+   (re-disposition).';
+
+-- 6. validate_missive_regards -- AMENDMENT 1 (2026-07-25, maintainer-ratified "yes to the
+--    column"): s58's own dedicated object for the two-way KIND correlation "the named row must
+--    be an in-world missive_received row" -- the same nonexistent-target refusal the build
+--    already witnessed, now on missive_regards' own home rather than borrowed from validate_
+--    missive_disposition (a deliberate, disclosed overlap with that trigger's own existence/kind
+--    check -- both independently refuse the same defect class, mirroring validate_review's own
+--    FK-plus-trigger duplication precedent one column family over; harmless regardless of
+--    firing order since either raising aborts the same INSERT).
+CREATE OR REPLACE FUNCTION :"schema".validate_missive_regards() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = :"schema", :"kern", pg_temp AS $fn$
+DECLARE
+  v_tgt_kind text;
+BEGIN
+  IF NEW.missive_regards IS NOT NULL THEN
+    SELECT l.kind INTO v_tgt_kind FROM ledger l WHERE l.id = NEW.missive_regards;
+    IF v_tgt_kind IS NULL THEN
+      RAISE EXCEPTION 'missive policy: missive_regards row % does not exist (design/FABLE-MISSIVES-KERNEL-SPEC.md AMENDMENT 1). Nothing was recorded.', NEW.missive_regards;
+    ELSIF v_tgt_kind <> 'missive_received' THEN
+      RAISE EXCEPTION 'missive policy: missive_regards row % (kind ''%'') is not a missive_received row -- a disposition regards a RECEIPT, nothing else (design/FABLE-MISSIVES-KERNEL-SPEC.md AMENDMENT 1).', NEW.missive_regards, v_tgt_kind;
+    END IF;
+  END IF;
+  RETURN NEW;
+END; $fn$;
+DROP TRIGGER IF EXISTS validate_missive_regards ON :"schema".ledger;
+CREATE TRIGGER validate_missive_regards BEFORE INSERT ON :"schema".ledger
+    FOR EACH ROW EXECUTE FUNCTION :"schema".validate_missive_regards();
+
+COMMENT ON FUNCTION :"schema".validate_missive_regards() IS
+  'design/FABLE-MISSIVES-KERNEL-SPEC.md AMENDMENT 1 (2026-07-25, ratified "yes to the column"):
+   the two-way KIND correlation for missive_regards -- the named row must be an in-world
+   missive_received row; a nonexistent or wrong-kind target is refused with teaching. s58''s own
+   dedicated object (not folded into validate_missive_disposition, ADR-0012 P1: the
+   kind-correlation fact gets its own home, exactly as missive_regards itself got its own column
+   rather than reusing regards). kernel/lineage/s58-missive-substrate.sql.';
 
 -- Triggers 2, 4, 5 and the re-issued supersession trigger (ELEMENT 5) read raw `ledger` by
 -- row-addressed/HISTORY-typed reads -- gates/ledger_reader_allowlist.py gains their entries
@@ -619,7 +684,8 @@ DECLARE
   v_target_regards bigint;
 BEGIN
   IF NEW.supersedes IS NOT NULL THEN
-    SELECT l.kind, l.principal_db_role, l.principal_subject, l.actor, l.missive_thread, l.regards
+    SELECT l.kind, l.principal_db_role, l.principal_subject, l.actor, l.missive_thread,
+           l.missive_regards
       INTO v_target_kind, v_target_db_role, v_target_subject, v_target_actor, v_target_thread,
            v_target_regards
       FROM ledger l WHERE l.id = NEW.supersedes;
@@ -674,10 +740,11 @@ BEGIN
     END IF;
 
     -- s58: missive_disposed supersession discipline -- re-disposition of the SAME receipt only
-    -- (the s45 identity-continuity pattern, spec §2.5).
+    -- (the s45 identity-continuity pattern, spec §2.5; AMENDMENT 1: was `regards`, now
+    -- `missive_regards`).
     IF v_target_kind = 'missive_disposed' THEN
-      IF NOT (NEW.kind = 'missive_disposed' AND NEW.regards = v_target_regards) THEN
-        RAISE EXCEPTION 'missive policy: a missive_disposed row (row %, regards %) is superseded ONLY by a same-kind re-disposition regarding the SAME receipt (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.5) — this write is kind ''%'' regarding %.', NEW.supersedes, v_target_regards, NEW.kind, NEW.regards;
+      IF NOT (NEW.kind = 'missive_disposed' AND NEW.missive_regards = v_target_regards) THEN
+        RAISE EXCEPTION 'missive policy: a missive_disposed row (row %, regards %) is superseded ONLY by a same-kind re-disposition regarding the SAME receipt (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.5) — this write is kind ''%'' regarding %.', NEW.supersedes, v_target_regards, NEW.kind, NEW.missive_regards;
       END IF;
     END IF;
   END IF;
@@ -775,8 +842,8 @@ BEGIN
     v_statement := COALESCE(p_payload->>'statement',
                              format('disposition: %s of %s', v_disposition, v_receipt_provenance));
 
-    -- step 2: the missive_disposed row.
-    INSERT INTO ledger (kind, statement, actor, regards, missive_disposition)
+    -- step 2: the missive_disposed row (AMENDMENT 1: missive_regards, not regards).
+    INSERT INTO ledger (kind, statement, actor, missive_regards, missive_disposition)
     VALUES ('missive_disposed', v_statement, v_actor, v_receipt, v_disposition)
     RETURNING id INTO v_disp_id;
 
@@ -823,9 +890,9 @@ COMMENT ON FUNCTION :"kern".missive_dispose(jsonb) IS
    kernel/lineage/s58-missive-substrate.sql.';
 
 -- ============================================================================================
--- ELEMENT 8a -- s42'S LAW SELF-APPLIED: compute_row_hash re-issued to 87 columns (the ten
--- missive_* columns appended in catalog ordinal order, before the predecessor link; base body
--- = s57's own text, verified unedited).
+-- ELEMENT 8a -- s42'S LAW SELF-APPLIED: compute_row_hash re-issued to 88 columns (the ten
+-- missive_* columns plus AMENDMENT 1's missive_regards appended in catalog ordinal order,
+-- before the predecessor link; base body = s57's own text, verified unedited).
 -- ============================================================================================
 CREATE OR REPLACE FUNCTION :"schema".compute_row_hash(r :"schema".ledger, predecessor_hash text)
     RETURNS text LANGUAGE sql IMMUTABLE
@@ -919,6 +986,8 @@ CREATE OR REPLACE FUNCTION :"schema".compute_row_hash(r :"schema".ledger, predec
       hashfield(r.missive_provenance),
       hashfield(r.missive_cites),
       hashfield(r.missive_disposition),
+      -- AMENDMENT 1: missive_regards, the eleventh missive_* column (catalog ordinal 88)
+      hashfield(r.missive_regards::text),
       hashfield(predecessor_hash)
     ], E'\x1f'),
   'utf8')), 'hex');
@@ -953,7 +1022,7 @@ SELECT l.id, l.ts, l.session, l.kind, l.statement, l.rationale, l.status, l.evid
        l.obligation_revoked_scope, l.obligation_revoke_reason,
        l.missive_protocol, l.missive_author_world, l.missive_addressee_world, l.missive_thread,
        l.missive_seq, l.missive_act, l.missive_responds_to, l.missive_provenance,
-       l.missive_cites, l.missive_disposition
+       l.missive_cites, l.missive_disposition, l.missive_regards
 FROM   :"schema".ledger l
 WHERE  NOT EXISTS (SELECT 1 FROM :"schema".ledger s WHERE s.supersedes = l.id);
 
@@ -983,7 +1052,7 @@ SELECT l.id, l.ts, l.session, l.kind, l.statement, l.rationale, l.status, l.evid
        l.obligation_revoked_scope, l.obligation_revoke_reason,
        l.missive_protocol, l.missive_author_world, l.missive_addressee_world, l.missive_thread,
        l.missive_seq, l.missive_act, l.missive_responds_to, l.missive_provenance,
-       l.missive_cites, l.missive_disposition
+       l.missive_cites, l.missive_disposition, l.missive_regards
 FROM   :"schema".ledger l
 WHERE  NOT EXISTS (SELECT 1 FROM :"schema".ledger s WHERE s.supersedes = l.id)
 AND    EXISTS (SELECT 1 FROM :"schema".discharging_attest da WHERE da.regards_id = l.id);

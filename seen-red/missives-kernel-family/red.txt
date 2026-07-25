@@ -1,0 +1,37 @@
+SEEN-RED evidence for the MISSIVES kernel family (kernel/lineage/s58-missive-substrate.sql,
+s59-missive-views.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263).
+
+=== HISTORICAL RED (round 1 of this build, pre-AMENDMENT 1, 2026-07-25) ===
+
+Witnessed live, both at the raw SQL boundary function (kernel.ledger_write / kernel.missive_
+dispose) and at the HTTP boundary (POST /d/{deployment}/write/missive_dispose), on the
+pre-amendment s58-missive-substrate.sql that carried missive_disposed's subject on the
+pre-existing `regards` column:
+
+    Ledger policy: regards is reserved for kind=review.
+
+(s15-schema.sql's validate_review trigger, unedited through all 57 prior deltas, refusing any
+non-review row naming a non-NULL regards.) Every missive_disposed write was refused here,
+unconditionally, before reaching validate_missive_disposition. Banked as the build's own primary
+finding (commit 4881a8f), resolved by AMENDMENT 1 (a new dedicated column, missive_regards).
+
+=== LIVE RED (this directory's run_fixtures.py, exercised 2026-07-25 against a real scratch
+    schema pair, teardown to zero residue on exit) ===
+
+  [ok] RED: missive_regards on a non-missive_disposed row refused
+  [ok] RED: missive_regards naming a nonexistent row refused, taught
+  [ok] RED: courier writing a non-missive_received kind refused (Q3)
+  [ok] GREEN: lawful missive_sent accepted (control)
+  [ok] RED: duplicate (thread, seq) missive_sent refused (dedup)
+
+NOTICE:  RESULT: refused / missive policy: missive_regards row 1 (kind 'principal_registered') is not a missive_received row -- a disposition regards a RECEIPT, nothing else (design/FABLE-MISSIVES-KERNEL-SPEC.md AMENDMENT 1).
+
+NOTICE:  RESULT: refused / missive policy: missive_regards row 999999 does not exist (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, AMENDMENT 1). Nothing was recorded.
+
+NOTICE:  RESULT: refused / missive policy: the courier principal records arrivals and NOTHING else (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 4, Q3 ratified row 1157) -- attempted kind 'decision'. The only path from "missive arrived" to local work, decision, belief, or disposition is a non-courier local principal's own attributable write citing the receipt (Q4). Nothing was recorded.
+
+NOTICE:  RESULT: accepted / <NULL>
+
+NOTICE:  RESULT: refused / missive policy: a missive_sent row already exists for (thread='seenredworld/t1', seq=1) -- the global identity's author-side half is a one-time fact (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2, §13 item 5).
+
+missives-kernel-family seen-red: all cases behaved as expected. (exit 0)

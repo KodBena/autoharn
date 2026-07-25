@@ -182,9 +182,10 @@ BASELINE: dict[str, int] = {
     # tools/setup_tui/steps_boundary.py's own surviving copy of the same comment instead (this
     # merge, 2026-07-23) -- there is no baseline row left to carry the +7.
     # Reconciled +221 to 1373 (design/FABLE-MISSIVES-KERNEL-SPEC.md, row 1263): two new
-    # kind-shape idioms (MANDATORY-ON-KIND, KIND-OR-VALUE-PERMITTED), each with regex + manifest
-    # + reconciliation block, plus ten new MANIFEST rows -- genuinely new, not padding.
-    "gates/kind_shape_manifest_gate.py":              1373,
+    # kind-shape idioms (MANDATORY-ON-KIND, KIND-OR-VALUE-PERMITTED) -- genuinely new, not padding.
+    # Reconciled +17 to 1390 (AMENDMENT 1): drops the conflicted (regards, missive_disposed)
+    # row, adds missive_regards' own MANIFEST_BY_COLUMN row -- genuinely new, not padding.
+    "gates/kind_shape_manifest_gate.py":              1390,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -236,7 +237,8 @@ BASELINE: dict[str, int] = {
     # Reconciled +33 to 559 (design/FABLE-MISSIVES-KERNEL-SPEC.md, row 1263): CHAIN += s58/s59;
     # ALLOWLIST entries for three new raw-ledger readers plus the re-issued
     # validate_supersession_target's widened reason text -- genuinely new, not padding.
-    "gates/ledger_reader_allowlist.py":                 559,
+    # Reconciled +6 to 565 (AMENDMENT 1): one more ALLOWLIST entry (validate_missive_regards).
+    "gates/ledger_reader_allowlist.py":                 565,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently

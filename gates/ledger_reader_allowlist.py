@@ -86,12 +86,13 @@ CHAIN = [
     "s59-missive-views.sql",
 ]
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row
-# 1263) extends this SAME gate's scratch CHAIN. It ships THREE new raw-`ledger` readers by design
-# (validate_missive_dedup, validate_missive_courier_scope, validate_missive_disposition; entries
-# below) and re-issues validate_supersession_target with three more missive_* branches (existing
-# entry updated in place, the s45/s53 precedent). s59's six views all factor through
-# ledger_current exclusively (the s31 discipline, stated in its own header) -- verified live,
-# classifies clean with NO allowlist entry for any of the six.
+# 1263, AS AMENDED by AMENDMENT 1 2026-07-25) extends this SAME gate's scratch CHAIN. It ships
+# FOUR new raw-`ledger` readers by design (validate_missive_dedup, validate_missive_courier_scope,
+# validate_missive_disposition, and AMENDMENT 1's validate_missive_regards; entries below) and
+# re-issues validate_supersession_target with three more missive_* branches (existing entry
+# updated in place, the s45/s53 precedent). s59's six views all factor through ledger_current
+# exclusively (the s31 discipline, stated in its own header) -- verified live, classifies clean
+# with NO allowlist entry for any of the six.
 # s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md,
 # maintainer-ratified 2026-07-22) extends this SAME gate's scratch CHAIN. discharging_attest
 # (RE-ISSUED, s32's own object, WHERE clause widened only) keeps its standing posture -- no raw
@@ -333,6 +334,11 @@ ALLOWLIST: dict[str, str] = {
                                     "missive_act), plus a raw-ledger re-disposition check -- "
                                     "same history-typed reasoning as validate_supersession_"
                                     "target one field over.",
+    "validate_missive_regards": "write-boundary BEFORE INSERT trigger (design/FABLE-MISSIVES-"
+                                "KERNEL-SPEC.md AMENDMENT 1, 2026-07-25): a single row-addressed "
+                                "read of the missive_regards TARGET's kind -- must be an "
+                                "in-world missive_received row; same history-typed reasoning as "
+                                "validate_review one field over.",
     "validate_missive_tokens": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 3): row:<id> "
                                "token existence check on missive_cites -- the s48/s52 idiom, "
                                "reused verbatim (artifact: tokens read kernel.artifact, outside "

@@ -206,6 +206,16 @@ CHAIN = [
 # ordinary MANIFEST_BY_COLUMN rows below, GENERATED like s53's _BELIEF_COLS. s59 (kernel/lineage/
 # s59-missive-views.sql) ships view-only, zero new columns/kinds/CHECKs -- verified live, no
 # MANIFEST change of any kind.
+# AMENDMENT 1 (design/FABLE-MISSIVES-KERNEL-SPEC.md, 2026-07-25, maintainer-ratified "yes to the
+# column") adds an ELEVENTH missive_* column, missive_regards -- missive_disposed's subject,
+# moved OFF the pre-existing `regards` column (this delta ORIGINALLY reused `regards`, which
+# s15's validate_review trigger-locks to kind='review' ONLY, refusing every missive_disposed
+# write live -- the build's own primary finding, round 1; MANDATORY_ON_KIND_MANIFEST's
+# (regards, missive_disposed) row, which documented that conflict, is REMOVED by the amendment,
+# below). missive_regards is an ORDINARY two-way iff (MANIFEST_BY_COLUMN, mechanism=CHECK) --
+# simpler than the MANDATORY-ON-KIND/FORBIDDEN-ON-KIND idiom pair used for missive_disposition's
+# own compound shape, and sufficient here: "forbidden on every kind except missive_disposed,
+# mandatory there" IS a two-way iff by construction, no new idiom owed.
 # s50-52/s54/s55/s56: no MANIFEST change. s53 (v2 B1): nine `belief` columns below; five coupling
 # CHECKs are off VALUES not `kind`, no entry owed. s57 (row 1150): two columns below.
 # s46/s47/s48/s49 each extend this SAME gate's scratch CHAIN and each ship ZERO new columns/kinds
@@ -670,6 +680,21 @@ MANIFEST.append(dict(column="missive_provenance", kinds=("missive_received",), a
                             "author-side token is MINTED by s59's missive_outbound view at serve "
                             "time, never stored on missive_sent -- a row cannot carry its own "
                             "row_hash."))
+# AMENDMENT 1 (2026-07-25, "yes to the column"): missive_regards, a NEW dedicated column --
+# missive_disposed's subject, moved OFF the pre-existing `regards` column (trigger-locked by
+# s15's validate_review to kind='review' ONLY, witnessed live to refuse every missive_disposed
+# write when reused there -- the build's own primary finding, round 1). Ordinary two-way iff:
+# FORBIDDEN on every kind except missive_disposed, MANDATORY there -- `regards` and
+# validate_review are UNTOUCHED (see this file's own note above, where the conflicted
+# MANDATORY_ON_KIND_MANIFEST row for (regards, missive_disposed) was REMOVED).
+MANIFEST.append(dict(column="missive_regards", kinds=("missive_disposed",), arity="two-way",
+                     mechanism="CHECK", constraint="missive_regards_kind_shape",
+                     defining_delta="s58-missive-substrate.sql",
+                     reason="the missive_received row a missive_disposed event regards -- "
+                            "mandatory on exactly that kind, forbidden elsewhere. Self-FK to "
+                            "ledger(id) for structural existence; the KIND correlation (must be "
+                            "missive_received) is validate_missive_regards' own cross-row check, "
+                            "AMENDMENT 1's dedicated trigger."))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 
@@ -757,26 +782,18 @@ MANDATORY_ON_KIND_MANIFEST = [
                 "(missive_disposition_allowed_homes/KIND_OR_VALUE_MANIFEST below) and mandatory "
                 "there too (missive_disposition_mandatory_on_ack, spelled off missive_act's VALUE, "
                 "out of this manifest's scope by the classifier's first test -- no `kind` literal)."),
-    dict(column="regards", kind="missive_disposed",
-         mechanism="CHECK", constraint="missive_disposed_regards_kind_shape",
-         defining_delta="s58-missive-substrate.sql",
-         reason="design/FABLE-MISSIVES-KERNEL-SPEC.md §2.3: 'missive_disposed requires its "
-                "subject' -- mandatory on kind=missive_disposed at the CHECK-catalog level. "
-                "FLAGGED LOUDLY, not silently absorbed (CLAUDE.md hazard rule): `regards` "
-                "already carries its OWN whole-column MANIFEST_BY_COLUMN row (mechanism=trigger, "
-                "kinds=('review',), s15-schema.sql's validate_review) which REFUSES any "
-                "non-review row naming a non-NULL regards ('Ledger policy: regards is reserved "
-                "for kind=review.', witnessed live). This CHECK is therefore SATISFIABLE ONLY "
-                "for a hypothetical world where validate_review is ALSO widened to admit "
-                "missive_disposed -- an s15 object outside s58's own §1 head-body-rule table and "
-                "outside this build's ratified scope. As authored, s58 is spec-literal and this "
-                "CHECK is CATALOG-VALID (this gate only checks shape, not cross-trigger runtime "
-                "consistency) but every missive_disposed write is UNCONDITIONALLY refused at "
-                "validate_review before reaching this CHECK or validate_missive_disposition -- "
-                "witnessed live, reported as the build's primary finding. Recorded here so the "
-                "MANIFEST accurately reflects the catalog; the runtime conflict is a SEPARATE, "
-                "louder finding this manifest row does not resolve."),
 ]
+# AMENDMENT 1 (design/FABLE-MISSIVES-KERNEL-SPEC.md, 2026-07-25, maintainer-ratified "yes to the
+# column") REMOVES the (regards, missive_disposed) row this manifest ORIGINALLY carried here --
+# that row documented a genuine, witnessed-live conflict (regards is trigger-locked by s15's
+# validate_review to kind='review' ONLY, refusing any non-review row naming it; a spec-literal
+# build could never write a missive_disposed row). The amendment moves missive_disposed's
+# subject to a NEW dedicated column, missive_regards -- regards and validate_review are
+# UNTOUCHED, so no MANDATORY-ON-KIND (nor any other) fact about `regards` is added by s58/s59
+# anymore; the conflict this row recorded no longer exists to record. missive_regards' own
+# kind-shape correlation is an ORDINARY two-way iff (below, MANIFEST_BY_COLUMN, mechanism=CHECK)
+# -- simpler than the MANDATORY-ON-KIND/FORBIDDEN-ON-KIND idiom pair, and sufficient: "FORBIDDEN
+# on every kind except missive_disposed, MANDATORY there" IS a two-way iff by construction.
 MANDATORY_ON_KIND_BY_KEY = {(row["column"], row["kind"]): row for row in MANDATORY_ON_KIND_MANIFEST}
 assert len(MANDATORY_ON_KIND_BY_KEY) == len(MANDATORY_ON_KIND_MANIFEST), \
     "duplicate (column, kind) in MANDATORY_ON_KIND_MANIFEST -- SSOT violated"

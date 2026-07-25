@@ -160,12 +160,13 @@ WHERE  r.kind = 'missive_received'
 AND    r.missive_act <> 'acknowledgment'
 AND    NOT EXISTS (
   SELECT 1 FROM :"schema".ledger_current d
-  WHERE d.kind = 'missive_disposed' AND d.regards = r.id
+  WHERE d.kind = 'missive_disposed' AND d.missive_regards = r.id
 );
 
 COMMENT ON VIEW :"schema".missive_undisposed IS
   'design/FABLE-MISSIVES-KERNEL-SPEC.md §3 item 3: in-force missive_received, act <>
-   ''acknowledgment'', with no in-force missive_disposed regarding it. Keyed by id. Consumer:
+   ''acknowledgment'', with no in-force missive_disposed regarding it (AMENDMENT 1:
+   missive_regards, not the core regards column). Keyed by id. Consumer:
    ./pickup (mail is part of hydration) and the deciding principal choosing dispositions.
    kernel/lineage/s59-missive-views.sql.';
 
