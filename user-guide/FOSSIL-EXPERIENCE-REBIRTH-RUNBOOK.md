@@ -1,4 +1,15 @@
-<!-- doc-attest-exempt: operator runbook, point-in-time; consumer, named: the maintainer executing the experience-world rebirth; strike when executed. -->
+<!-- doc-attest-exempt: EXECUTED operator runbook kept as an explicit fossil (maintainer
+disposition 2026-07-25: "move it to user-guide as an explicit fossil"); point-in-time record,
+never updated. Removal condition: maintainer decides the fossil is no longer worth shelf
+space. -->
+
+# FOSSIL — EXPERIENCE-REBIRTH-RUNBOOK (executed; kept for reference only)
+
+> **This runbook was executed** — the "experience" world was reborn as "experience2", and a
+> dated addendum below records which parts are already moot (the legacy-led retirement landed
+> after execution). It is kept in user-guide/ as an explicit fossil: a worked example of a
+> rebirth, useful as a template if another rebirth is ever needed, NOT current procedure.
+> Nothing here is maintained against the current tree.
 
 # MAINT-EXPERIENCE-REBIRTH-RUNBOOK — rebirthing the "experience" world as "experience2"
 
