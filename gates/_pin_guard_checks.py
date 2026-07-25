@@ -174,17 +174,22 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
     # CHECK 1 (leak class a): argv names a REPO-rooted verb path (root shim, libexec/autoharn/
     # <verb>, the autoharn dispatcher, or (round 4) a BARE literal naming one of those verbs with
     # no path join at all) instead of a scaffolded scratch copy. Callee-agnostic, scans EVERY
-    # positional Call argument. PROVE-OR-REFUSE (round 3): an argv is analyzed only when it is a
-    # direct inline literal at the call site, or a Name proven safe by `resolve_tracked_names`
-    # (exactly one literal binding, zero other events anywhere in the file, now including every
-    # census-swept binding shape -- round 4, see module docstring); every other argv that ever
-    # carried one of this repo's own verb paths is refused outright as UNPROVEN.
+    # positional AND keyword Call argument (final round, one-line widening: a keyword-passed argv
+    # -- `subprocess.run(args=[...])`, `functools.partial(subprocess.run, args=[...])` -- used to
+    # be invisible because only `node.args` was ever walked; disclosed as a known-uncaught idiom
+    # through fix-round 4, closed here as a pure widening of this same loop, no new analysis
+    # machinery -- see the gate module docstring's FINAL ROUND section). PROVE-OR-REFUSE (round 3):
+    # an argv is analyzed only when it is a direct inline literal at the call site, or a Name
+    # proven safe by `resolve_tracked_names` (exactly one literal binding, zero other events
+    # anywhere in the file, now including every census-swept binding shape -- round 4, see module
+    # docstring); every other argv that ever carried one of this repo's own verb paths is refused
+    # outright as UNPROVEN.
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         if _span_has_waiver(node, lines, ambiguous_lines):
             continue
-        for arg in node.args:
+        for arg in list(node.args) + [kw.value for kw in node.keywords]:
             elts, unproven, kinds = argv_provenance(arg, tracked)
             if unproven:
                 name = arg.id if isinstance(arg, ast.Name) else "?"

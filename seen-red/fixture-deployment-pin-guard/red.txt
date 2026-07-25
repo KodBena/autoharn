@@ -133,3 +133,135 @@ GREEN ok: GREEN_MUTATED_NON_SENSITIVE
 
 ALL CASES OK -- fixture-deployment-pin-guard both polarities, zero residue
 
+
+=== 2026-07-26 FINAL ROUND (maintainer disposition, ledger row 1316, on the row-1315 non- =======
+=== converging-review-loop escalation -- fifth fresh-context lap witnessed new false-clean ======
+=== ordinary idioms; maintainer: "I'll take your recommendation") ================================
+DEMOTION, not another patch lap: this gate's claims are rewritten to state plainly what five
+rounds of evidence show it to be -- a best-effort DETECTOR of the enumerated accident idioms its
+banked specimens witness (35, now 38 with this round's three additions), explicitly NOT a
+soundness guarantee against a deliberate, unusual, or merely unenumerated spelling of the same
+leak. The class-closing mechanism is commissioned separately as RUNTIME FORECLOSURE (rows
+1315/1316), a Fable spec pending the maintainer's yes/no -- this gate remains fast feedback in
+front of it, not the guarantee. See gates/fixture_deployment_pin_guard.py's own FINAL ROUND
+section for the full claim inventory.
+
+Lap-5 findings (fresh-context review beyond round 4): keyword-argument argv
+(`subprocess.run(args=[...])`), functools.partial with a keyword-arg argv (and the discovery that
+an earlier round's docstring FALSELY claimed functools.partial was specially recognized as a
+spawn-callee -- no such code ever existed; the claim is deleted here, not implemented), ast.Match
+capture patterns, attribute-typed argv (`self.cmd`/`k.cmd`), a one-hop Name bound to a bare verb
+string, a bare `legacy/<verb>` literal with no REPO join, and vars()/methodcaller/__iadd__
+mutators.
+
+Disposition per finding, per the maintainer's ruling (fix cheap, disclose the rest -- no new
+analysis machinery this round):
+  - FIXED (pure scan-loop widening, CHECK 1 now walks node.args PLUS every keyword value): the
+    keyword-arg argv finding, and functools.partial-with-keyword-argv for free (CHECK 1 has always
+    been callee-agnostic). Real-tree measurement re-run after the change: gates/
+    fixture_deployment_pin_guard.py against seen-red/**, instruments/**, kernel/fixtures/** ->
+    exit 0, ZERO new false positives (the same clean result as before the widening). A targeted
+    sweep for existing real files passing an `args=`/`argv=`/`cmd=` keyword whose value is a
+    List/Tuple/Name found only 7 occurrences across 4 files (seen-red/boundary-multiplex,
+    seen-red/boundary-read-surface, seen-red/boundary-service, seen-red/setup-tui-pure-core-
+    foundation), none sensitive (none resolves to a repo-verb path) -- all stay green under the
+    widened scan.
+  - FIXED (one more roster alternative in the existing `bare_verb_literal` regex): the bare
+    `legacy/<verb>` literal, matching the REPO-joined form's existing `legacy/<verb>` recognition.
+    Real-tree measurement: unaffected (no real file spells a bare `legacy/<verb>` literal).
+  - DISCLOSED, not fixed (each needs genuinely new analysis machinery, not a widening of an
+    existing loop/roster -- named in gates/fixture_deployment_pin_guard.py's FINAL ROUND /
+    KNOWN-UNCAUGHT section): ast.Match capture patterns (pattern-node hierarchy has no analog to
+    the existing Tuple/List/Starred target walker), attribute-typed argv (needs a second
+    tracked-key shape keyed by object+attribute, not bare Name id), a one-hop Name bound to a bare
+    verb string (needs a parallel bare-string-literal binding table), and
+    vars()/methodcaller/__iadd__ mutators (each is its own new pattern-detector, the same shape of
+    work finding 5 already showed does not generalize by widening).
+  - CORRECTED (false claim, not a gap): the functools.partial "special-casing" the module
+    docstring claimed through round 4 was never implemented anywhere in this gate's code
+    (`_is_subprocess_like_call`/`is_argv_sink_call` never recognize `functools.partial`); the
+    claim is deleted from the docstring rather than retrofitted into new code, per the
+    maintainer's disposition to correct false claims rather than chase every one into new
+    machinery.
+
+Three new RED specimens bank the two cheap fixes (RED_KWARG_ARGV, RED_PARTIAL_KWARG_ARGV,
+RED_BARE_LEGACY_PICKUP); each was confirmed false-clean (exit 0) against the pre-this-round gate
+and refused (exit 1) against the post-this-round gate before being wired into run_fixtures.py.
+Full run of seen-red/fixture-deployment-pin-guard/run_fixtures.py below, verbatim, bank as final
+evidence for this branch:
+
+GREEN ok: GREEN-real-tree
+GREEN ok: RED_REPO_LED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-repo-led.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_REPO_LEGACY_PICKUP
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-repo-legacy-pickup.py:8: call invokes THIS CHECKOUT'S OWN `pickup` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_ENVIRON_MUTATION
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-environ-mutation.py:4: `os.environ["PICKUP_DEPLOYMENT"] = ...` (directly or aliased) mutates the PROCESS-GLOBAL environment instead of pinning per-subprocess (build a local `env = {**os.environ, "PICKUP_DEPLOYMENT": ...}` dict, pass via each call's own `env=` kwarg -- row 1249). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: GREEN_SCRATCH_SCOPED
+GREEN ok: GREEN_LOCAL_ENV_DICT
+GREEN ok: RED_OS_SYSTEM
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-os-system.py:8: `os.system(...)` spawns via a shell string, never an argv list -- refused outright (unenumerable repo-path spelling; use subprocess.run([...])). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_SHELL_TRUE
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-shell-true.py:8: subprocess call with shell=True spawns via a shell string -- refused outright, same reason as os.system(...) above. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_LIBEXEC_LED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-libexec-led.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_ENVIRON_UPDATE
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-environ-update.py:4: `os.environ.update(...)` (directly or aliased) merges PICKUP_DEPLOYMENT into the PROCESS-GLOBAL environment -- same violation as a direct subscript assign (row 1249). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_ENVIRON_ALIAS
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-environ-alias.py:5: `os.environ["PICKUP_DEPLOYMENT"] = ...` (directly or aliased) mutates the PROCESS-GLOBAL environment instead of pinning per-subprocess (build a local `env = {**os.environ, "PICKUP_DEPLOYMENT": ...}` dict, pass via each call's own `env=` kwarg -- row 1249). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_WRAPPER_INDIRECTED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-wrapper-indirected.py:14: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: GREEN_WAIVED_LED
+GREEN ok: RED_WAIVER_BLANKET
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-waiver-blanket.py:15: call invokes THIS CHECKOUT'S OWN `autoharn` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_SUBSCRIPT_MUTATION
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-subscript-mutation.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_APPEND_BUILT_ARGV
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-append-built-argv.py:12: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_OS_PATH_JOIN
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-os-path-join.py:9: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_JOINPATH
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-joinpath.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_PARTIAL_ARGV
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-partial-argv.py:10: call invokes THIS CHECKOUT'S OWN `autoharn` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_SEMICOLON_SHARED_WAIVER
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-semicolon-shared-waiver.py:9: call invokes THIS CHECKOUT'S OWN `autoharn` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_OPAQUE_BEFORE_SENSITIVE
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-opaque-before-sensitive.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_ALIAS_APPEND
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-alias-append.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_BRANCH_ORDER_DISSOLVED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-branch-order-dissolved.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_CHAINED_ASSIGN
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-chained-assign.py:9: argv `y` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: chained-assign. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_TUPLE_UNPACK
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-tuple-unpack.py:9: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: tuple-unpack. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_FOR_TARGET
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-for-target.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: for-target. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_TUPLE_SWAP
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-tuple-swap.py:11: argv `a` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: tuple-unpack. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_WALRUS
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-walrus.py:9: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: walrus. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_BARE_LED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-bare-led.py:5: argv[0] is the BARE literal `'led'` naming this checkout's own `led` verb with NO REPO-path join at all (row 1249 fix-round 4, finding 4 -- the leak class's most literal spelling: relies on `cwd`/`PATH` resolution, which this gate does not attempt to prove or disprove). If `cwd` genuinely points at a scaffolded scratch copy, waive here naming that invariant. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_BARE_DOT_LED
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-bare-dot-led.py:5: argv[0] is the BARE literal `'./led'` naming this checkout's own `led` verb with NO REPO-path join at all (row 1249 fix-round 4, finding 4 -- the leak class's most literal spelling: relies on `cwd`/`PATH` resolution, which this gate does not attempt to prove or disprove). If `cwd` genuinely points at a scaffolded scratch copy, waive here naming that invariant. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_GETATTR_APPEND
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-getattr-append.py:9: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: dynamic-mutator. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_GLOBALS_APPEND
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-globals-append.py:11: argv `cmd` is repo-verb-bearing (resolves to one of this repo's own operator-verb paths at some point) but its dataflow is not statically provable -- rebound more than once, mutated (`.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/`.clear`), aliased (`x = y`, including a tuple-swap), or passed as a bare argument to another call anywhere in this file -- argv dataflow not statically provable, so this gate refuses rather than trust a partial or stale reconstruction (row 1249 fix-round 3/4: PROVE-OR-REFUSE, not better simulation). This name was also touched by a round-4 census-swept binding construct this gate cannot model precisely: dynamic-mutator. Use a direct inline literal argv at this call site, or waive here naming the reviewed invariant that makes it safe. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_STARRED_LITERAL
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-starred-literal.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_IFEXP_JOIN
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-ifexp-join.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_FSTRING_STR_CALL
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-fstring-str-call.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: GREEN_MUTATED_NON_SENSITIVE
+GREEN ok: RED_KWARG_ARGV
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-kwarg-argv.py:8: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_PARTIAL_KWARG_ARGV
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-partial-kwarg-argv.py:9: call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path, or a constant bound to one) instead of a scaffolded scratch copy -- root-level verb shims and libexec/autoharn/<verb> resolve deployment from their own file location, never a caller's env override (row 1249; the row-1237-1244/1248 leak class). Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+GREEN ok: RED_BARE_LEGACY_PICKUP
+  /tmp/fixture-deployment-pin-guard-hq7orwhg/red-bare-legacy-pickup.py:5: argv[0] is the BARE literal `'legacy/pickup'` naming this checkout's own `pickup` verb with NO REPO-path join at all (row 1249 fix-round 4, finding 4 -- the leak class's most literal spelling: relies on `cwd`/`PATH` resolution, which this gate does not attempt to prove or disprove). If `cwd` genuinely points at a scaffolded scratch copy, waive here naming that invariant. Waive with `fixture-scratch-pinning-guard-waiver: <reason>` if proven safe.
+
+ALL CASES OK -- fixture-deployment-pin-guard both polarities, zero residue

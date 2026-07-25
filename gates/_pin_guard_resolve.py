@@ -250,20 +250,22 @@ _BARE_VERB_RE_CACHE: dict[frozenset[str], "re.Pattern[str]"] = {}
 
 
 def bare_verb_literal(elt: ast.expr, position: int, shim_verbs: set[str]) -> str | None:
-    """Finding 4: a BARE string constant argv[0] -- `"led"`, `"./led"`, `"/led"` -- spelling one
-    of this repo's own root-level verb shims (or the `autoharn` dispatcher) with NO `REPO`-path
-    join anywhere in sight. Only checked at `position == 0` (a verb name appearing elsewhere in an
-    argv is an ordinary subcommand argument, not a callee) and only against `shim_verbs` (the
-    root-shim/dispatcher roster -- `libexec/autoharn/<verb>` is never invoked bare, only via its
-    full repo-rooted path, so `libexec_verbs` is not part of this check). Deliberately does NOT
-    look at a `cwd=` kwarg on the enclosing call -- see the gate's own POSTURE section for why."""
+    """Finding 4: a BARE string constant argv[0] -- `"led"`, `"./led"`, `"/led"`, or (final round,
+    one more roster alternative in this same regex, no new analysis machinery) `"legacy/led"` --
+    spelling one of this repo's own root-level verb shims (or the `autoharn` dispatcher) with NO
+    `REPO`-path join anywhere in sight. Only checked at `position == 0` (a verb name appearing
+    elsewhere in an argv is an ordinary subcommand argument, not a callee) and only against
+    `shim_verbs` (the root-shim/dispatcher roster -- `libexec/autoharn/<verb>` is never invoked
+    bare, only via its full repo-rooted path, so `libexec_verbs` is not part of this check).
+    Deliberately does NOT look at a `cwd=` kwarg on the enclosing call -- see the gate's own
+    POSTURE section for why."""
     if position != 0 or not isinstance(elt, ast.Constant) or not isinstance(elt.value, str):
         return None
     key = frozenset(shim_verbs)
     pattern = _BARE_VERB_RE_CACHE.get(key)
     if pattern is None:
         alts = "|".join(re.escape(v) for v in shim_verbs)
-        pattern = re.compile(rf"\.?/?({alts})$") if alts else re.compile(r"(?!)")
+        pattern = re.compile(rf"(?:\.?/?|legacy/)({alts})$") if alts else re.compile(r"(?!)")
         _BARE_VERB_RE_CACHE[key] = pattern
     m = pattern.fullmatch(elt.value)
     return m.group(1) if m else None

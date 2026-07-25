@@ -17,6 +17,10 @@ served `led` against the LIVE kernel, writing garbage rows. Three doors, all gua
       `env=` kwarg -- a global mutation leaks into every later subprocess this process spawns.
   (c) spawning via a shell string (`os.system(...)`, `shell=True`) instead of an argv list --
       sidesteps (a)/(b) entirely: a shell string's repo-path spelling is unenumerable.
+"Guarded" below means: caught for every ENUMERATED spelling this gate's 35 banked specimens
+witness, not proven closed against every possible one -- see the FINAL ROUND section (below,
+after the round-by-round history) for the honest, demoted claim and the forward pointer to the
+runtime-foreclosure mechanism that is the actual guarantee.
 
 Grep/AST CENSUS gate (gates/no_lazy_imports.py's own family), not a dataflow prover. Binding/
 argv-provability helpers live in `gates/_pin_guard_argv.py`, the CENSUS sweep that widens what
@@ -133,32 +137,95 @@ a blanket waiver: rules A (census) and the narrow, verb-DETECTION halves of find
 are implemented in full; the sensitivity-INDEPENDENT form of B/C is NOT implemented this round,
 named here as the honest, deliberately-declined remainder rather than silently narrowed to fit.
 
-WHAT THIS GATE NOW CLAIMS, AND DOES NOT CLAIM (round 4's honest inventory, superseding round 3's):
+FINAL ROUND (maintainer disposition 2026-07-26, ledger row 1316, on the row-1315 escalation) --
+THIS GATE IS DEMOTED. Five fresh-context strengthened-tier review laps in a row (rounds 1, 3, 4,
+and two more beyond round 4 not separately numbered above) each genuinely closed the prior round's
+findings, and each NEXT lap witnessed new false-clean results on ordinary, non-adversarial Python
+idioms it had never occurred to the previous lap to try. That is not noise: it is the structural
+signature of a static AST census trying to enumerate an open grammar. The maintainer's ruling
+(row 1316, verbatim: "I'll take your recommendation") is to STOP re-dispatching this loop and
+instead say plainly what five rounds of evidence show this gate to be:
+
+THIS GATE IS A BEST-EFFORT DETECTOR OF THE ENUMERATED ACCIDENT IDIOMS ITS SPECIMENS WITNESS -- IT
+IS NOT, AND HAS NEVER BEEN, A SOUNDNESS GUARANTEE AGAINST A DELIBERATE, UNUSUAL, OR MERELY
+UNENUMERATED SPELLING OF THE SAME LEAK. Every accident this gate catches is one that also shows up
+as a RED specimen in `seen-red/fixture-deployment-pin-guard/run_fixtures.py` (35 banked specimens
+as of this round) -- the specimen list IS the coverage claim, not a sample of it. Anything not
+shaped like one of those specimens is, by construction, not provably caught, whether or not this
+docstring happens to name it. The class-CLOSING mechanism -- the one meant to actually foreclose
+the leak rather than detect its known shapes -- is commissioned separately: RUNTIME FORECLOSURE
+(rows 1315/1316), a Fable spec pending the maintainer's yes/no, which moves enforcement from
+"recognize the call" (what this gate does, and what a fresh mind keeps finding new ways around) to
+"the called thing refuses" (the fixture runner marks its environment; this repo's own verbs refuse
+under that marker, waivable explicitly, foreclosing every argv spelling at once because none of
+them matter once the callee itself won't cooperate). Until that spec lands, this gate remains
+useful as FAST FEEDBACK in front of it -- a pre-commit signal that catches the common-case mistake
+cheaply -- never cite it as the guarantee.
+
+WHAT THIS GATE CLAIMS, AND DOES NOT CLAIM (this round's honest inventory, superseding round 4's):
 CLAIMS -- an argv is proven safe only when (1) it is a literal at the call site (every element
-checked against the full verb grammar, including this round's bare-literal/f-string/IfExp-concat/
+checked against the full verb grammar, including round 4's bare-literal/f-string/IfExp-concat/
 Starred-of-literal extensions), or (2) a Name with exactly one literal binding and zero other
-qualifying events ANYWHERE in the file, where "qualifying event" now also includes every binding
-shape `_pin_guard_census.py` sweeps (chained assign, tuple/list-unpack, a swap, a `for` target,
-walrus, `with`/`except ... as`, annotated assign, comprehension target) and the two dynamic-
-mutator shapes from finding 5. Every other argv that is ever found sensitive is REFUSED-AS-
-UNPROVEN. DOES NOT CLAIM (the honestly-scoped remainder, unchanged in kind from round 3, now
-precisely three items, per the brief's own rule D):
+qualifying events ANYWHERE in the file, where "qualifying event" includes every binding shape
+`_pin_guard_census.py` sweeps (chained assign, tuple/list-unpack, a swap, a `for` target, walrus,
+`with`/`except ... as`, annotated assign, comprehension target) and the two dynamic-mutator shapes
+from round 4's finding 5. Every other argv that is ever found sensitive is REFUSED-AS-UNPROVEN.
+This round widened two things, each a plain widening of an existing scan loop or roster, no new
+analysis machinery, each re-measured against the real tree with zero new false positives (see
+MEASUREMENT above, unchanged by this round, and the fresh confirmation in `red.txt`'s final-round
+appendix): CHECK 1 now scans every Call's KEYWORD argument values too, not only `node.args`
+(closes `subprocess.run(args=[...])` and, for free, since CHECK 1 has always been callee-agnostic,
+`functools.partial(subprocess.run, args=[...])`); `bare_verb_literal` now also accepts a
+`legacy/<verb>` prefix (one more roster alternative in the same regex, matching the REPO-joined
+form's existing `legacy/<verb>` recognition).
+
+KNOWN-UNCAUGHT (named here as what a fifth fresh-context lap found, not silently narrowed around --
+DELIBERATELY NOT FIXED this round because each needs genuinely new analysis machinery, not a
+widening of an existing loop/roster, which is the line this round holds):
+  - `ast.Match` capture patterns (`match cmd: case [x, *rest]: ...`) are not swept by
+    `_pin_guard_census.py` at all -- a name bound inside a `case` pattern gets no facts entry,
+    same blind spot round 4 closed for every OTHER binding construct, just not this one. Not
+    symmetrical with the existing For/With sweep (which reuses the plain Tuple/List/Starred
+    target walker `_names_in_target`): `ast.Match`'s own pattern node hierarchy (`MatchAs`,
+    `MatchStar`, `MatchMapping`'s `rest`, `MatchClass`'s nested/keyword patterns, `MatchOr`) needs
+    its own recursive walker, which is new code, not a one-line addition to an existing one.
+  - Attribute-typed argv (`self.cmd`, `k.cmd`) is invisible: every binding/event/sensitivity
+    path in `_pin_guard_argv.py`/`_pin_guard_census.py` is keyed by bare `Name` id; an
+    `ast.Attribute` target or read is never tracked as anything, so `self.cmd = [str(REPO /
+    "led")]; subprocess.run(self.cmd)` passes clean. Needs a second tracked-key shape (object +
+    attribute name) alongside the existing bare-Name one -- new state, not a widened loop.
+  - A one-hop Name bound to a BARE VERB STRING (`x = "led"; subprocess.run([x, "status"])`) is
+    invisible: `bare_verb_literal` only inspects the literal AT the call site, and
+    `verb_path_bindings`/`resolve_verb_element` only resolve a Name bound to a REPO-JOIN
+    expression, never a Name bound to a plain string constant. Closing it needs a parallel
+    binding-tracking table for bare-string-literal assigns, not a regex tweak.
+  - `vars()`-based mutation (`vars()["cmd"].append(...)`), `methodcaller`-driven mutation
+    (`operator.methodcaller("append", x)(cmd)`), and `__iadd__` invoked directly
+    (`cmd.__iadd__([...])`) are not swept by `sweep_dynamic_mutators` -- that sweep recognizes
+    exactly two named shapes (`getattr(...)`, `globals()[...]`); each additional shape found is
+    its own new pattern-detector function, the same shape of work finding 5 already showed does
+    not generalize by widening.
   - Spawn-CALLEE recognition: only `subprocess.run/Popen/check_call/check_output/call` (attribute
-    form, or `functools.partial` over one of those as its own first positional arg) and
-    `os.system` are recognized as spawn-like. `exec`/`eval`, `ctypes`, `os.posix_spawn`, a bare
-    `from subprocess import run; run(...)` call, and any OTHER spawn mechanism are simply not on
-    this gate's roster -- out of scope, not silently approximated.
+    or bare-Name form) and `os.system` are recognized as spawn-like for CHECK 1b (shell-string
+    refusal) and `is_argv_sink_call`. `functools.partial(subprocess.run, ...)` is CAUGHT when its
+    argv is a literal/keyword argument (CHECK 1 is callee-agnostic, walks every Call regardless of
+    func) but is NOT itself recognized as a spawn-like callee anywhere else in this gate -- an
+    earlier round's docstring claimed a "functools.partial special-casing" that does not and never
+    did exist in the code; that false claim is deleted here, not implemented, per the maintainer's
+    disposition to correct rather than chase every falsified claim into new code. `exec`/`eval`,
+    `ctypes`, `os.posix_spawn`, a bare `from subprocess import run; run(...)` call, and any OTHER
+    spawn mechanism are simply not on this gate's roster -- out of scope, not silently
+    approximated.
   - Cross-module constant import (`from helper import LED`): single-file AST census, stops at the
     file boundary by construction.
   - Sensitivity-independent argv-fail-closed at every spawn call site (rules B/C in their full,
-    requested form): named above (MEASUREMENT) as a deliberate, measured non-implementation, not
-    a silent gap -- the one remaining item that is NOT merely a scope boundary but an explicit
-    stop-and-report against this round's own brief.
+    requested form, round 4's brief): named above (MEASUREMENT) as a deliberate, measured
+    non-implementation, not a silent gap.
 A `Starred` element wrapping anything OTHER than an inline List/Tuple literal (a bare parameter,
 a comprehension, a Subscript), an `IfExp`/unrecognized `Call`/`BinOp` argv ELEMENT that is not one
 of the verb-grammar shapes above, and a plain, well-behaved Name-argv with a local, non-sensitive
 mutation event (the psql/git-flag-building idiom) all stay OUT OF SCOPE, unflagged -- exactly as
-every prior round, and now explicitly named rather than left to be rediscovered by a fifth lap.
+every prior round.
 
 WHAT THIS DOES NOT CLAIM (mechanical detail, carried forward from round 3):
   - A NAME-LIST census over each file's own REPO/REPO_ROOT/AUTOHARN_ROOT/EXEC_ROOT convention,
@@ -179,7 +246,10 @@ WHAT THIS DOES NOT CLAIM (mechanical detail, carried forward from round 3):
 ROUND 1/2 findings, disposition unchanged, kept for context (see git history for the full text of
 each round's own POSTURE section): round 1 rejected a full-scope inversion (refusing every
 subprocess-spawning file outright) as measured overkill (~150/203 files are plain git/psql calls);
-round 2 closed the waiver-scoping/os.path.join/functools.partial/semicolon-sharing findings.
+round 2 closed the waiver-scoping/os.path.join/semicolon-sharing findings (round 2's own
+"functools.partial" finding closed only the ARGV-AS-NON-FIRST-POSITIONAL-ARG shape, via CHECK 1's
+pre-existing callee-agnostic scan -- never a partial-aware spawn-callee recognizer; see
+KNOWN-UNCAUGHT above for the claim that conflated the two and is now corrected).
 
 SCOPE: seen-red/**/*.py, instruments/**/*.py, kernel/fixtures/**/*.py (submodules excluded).
 Exit 0 clean (or every match waived); exit 1 naming every offending line otherwise.

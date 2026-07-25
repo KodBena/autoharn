@@ -197,6 +197,40 @@ sight, would refuse), which this round's MEASUREMENT section declines to impleme
 dominant convention -- see gates/fixture_deployment_pin_guard.py's own docstring). Kept GREEN
 here, deliberately, rather than silently narrowing the brief without saying so.
 
+FINAL ROUND (maintainer disposition 2026-07-26, ledger row 1316, on the row-1315 non-converging-
+review-loop escalation after a FIFTH fresh-context lap found new false-clean ordinary idioms):
+STOP closing holes, DEMOTE the gate's claims to what it demonstrably is (a best-effort DETECTOR
+of enumerated accident idioms, not a soundness guarantee -- see gate module docstring's FINAL
+ROUND section for the full inventory). Two of the lap-5 findings turned out to be genuine
+one-line widenings of existing scan loops/rosters -- no new analysis machinery -- and are closed
+here, each banked as its own RED specimen:
+
+RED (keyword-arg argv): `subprocess.run(args=[str(REPO / "led"), ...])` -- CHECK 1 used to walk
+only `node.args` (positional), so an argv passed as the `args=` keyword was invisible regardless
+of content; refused now (the walk widened to `node.args` PLUS every keyword value, one line, no
+new logic).
+
+RED (functools.partial with a keyword-arg argv): `functools.partial(subprocess.run,
+args=[str(REPO / "led"), ...])` -- the same keyword-argv blind spot, demonstrated on the shape the
+prior rounds' docstring falsely claimed was specially recognized (it was not -- no partial-aware
+code existed anywhere in this gate; the claim is deleted, not implemented, in this round's
+docstring). Caught for free by the same CHECK 1 widening above, since CHECK 1 has always been
+callee-agnostic (walks every Call node, not just recognized spawn-callees).
+
+RED (bare `legacy/<verb>` literal, no REPO join): `subprocess.run(["legacy/pickup", "status"])` --
+`bare_verb_literal`'s regex only ever accepted an optional leading `.`/`/`, never a `legacy/`
+prefix, even though the REPO-joined form of this exact shape (`REPO / "legacy" / "pickup"`) was
+already recognized; refused now (one more roster alternative in the same regex, no new matching
+logic).
+
+Three other lap-5 findings (ast.Match capture patterns, attribute-typed argv `K.cmd`/`self.cmd`,
+a one-hop bare-verb Name) were measured against the "pure widening, no new machinery" bar and
+found to need genuinely new analysis code (a pattern-name walker for ast.Match's own node
+hierarchy is not expressible via the existing Tuple/List/Starred target walker; attribute-typed
+argv and a bare-verb-string Name binding both need a new tracked-binding class this gate does not
+carry). Named as known-uncaught, disclosed rather than silently narrowed -- see the gate module
+docstring's FINAL ROUND section for the full, current claim inventory.
+
 Runs against throwaway tempfile copies; zero residue in the repo itself."""
 from __future__ import annotations
 
@@ -660,6 +694,45 @@ def run_it():
     return subprocess.run(cmd, capture_output=True, text=True)
 '''
 
+# --- FINAL ROUND specimens (maintainer disposition, ledger row 1316: DEMOTE the gate's claims,
+# fix cheap findings that are a genuine scan-loop widening, disclose the rest). Each below is a
+# lap-5 finding closed as a one-line widening -- see gate module docstring's FINAL ROUND section
+# for the honest inventory of what stays disclosed instead. -----------------------------------
+
+RED_KWARG_ARGV = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run(args=[str(REPO / "led"), "finding", "hello"],
+                          capture_output=True, text=True)
+'''
+
+RED_PARTIAL_KWARG_ARGV = '''\
+import functools
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    runner = functools.partial(subprocess.run, args=[str(REPO / "led"), "finding"],
+                                capture_output=True, text=True)
+    return runner()
+'''
+
+RED_BARE_LEGACY_PICKUP = '''\
+import subprocess
+
+
+def run_it():
+    return subprocess.run(["legacy/pickup", "status"], capture_output=True, text=True)
+'''
+
 
 def _run_gate(*paths: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(GATE), *[str(p) for p in paths]],
@@ -719,6 +792,11 @@ def main() -> int:
             "red-ifexp-join.py": (RED_IFEXP_JOIN, True, "led"),
             "red-fstring-str-call.py": (RED_FSTRING_STR_CALL, True, "led"),
             "green-mutated-non-sensitive.py": (GREEN_MUTATED_NON_SENSITIVE, False, None),
+            # --- FINAL ROUND (demotion, ledger row 1316): lap-5 findings closed as pure
+            # scan-loop/roster widenings, no new analysis machinery. ---------------------------
+            "red-kwarg-argv.py": (RED_KWARG_ARGV, True, "led"),
+            "red-partial-kwarg-argv.py": (RED_PARTIAL_KWARG_ARGV, True, "led"),
+            "red-bare-legacy-pickup.py": (RED_BARE_LEGACY_PICKUP, True, "pickup"),
         }
         for fname, (content, should_be_bad, verb) in specimens.items():
             spath = tmp_path / fname
