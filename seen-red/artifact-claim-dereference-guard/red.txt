@@ -144,3 +144,45 @@ After the repair (guard/scanner reimplemented in cmd_generic/cmd_review), the SA
 its REDISCOVERED-GAP-* case bodies flipped to assert the guard holds, this session) goes fully
 green, all 8 cases, real led round-trips verified, scratch torn down to zero residue -- see this
 session's own commit for the green capture.
+
+---
+
+2026-07-25 dated note (strengthened-tier fresh-context review of THIS arc's own guard-trio
+commit, CLEARED-BUT-MODERATE-SILENT, MODERATE finding fixed same session): the review found a
+third sibling guard silently missing. legacy-led.tmpl's `review` case calls
+`warn_content_free_review_statement "$statement"` immediately alongside
+`warn_path_shaped_in_statement "$statement"` (git show 93affa0^, both calls back to back right
+after `statement="$*"`), but the row-1245 repair above only ported the path-shape scanner into
+`cmd_review` -- the content-free sibling was never wired in. Downstream mitigation was partial
+only: `engine/review_gap_audit.py` flags a short review, but ONLY when it discharges a
+countersign obligation; a content-free `led review` statement outside that path got no catch
+anywhere in the served CLI.
+
+RED-FIRST capture, TWO new cases added to this fixture (red_first_content_free_review_statement /
+green_genuine_review_statement_no_warning), run against led.tmpl with
+`_warn_content_free_review_statement(statement)`'s call site in `cmd_review` commented out
+(the state of this arc's own prior commit, 5e6fd5c, before this same-session follow-up fix;
+scratch, HARNESS_PGHOST=192.168.122.1):
+
+# RED-FIRST-CONTENT-FREE-REVIEW-STATEMENT -- `led review` on a content-free statement (run12 ledger row 20's own 4-char specimen, verbatim) still writes (WARN-only, never a refusal), and now prints a WARNING naming the content-free-review-audit tracker item (strengthened-tier review finding, this arc: the guard was byte-faithfully ported off legacy-led.tmpl's own warn_content_free_review_statement, but silently left un-wired from cmd_review when the sibling path-shape scanner was reinstated).
+  [ok] write still succeeds (exit 0, WARN-only, never a refusal)
+  [FAIL] a WARNING is printed (the content-free guard fires)
+  [FAIL] the warning names this tracker item
+  [FAIL] the warning points at the retroactive check (./audit --review-gap)
+  [FAIL] the warning states the normalized 4-char length of the specimen
+# GREEN, RIGHT REASON VERIFIED — a review statement of ordinary length gets NO content-free warning: verified for the right reason (the guard exists and correctly passes a genuine statement), not merely because nothing checks at all.
+  [ok] write succeeds (exit 0)
+  [ok] no content-free WARNING fires for a genuine-length statement
+
+SPECIMEN RED — 4 check(s) failed against the EXPECTED (guard-holds) BEHAVIOR this fixture now
+requires: ['a WARNING is printed (the content-free guard fires)', 'the warning names this
+tracker item', 'the warning points at the retroactive check (./audit --review-gap)', 'the
+warning states the normalized 4-char length of the specimen'] -- reproducing the finding exactly
+(the write proceeds silently, no catch anywhere in the served CLI).
+
+After the fix (`_warn_content_free_review_statement` ported into `bootstrap/templates/led.tmpl`
+as a direct top-of-file import of `engine/review_gap_thresholds` -- house Python idiom, this file
+is already Python so no subprocess round-trip is needed the way bash needed one -- and wired into
+`cmd_review` alongside `_warn_path_shaped_in_statement`, legacy's own call order preserved), the
+SAME fixture goes fully green, all 10 cases, real led round-trips verified, scratch torn down to
+zero residue -- see this session's own commit for the green capture.

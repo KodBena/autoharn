@@ -54,9 +54,17 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deploymen
 
 sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
+sys.path.insert(0, str(AUTOHARN / "engine"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
     import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
+    import review_gap_thresholds as rgt  # noqa: E402  (guard-trio port, ledger row 1600's sibling
+    # finding: the ONE HOME (ADR-0012 P1) for the content-free-review-statement threshold/
+    # normalization is engine/review_gap_thresholds.py -- legacy-led.tmpl (bash) had to shell out
+    # to it via a python3 subprocess because bash cannot import Python; this served CLI is ALREADY
+    # Python, so the house idiom is a direct top-of-file import, same shape as the `bcc`/`er`
+    # imports immediately above, never a second hand-copied threshold or a subprocess round trip
+    # for a fact this same interpreter can just import.
 except ImportError as _e:
     print(f"led: cannot import autoharn's serving/boundary_cli_client.py under "
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
@@ -1503,6 +1511,52 @@ def _warn_path_shaped_in_statement(statement: str) -> None:
         print(f"    - {word}", file=sys.stderr)
 
 
+# CONTENT-FREE-REVIEW-STATEMENT TRIPWIRE (guard-trio's third member; strengthened-tier review of
+# this arc's own row-1245/1600 commit caught the gap, MODERATE/SILENT: legacy-led.tmpl's `led
+# review` case called this SIBLING guard immediately alongside warn_path_shaped_in_statement (git
+# show 93affa0^:bootstrap/templates/legacy-led.tmpl, the `review` case, both calls back to back
+# right after `statement="$*"`), but only the path-shape scanner was ported into this served
+# CLI's cmd_review -- this one was silently left behind. Ported here, faithfully, as this file's
+# third sibling of the same shape.
+#
+# TRACKER ITEM `content-free-review-audit`; WITNESSED SPECIMEN: run12 ledger row 20,
+# statement="test" (4 chars) -- a review row whose ENTIRE statement was 4 characters mechanically
+# discharged another row's countersign obligation under `<schema>.review_gap`'s own semantics
+# (kernel/lineage/s13-schema.sql: ANY unsuperseded, distinct-actor `attest` review discharges --
+# content is NEVER examined by the view). None of run12's six reviewer passes ever caught it; it
+# stands attested in the append-only record.
+#
+# WARN-ONLY, mirrors _warn_path_shaped_in_statement's own posture (same function shape, same
+# tone) -- unlike a hard REFUSE, a legitimately terse review DOES exist ("Confirmed, matches row
+# 4's stated criteria exactly." clears easily), so a false positive here is a harmless notice,
+# never a blocked write -- the write PROCEEDS either way. The retroactive, content-EXAMINING half
+# of this check lives in engine/review_gap_audit.py (`./audit --review-gap`) -- this tripwire is
+# intake-time and length-only, exactly the honest limit that module's own docstring names.
+#
+# THE SHARED THRESHOLD LIVES ONE PLACE (ADR-0012 P1): engine/review_gap_thresholds.py, imported
+# directly at top-of-file as `rgt` (house Python idiom -- the bash original had to shell out to
+# `python3 engine/review_gap_thresholds.py "$text"` and parse a `FLAGGED <n>`/`CLEAN <n>` line
+# because bash cannot import Python; this file is already Python, so it calls
+# `rgt.is_content_free`/`rgt.normalize` directly -- same one-home threshold, no subprocess, no
+# hand-copied number). The bash original's own fail-open posture ("Fails OPEN on any subprocess
+# trouble ... a tripwire that cannot run must never block the write it is only ever supposed to
+# warn about") is preserved in spirit: an import-time failure of `review_gap_thresholds` already
+# takes the whole CLI down via the top-of-file ImportError guard above (fail-closed, before any
+# command ever runs) rather than this function ever needing its own runtime try/except -- there
+# is no in-flight subprocess step left to fail once the call is a direct, already-validated
+# import.
+def _warn_content_free_review_statement(statement: str) -> None:
+    if not rgt.is_content_free(statement):
+        return
+    n = len(rgt.normalize(statement))
+    print(f"led: WARNING -- this review's statement is very short ({n} whitespace-normalized "
+          f"chars). engine/review_gap_audit.py (./audit --review-gap, tracker item "
+          f"'content-free-review-audit') will FLAG this row if it discharges a countersign "
+          f"obligation -- state what you actually checked, not just the verdict.", file=sys.stderr)
+    print("  (warn-only tripwire, not a refusal -- a legitimate terse review exists; the write "
+          "proceeds either way)", file=sys.stderr)
+
+
 def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
     if surface not in ("ledger", "review", "registration", "obligation"):
         print(f"led --json: REFUSED -- unrecognized surface {surface!r} (expected one of "
@@ -1707,6 +1761,9 @@ def cmd_artifact_stat(cfg: bcc.ServedConfig, hash_: str) -> int:
 
 def cmd_review(cfg: bcc.ServedConfig, entry_id: int, verdict: str, independence: str,
                antecedent: int | None, statement: str) -> int:
+    # ORDER matches legacy-led.tmpl's `review` case exactly (git show 93affa0^, immediately after
+    # `statement="$*"`): content-free tripwire first, then the path-shape scanner.
+    _warn_content_free_review_statement(statement)
     _warn_path_shaped_in_statement(statement)
     actor = _resolve_actor(cfg)
     # basis = statement, VERBATIM -- the legacy tool's own choice (bootstrap/templates/
@@ -2448,7 +2505,20 @@ def _review_witness_violation(cfg: bcc.ServedConfig, review_ref: str) -> list[st
           the column" -- i.e. it never asked whether the cited row IS a review), so this sanity
           leg closes a real, disclosed residual gap rather than duplicating s48 with less rigor.
     Returns the REFUSED teach-text (a list of stderr lines), or None if every row:<id> token in
-    `review_ref` passes both checks (including the vacuous case of zero such tokens)."""
+    `review_ref` passes both checks (including the vacuous case of zero such tokens).
+
+    NETWORK-FAILURE POSTURE: this function catches `bcc.BoundaryRefusal` only (re-raising any
+    status other than 404, per the `if e.status != 404: raise` below). `bcc.BoundaryUnreachable`
+    is NOT caught here -- it propagates uncaught, out of this pre-flight and out of its callers,
+    to `__main__`'s own top-level handler (this file's bottom, `except (bcc.BoundaryRefusal,
+    bcc.BoundaryUnreachable, bcc.BoundaryClientError)`), which reports it fail-closed (exit 4,
+    restart teach-text) instead of letting the write this pre-flight guards ever attempt to
+    proceed. This is deliberate, not an oversight: the write this check exists to protect (`led
+    work close --review-witness ...` / the `--supersedes` correction path) would fail identically
+    against the SAME unreachable boundary one call later anyway, so there is no safe way to treat
+    an unreachable boundary as "the pre-flight silently passed" -- matching `_current_row_by_id`'s
+    own existing convention immediately above (it, too, lets a transport-level failure propagate
+    rather than swallowing it into a false negative)."""
     lines: list[str] = []
     for rid_str in _REVIEW_WITNESS_ROW_RE.findall(review_ref):
         rid = int(rid_str)

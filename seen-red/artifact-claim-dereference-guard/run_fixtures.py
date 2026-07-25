@@ -71,12 +71,33 @@ GREEN, RIGHT REASON NOW VERIFIED (the caveat this file used to carry while the g
   - a statement containing a URL: same, now verified for the right reason (the scanner exists and
     correctly excludes URLs).
 
+THIRD GUARD-TRIO MEMBER ADDED (strengthened-tier fresh-context review of THIS arc's own guard-trio
+commit, MODERATE/SILENT finding, 2026-07-25): legacy-led.tmpl's `review` case called
+`warn_content_free_review_statement` immediately alongside `warn_path_shaped_in_statement` (git
+show 93affa0^, the `review` case body -- both calls back to back right after `statement="$*"`),
+but only the path-shape scanner was ported into `cmd_review` when this arc's repair landed --
+the content-free sibling guard was silently left behind, so a content-free `led review` statement
+(run12 ledger row 20's own specimen, `"test"`, 4 chars) discharging a countersign obligation got
+no CLI-side catch at all outside `engine/review_gap_audit.py`'s own retroactive, discharge-scoped
+check. Ported here too, `_warn_content_free_review_statement`, wired into `cmd_review` alongside
+the path-shape scanner (legacy's own call order preserved: content-free check first). New cases,
+same real-served-CLI pattern as every case above:
+  - RED-FIRST-CONTENT-FREE-REVIEW-STATEMENT: `led review` on a content-free statement (run12's
+    own 4-char specimen) still writes (WARN-only, never a refusal), and a WARNING naming
+    engine/review_gap_audit.py / tracker item `content-free-review-audit` is printed. Captured RED
+    against the pre-repair led.tmpl (this repair's own parent commit, guard absent -> silent),
+    GREEN after (guard ported -> warns) -- see this dir's red.txt for the dated dual capture.
+  - GREEN-GENUINE-REVIEW-STATEMENT-NO-WARNING: a review statement of ordinary length gets NO
+    content-free warning -- verified for the right reason (the guard exists and correctly passes
+    a genuine statement), not merely because nothing checks at all.
+
 Usage: python3 seen-red/artifact-claim-dereference-guard/run_fixtures.py
 Exit 0 if every case matches expected (guard-holds) behavior; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -128,8 +149,13 @@ def _drop_scratch() -> None:
           "-c", f"DROP ROLE IF EXISTS {ROLE};")
 
 
-def _run_led(dest: Path, *args: str) -> tuple[int, str, str]:
-    cp = subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True)
+def _run_led(dest: Path, *args: str, env: dict | None = None) -> tuple[int, str, str]:
+    full_env = None
+    if env:
+        full_env = os.environ.copy()
+        full_env.update(env)
+    cp = subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True,
+                         env=full_env)
     return cp.returncode, cp.stdout, cp.stderr
 
 
@@ -252,6 +278,53 @@ def green_url_untouched() -> None:
     _check("no path-shape WARNING fires for a URL", "WARNING" not in err)
 
 
+def red_first_content_free_review_statement() -> None:
+    print("# RED-FIRST-CONTENT-FREE-REVIEW-STATEMENT -- `led review` on a content-free "
+          "statement (run12 ledger row 20's own 4-char specimen, verbatim) still writes "
+          "(WARN-only, never a refusal), and now prints a WARNING naming the "
+          "content-free-review-audit tracker item (strengthened-tier review finding, this arc: "
+          "the guard was byte-faithfully ported off legacy-led.tmpl's own "
+          "warn_content_free_review_statement, but silently left un-wired from cmd_review when "
+          "the sibling path-shape scanner was reinstated).")
+    rc0, out0, err0 = _run_led(DEST, "decision", f"{TAG}: content-free-review target row")
+    assert rc0 == 0, f"could not seed a target row: {out0!r} {err0!r}"
+    target_id = _current_max_id(DEST)
+    rc1, out1, err1 = _run_led(DEST, "register-principal", "acdg-reviewer", "model",
+                                "--purpose", "artifact-claim-dereference-guard fixture "
+                                "content-free-review case")
+    assert rc1 == 0, f"could not register reviewer principal: {out1!r} {err1!r}"
+    rc, out, err = _run_led(DEST, "review", str(target_id), "attest", "self-review", "test",
+                             env={"LED_ACTOR": "acdg-reviewer"})
+    _check("write still succeeds (exit 0, WARN-only, never a refusal)", rc == 0)
+    _check("a WARNING is printed (the content-free guard fires)", "WARNING" in err)
+    _check("the warning names this tracker item",
+           "content-free-review-audit" in err)
+    _check("the warning points at the retroactive check (./audit --review-gap)",
+           "review-gap" in err)
+    _check("the warning states the normalized 4-char length of the specimen",
+           "4" in err and "whitespace-normalized" in err)
+
+
+def green_genuine_review_statement_no_warning() -> None:
+    print("# GREEN, RIGHT REASON VERIFIED — a review statement of ordinary length gets NO "
+          "content-free warning: verified for the right reason (the guard exists and correctly "
+          "passes a genuine statement), not merely because nothing checks at all.")
+    rc0, out0, err0 = _run_led(DEST, "decision", f"{TAG}: genuine-review target row")
+    assert rc0 == 0, f"could not seed a target row: {out0!r} {err0!r}"
+    target_id = _current_max_id(DEST)
+    rc1, out1, err1 = _run_led(DEST, "register-principal", "acdg-reviewer-2", "model",
+                                "--purpose", "artifact-claim-dereference-guard fixture "
+                                "genuine-review case")
+    assert rc1 == 0, f"could not register reviewer principal: {out1!r} {err1!r}"
+    rc, out, err = _run_led(
+        DEST, "review", str(target_id), "attest", "self-review",
+        f"Confirmed: reviewed this decision's statement directly against the stated criteria "
+        f"row {target_id}; matches exactly, no discrepancies found ({TAG}).",
+        env={"LED_ACTOR": "acdg-reviewer-2"})
+    _check("write succeeds (exit 0)", rc == 0)
+    _check("no content-free WARNING fires for a genuine-length statement", "WARNING" not in err)
+
+
 DEST: Path
 
 
@@ -292,6 +365,8 @@ def main() -> int:
         gap_statement_multiple_path_tokens_no_warning()
         green_row_citation_untouched()
         green_url_untouched()
+        red_first_content_free_review_statement()
+        green_genuine_review_statement_no_warning()
     except BaseException as exc:  # noqa: BLE001 -- last-resort net, see led-help-token-closure's
         # own identical fix for the reasoning: an uncaught exception here must not leak the
         # boundary_service subprocess or the scratch schema/kern/role.
@@ -320,10 +395,11 @@ def main() -> int:
     _drop_scratch()
     shutil.rmtree(tmpdir, ignore_errors=True)
     print(f"\n# artifact-claim-dereference-guard: all cases match EXPECTED (guard-holds) "
-          f"BEHAVIOR -- the --evidence dereference guard and the path-shaped-statement warning "
-          f"are BOTH REIMPLEMENTED in the served CLI (ledger row 1245, closed), the "
-          f"REDISCOVERED-GAP-* cases now asserting the guard holds rather than the gap "
-          f"reproducing. Scratch torn down to zero residue. Tag: {TAG}")
+          f"BEHAVIOR -- the --evidence dereference guard, the path-shaped-statement warning, "
+          f"and the content-free-review-statement warning are ALL wired into the served CLI "
+          f"(ledger row 1245 + this arc's own strengthened-tier-review follow-up), the "
+          f"REDISCOVERED-GAP-*/RED-FIRST-* cases now asserting each guard holds rather than the "
+          f"gap reproducing. Scratch torn down to zero residue. Tag: {TAG}")
     return 0
 
 
