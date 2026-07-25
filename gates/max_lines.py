@@ -181,7 +181,10 @@ BASELINE: dict[str, int] = {
     # since-deleted screens.py; that erratum text is ported forward into
     # tools/setup_tui/steps_boundary.py's own surviving copy of the same comment instead (this
     # merge, 2026-07-23) -- there is no baseline row left to carry the +7.
-    "gates/kind_shape_manifest_gate.py":              1152,
+    # Reconciled +221 to 1373 (design/FABLE-MISSIVES-KERNEL-SPEC.md, row 1263): two new
+    # kind-shape idioms (MANDATORY-ON-KIND, KIND-OR-VALUE-PERMITTED), each with regex + manifest
+    # + reconciliation block, plus ten new MANIFEST rows -- genuinely new, not padding.
+    "gates/kind_shape_manifest_gate.py":              1373,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -230,7 +233,10 @@ BASELINE: dict[str, int] = {
     # kernel/lineage/s57-obligation-revocation-event.sql): CHAIN += s57 -- exercises review_gap's
     # own third, narrowing-only anti-join, an already-allowlisted entry whose reason text is
     # UPDATED in place (no new row). One genuinely load-bearing line, not padding.
-    "gates/ledger_reader_allowlist.py":                 526,
+    # Reconciled +33 to 559 (design/FABLE-MISSIVES-KERNEL-SPEC.md, row 1263): CHAIN += s58/s59;
+    # ALLOWLIST entries for three new raw-ledger readers plus the re-issued
+    # validate_supersession_target's widened reason text -- genuinely new, not padding.
+    "gates/ledger_reader_allowlist.py":                 559,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently

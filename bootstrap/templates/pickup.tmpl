@@ -9,7 +9,9 @@ SCOPE, HONESTLY NAMED:
            IN-FORCE-DECISIONS (/rows/current, id-descending, the SQL-floor reading),
            OPEN-QUESTIONS (/views/question_status), REVIEW-DEBT (/views/review_gap) -- the FOUR
            sections the read-surface amendment's own §5 seam stop named explicitly as blocked
-           without the /views/{view} route; now unblocked, rebased first.
+           without the /views/{view} route; now unblocked, rebased first. MAIL (design/
+           FABLE-MISSIVES-KERNEL-SPEC.md §5, ledger row 1263: missive_undisposed/missive_stale/
+           missive_open_threads counts and rows) -- a FIFTH section, added same build.
   NOT COVERED (UNEXERCISED by this build, named rather than silently dropped -- run
            `./legacy/pickup` for these): RESOURCES/ESTIMATES/TAXONOMIES/MAINTAINER-REVIEW-QUEUE
            (each its own statement-prefix-convention scan over the WHOLE ledger_current, with
@@ -182,6 +184,44 @@ def review_debt(cfg: bcc.ServedConfig) -> None:
         print(json.dumps(r, sort_keys=True))
 
 
+def mail(cfg: bcc.ServedConfig) -> None:
+    """design/FABLE-MISSIVES-KERNEL-SPEC.md §5 ("./pickup integration, same build"): surface
+    missive_undisposed and missive_stale counts (and the open-thread list when nonzero) -- mail
+    is part of hydration, the resumption doctrine covers cross-world state. A world without s58
+    applied reports capability_absent (HTTP 409), handled the SAME way review_debt's own
+    pre-s20 case is -- named, not a bug in this script."""
+    _section("MAIL")
+    try:
+        undisposed = bcc.get_all_rows(cfg.base, "/views/missive_undisposed", cursor="after_id")
+        stale = bcc.get_all_rows(cfg.base, "/views/missive_stale", cursor="after_id")
+        open_threads = bcc.get_all_rows(cfg.base, "/views/missive_open_threads", cursor="after_slug")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 409:
+            print("BLOCKED: this world's kernel predates s58 (design/FABLE-MISSIVES-KERNEL-"
+                  "SPEC.md) -- the boundary reports this as a typed capability_absent (see its "
+                  "own message below), not a bug in this script.")
+            detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+            print(f"  {detail}")
+            return
+        detail = e.body.get("message") if isinstance(e.body, dict) else e.body
+        print(f"ERROR: boundary HTTP {e.status}: {detail}")
+        return
+    print(f"undisposed: {len(undisposed)}  stale: {len(stale)}  open threads: {len(open_threads)}")
+    if not undisposed and not stale:
+        print("(no mail outstanding)")
+    for r in sorted(stale, key=lambda r: r["id"]):
+        print(f"STALE  {json.dumps(r, sort_keys=True)}")
+    for r in sorted(undisposed, key=lambda r: r["id"]):
+        if r["id"] not in {s["id"] for s in stale}:
+            print(f"OPEN   {json.dumps(r, sort_keys=True)}")
+    if open_threads:
+        for r in sorted(open_threads, key=lambda r: r["missive_thread"]):
+            print(f"THREAD {json.dumps(r, sort_keys=True)}")
+    print("NOTE: an unrun courier is an unread mailbox -- this section cannot tell you the "
+          "courier has not run this session, only what is already on record (spec §12 item 1, "
+          "the poll-liveness ceiling -- mitigated, not closed).")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--since", default=None, help="UNEXERCISED by this rebase -- see module docstring")
@@ -200,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     in_force_decisions(cfg, args.limit)
     open_questions(cfg)
     review_debt(cfg)
+    mail(cfg)
     print()
     print("### SECTION: NOT-REBASED")
     print()

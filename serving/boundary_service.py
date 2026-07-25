@@ -406,6 +406,7 @@ from boundary_models import (  # noqa: E402
     InfraFailure,
     LedgerWriteIntFields,
     MetaResponse,
+    MissiveDisposeWriteIntFields,
     ObligationRevokeWriteIntFields,
     ObligationWriteIntFields,
     PayloadTooLarge,
@@ -530,6 +531,18 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "principal_role_bindings": ("row_id", "id"),
     "principal_keys": ("row_id", "id"),
     "principal_competences": ("row_id", "id"),
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md §3 (kernel/lineage/s59-missive-views.sql, ledger row
+    # 1263) -- a FIFTH additive registry growth, same closed-registry mechanism, no new route, no
+    # BOUNDARY_SERVICE_VERSION bump. Five of the six views key on id (bigint, id-shaped
+    # pagination, the same shape reservations_outstanding/review_verdicts already use);
+    # missive_open_threads keys on missive_thread (slug-shaped, the work_startable/
+    # work_edge_parent precedent).
+    "missive_outbound": ("id", "id"),
+    "missive_receipts": ("id", "id"),
+    "missive_undisposed": ("id", "id"),
+    "missive_stale": ("id", "id"),
+    "missive_delivery_audit": ("id", "id"),
+    "missive_open_threads": ("missive_thread", "slug"),
 }
 
 # The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
@@ -544,6 +557,14 @@ WRITE_SURFACES: dict[str, str] = {
     "registration": "registration_write",
     "obligation": "obligation_write",
     "obligation_revoke": "obligation_revoke",
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md §2.7 (kernel/lineage/s58-missive-substrate.sql, ledger
+    # row 1263): the SEVENTH SECURITY DEFINER boundary function, the two-row disposition+
+    # acknowledgment ceremony. Its (receipt/disposition/statement/actor) payload fits the generic
+    # psql `-v` transport comfortably (the obligation_revoke precedent) -- no dedicated route.
+    # missive_sent/missive_received/belief ride the generic `ledger` surface above unchanged
+    # (missive_* payload keys pass ledger_write's generic key validation with zero edits, s53's
+    # own precedent for kind-scoped columns).
+    "missive_dispose": "missive_dispose",
 }
 
 # A5.2: per-surface pydantic models are the ENUMERATION AUTHORITY for "every integer-typed
@@ -559,6 +580,7 @@ WRITE_SURFACE_INT_FIELDS: dict[str, type] = {
     "registration": RegistrationWriteIntFields,
     "obligation": ObligationWriteIntFields,
     "obligation_revoke": ObligationRevokeWriteIntFields,
+    "missive_dispose": MissiveDisposeWriteIntFields,
     # "artifact" is deliberately NOT keyed through WRITE_SURFACES/make_write_route (Part B's own
     # dedicated route, artifact_put, reuses this SAME dict directly via
     # `_bound_write_payload_ints("artifact", payload)` -- see that route's own docstring for why).

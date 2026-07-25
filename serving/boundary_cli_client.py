@@ -346,6 +346,11 @@ _SLUG_FIELD_OVERRIDE: dict[str, str] = {
     # the default 'slug' -- work_item_violations/work_review_gap/work_item_current/work_startable
     # all key on the default 'slug' and need no entry here.
     "work_edge_parent": "child_slug",
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md §3 (kernel/lineage/s59-missive-views.sql, ledger row
+    # 1263): missive_open_threads keys on missive_thread, not the default 'slug' -- the other
+    # five missive views all key on the default 'id' (VIEW_REGISTRY, boundary_service.py) and
+    # need no entry here.
+    "missive_open_threads": "missive_thread",
 }
 _ID_FIELD_OVERRIDE: dict[str, str] = {
     "question_status": "question_id",
