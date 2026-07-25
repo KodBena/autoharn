@@ -1,65 +1,114 @@
 # Postmortem — the 2026-07-23 review campaign
 
-<!-- doc-attest-exempt: Fable-authored postmortem, commissioned ledger row 1235, awaiting
-the maintainer's own read; the lessons marked CANDIDATE below are proposals for his
-ratification, not enacted law. Removal condition: maintainer disposition of the three
-candidates (adopt/decline each), after which this marker is struck and the disposition
-recorded inline. -->
+<!-- doc-attest-exempt: Fable-authored postmortem, commissioned ledger row 1235; the
+maintainer has now read it and dispositioned the three CANDIDATE lessons (see the dated
+note in the CANDIDATE 1 section below) — the substantive disposition this marker's
+original removal condition asked for is therefore recorded inline. This marker stays in
+place, with an UPDATED condition, only because this ADR-0017 polish pass ran without
+access to a genuinely separate fresh-context B invocation (no `Agent`-type tool was
+available to the session that produced this edition — see this edition's own C-step
+meaning-preservation statement, added below, for the full disposition). Removal
+condition, updated: strike this marker once a fresh-context B — a provably separate
+invocation, per the A:B:C recipe (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — has read
+this edition and the attestation is recorded per that recipe's step 6. -->
 
-Commissioned by the maintainer (row 1235, his words): *"see whether there's any durable
-lessons learned we haven't already banked (and given the amount of finding, we shouldn't
-require there to be a durable lesson beyond what we already have — but, on the other hand,
-let's not be conceited either)."* This document holds that line from both sides: each
-candidate lesson below is tested against the banked set (the ADRs, the setup-TUI
-postmortem's lessons, the audit-bias clauses of row 1887, the witness discipline), and is
-either classified as **covered** (an instance of law we already have — cited), or named
-**CANDIDATE** (genuinely beyond it, proposed for ratification, not enacted here).
+Commissioned by the maintainer (ledger row 1235, his words — "ledger" is this project's
+append-only Postgres decision/audit log, read via the `./led` command-line tool, not a
+file in this repository): *"see whether there's any durable lessons learned we haven't
+already banked (and given the amount of finding, we shouldn't require there to be a
+durable lesson beyond what we already have — but, on the other hand, let's not be
+conceited either)."* This document holds that line from both sides: each candidate
+lesson below is tested against the **banked set** — the project's already-codified
+prior lessons: the ADRs, the setup-TUI postmortem's own lessons, ledger row 1887's
+audit-bias clauses (false-SILENT: checking too few surfaces; false-MET: reading a
+requirement down to fit what was found), and the witness discipline (every claim is
+recorded as WITNESSED, REFUSED-AS-EXPECTED, or UNEXERCISED, per this project's
+[orchestration contract](../../../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09))
+— and is either classified as **covered** (an instance of law we already have — cited),
+or named **CANDIDATE** (genuinely beyond it, proposed for ratification, not enacted
+here).
 
 ## What happened, in one paragraph
 
-Five delivery batches (docs, bootstrap trio, engine pair, fixture repairs, umbrella CLI)
-landed the same day the maintainer tightened the review bar (rows 1229/1231: every
-code-touching delivery gets a fresh-context adversarial review; weak fixed-point per axis;
-a strengthened tier where silent wrong answers cost most). The campaign ran ~20 fresh-eyes
-review laps and 8 fix rounds across those streams. Findings: roughly a dozen severes in
-work that had arrived "done, witnessed, gates green" — among them a live-ledger write leak
-from a fixture (rows 1237–1244, marked garbage by 1248), a merged bootstrap regression
-that stranded every pre-2026-07-18 deployment including `~/ent`, a recursion-guard gate
-wired into nothing that also false-passed superclass catches, a service-lifecycle race
-that left a healthy service unstoppable, and a dispatch fixture blind to wrong-target
-swaps through four progressively narrower escapes. Every severe was closed red-first and
-re-reviewed to a clean lap; the umbrella axis needed five laps and converged monotonically
-(whole-fixture absence → content swap → shared-boilerplate collision → sibling-template
-marker collision). The handshake's first live catch, minutes after merge, was this host's
-own pre-upgrade service — refused with teaching, recovered via doctor's own taught path.
+*(Split below into short paragraphs for this edition; the original was one dense block —
+no sentence, clause, number, or citation was dropped or reworded in splitting it. Terms
+used loosely throughout this campaign are glossed at their first use here: an **axis** is
+one delivery stream's own review cycle, tracked separately from the others — the docs
+axis, the umbrella axis, the ensure-running axis, and so on, each named for the stream it
+reviews; a **lap** is one full fresh-eyes review pass over a stream's axis; a **weak
+fixed-point per axis** means each axis's laps repeat until a pass finds nothing new,
+which is the empirical claim item 4 below returns to; closing a defect **red-first** means
+first reproducing the failing state — "red" — before applying and re-testing the fix, so
+the fix is checked against a real failure rather than assumed to matter.)*
+
+Five delivery batches landed the same day: docs, the bootstrap trio (three bootstrap-layer
+changes), the engine pair (two engine-layer changes), fixture repairs, and the umbrella
+CLI (the `./autoharn <verb>` dispatch rework named in
+[design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md](../../../design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md)).
+That same day the maintainer tightened the review bar (ledger rows 1229/1231: every
+code-touching delivery gets a fresh-context adversarial review; a weak fixed-point per
+axis, as glossed above; a strengthened review tier where silent wrong answers cost most).
+The campaign ran ~20 fresh-eyes review laps and 8 fix rounds across those five streams.
+
+Findings: roughly a dozen severe defects in work that had arrived "done, witnessed, gates
+green" — among them a live-ledger write leak from a fixture (ledger rows 1237–1244, later
+marked garbage — voided as a bad record — by row 1248); a merged bootstrap regression that
+stranded every pre-2026-07-18 deployment, including `~/ent` (one such early-scaffolded
+deployment, cited by its filesystem path); a recursion-guard gate that was wired into
+nothing (so it never ran) and that would also have false-passed on superclass catches even
+if it had been wired in (its exception handling caught a broader exception class than the
+one it needed to distinguish, so the specific failure it existed to catch would have
+slipped through as a false pass); a service-lifecycle race that left a healthy service
+unstoppable; and a dispatch fixture blind to wrong-target swaps through four progressively
+narrower escapes (four successive fixes each closed one way the fixture could be fooled,
+and each still left a narrower one open, until the fourth closed it).
+
+Every severe was closed red-first and re-reviewed to a clean lap (a pass with no new
+finding); the umbrella axis needed five laps and converged monotonically — each lap's
+finding was a different, narrower failure than the last: whole-fixture absence → content
+swap → shared-boilerplate collision → sibling-template marker collision. The
+version-handshake check's first live catch, minutes after merge, was this host's own
+pre-upgrade service — refused with teaching (a refusal that explains the fix, not a bare
+error), recovered via `doctor`'s own taught path (`doctor`, one of this project's operator
+verbs — see the [operator-verb roster](../../../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09) —
+answers "is this world set up right?" in one witnessed call and points at the fix when it
+is not).
 
 ## The classification
 
 ### Covered by existing law (instances, not lessons)
 
 1. **"Zero residue" that checked the filesystem and processes but not the kernel**
-   (the fixture leak's own batch report) — an instance of row 1887's false-SILENT bias:
-   *convenient search surfaces*. The surface swept was the convenient one; the surface
-   that mattered (the live ledger) went unswept. No new law needed; the mechanical guard
-   now exists (`serve_existing_world` refuses non-scratch paths by construction,
-   row 1249's item remains open for the general fixture-pinning shape).
+   (the **kernel**: this project's append-only Postgres schema and its integrity
+   machinery, paired per [world](../../../GLOSSARY.md#world) — the live ledger lives
+   there) (the fixture leak's own batch report) — an instance of row
+   1887's false-SILENT bias: *convenient search surfaces*. The surface swept was the
+   convenient one; the surface that mattered (the live ledger) went unswept. No new law
+   needed; the mechanical guard now exists (`serve_existing_world` — the code path that
+   serves a world's data — refuses non-scratch paths by construction; row 1249's item
+   remains open for the general fixture-pinning shape).
 2. **Report claims outrunning the artifact** (the version-handshake red.txt that showed
    ALL CASES PASS while claiming red; `world_descriptor.py`'s docstring citing fixtures
    that did not exist) — the witness discipline already governs: a claim is WITNESSED,
    REFUSED-AS-EXPECTED, or UNEXERCISED. These were violations caught by review doing its
    job, not gaps in the law.
-3. **The carve-out chronology miss** (doctor got an optional-for-discovery carve-out;
-   asof-export, with the identical chronological profile, did not — stranding `~/ent`) —
-   at bottom an instance of the class-sweep discipline the doorway round already paid
-   for (fix the class, not the instance you met). The near-miss form is worth the
-   checklist line in candidate 3 below, but the governing principle is banked.
+3. **The carve-out chronology miss** (`doctor` and `asof-export` are both operator
+   verbs — see the gloss under "What happened," above; `doctor` got an
+   optional-for-discovery carve-out — an exemption from a stricter check, granted
+   because the verb is optional for a deployment's own discovery step — while
+   `asof-export`, with the identical chronological profile, did not, stranding `~/ent`)
+   — at bottom an instance of the class-sweep discipline the doorway round (ledger row
+   1180's usability review round; a prior instance of this same "fix the class, not the
+   instance you met" discipline) already paid for. The near-miss form is worth the
+   checklist line in CANDIDATE 3 below, but the governing principle is banked.
 4. **The review regime itself was vindicated empirically.** Under the prior lax regime,
-   the trio's two silent-wrong-answer defects were already ON MAIN when review caught
-   them, and roughly a dozen severes across the other streams would have shipped. The
-   fixed-point's laps each found *new* defect classes, never re-finding old ones, and
-   find-severity narrowed monotonically to convergence — evidence the fresh-blind-eyes
-   design (rows 1124/1174/1177 lineage) is load-bearing, not ceremonial. Confirmation,
-   not lesson.
+   the bootstrap trio's two silent-wrong-answer defects were already ON MAIN when review
+   caught them, and roughly a dozen severe defects across the other streams would have
+   shipped. The fixed-point's laps (see the gloss under "What happened," above) each
+   found *new* defect classes, never re-finding old ones, and find-severity narrowed
+   monotonically to convergence — evidence the fresh-blind-eyes design (independent,
+   context-blind reviewers assigned by design, not by ad hoc habit; ledger rows
+   1124/1174/1177 lineage) is load-bearing, not ceremonial. Confirmation, not lesson.
 
 ### CANDIDATE 1 — the proxy-surface class (proposed; the campaign's one genuinely new shape)
 
@@ -75,15 +124,28 @@ Four independent findings share a structure the banked set names only partially:
 - "zero residue" observed **filesystem and process table** while the write landed in the
   **kernel**.
 
-ADR-0020 names the conservation proxy: *no content lost* standing in for *no meaning
-changed*. These four are its structural cousin: **verification aimed at a sibling of the
-real surface** — the check is real, runs honestly, and passes while the surface that
-actually ships/commits/persists diverges. The banked law covers the meaning axis
-(ADR-0020) and the search-breadth axis (row 1887); neither states the rule *the checked
+[ADR-0020](../0020-meaning-preservation-witness.md) names the conservation proxy: *no
+content lost* standing in for *no meaning changed*. These four are its structural
+cousin: **verification aimed at a sibling of the real surface** — the check is real,
+runs honestly, and passes while the surface that actually ships/commits/persists
+diverges. The banked law covers the meaning axis (ADR-0020) and the search-breadth axis
+(row 1887, [glossed above](#the-classification)); neither states the rule *the checked
 surface must be the surface that ships, and a check whose object is a proxy surface must
 name that fact where its verdict is read*. Proposed for the maintainer: either a short
 sibling ADR or a ratified amendment note on ADR-0020's family. Until ratified, it stands
 here as the campaign's principal harvest.
+
+> **Maintainer disposition, 2026-07-25:** the maintainer read this postmortem and
+> directed a new review-class ADR. It is now drafted as
+> [ADR-0021 — Review reads the real object](../0021-the-checked-surface-is-the-shipped-surface.md)
+> (DRAFT, awaiting ratification). CANDIDATE 1 above became ADR-0021's Rule A (the
+> proxy-surface rule, essentially unchanged). CANDIDATE 2 below (fix-comments are
+> claims) became ADR-0021's Rule B — and, per the maintainer's own reading at
+> ratification time, Rule B was his **primary intent** in commissioning the ADR, not a
+> secondary addition to Rule A. CANDIDATE 3 below (carve-outs state predicates) became
+> ADR-0021's subsidiary clause. All three candidates are therefore dispositioned: none
+> declined, none enacted as freestanding law of their own — each rides ADR-0021 toward
+> ratification.
 
 ### CANDIDATE 2 — fix-comments are claims (proposed; recurred twice in one axis)
 
@@ -111,7 +173,7 @@ enumerated); this brings the same shape down to the humble compatibility carve-o
 
 - **(a) Could project-agnostic directives have been given that weren't?** Yes — the three
   candidates above, chiefly the proxy-surface rule.
-- **(b) Should they enter project law?** Candidate 1 plausibly yes (ADR-shaped); 2 and 3
+- **(b) Should they enter project law?** CANDIDATE 1 plausibly yes (ADR-shaped); 2 and 3
   are checklist/brief material — law only if the maintainer prefers them binding.
 - **(c) Are existing ADRs unclear or insufficiently generic?** ADR-0020 is sound and
   correctly scoped to meaning; the campaign argues not for amending its rule but for
