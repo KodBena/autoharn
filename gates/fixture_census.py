@@ -229,12 +229,17 @@ REGISTRY: dict[str, str] = {
     "setup-tui-rehearsal-mid-cancel":  "seen-red/setup-tui-rehearsal-mid-cancel/run_fixtures.py",
     "setup-tui-control-help-split":    "seen-red/setup-tui-control-help-split/run_fixtures.py",
     # MISSIVES kernel family (kernel/lineage/s58-missive-substrate.sql, s59-missive-views.sql,
-    # design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263, AMENDMENT 1 2026-07-25): red.txt
-    # banks the historical pre-amendment defect (regards reused for missive_disposed, refused by
-    # s15's validate_review -- the build's own primary finding, resolved by the new dedicated
-    # missive_regards column) plus the live refusal set this run_fixtures.py exercises against a
-    # real scratch schema pair (missive_regards kind-shape/existence, courier scope, dedup; one
-    # green control).
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263, AMENDMENTS 1 and 2, 2026-07-25):
+    # red.txt banks (a) the historical pre-AMENDMENT-1 defect (regards reused for
+    # missive_disposed, refused by s15's validate_review -- the build's own primary finding,
+    # resolved by the new dedicated missive_regards column), (b) the strengthened-tier review's
+    # two concurrency races (dedup, re-disposition -- both RED pre-fix, both GREEN post-fix,
+    # real psycopg concurrency), and (c) AMENDMENT 2's reviewer reproduction (missive_outbound
+    # silently dropping a superseded-before-poll missive, RED pre-fix / GREEN post-fix).
+    # run_fixtures.py is the ONE registered fixture for this directory (the census keys one
+    # entry per seen-red dir); it invokes concurrent_race_fixtures.py and
+    # amendment2_transport_fixture.py, its own sibling modules in this same directory, as
+    # subprocesses, so this one entry exercises the whole family.
     "missives-kernel-family":          "seen-red/missives-kernel-family/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,

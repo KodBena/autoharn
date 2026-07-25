@@ -116,9 +116,14 @@
 -- acknowledgment state is unrepresentable through this path, the review_write atomicity
 -- argument).
 --
--- ELEMENT 8 -- SAME-COMMIT SET (the s53 ELEMENT 6 idiom): (a) compute_row_hash re-issued to 88
--- columns (eleven appended in catalog ordinal order -- the original ten plus AMENDMENT 1's
--- missive_regards, s42's law); (b) ledger_current/countersigned_in_force re-issued +11 appended
+-- ELEMENT 8 -- SAME-COMMIT SET (the s53 ELEMENT 6 idiom): (a) compute_row_hash RE-ISSUED TO
+-- SERIALIZE 87 COLUMNS TOTAL (eleven missive_* fields appended in serialization order -- the
+-- original ten plus AMENDMENT 1's missive_regards, s42's law; PROSE CORRECTION, strengthened-
+-- tier review: an earlier revision of this sentence said "88", hand-derived from s57's own
+-- header claim of a 77-column base rather than gate-verified -- 87 is the number
+-- gates/hash_coverage_gate.py ITSELF reports live against the applied chain, the mechanically-
+-- checked surface, and is what this sentence now states); (b) ledger_current/
+-- countersigned_in_force re-issued +11 appended
 -- at end (the s20 lesson); (c) kind CHECK to 30; (d) refusal_surface_check widened to seven
 -- members ('missive_dispose'); (e) gates/kind_shape_manifest_gate.py: MANDATORY-ON-KIND is a
 -- GENUINELY NEW kind-shape idiom this codebase had none of before (spec's own text says
@@ -460,6 +465,77 @@ COMMENT ON CONSTRAINT missive_disposition_mandatory_on_ack ON :"schema".ledger I
    kernel/lineage/s58-missive-substrate.sql.';
 
 -- ============================================================================================
+-- ELEMENT 3B -- CONCURRENCY BACKSTOP FOR DEDUP (strengthened-tier review, kernel axis, one
+-- severe): TWO UNIQUE PARTIAL INDEXES. ADR-0021 Rule B ("a fix names its exclusivity
+-- primitive... a timing argument is not one"): validate_missive_dedup's own EXISTS checks
+-- (ELEMENT 4 item 2, unchanged below) are a plain SELECT under READ COMMITTED and CANNOT close
+-- the race -- reproduced live by the reviewer with two concurrent psql sessions, both
+-- committing a duplicate (author_world, thread, seq) row on the SAME side. The EXCLUSIVITY
+-- PRIMITIVE is these two indexes: Postgres enforces UNIQUE constraints/indexes with its own
+-- index-level locking, which a bare SELECT-then-INSERT can never replicate -- one of two
+-- concurrent INSERTs targeting the same key WILL be serialized against the other at the index
+-- b-tree level and WILL see a unique-violation (SQLSTATE 23505) if it loses, independent of
+-- snapshot isolation. Legal supersession never reuses a key (a withdrawal takes a NEW seq,
+-- Q7/§2.5), so PERMANENT uniqueness per (author_world, thread, seq) per side is exactly the
+-- invariant -- no partial-index predicate needs to account for supersession at all.
+-- validate_missive_dedup's EXISTS check remains the TEACHING layer (fires first, in the
+-- ordinary sequential case, with its own friendly message); these indexes are the CONCURRENCY
+-- BACKSTOP for the case two writers' EXISTS checks both ran before either committed. A raced
+-- 23505 is caught and translated to the SAME typed teaching refusal by
+-- kernel.missive_dedup_race_text() (ELEMENT 4B) inside the re-issued kernel.ledger_write
+-- (ELEMENT 7B) and kernel.missive_dispose (ELEMENT 7) -- never a raw 23505 reaching the caller.
+-- ============================================================================================
+DROP INDEX IF EXISTS :"schema".missive_sent_dedup_uq;
+CREATE UNIQUE INDEX missive_sent_dedup_uq ON :"schema".ledger
+    (missive_author_world, missive_thread, missive_seq) WHERE kind = 'missive_sent';
+COMMENT ON INDEX :"schema".missive_sent_dedup_uq IS
+  'The CONCURRENCY BACKSTOP for the sent-side half of validate_missive_dedup (ELEMENT 4 item 2)
+   -- ADR-0021 Rule B''s exclusivity primitive, named: Postgres''s own unique-index locking,
+   not a timing argument. A raced duplicate surfaces as SQLSTATE 23505, translated to the
+   trigger''s own teaching text by kernel.missive_dedup_race_text() (ELEMENT 4B).
+   kernel/lineage/s58-missive-substrate.sql.';
+DROP INDEX IF EXISTS :"schema".missive_received_dedup_uq;
+CREATE UNIQUE INDEX missive_received_dedup_uq ON :"schema".ledger
+    (missive_author_world, missive_thread, missive_seq) WHERE kind = 'missive_received';
+COMMENT ON INDEX :"schema".missive_received_dedup_uq IS
+  'The CONCURRENCY BACKSTOP for the received-side half of validate_missive_dedup (ELEMENT 4
+   item 2) -- same primitive, same translation path, one side over.
+   kernel/lineage/s58-missive-substrate.sql.';
+
+-- ============================================================================================
+-- ELEMENT 4B -- kernel.missive_dedup_race_text(text, jsonb): the ONE home (ADR-0012 P1) for
+-- "what does a raced ELEMENT 3B unique-violation teach" -- reconstructs the SAME friendly text
+-- validate_missive_dedup's own EXISTS-path RAISE EXCEPTION produces, from the ORIGINAL PAYLOAD
+-- (the row that lost the race no longer exists to re-query once the exception unwinds; the
+-- payload jsonb the caller already has is the one surviving source for author_world/thread/seq).
+-- Returns NULL for any constraint name this delta does not own -- callers pass the raw message
+-- through unchanged in that case (never assume a 23505 this function does not recognize is
+-- ours). Called from the re-issued kernel.ledger_write (ELEMENT 7B) and kernel.missive_dispose
+-- (ELEMENT 7)'s own exception handlers -- the two write paths that can raise these two indexes'
+-- violations.
+-- ============================================================================================
+CREATE OR REPLACE FUNCTION :"kern".missive_dedup_race_text(p_constraint text, p_payload jsonb)
+    RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
+  SELECT CASE p_constraint
+    WHEN 'missive_received_dedup_uq' THEN
+      format('missive policy: a missive_received row already exists for (author_world=''%s'', thread=''%s'', seq=%s) -- at-least-once delivery converts to exactly-once RECORDING (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2); this refusal is itself journaled, so re-delivery stays visible, never silent. [raced: caught at the missive_received_dedup_uq unique index, ADR-0021 Rule B -- the sequential-case EXISTS check in validate_missive_dedup lost this race, the index caught it]',
+             p_payload->>'missive_author_world', p_payload->>'missive_thread', p_payload->>'missive_seq')
+    WHEN 'missive_sent_dedup_uq' THEN
+      format('missive policy: a missive_sent row already exists for (thread=''%s'', seq=%s) -- the global identity''s author-side half is a one-time fact (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2, §13 item 5). [raced: caught at the missive_sent_dedup_uq unique index, ADR-0021 Rule B]',
+             p_payload->>'missive_thread', p_payload->>'missive_seq')
+    ELSE NULL
+  END;
+$fn$;
+
+COMMENT ON FUNCTION :"kern".missive_dedup_race_text(text, jsonb) IS
+  'kernel/lineage/s58-missive-substrate.sql ELEMENT 4B: the one home for "what a raced ELEMENT
+   3B unique-violation teaches" -- reconstructs validate_missive_dedup''s own friendly text from
+   the surviving payload jsonb. Returns NULL for any other constraint name (pass the raw
+   message through unchanged). ADR-0021 Rule B: the exclusivity primitive is the unique index,
+   this function only translates its SQLSTATE into the SAME teaching text the sequential-case
+   trigger would have produced.';
+
+-- ============================================================================================
 -- ELEMENT 4 -- SIX NEW REFUSAL TRIGGERS (spec §2.4, AMENDMENT 1).
 -- ============================================================================================
 
@@ -592,6 +668,27 @@ COMMENT ON FUNCTION :"schema".validate_missive_courier_scope() IS
 -- 5. validate_missive_disposition -- missive_regards must name an existing missive_received
 --    row (AMENDMENT 1: was `regards`, moved to the dedicated column); no ack-of-ack;
 --    re-disposition only via same-kind supersession.
+--
+-- CONCURRENCY, FOUND AND CLOSED (strengthened-tier review, kernel axis, one severe -- reproduced
+-- live by the reviewer with two concurrent psql sessions: two racing dispositions of the SAME
+-- receipt both passed the EXISTS re-disposition check below and both committed, each minting
+-- its own acknowledgment). A plain UNIQUE index cannot express "at most one IN-FORCE
+-- missive_disposed per receipt" (legal re-disposition, ELEMENT 5/Q7, deliberately leaves BOTH
+-- rows in the table -- the superseded one stays, only its in-force-ness changes) -- serialize
+-- instead. THE EXCLUSIVITY PRIMITIVE (ADR-0021 Rule B, named, not a timing argument):
+-- pg_advisory_xact_lock, keyed on a schema-scoped hash of missive_regards (the s26 row_hash_
+-- chain lock's own idiom, one table over -- `hashtext(TG_TABLE_SCHEMA || '.missive_disposed.'
+-- || NEW.missive_regards::text)::bigint`), acquired HERE, before the EXISTS check below, and
+-- held to COMMIT (a plain pg_advisory_xact_lock, not the _lock()/_unlock() pair -- released
+-- automatically at transaction end, matching s26's own choice). THE ORDERING ARGUMENT: two
+-- concurrent dispositions of the same receipt call this trigger with the same lock key; the
+-- SECOND to arrive at pg_advisory_xact_lock blocks until the FIRST's transaction commits or
+-- aborts; once unblocked, the second transaction's EXISTS check runs on ITS OWN (by-then-
+-- refreshed) READ COMMITTED snapshot, which now, provably, contains the first transaction's
+-- committed missive_disposed row (a snapshot taken after a COMMIT that happened-before it, by
+-- MVCC's own visibility rule) -- so the existing EXISTS-based refusal fires for the loser,
+-- exactly as it does in the sequential case, not a narrowed window, an actual serialization.
+-- Two DIFFERENT receipts take DIFFERENT lock keys and never contend.
 CREATE OR REPLACE FUNCTION :"schema".validate_missive_disposition() RETURNS trigger
     LANGUAGE plpgsql SET search_path = :"schema", :"kern", pg_temp AS $fn$
 DECLARE
@@ -599,6 +696,11 @@ DECLARE
   v_tgt_act text;
 BEGIN
   IF NEW.kind = 'missive_disposed' THEN
+    IF NEW.missive_regards IS NOT NULL THEN
+      -- the exclusivity primitive: serialize every disposition attempt against THIS receipt.
+      PERFORM pg_advisory_xact_lock(
+        hashtext(TG_TABLE_SCHEMA || '.missive_disposed.' || NEW.missive_regards::text)::bigint);
+    END IF;
     SELECT l.kind, l.missive_act INTO v_tgt_kind, v_tgt_act
       FROM ledger l WHERE l.id = NEW.missive_regards;
     IF v_tgt_kind IS NULL THEN
@@ -626,7 +728,10 @@ COMMENT ON FUNCTION :"schema".validate_missive_disposition() IS
   'kernel/lineage/s58-missive-substrate.sql §2.4 item 5 (AMENDMENT 1): missive_regards must name
    an existing missive_received row, not itself an acknowledgment; refuses a second in-force
    disposition of the same receipt unless this write supersedes exactly the prior one
-   (re-disposition).';
+   (re-disposition). CONCURRENCY (strengthened-tier review, ADR-0021 Rule B): pg_advisory_xact_
+   lock keyed on missive_regards, taken before the re-disposition EXISTS check, serializes
+   concurrent dispositions of the SAME receipt -- the exclusivity primitive and its ordering
+   argument are stated in full above this function''s own DEFINE.';
 
 -- 6. validate_missive_regards -- AMENDMENT 1 (2026-07-25, maintainer-ratified "yes to the
 --    column"): s58's own dedicated object for the two-way KIND correlation "the named row must
@@ -663,9 +768,16 @@ COMMENT ON FUNCTION :"schema".validate_missive_regards() IS
    kind-correlation fact gets its own home, exactly as missive_regards itself got its own column
    rather than reusing regards). kernel/lineage/s58-missive-substrate.sql.';
 
--- Triggers 2, 4, 5 and the re-issued supersession trigger (ELEMENT 5) read raw `ledger` by
--- row-addressed/HISTORY-typed reads -- gates/ledger_reader_allowlist.py gains their entries
--- with reasons, same commit (the s53 ELEMENT 6(e) discipline).
+-- PROSE CORRECTION (strengthened-tier review, prose minor): triggers 2 (validate_missive_
+-- dedup), 3 (validate_missive_tokens), 5 (validate_missive_disposition), 6 (validate_missive_
+-- regards, AMENDMENT 1) and the re-issued supersession trigger (ELEMENT 5) read raw `ledger`
+-- by row-addressed/HISTORY-typed reads -- gates/ledger_reader_allowlist.py gains their entries
+-- with reasons, same commit (the s53 ELEMENT 6(e) discipline). Trigger 4 (validate_missive_
+-- courier_scope) reads kernel.principal ONLY (a row-addressed lookup by name, resolved once
+-- per insert) -- it does NOT read `ledger` at all, and correctly carries no
+-- ledger_reader_allowlist entry (verified live: "no raw-ledger access", the gate's own clean
+-- classification) -- an earlier revision of this sentence misnamed it as a ledger reader and
+-- omitted trigger 3; corrected here to match what the gate itself already verifies.
 
 -- ============================================================================================
 -- ELEMENT 5 -- validate_supersession_target RE-ISSUED (FOURTH re-issue): s43's write_refused
@@ -800,7 +912,7 @@ DECLARE
   v_disp_id bigint;
   v_seq int;
   v_ack_id bigint;
-  v_state text; v_msg text; v_refusal bigint;
+  v_state text; v_msg text; v_refusal bigint; v_constraint text; v_friendly text;
 BEGIN
   BEGIN
     FOR k IN SELECT jsonb_object_keys(p_payload) LOOP
@@ -866,8 +978,21 @@ BEGIN
     SET CONSTRAINTS ALL IMMEDIATE;
     RETURN ('accepted', v_disp_id, NULL, NULL, NULL)::write_verdict;
   EXCEPTION WHEN OTHERS THEN
-    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT,
+                            v_constraint = CONSTRAINT_NAME;
     IF v_state LIKE '22%' OR v_state LIKE '23%' OR v_state LIKE 'P0%' THEN
+      -- ADR-0021 Rule B: a raced ELEMENT 3B unique-violation on the acknowledgment's OWN
+      -- missive_sent insert (step 4 -- two concurrent dispositions in the same thread racing
+      -- the seq computation, step 3) is translated to the SAME teaching text ELEMENT 4B gives
+      -- the generic path, built from the values THIS function already computed (v_receipt_
+      -- thread/v_local_world/v_seq), never the caller's p_payload (which carries no envelope
+      -- fields of its own -- receipt/disposition/statement/actor only).
+      IF v_state = '23505' THEN
+        v_friendly := missive_dedup_race_text(v_constraint, jsonb_build_object(
+          'missive_author_world', v_local_world, 'missive_thread', v_receipt_thread,
+          'missive_seq', v_seq));
+        IF v_friendly IS NOT NULL THEN v_msg := v_friendly; END IF;
+      END IF;
       v_refusal := journal_write_refusal('missive_dispose', p_payload, v_state, v_msg);
       RETURN ('refused', NULL, v_refusal, v_state, v_msg)::write_verdict;
     END IF;
@@ -883,16 +1008,112 @@ COMMENT ON FUNCTION :"kern".missive_dispose(jsonb) IS
    ceremony. Payload keys: receipt (required, bigint), disposition (required, closed
    vocabulary), statement (optional, kernel-generated otherwise), actor (optional, the standing
    set_actor default). Refuses a nonexistent/foreign/acknowledgment receipt and a duplicate
-   disposition (the validate_missive_disposition trigger, fired inside this same guarded
-   block); on accept, writes a missive_disposed row and an acknowledgment missive_sent row
-   atomically -- a disposed-without-acknowledgment state is unrepresentable through this path.
-   The courier-scope trigger makes a courier-actored call refuse at the FIRST insert already.
+   disposition (the validate_missive_disposition trigger''s pg_advisory_xact_lock-serialized
+   EXISTS check, fired inside this same guarded block -- ADR-0021 Rule B, see that trigger''s
+   own header); on accept, writes a missive_disposed row and an acknowledgment missive_sent row
+   atomically -- a disposed-without-acknowledgment state is unrepresentable through this path. A
+   raced ELEMENT 3B unique-violation on the acknowledgment''s own insert is translated to the
+   same teaching text via missive_dedup_race_text(), never a raw 23505. The courier-scope
+   trigger makes a courier-actored call refuse at the FIRST insert already.
    kernel/lineage/s58-missive-substrate.sql.';
 
 -- ============================================================================================
--- ELEMENT 8a -- s42'S LAW SELF-APPLIED: compute_row_hash re-issued to 88 columns (the ten
--- missive_* columns plus AMENDMENT 1's missive_regards appended in catalog ordinal order,
--- before the predecessor link; base body = s57's own text, verified unedited).
+-- ELEMENT 7B -- kernel.ledger_write RE-ISSUED (base = s43's own head text, verified byte-
+-- identical and unedited by s44-s57): the SAME generic single-row write boundary, with ONE
+-- addition -- ADR-0021 Rule B's translation of a raced ELEMENT 3B unique-violation into the
+-- SAME teaching text validate_missive_dedup's sequential-case EXISTS check would have produced
+-- (ELEMENT 4B's missive_dedup_race_text(), called with THIS function's own surviving `payload`
+-- argument, which for the missive_sent/missive_received write paths already carries
+-- missive_author_world/missive_thread/missive_seq verbatim -- no reconstruction needed, unlike
+-- kernel.missive_dispose's own translation, ELEMENT 7, whose payload carries no envelope
+-- fields of its own). Every other kind's write is byte-identical to s43's own path --
+-- missive_dedup_race_text() returns NULL for any constraint name it does not recognize, so a
+-- non-missive 23505 (e.g. a future unrelated unique index) passes through with its raw message
+-- exactly as before this re-issue.
+-- ============================================================================================
+CREATE OR REPLACE FUNCTION :"kern".ledger_write(payload jsonb)
+    RETURNS :"kern".write_verdict LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = :"schema", :"kern", pg_temp AS $fn$
+DECLARE
+  k text;
+  cols text := '';
+  vals text := '';
+  v_id bigint;
+  v_state text; v_msg text; v_refusal bigint; v_constraint text; v_friendly text;
+BEGIN
+  BEGIN
+    -- payload validation (spec §4.2): every key a ledger column; no server-owned key; no
+    -- minted refusal row. Refused loudly AS A VERDICT (RAISE inside the guarded block ->
+    -- journaled under class P0), never silently dropped.
+    FOR k IN SELECT jsonb_object_keys(payload) LOOP
+      IF NOT EXISTS (SELECT 1 FROM pg_attribute a
+                     WHERE a.attrelid = 'ledger'::regclass
+                       AND a.attname = k AND a.attnum > 0 AND NOT a.attisdropped) THEN
+        RAISE EXCEPTION 'write boundary: payload key ''%'' is not a ledger column (kernel/lineage/s43-typed-verdict-write-boundary.sql §4.2) -- payload keys are ledger column names, exactly.', k;
+      END IF;
+      IF k IN ('id', 'ts', 'row_hash', 'stamp_session', 'stamp_agent', 'stamp_ts',
+               'stamp_hmac', 'stamp_verified', 'stamp_invocation',
+               'principal_actor_resolution',
+               'refusal_sqlstate', 'refusal_message', 'refusal_surface',
+               'refusal_payload_digest', 'refusal_attempted_actor',
+               'refusal_attempted_role') THEN
+        RAISE EXCEPTION 'write boundary: payload key ''%'' is SERVER-OWNED (id/ts default server-side; stamps and actor-resolution are trigger-computed; refusal_* columns are minted only by the boundary''s own journaler) -- a writer-supplied value would be a lying channel, refused (s43 §4.2). Declared event time rides event_declared_ts (s24); everything else here is the kernel''s to write.', k;
+      END IF;
+      IF k = 'kind' AND payload->>'kind' = 'write_refused' THEN
+        RAISE EXCEPTION 'write boundary: kind ''write_refused'' is minted ONLY by the boundary''s own refusal journaler -- a caller-supplied refusal row is the forgery channel, closed at this same trust boundary (s43 §4.2; the refusal_seq oracle''s count>sequence FAIL is the tripwire behind it).';
+      END IF;
+      cols := cols || CASE WHEN cols = '' THEN '' ELSE ', ' END || quote_ident(k);
+      vals := vals || CASE WHEN vals = '' THEN '' ELSE ', ' END || 'r.' || quote_ident(k);
+    END LOOP;
+    IF cols = '' THEN
+      RAISE EXCEPTION 'write boundary: empty payload -- nothing to write (s43 §4.2).';
+    END IF;
+    -- per-type casting DERIVED from the rowtype (P1): values pass through
+    -- jsonb_populate_record(NULL::ledger, payload); absent keys fall to column defaults.
+    EXECUTE format('INSERT INTO ledger (%s) SELECT %s FROM jsonb_populate_record(NULL::ledger, $1) r RETURNING id',
+                   cols, vals)
+      USING payload INTO v_id;
+    SET CONSTRAINTS ALL IMMEDIATE;
+    RETURN ('accepted', v_id, NULL, NULL, NULL)::write_verdict;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT,
+                            v_constraint = CONSTRAINT_NAME;
+    IF v_state = '23505' THEN
+      -- ADR-0021 Rule B: translate a raced ELEMENT 3B unique-violation to the SAME teaching
+      -- text the sequential-case EXISTS trigger would have produced, from the surviving
+      -- `payload` argument -- never a raw 23505 reaching the caller.
+      v_friendly := missive_dedup_race_text(v_constraint, payload);
+      IF v_friendly IS NOT NULL THEN v_msg := v_friendly; END IF;
+    END IF;
+    IF v_state LIKE '22%' OR v_state LIKE '23%' OR v_state LIKE 'P0%' THEN
+      v_refusal := journal_write_refusal('ledger', payload, v_state, v_msg);
+      RETURN ('refused', NULL, v_refusal, v_state, v_msg)::write_verdict;
+    END IF;
+    RAISE;   -- infrastructure classes (40/53/57/XX/...): not a denied attempt -- re-raised.
+  END;
+END; $fn$;
+REVOKE ALL ON FUNCTION :"kern".ledger_write(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION :"kern".ledger_write(jsonb) TO :"role";
+
+COMMENT ON FUNCTION :"kern".ledger_write(jsonb) IS
+  'The generic single-row write boundary (s43 §4.2): payload keys are ledger column names,
+   values cast via the rowtype (jsonb_populate_record), absent keys fall to defaults;
+   server-owned keys and a caller-minted write_refused are refused; a policy/integrity/data
+   refusal (SQLSTATE 22*/23*/P0*) is journaled as a committed write_refused row and returned
+   as a typed verdict, never an abort; infrastructure classes re-raise. The ONLY generic
+   write path -- the granted role holds no ledger INSERT. RE-ISSUED (kernel/lineage/
+   s58-missive-substrate.sql ELEMENT 7B, strengthened-tier review, ADR-0021 Rule B): a raced
+   ELEMENT 3B unique-violation (SQLSTATE 23505 on missive_sent_dedup_uq/missive_received_
+   dedup_uq) is translated to the SAME teaching text validate_missive_dedup''s sequential-case
+   EXISTS check produces, via missive_dedup_race_text() -- every other SQLSTATE/kind is
+   byte-identical to s43''s own path.
+   kernel/lineage/s43-typed-verdict-write-boundary.sql; kernel/lineage/s58-missive-substrate.sql.';
+
+-- ============================================================================================
+-- ELEMENT 8a -- s42'S LAW SELF-APPLIED: compute_row_hash RE-ISSUED TO SERIALIZE 87 COLUMNS
+-- TOTAL (the ten missive_* columns plus AMENDMENT 1's missive_regards appended in
+-- serialization order, before the predecessor link; base body = s57's own text, verified
+-- unedited; 87 is gates/hash_coverage_gate.py's own live-verified count, not hand-derived).
 -- ============================================================================================
 CREATE OR REPLACE FUNCTION :"schema".compute_row_hash(r :"schema".ledger, predecessor_hash text)
     RETURNS text LANGUAGE sql IMMUTABLE
@@ -975,7 +1196,7 @@ CREATE OR REPLACE FUNCTION :"schema".compute_row_hash(r :"schema".ledger, predec
       hashfield(r.belief_concurs::text),
       hashfield(r.obligation_revoked_scope),
       hashfield(r.obligation_revoke_reason),
-      -- s58: the ten missive_* columns (catalog ordinals 78..87)
+      -- s58: the ten missive_* columns, appended in serialization order
       hashfield(r.missive_protocol::text),
       hashfield(r.missive_author_world),
       hashfield(r.missive_addressee_world),
@@ -986,7 +1207,7 @@ CREATE OR REPLACE FUNCTION :"schema".compute_row_hash(r :"schema".ledger, predec
       hashfield(r.missive_provenance),
       hashfield(r.missive_cites),
       hashfield(r.missive_disposition),
-      -- AMENDMENT 1: missive_regards, the eleventh missive_* column (catalog ordinal 88)
+      -- AMENDMENT 1: missive_regards, the eleventh and last missive_* field serialized
       hashfield(r.missive_regards::text),
       hashfield(predecessor_hash)
     ], E'\x1f'),

@@ -90,9 +90,14 @@ CHAIN = [
 # FOUR new raw-`ledger` readers by design (validate_missive_dedup, validate_missive_courier_scope,
 # validate_missive_disposition, and AMENDMENT 1's validate_missive_regards; entries below) and
 # re-issues validate_supersession_target with three more missive_* branches (existing entry
-# updated in place, the s45/s53 precedent). s59's six views all factor through ledger_current
-# exclusively (the s31 discipline, stated in its own header) -- verified live, classifies clean
-# with NO allowlist entry for any of the six.
+# updated in place, the s45/s53 precedent). s59 (kernel/lineage/s59-missive-views.sql, AS AMENDED
+# by AMENDMENT 2 2026-07-25): FIVE of its six views factor through ledger_current exclusively
+# (the s31 discipline, stated in its own header) -- classify clean with NO allowlist entry;
+# missive_outbound is the ONE declared exception -- AMENDMENT 2 re-issues it to read raw
+# `ledger` (superseded missive_sent rows included -- transport is not truth, that view's own
+# header carries the full witnessed defect/fix) -- entry below, the s56 review_verdicts / s37
+# work_violation_history precedent (a declared raw/history reader by design, needing no
+# additional GRANT: SELECT on raw `ledger` has been granted to `:role` since s15).
 # s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md,
 # maintainer-ratified 2026-07-22) extends this SAME gate's scratch CHAIN. discharging_attest
 # (RE-ISSUED, s32's own object, WHERE clause widened only) keeps its standing posture -- no raw
@@ -339,6 +344,15 @@ ALLOWLIST: dict[str, str] = {
                                 "read of the missive_regards TARGET's kind -- must be an "
                                 "in-world missive_received row; same history-typed reasoning as "
                                 "validate_review one field over.",
+    "missive_outbound": "DECLARED raw/history reader by design (design/FABLE-MISSIVES-KERNEL-"
+                        "SPEC.md AMENDMENT 2, 2026-07-25, maintainer-ratified \"yes\"): the "
+                        "served transport feed reads raw `ledger` -- EVERY missive_sent row "
+                        "ever written, superseded included -- because transport is not truth "
+                        "(the pre-amendment ledger_current-sourced body silently dropped a "
+                        "missive superseded before its first courier pull, witnessed live with "
+                        "two ordinary sequential writes, no race). Mirrors s56's own "
+                        "review_verdicts / s37's work_violation_history precedent one family "
+                        "over -- 'every row ever sent, never thinner'.",
     "validate_missive_tokens": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 3): row:<id> "
                                "token existence check on missive_cites -- the s48/s52 idiom, "
                                "reused verbatim (artifact: tokens read kernel.artifact, outside "

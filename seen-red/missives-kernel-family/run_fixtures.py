@@ -165,10 +165,21 @@ def dowrite(schema: str, kern: str, role: str, sql: str) -> str:
     return cp.stdout + cp.stderr
 
 
+def doquery(schema: str, kern: str, role: str, sql: str) -> str:
+    """A bare scalar/tuple SELECT, tuples-only + unaligned (-tA) -- unambiguous stdout, no
+    header/footer/formatting noise to mis-parse (unlike dowrite(), which is for DO blocks whose
+    RAISE NOTICE output is the point)."""
+    script = f"SET ROLE {role};\nSET search_path = {schema}, {kern};\n{sql}"
+    cp = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAq", "-v", "ON_ERROR_STOP=1"], input=script)
+    return cp.stdout.strip()
+
+
 def main() -> int:
     suffix = "mkf"
     schema, kern, role = f"{suffix}_scratch", f"{suffix}_scratch_kernel", f"{suffix}_scratch_rw"
+    peer_schema, peer_kern, peer_role = f"{suffix}_peer", f"{suffix}_peer_kernel", f"{suffix}_peer_rw"
     teardown(schema, kern, role)
+    teardown(peer_schema, peer_kern, peer_role)
     log_lines: list[str] = []
     try:
         apply_chain(schema, kern, role)
@@ -254,12 +265,151 @@ END $$;
         log_lines.append(out)
         _check("RED: duplicate (thread, seq) missive_sent refused (dedup)",
                "RESULT: refused" in out and "one-time fact" in out)
+
+        # WITNESS-AXIS MODERATE (strengthened-tier review): the FULL dispose/acknowledge
+        # lifecycle, the exact leg AMENDMENT 1 unblocked, had no GREEN case banked here. Added:
+        # send -> receive -> dispose -> acknowledgment row verified -> re-disposition refused ->
+        # supersession-based re-disposition accepted -- a GENUINE two-world pair (send happens
+        # in a real peer schema, addressed to THIS world; a single-schema "send to yourself"
+        # would never pass validate_missive_identity's own author/addressee split).
+        apply_chain(peer_schema, peer_kern, peer_role)
+        birth(peer_schema, peer_kern, peer_role, "peerworld")
+
+        out = dowrite(peer_schema, peer_kern, peer_role, f"""
+DO $$
+DECLARE v {peer_kern}.write_verdict;
+BEGIN
+  SELECT * INTO v FROM {peer_kern}.ledger_write(jsonb_build_object(
+    'kind','missive_sent','statement','full lifecycle: send',
+    'actor',(SELECT id FROM principal WHERE name='author'),
+    'missive_protocol',1,'missive_author_world','peerworld','missive_addressee_world','seenredworld',
+    'missive_thread','peerworld/lifecycle','missive_seq',1,'missive_act','request'));
+  RAISE NOTICE 'LIFECYCLE send: % / row=%', v.disposition, v.row_id;
+END $$;
+""")
+        log_lines.append(out)
+        _check("LIFECYCLE: send accepted (peer world)", "LIFECYCLE send: accepted" in out)
+
+        prov_row = doquery(peer_schema, peer_kern, peer_role,
+            "SELECT id || ':' || row_hash FROM ledger WHERE kind='missive_sent' "
+            "AND missive_thread='peerworld/lifecycle' AND missive_seq=1;")
+        prov_token = f"xrow:peerworld:{prov_row}" if prov_row else None
+        _check("LIFECYCLE: sent row's provenance token resolved", prov_token is not None)
+
+        out = dowrite(schema, kern, role, f"""
+DO $$
+DECLARE v {kern}.write_verdict;
+BEGIN
+  SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object(
+    'kind','missive_received','statement','full lifecycle: send',
+    'actor',(SELECT id FROM principal WHERE name='courier'),
+    'missive_protocol',1,'missive_author_world','peerworld','missive_addressee_world','seenredworld',
+    'missive_thread','peerworld/lifecycle','missive_seq',1,'missive_act','request',
+    'missive_provenance','{prov_token}'));
+  RAISE NOTICE 'LIFECYCLE receive: % / row=%', v.disposition, v.row_id;
+END $$;
+""")
+        log_lines.append(out)
+        _check("LIFECYCLE: receive (courier pull) accepted", "LIFECYCLE receive: accepted" in out)
+
+        out = dowrite(schema, kern, role, f"""
+DO $$
+DECLARE v {kern}.write_verdict;
+DECLARE rid bigint;
+BEGIN
+  SELECT id INTO rid FROM ledger_current WHERE kind='missive_received'
+    AND missive_thread='peerworld/lifecycle' AND missive_seq=1;
+  SELECT * INTO v FROM {kern}.missive_dispose(jsonb_build_object(
+    'receipt', rid, 'disposition', 'consumed',
+    'actor', (SELECT id FROM principal WHERE name='author')));
+  RAISE NOTICE 'LIFECYCLE dispose: % / disp_row=%', v.disposition, v.row_id;
+END $$;
+""")
+        log_lines.append(out)
+        _check("LIFECYCLE: dispose accepted (the leg AMENDMENT 1 unblocked)",
+               "LIFECYCLE dispose: accepted" in out)
+
+        ack_row = doquery(schema, kern, role,
+            "SELECT count(*) FROM missive_outbound WHERE missive_thread='peerworld/lifecycle' "
+            "AND missive_act='acknowledgment' AND missive_disposition='consumed';")
+        _check("LIFECYCLE: acknowledgment row verified on missive_outbound "
+               "(act=acknowledgment, disposition=consumed)",
+               ack_row == "1")
+
+        # bare re-disposition (no supersedes) -- refused.
+        out = dowrite(schema, kern, role, f"""
+DO $$
+DECLARE v {kern}.write_verdict;
+DECLARE rid bigint;
+BEGIN
+  SELECT id INTO rid FROM ledger_current WHERE kind='missive_received'
+    AND missive_thread='peerworld/lifecycle' AND missive_seq=1;
+  SELECT * INTO v FROM {kern}.missive_dispose(jsonb_build_object(
+    'receipt', rid, 'disposition', 'declined',
+    'actor', (SELECT id FROM principal WHERE name='author')));
+  RAISE NOTICE 'LIFECYCLE re-dispose (bare): % / %', v.disposition, v.message;
+END $$;
+""")
+        log_lines.append(out)
+        _check("LIFECYCLE: bare re-disposition refused",
+               "LIFECYCLE re-dispose (bare): refused" in out
+               and "already carries an in-force disposition" in out)
+
+        # supersession-based re-disposition -- accepted.
+        out = dowrite(schema, kern, role, f"""
+DO $$
+DECLARE v {kern}.write_verdict;
+DECLARE rid bigint; prior_id bigint;
+BEGIN
+  SELECT id INTO rid FROM ledger_current WHERE kind='missive_received'
+    AND missive_thread='peerworld/lifecycle' AND missive_seq=1;
+  SELECT id INTO prior_id FROM ledger_current WHERE kind='missive_disposed' AND missive_regards = rid;
+  SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object(
+    'kind','missive_disposed','statement','full lifecycle: re-disposition via supersession',
+    'actor',(SELECT id FROM principal WHERE name='author'),
+    'missive_regards', rid, 'missive_disposition','escalated', 'supersedes', prior_id));
+  RAISE NOTICE 'LIFECYCLE re-dispose (supersedes): % / row=%', v.disposition, v.row_id;
+END $$;
+""")
+        log_lines.append(out)
+        _check("LIFECYCLE: supersession-based re-disposition accepted",
+               "LIFECYCLE re-dispose (supersedes): accepted" in out)
     finally:
         teardown(schema, kern, role)
+        teardown(peer_schema, peer_kern, peer_role)
 
     print("\n".join(log_lines))
-    if FAILURES:
-        print(f"\nmissives-kernel-family seen-red: {len(FAILURES)} FAILURE(S): {FAILURES}")
+
+    # Same-family concurrency races (strengthened-tier review, kernel axis, one severe) --
+    # a SEPARATE runnable module (real psycopg concurrency, threading), invoked here so this
+    # ONE registered fixture (gates/fixture_census.py) exercises the whole family, per-dir.
+    race_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "concurrent_race_fixtures.py")
+    race_cp = sh([sys.executable, race_script])
+    print(race_cp.stdout)
+    if race_cp.stderr:
+        print(race_cp.stderr, file=sys.stderr)
+    race_ok = race_cp.returncode == 0
+
+    # AMENDMENT 2 (missive_outbound append-complete transport) -- same invocation, same
+    # one-registered-fixture-per-dir census discipline.
+    a2_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "amendment2_transport_fixture.py")
+    a2_cp = sh([sys.executable, a2_script])
+    print(a2_cp.stdout)
+    if a2_cp.stderr:
+        print(a2_cp.stderr, file=sys.stderr)
+    a2_ok = a2_cp.returncode == 0
+
+    if FAILURES or not race_ok or not a2_ok:
+        if FAILURES:
+            print(f"\nmissives-kernel-family seen-red: {len(FAILURES)} FAILURE(S): {FAILURES}")
+        if not race_ok:
+            print("\nmissives-kernel-family seen-red: concurrent_race_fixtures.py FAILED "
+                  f"(exit {race_cp.returncode})")
+        if not a2_ok:
+            print("\nmissives-kernel-family seen-red: amendment2_transport_fixture.py FAILED "
+                  f"(exit {a2_cp.returncode})")
         return 1
     print("\nmissives-kernel-family seen-red: all cases behaved as expected. ✓")
     return 0

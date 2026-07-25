@@ -1,8 +1,12 @@
 -- s59 MISSIVE VIEWS (design/FABLE-MISSIVES-KERNEL-SPEC.md §3 -- Fable-authored, OUT OF FRAME,
--- maintainer-ratified AS IT STANDS 2026-07-25, ledger row 1263). Sonnet-executed per the
--- standing delegation contract. VIEW-ONLY, ZERO NEW LEDGER COLUMNS, ZERO NEW KINDS -- the
--- s54/s56 discipline, restated: compute_row_hash is UNTOUCHED, writes are unaffected (the s43
--- boundary continues to own them; this delta touches no INSERT path whatsoever).
+-- maintainer-ratified AS IT STANDS 2026-07-25, ledger row 1263, AS AMENDED by AMENDMENT 2
+-- (2026-07-25, maintainer-ratified "yes"): missive_outbound re-issued as APPEND-COMPLETE
+-- transport -- reads raw `ledger` (superseded missive_sent rows included), never
+-- ledger_current; see that view's own header, in place below, for the full witnessed defect
+-- and fix). Sonnet-executed per the standing delegation contract. VIEW-ONLY, ZERO NEW LEDGER
+-- COLUMNS, ZERO NEW KINDS -- the s54/s56 discipline, restated: compute_row_hash is UNTOUCHED,
+-- writes are unaffected (the s43 boundary continues to own them; this delta touches no INSERT
+-- path whatsoever).
 --
 -- This delta is AUTHORED and SCRATCH-WITNESSED only; APPLYING it to any live/existing world is
 -- the maintainer's act at a FUTURE world's birth (runs-are-strictly-linear, 2026-07-11) -- never
@@ -12,15 +16,21 @@
 -- below reads the ten missive_* typed columns s58 adds. Applying this file on a pre-s58 kernel
 -- fails loudly at CREATE VIEW time (undefined column) -- the correct, disclosed failure mode.
 --
--- SIX NEW VIEWS (spec §3, every consumer named, row 1906 discipline), all security_invoker, all
--- reading ledger_current (the s31 discipline -- every missive view is a current-truth
--- working-set surface, no HISTORY read is the view's own point here, unlike s56's
--- review_verdicts):
---   1. missive_outbound -- THE SERVED TRANSPORT FEED (spec §3 item 1, §13 item 3): all in-force
---      missive_sent rows, all ten envelope columns plus statement, plus the MINTED provenance
---      token ('xrow:' || author_world || ':' || id || ':' || row_hash). Deliberately the FULL
---      cursor-paged set, no "minus acknowledged" filter (that working set lives in view 5
---      instead) and no ?addressee= parameter (client-side filter, spec §5 step 2). Keyed/
+-- SIX NEW VIEWS (spec §3, every consumer named, row 1906 discipline), all security_invoker.
+-- FIVE of the six read ledger_current (the s31 discipline -- a current-truth working-set
+-- surface, no HISTORY read is the view's own point there, unlike s56's review_verdicts);
+-- missive_outbound is the ONE DECLARED EXCEPTION (AMENDMENT 2, 2026-07-25, maintainer-ratified
+-- "yes" -- reads raw `ledger`, superseded rows included, transport is not truth; see that
+-- view's own header for the witnessed defect this closes), the SAME declared-raw-reader
+-- discipline s56's review_verdicts and s37's work_violation_history already establish
+-- one delta/family over -- named here, not silently assumed current-truth-typed:
+--   1. missive_outbound -- THE SERVED TRANSPORT FEED (spec §3 item 1, §13 item 3, AS AMENDED BY
+--      AMENDMENT 2): EVERY missive_sent row EVER WRITTEN (superseded included, raw `ledger`),
+--      all ten envelope columns plus statement, plus the MINTED provenance token ('xrow:' ||
+--      author_world || ':' || id || ':' || row_hash). Deliberately the FULL cursor-paged set,
+--      no "minus acknowledged" filter (that working set lives in view 5 instead), no
+--      ?addressee= parameter (client-side filter, spec §5 step 2), and (AMENDMENT 2) no
+--      current-truth filter -- delivery-monotonic, what was sent is what arrives. Keyed/
 --      paginated by id. Consumer: the counterpart world's courier.
 --   2. missive_receipts -- courier index (spec §3 item 2): id, author_world, thread, seq, act,
 --      provenance, and provenance_row_id (parsed from the pinned token, derived, never a second
@@ -87,6 +97,20 @@
 -- HISTORY: safe -- this delta touches derived views only; zero stored rows change, no data
 -- rewrite, no re-denomination. s59 re-issues nothing (no pre-existing reader of any of the six
 -- names -- verified by grep at build time, the s56 §7 discipline).
+--
+-- AMENDMENT 2 CLOSURE ADDENDUM (2026-07-25, maintainer-ratified "yes" -- ADR-0000 form):
+-- *Invariant:* every missive_sent row is visible to its addressee's courier exactly once,
+-- independent of any later row (supersession is a content-level fact the row itself carries,
+-- never a reason the transport withholds it). *Quantification universe:* missive_outbound's
+-- row set -- ALL missive_sent rows of the serving world, superseded included; named as not
+-- covered: rows a hostile or dead network never lets a courier pull (§7''s honest limit,
+-- unchanged); the FIVE receiving-side views are UNCHANGED by this amendment (re-verified: none
+-- reads missive_outbound or any other re-issued object). *Denomination check:* no numeric
+-- bounds; vacuous, named as such. *Reader-type note (gates/ledger_reader_allowlist.py):*
+-- missive_outbound is now a DECLARED raw/history reader by design (the s56 review_verdicts /
+-- s37 work_violation_history precedent) -- needs NO additional GRANT (SELECT on raw `ledger`
+-- has been granted to `:role` since s15; s43 revoked only INSERT), only the allowlist entry.
+-- *History note:* view re-issue only; zero stored rows change.
 -- ============================================================================================
 
 \if :{?schema}
@@ -104,6 +128,33 @@
 
 -- ============================================================================================
 -- 1. missive_outbound -- THE SERVED TRANSPORT FEED.
+--
+-- AMENDMENT 2 (2026-07-25, maintainer-ratified "yes"): RE-ISSUED as APPEND-COMPLETE TRANSPORT.
+-- Witnessed defect (strengthened-tier review, serving axis): the pre-amendment body read
+-- `ledger_current` (the in-force/un-superseded projection) -- baking a CURRENT-TRUTH view into
+-- a TRANSPORT feed, contradicting spec §13 decision 3's own "FULL cursor-paged outbound feed"
+-- and the family's own founding purpose (communication where nothing is silently lost).
+-- Witnessed live with two ordinary SEQUENTIAL writes (no race): a missive superseded before its
+-- first courier pull VANISHES from the only feed a courier ever reads -- the addressee receives
+-- a later withdrawal citing a provenance token for a message it never got and never will;
+-- missive_stale cannot correlate (the original never arrived); the content is unrecoverably
+-- lost; "withdrawn before poll" becomes indistinguishable from "never sent". A drafting error
+-- (letter/spirit divergence, CLAUDE.md's reading posture, ADR-0000 Rule 2(a)) -- the spirit
+-- governs, corrected here.
+--
+-- THE FIX: reads raw `ledger` (NOT ledger_current) -- superseded missive_sent rows INCLUDED,
+-- cursor on `id`, delivery-monotonic: what was sent is what arrives, in order, always.
+-- Supersession remains a CONTENT-level fact carried in the rows themselves (a withdrawal's own
+-- `supersedes`/`missive_responds_to` travel WITH it, as an ordinary served row) -- the
+-- RECEIVING side's views (missive_undisposed/missive_stale/missive_open_threads) keep their
+-- own current-truth semantics UNCHANGED and now correlate correctly, because the original
+-- actually arrives for missive_stale to correlate against. No other view changes; no
+-- write-path change; the courier needs no change (its cursor is already id-monotonic --
+-- verified live, this same witness pass).
+--
+-- gates/ledger_reader_allowlist.py: missive_outbound gains a NEW ALLOWLIST entry (declared
+-- raw/history reader by design, the review_verdicts/work_violation_history precedent -- "every
+-- row ever sent, never thinner").
 -- ============================================================================================
 CREATE OR REPLACE VIEW :"schema".missive_outbound
     WITH (security_invoker = true) AS
@@ -112,16 +163,21 @@ SELECT s.id, s.ts, s.statement, s.actor,
        s.missive_thread, s.missive_seq, s.missive_act, s.missive_responds_to,
        s.missive_cites, s.missive_disposition,
        'xrow:' || s.missive_author_world || ':' || s.id || ':' || s.row_hash AS missive_provenance
-FROM   :"schema".ledger_current s
+FROM   :"schema".ledger s
 WHERE  s.kind = 'missive_sent';
 
 COMMENT ON VIEW :"schema".missive_outbound IS
-  'design/FABLE-MISSIVES-KERNEL-SPEC.md §3 item 1: THE SERVED TRANSPORT FEED -- every in-force
-   missive_sent row plus the MINTED provenance token (xrow:<author_world>:<id>:<row_hash>, spec
-   §13 item 1 -- a row cannot carry its own row_hash, so this view is where the token is born).
-   Deliberately the FULL cursor-paged set, no "minus acknowledged" filter (missive_delivery_audit
-   carries that working set instead) and no addressee filter (client-side, the courier verb).
-   Keyed/paginated by id. Consumer: the counterpart world''s courier.
+  'design/FABLE-MISSIVES-KERNEL-SPEC.md §3 item 1, AS AMENDED BY AMENDMENT 2 (2026-07-25,
+   maintainer-ratified "yes"): THE SERVED TRANSPORT FEED, APPEND-COMPLETE -- every missive_sent
+   row EVER WRITTEN (superseded included, raw `ledger`, never ledger_current) plus the MINTED
+   provenance token (xrow:<author_world>:<id>:<row_hash>, spec §13 item 1 -- a row cannot carry
+   its own row_hash, so this view is where the token is born). Deliberately the FULL
+   cursor-paged set: no "minus acknowledged" filter (missive_delivery_audit carries that
+   working set instead), no addressee filter (client-side, the courier verb), and (AMENDMENT 2)
+   no current-truth filter either -- transport is not truth; supersession is a CONTENT-level
+   fact the row itself carries (supersedes/missive_responds_to), never a reason to withhold the
+   row from the one feed a courier will ever read. Keyed/paginated by id, delivery-monotonic.
+   Consumer: the counterpart world''s courier.
    kernel/lineage/s59-missive-views.sql.';
 
 GRANT SELECT ON :"schema".missive_outbound TO :"role";

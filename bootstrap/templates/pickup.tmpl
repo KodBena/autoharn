@@ -189,7 +189,18 @@ def mail(cfg: bcc.ServedConfig) -> None:
     missive_undisposed and missive_stale counts (and the open-thread list when nonzero) -- mail
     is part of hydration, the resumption doctrine covers cross-world state. A world without s58
     applied reports capability_absent (HTTP 409), handled the SAME way review_debt's own
-    pre-s20 case is -- named, not a bug in this script."""
+    pre-s20 case is -- named, not a bug in this script.
+
+    BUDGET (strengthened-tier review, serving moderate): a missive's `statement` can carry an
+    artifact-scale body (spec §2.3: "a body beyond ledger bounds is an artifact: token in
+    statement" -- still up to ~100KB verbatim, unbudgeted before this fix). Applies the SAME
+    byte_cap-bounds-ROW-CONTENT-ONLY discipline standing_decisions() uses above (shared
+    apparatus.json config, filing/standing_decisions_config.py -- ADR-0012 P1, one home for the
+    defaulting/validation logic; this section's own `mechs.get("standing_decisions")`
+    extraction is a SEPARATE call site in THIS scanned file, per that module's own NAMED CHOICE
+    section) -- oldest-first, byte_cap (and max_items, if set) truncate the STALE+OPEN+THREAD
+    listing exactly as they truncate standing decisions, with the SAME loud ACTION-REQUIRED
+    notice naming how many rows were omitted."""
     _section("MAIL")
     try:
         undisposed = bcc.get_all_rows(cfg.base, "/views/missive_undisposed", cursor="after_id")
@@ -209,14 +220,44 @@ def mail(cfg: bcc.ServedConfig) -> None:
     print(f"undisposed: {len(undisposed)}  stale: {len(stale)}  open threads: {len(open_threads)}")
     if not undisposed and not stale:
         print("(no mail outstanding)")
+
+    apparatus = _load_apparatus(DEPLOYMENT_PATH.parent)
+    mechs = apparatus.get("mechanisms")
+    entry = mechs.get("standing_decisions") if isinstance(mechs, dict) else None
+    _grades, byte_cap, max_items = standing_decisions_config.resolve_standing_decisions_config(entry)
+
+    stale_ids = {s["id"] for s in stale}
+    lines: list[str] = []
     for r in sorted(stale, key=lambda r: r["id"]):
-        print(f"STALE  {json.dumps(r, sort_keys=True)}")
+        lines.append(("STALE", json.dumps(r, sort_keys=True)))
     for r in sorted(undisposed, key=lambda r: r["id"]):
-        if r["id"] not in {s["id"] for s in stale}:
-            print(f"OPEN   {json.dumps(r, sort_keys=True)}")
-    if open_threads:
-        for r in sorted(open_threads, key=lambda r: r["missive_thread"]):
-            print(f"THREAD {json.dumps(r, sort_keys=True)}")
+        if r["id"] not in stale_ids:
+            lines.append(("OPEN", json.dumps(r, sort_keys=True)))
+    for r in sorted(open_threads, key=lambda r: r["missive_thread"]):
+        lines.append(("THREAD", json.dumps(r, sort_keys=True)))
+
+    # ACCOUNTING (mirrors standing_decisions()'s own comment, verbatim discipline): budget bounds
+    # ROW CONTENT only -- "undisposed: N  stale: M  open threads: K" above and the section banner
+    # are fixed, tool-authored overhead, never deducted from it.
+    budget = byte_cap
+    rendered: list[str] = []
+    shown = 0
+    for tag, body in lines:
+        if max_items is not None and shown >= max_items:
+            break
+        line = f"{tag}  {body}"
+        cost = len(line.encode("utf-8")) + 1
+        if cost > budget:
+            break
+        rendered.append(line)
+        budget -= cost
+        shown += 1
+    remaining = len(lines) - shown
+    print("\n".join(rendered))
+    if remaining > 0:
+        print(f"ACTION REQUIRED: {remaining} more mail row(s) omitted (byte_cap={byte_cap}) -- "
+              f"query /views/missive_undisposed, /views/missive_stale, or /views/"
+              f"missive_open_threads directly NOW to read them before proceeding.")
     print("NOTE: an unrun courier is an unread mailbox -- this section cannot tell you the "
           "courier has not run this session, only what is already on record (spec §12 item 1, "
           "the poll-liveness ceiling -- mitigated, not closed).")

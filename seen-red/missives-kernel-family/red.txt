@@ -35,3 +35,100 @@ NOTICE:  RESULT: accepted / <NULL>
 NOTICE:  RESULT: refused / missive policy: a missive_sent row already exists for (thread='seenredworld/t1', seq=1) -- the global identity's author-side half is a one-time fact (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2, §13 item 5).
 
 missives-kernel-family seen-red: all cases behaved as expected. (exit 0)
+
+=== FULL DISPOSE/ACKNOWLEDGE LIFECYCLE (strengthened-tier review, witness-axis moderate --
+    the exact leg AMENDMENT 1 unblocked had no GREEN case banked; added, two-schema pair) ===
+
+  [ok] LIFECYCLE: send accepted (peer world)
+  [ok] LIFECYCLE: sent row's provenance token resolved
+  [ok] LIFECYCLE: receive (courier pull) accepted
+  [ok] LIFECYCLE: dispose accepted (the leg AMENDMENT 1 unblocked)
+  [ok] LIFECYCLE: acknowledgment row verified on missive_outbound (act=acknowledgment, disposition=consumed)
+  [ok] LIFECYCLE: bare re-disposition refused
+  [ok] LIFECYCLE: supersession-based re-disposition accepted
+
+NOTICE:  LIFECYCLE send: accepted / row=6
+NOTICE:  LIFECYCLE receive: accepted / row=15
+NOTICE:  LIFECYCLE dispose: accepted / disp_row=16
+NOTICE:  LIFECYCLE re-dispose (bare): refused / missive policy: receipt 15 already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.
+NOTICE:  LIFECYCLE re-dispose (supersedes): accepted / row=20
+
+=== CONCURRENCY RACES (strengthened-tier review, kernel axis, one severe -- reproduced live by
+    the reviewer with two concurrent psql sessions; concurrent_race_fixtures.py, real psycopg
+    connections, real threading, real Postgres MVCC blocking -- not simulated) ===
+
+RACE 1 (dedup) and RACE 2 (re-disposition) RED, reproduced 2026-07-25 against a DELIBERATELY
+REVERTED copy of kernel/lineage/s58-missive-substrate.sql (the two unique partial indexes
+NOT created; the pg_advisory_xact_lock line removed from validate_missive_disposition) --
+never committed to the tree, applied only to a throwaway scratch schema for this one
+reproduction, then discarded:
+
+  A: ('accepted', None)
+  B: ('accepted', None)          <- RACE 1: BOTH accepted, a duplicate committed
+  [FAIL] RACE 1: B refused (post-fix concurrency backstop, not a raw exception)
+
+  A: ('accepted', None)
+  B: ('accepted', None)          <- RACE 2: BOTH accepted, two contradictory in-force
+                                    dispositions of the SAME receipt, each minting its own
+                                    acknowledgment
+  [FAIL] RACE 2: B refused (advisory-lock serialization, not a raw exception)
+
+POST-FIX (this repo's current tree, THIS directory's own concurrent_race_fixtures.py, live
+2026-07-25):
+
+  === RACE 1: dedup (missive_received), two real concurrent connections ===
+  A: ('accepted', None)
+  B: ('refused', "missive policy: a missive_received row already exists for (author_world='raceauthor', thread='raceauthor/race-1', seq=1) -- at-least-once delivery converts to exactly-once RECORDING (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2); this refusal is itself journaled, so re-delivery stays visible, never silent. [raced: caught at the missive_received_dedup_uq unique index, ADR-0021 Rule B -- the sequential-case EXISTS check in validate_missive_dedup lost this race, the index caught it]")
+  [ok] RACE 1: A accepted
+  [ok] RACE 1: B refused (post-fix concurrency backstop, not a raw exception)
+  [ok] RACE 1: B's refusal carries the SAME teaching text as the sequential case (exactly-once RECORDING), not a raw 23505/constraint name
+
+  === RACE 2: re-disposition, two real concurrent connections ===
+  [ok] RACE 2 setup: seed receipt written
+  A: ('accepted', None)
+  B: ('refused', 'missive policy: receipt 9 already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.')
+  [ok] RACE 2: A accepted
+  [ok] RACE 2: B refused (advisory-lock serialization, not a raw exception)
+  [ok] RACE 2: B's refusal carries the SAME in-force-disposition teaching text
+
+missives-kernel-family concurrent races: both races closed, post-fix. (exit 0)
+
+=== AMENDMENT 2 (missive_outbound as append-complete transport, 2026-07-25, maintainer-
+    ratified "yes") -- the reviewer's exact reproduction: two ORDINARY SEQUENTIAL writes, no
+    race (amendment2_transport_fixture.py) ===
+
+RED (pre-A2, `missive_outbound FROM ledger_current`, applied to a throwaway scratch schema via
+a deliberately reverted copy of s59-missive-views.sql -- never committed, discarded after this
+one reproduction):
+
+  send seq=1 (request) -> accepted
+  send seq=2 (withdrawal, supersedes seq=1) -> accepted
+  SELECT count(*) FROM missive_outbound WHERE missive_thread='worlda/a2fixture';
+  RED (pre-A2, ledger_current-sourced): missive_outbound row count = 1
+  [ok] RED: pre-A2 view silently drops the superseded original (count == 1)
+
+  -- i.e. the addressee's courier would see ONLY the withdrawal: a withdrawal citing a
+  -- provenance token for a message it never received and never will; missive_stale cannot
+  -- correlate (the original never arrived).
+
+GREEN (post-A2, this repo's current tree, `missive_outbound FROM ledger`):
+
+  GREEN (post-A2, append-complete): missive_outbound row count = 2
+  [ok] GREEN: post-A2 view delivers BOTH rows (count == 2)
+
+Additionally witnessed live (this build's own manual pass, schemas s58r3/s58r3b, torn down):
+  - direct SQL: missive_outbound on the SENDING world shows BOTH id=8 (seq=1) and id=11 (seq=2),
+    in id order; ledger_current on the SAME world shows ONLY id=11 -- confirming the defect is
+    real and the fix (raw `ledger`) is what closes it.
+  - real courier run (`./courier`) against a live boundary_service.py instance (scratch port
+    8495, never 8433/8422): `courier: worlda: pulled=2 new=2 recorded=[8, 9] dedup-raced=0`.
+  - receiving world's missive_stale, post-pull: one row, id=8 (the original, seq=1),
+    superseding_id=9 (the withdrawal), superseding_act=withdrawal -- CORRELATING CORRECTLY,
+    because the original actually arrived.
+  - ./judge re-verified AGREE on all four capable layers post-amendment.
+  - detect siblings (s58-missive-substrate.detect.sql, s59-missive-views.detect.sql)
+    re-verified both polarities (t on the amended chain, f on a fresh pre-s58 chain) --
+    unaffected by AMENDMENT 2 (their own fingerprint facts, kind CHECK membership and view
+    existence, are unchanged by the view-body re-issue).
+
+amendment2_transport_fixture: red (pre-A2) and green (post-A2) both confirmed. (exit 0)

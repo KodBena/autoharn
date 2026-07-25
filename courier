@@ -103,31 +103,70 @@ def resolve_courier_actor_id(self_base: str, self_name: str) -> int:
         f"registers it at a future world's birth).")
 
 
+def _require(r: dict, key: str, *, route: str, counterpart: str) -> object:
+    """The ONE place a served row's missing expected field becomes a named, teaching refusal
+    (strengthened-tier review, serving severe) instead of a bare KeyError/traceback -- a
+    drifted counterpart shape (a served view missing a column this client's contract expects)
+    is exactly the class the courier is MOST exposed to (it talks to a boundary this world's
+    own operator does not control, spec §5's own "the client most exposed to skew"). Names the
+    route, the counterpart, the missing field, and the row's own `id` (if present) so the
+    operator can go look at the served shape directly, never a bare stack trace."""
+    if key not in r:
+        raise CourierConfigError(
+            f"courier: {counterpart}: a row served from {route} is missing expected field "
+            f"{key!r} (row id={r.get('id', '?')!r}) -- the counterpart's own served shape has "
+            f"drifted from this client's contract. Refused loudly rather than crashing on a "
+            f"bare KeyError; check that counterpart's own boundary_service.py/kernel version.")
+    return r[key]
+
+
 def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: str,
                      counterpart_base: str) -> dict:
     """One pass for one counterpart (spec §5 steps 1-4). Returns a witness-grade report dict:
-    {pulled, new, recorded: [row_id...], dedup_raced: [count], errors: [...]}."""
+    {pulled, new, recorded: [row_id...], dedup_raced: [count], errors: [...]}.
+
+    HANDSHAKE (strengthened-tier review, serving severe): the courier talks to TWO independent
+    boundaries per run -- self (checked ONCE in main(), before this function is ever called)
+    and THIS counterpart (checked HERE, before step 1, once per counterpart per run) -- the
+    counterpart is the client's OWN "most exposed to skew" peer, spec's own words, and a
+    drifted shape there used to surface as a raw KeyError deep in the row-processing loop
+    below; the handshake now catches an incompatible PROTOCOL VERSION before any row is even
+    fetched, and _require() (above) catches a drifted ROW SHAPE at the exact field that's
+    missing, both refusing with teaching rather than a bare traceback."""
     counterpart_base = counterpart_base.rstrip("/")
+    bcc.check_protocol_version(f"{counterpart_base}/d/{counterpart}", counterpart_base)
 
     # step 1: already-recorded (author_world=C, thread, seq) + high-water provenance_row_id.
-    receipts = bcc.get_all_rows(self_base, f"/d/{self_name}/views/missive_receipts")
-    recorded_keys = {
-        (r["missive_author_world"], r["missive_thread"], r["missive_seq"])
-        for r in receipts if r["missive_author_world"] == counterpart
-    }
-    high_water = max(
-        (r["provenance_row_id"] for r in receipts if r["missive_author_world"] == counterpart),
-        default=0)
+    receipts_route = f"/d/{self_name}/views/missive_receipts"
+    receipts = bcc.get_all_rows(self_base, receipts_route)
+    recorded_keys = set()
+    high_water_candidates = []
+    for r in receipts:
+        author_world = _require(r, "missive_author_world", route=receipts_route, counterpart=self_name)
+        if author_world != counterpart:
+            continue
+        thread = _require(r, "missive_thread", route=receipts_route, counterpart=self_name)
+        seq = _require(r, "missive_seq", route=receipts_route, counterpart=self_name)
+        recorded_keys.add((author_world, thread, seq))
+        high_water_candidates.append(
+            _require(r, "provenance_row_id", route=receipts_route, counterpart=self_name))
+    high_water = max(high_water_candidates, default=0)
 
     # step 2: the counterpart's outbound feed, paginated, client-side addressee filter + set-diff.
-    outbound = bcc.get_all_rows(
-        counterpart_base, f"/d/{counterpart}/views/missive_outbound", limit=1000)
-    outbound = [r for r in outbound if r["id"] > high_water]
-    candidates = [
-        r for r in outbound
-        if r["missive_addressee_world"] == self_name
-        and (r["missive_author_world"], r["missive_thread"], r["missive_seq"]) not in recorded_keys
-    ]
+    outbound_route = f"/d/{counterpart}/views/missive_outbound"
+    outbound = bcc.get_all_rows(counterpart_base, outbound_route, limit=1000)
+    outbound = [r for r in outbound
+                if _require(r, "id", route=outbound_route, counterpart=counterpart) > high_water]
+    candidates = []
+    for r in outbound:
+        addressee = _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart)
+        if addressee != self_name:
+            continue
+        key = (_require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
+               _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
+               _require(r, "missive_seq", route=outbound_route, counterpart=counterpart))
+        if key not in recorded_keys:
+            candidates.append(r)
     candidates.sort(key=lambda r: r["id"])
 
     recorded: list[int] = []
@@ -136,15 +175,15 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
     for r in candidates:
         payload = {
             "kind": "missive_received",
-            "statement": r["statement"],
+            "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
             "actor": actor_id,
-            "missive_protocol": r["missive_protocol"],
-            "missive_author_world": r["missive_author_world"],
-            "missive_addressee_world": r["missive_addressee_world"],
-            "missive_thread": r["missive_thread"],
-            "missive_seq": r["missive_seq"],
-            "missive_act": r["missive_act"],
-            "missive_provenance": r["missive_provenance"],
+            "missive_protocol": _require(r, "missive_protocol", route=outbound_route, counterpart=counterpart),
+            "missive_author_world": _require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
+            "missive_addressee_world": _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart),
+            "missive_thread": _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
+            "missive_seq": _require(r, "missive_seq", route=outbound_route, counterpart=counterpart),
+            "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
+            "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
         }
         if r.get("missive_responds_to") is not None:
             payload["missive_responds_to"] = r["missive_responds_to"]
@@ -183,6 +222,22 @@ def main(argv: list[str] | None = None) -> int:
         return 4
 
     self_name, self_base = cfg["self"], cfg["self_base"]
+
+    # HANDSHAKE, self (strengthened-tier review, serving severe): the courier talks to TWO
+    # independent boundaries every run -- self and each counterpart -- and previously checked
+    # NEITHER's protocol version, though this is exactly the client most exposed to skew (spec
+    # §5's own point: it is the one verb that ALWAYS crosses a world boundary, by construction).
+    # Checked ONCE here, before anything else; each counterpart is checked once per pass inside
+    # run_counterpart (below) -- a mismatch on EITHER side maps to the same standard teaching
+    # refusal + exit 4 every other rebased shim already uses (report_protocol_mismatch).
+    try:
+        bcc.check_protocol_version(f"{self_base}/d/{self_name}", self_base)
+    except bcc.ProtocolVersionMismatch as e:
+        return bcc.report_protocol_mismatch("courier", e)
+    except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable) as e:
+        sys.stderr.write(f"courier: self ({self_base}): {e}\n")
+        return 4
+
     try:
         actor_id = resolve_courier_actor_id(self_base, self_name)
     except (CourierConfigError, bcc.BoundaryRefusal, bcc.BoundaryUnreachable) as e:
@@ -193,12 +248,23 @@ def main(argv: list[str] | None = None) -> int:
     for counterpart, counterpart_base in cfg["counterparts"].items():
         try:
             report = run_counterpart(self_base, self_name, actor_id, counterpart, counterpart_base)
+        except bcc.ProtocolVersionMismatch as e:
+            sys.stderr.write(f"courier: {counterpart}: ")
+            bcc.report_protocol_mismatch("courier", e)
+            overall_ok = False
+            continue
         except bcc.BoundaryRefusal as e:
             sys.stderr.write(f"courier: {counterpart}: BOUNDARY REFUSED: {e}\n")
             overall_ok = False
             continue
         except bcc.BoundaryUnreachable as e:
             sys.stderr.write(f"courier: {counterpart}: BOUNDARY UNREACHABLE: {e}\n")
+            overall_ok = False
+            continue
+        except CourierConfigError as e:
+            # _require()'s own drifted-shape refusal (strengthened-tier review, serving severe)
+            # -- named field, named counterpart, never a bare traceback.
+            sys.stderr.write(f"{e}\n")
             overall_ok = False
             continue
 

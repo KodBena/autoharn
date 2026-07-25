@@ -357,6 +357,14 @@ _ID_FIELD_OVERRIDE: dict[str, str] = {
     "review_stamp_distinctness": "review_id",
     "model_attestations": "row_id",
     "model_defeated_rows": "attest_id",
+    # strengthened-tier review, serving moderate (in reach, latent KeyError class): these two
+    # views (design/FABLE-RESERVATION-RESIDUE-SPEC.md §2, kernel/lineage/s56-reservation-
+    # residue.sql) were already registered in boundary_service.py's own VIEW_REGISTRY keyed on
+    # review_id (not the default 'id') but had no matching entry here -- a caller pulling either
+    # through get_all_rows(cursor="after_id") would hit `page[-1][id_field]` with id_field
+    # defaulted to 'id', a KeyError on the FIRST page (neither view carries a bare 'id' column).
+    "reservations_outstanding": "review_id",
+    "review_verdicts": "review_id",
 }
 
 
