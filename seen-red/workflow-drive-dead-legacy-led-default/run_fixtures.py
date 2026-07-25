@@ -6,8 +6,25 @@ exit-1 teaching-refusal stub since commit 93affa0 (2026-07-23) -- so `check_char
 UNCONDITIONALLY, and every phase of every compiled workflow resolved UNCHARTED regardless of
 whether an actual charter existed. Fix: default the template's `led` binding to the served
 `./led` instead, and regenerate all 7 `tools/workflow_units/*/drive.py` copies through
-`tools/workflow_compile.py`'s own compiler entry point (`compile_toml`/`main`) -- never
-hand-edited.
+`tools/workflow_compile.py`'s own compiler entry point (`compile_toml`/`main`).
+
+HONEST PROVENANCE OF THE 7 COPIES (correcting this file's and red.txt's own prior claim, review
+finding 1, 2026-07-26 follow-up): at commit cb5cf23 the 7 copies WERE regenerated through the
+entry point as claimed, but `tools/workflow_compile.py` at that time had no notion of a
+repo-root override -- its `REPO_ROOT = Path(__file__).resolve().parents[1]` baked whatever
+checkout the compiler happened to run from into `ROLE_CHARTER_PY`/`ROLE_BRIEF_PY`. That pass ran
+the compiler from this repo's WORKTREE checkout, so the two lines came out baked to the
+worktree's own transient `.claude/worktrees/<agent>/...` path -- wrong for a committed artifact
+meant to run against the real checkout. Those two REPO_ROOT-derived lines, in all 7 files, were
+then corrected BY HAND to the real checkout's path, and the commit message half-disclosed this;
+this file and red.txt did not, and said "never hand-edited" instead, which was false for those
+two lines. THIS FOLLOW-UP PASS (review finding 2) closes the underlying gap instead of leaving
+it as a one-time manual patch: `tools/workflow_compile.py` gained an honest `--repo-root`
+flag/`AUTOHARN_REPO_ROOT` env var (refusing a nonexistent path) letting a compile invoked from a
+worktree bake the REAL checkout's path without hand-editing afterward, W5 below extends the
+standing regression to catch a future worktree-path recurrence, and all 7 copies were
+regenerated AGAIN through the entry point WITH the override -- this time genuinely never
+hand-edited, byte-identical to a fresh compile (verified below).
 
 RED-FIRST, against a REAL scaffolded scratch world (bootstrap/new-project.sh --new-world) with a
 REAL `serving.boundary_service` subprocess and the world's own real `./legacy/led` teaching stub
@@ -19,6 +36,14 @@ W1  RED: the exact `check_charter` call shape (`role_charter.py show <principal>
     imported straight off a REAL compiled `tools/workflow_units/*/drive.py` module -- not a
     reimplementation) against `./legacy/led` (the pre-fix hardcoded default) exits 1 with the
     stub's own teaching text, nothing resolved -- the dead-by-default reproduction.
+W1b STRONG-FORM RED (the SEVERE part red.txt banked but this fixture, pre-fix-up, never
+    re-proved): the SAME `check_charter` call against `./legacy/led`, run AGAIN after a REAL,
+    IN-FORCE charter is registered for the same principal (immediately below), STILL exits 1
+    with the identical stub teaching -- the stub's rc is unconditional, so an actual charter's
+    existence is irrelevant to the pre-fix outcome. Without this re-check the fixture only
+    proves the weak form (uncharted -> refused, unsurprising); W1b is what makes the standing
+    regression catch a future change that made `./legacy/led` conditionally succeed while still
+    leaving it as the driver's default.
 W2  GREEN: the same `check_charter` call against the served `./led` (the post-fix default),
     after registering a real charter via `tools/role_charter.py register` (the world's own
     charter-registration machinery -- ledger row 1663's flow, never hand-inserted SQL), exits 0
@@ -31,6 +56,13 @@ W4  ALL SEVEN generated `tools/workflow_units/*/drive.py` copies were produced B
     invoking `tools/workflow_compile.py` against every `design/workflows/*.toml` into a SCRATCH
     output directory (never the real tools/workflow_units/ tree) and diffing the `led = ...`
     line against the real, committed copy -- a real regeneration-parity check, not a grep.
+W5  RECURRENCE GUARD (row 1307/1308 follow-up, 2026-07-26): the committed `ROLE_CHARTER_PY`/
+    `ROLE_BRIEF_PY` lines in all 7 copies carry no `.claude/worktrees` path component -- the next
+    regeneration run from ANY worktree, without `tools/workflow_compile.py`'s new
+    `--repo-root`/`AUTOHARN_REPO_ROOT` override, would otherwise silently bake that worktree's
+    own transient path back in (exactly what happened once already and had to be hand-corrected
+    -- see this directory's git history). W4 only ever checked the `led = ...` line; this closes
+    the other two baked-path lines the same defect class touches.
 
 Zero residue: the scratch schema/role/world/tempdirs are torn down in a `finally` regardless of
 outcome, and the boundary subprocess is terminated. Never live 8433/8422 (own ephemeral port).
@@ -174,6 +206,22 @@ def main() -> int:
                   f"committed={committed_m.group(1) if committed_m else None!r} "
                   f"fresh={fresh_m.group(1) if fresh_m else None!r}", failures)
 
+        print("== W5: committed drive.py's ROLE_CHARTER_PY/ROLE_BRIEF_PY carry no "
+              "'.claude/worktrees' component -- the recurrence this pass closes (row 1307/1308 "
+              "follow-up, 2026-07-26): a regeneration run FROM a worktree checkout, without the "
+              "--repo-root/AUTOHARN_REPO_ROOT override, would silently bake that worktree's own "
+              "transient path back into these two lines across all 7 files ==")
+        role_path_re = re.compile(r'^(ROLE_CHARTER_PY|ROLE_BRIEF_PY) = "([^"]+)"\s*$', re.MULTILINE)
+        for toml_path in tomls:
+            stem = toml_path.stem
+            committed_drive = WORKFLOW_UNITS_DIR / stem / "drive.py"
+            matches = role_path_re.findall(committed_drive.read_text()) if committed_drive.is_file() else []
+            check(f"w5-{stem}-role-paths-found", len(matches) == 2,
+                  f"found {len(matches)} of 2 expected ROLE_*_PY lines", failures)
+            for name, value in matches:
+                check(f"w5-{stem}-{name.lower()}-no-worktree-component",
+                      ".claude/worktrees" not in value, f"{name} = {value!r}", failures)
+
         # ---------------------------------------------------------------------------------
         # W1/W2: live world -- real scaffold, real boundary, real check_charter() call shape
         # ---------------------------------------------------------------------------------
@@ -237,6 +285,15 @@ def main() -> int:
             check("register-charter-ok", cp.returncode == 0,
                   f"exit={cp.returncode} {cp.stdout!r} {cp.stderr!r}", failures)
 
+            print("== W1b: STRONG-FORM RED -- check_charter() against ./legacy/led STILL rc=1 "
+                  "even with a REAL, IN-FORCE charter now registered for 'author' -- the severe "
+                  "part red.txt banked but this fixture never re-proved: the stub's rc is "
+                  "unconditional, so an actual charter's existence is irrelevant to it ==")
+            rc, out = check_charter("./legacy/led", "author")
+            check("w1b-red-still-exit-1-after-real-charter", rc == 1, f"rc={rc}", failures)
+            check("w1b-red-still-teaches-retirement",
+                  "RETIRED" in out and "Use ./led instead" in out, f"out={out!r}", failures)
+
             print("== W2: GREEN -- check_charter() against ./led (the post-fix served default) ==")
             rc, out = check_charter("./led", "author")
             check("w2-green-exit-0", rc == 0, f"rc={rc}", failures)
@@ -258,8 +315,10 @@ def main() -> int:
         print(f"FAILURES: {failures}")
         return 1
     print("ALL CASES OK -- workflow-drive-dead-legacy-led-default: DRIVE_TEMPLATE default fixed, "
-          "all 7 drive.py copies regenerated through the compiler and match a fresh compile, "
-          "check_charter() RED against ./legacy/led / GREEN against served ./led -- zero residue")
+          "all 7 drive.py copies regenerated through the compiler's --repo-root override and "
+          "match a fresh compile byte-for-byte, no baked worktree paths in ROLE_CHARTER_PY/"
+          "ROLE_BRIEF_PY, check_charter() RED against ./legacy/led both pre- and post-charter-"
+          "registration (strong form) / GREEN against served ./led -- zero residue")
     return 0
 
 

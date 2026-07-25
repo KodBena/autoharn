@@ -40,12 +40,34 @@ through the hardcoded `./legacy/led` default still returns rc=1 with the identic
 above -- the charter's existence is irrelevant to the pre-fix outcome, which is the SEVERE part
 of this finding.
 
-Fix (this pass): tools/workflow_compile.py's DRIVE_TEMPLATE now defaults `led = "./led"` (the
-served shim), the false "role_brief.py's parsers still silently misparse served output" rationale
-is deleted (it was already false as of commit 417b200 on the in-flight role branch --
-parse_current_line refuses loudly now, never silently misparses), and all 7 tools/workflow_units/
-*/drive.py copies were regenerated through tools/workflow_compile.py's own compiler entry point
-(compile_toml/main), never hand-edited. run_fixtures.py in this directory re-proves the fixed,
-GREEN side as a standing regression: the identical check_charter() call against the served
-./led, after registering the same charter via tools/role_charter.py's own register flow, now
-returns rc=0 with "IN-FORCE charter registration" in its output.
+Fix (commit cb5cf23): tools/workflow_compile.py's DRIVE_TEMPLATE now defaults `led = "./led"`
+(the served shim), the false "role_brief.py's parsers still silently misparse served output"
+rationale is deleted (it was already false as of commit 417b200 on the in-flight role branch --
+parse_current_line refuses loudly now, never silently misparses), and all 7
+tools/workflow_units/*/drive.py copies were regenerated through tools/workflow_compile.py's own
+compiler entry point (compile_toml/main).
+
+HONEST PROVENANCE (correcting this file's own prior claim, review finding 1, 2026-07-26
+follow-up): the sentence above said those 7 copies were "never hand-edited" -- that was false
+for two lines in each. At cb5cf23 time, tools/workflow_compile.py had no notion of a repo-root
+override; its `REPO_ROOT = Path(__file__).resolve().parents[1]` baked whatever checkout the
+compiler ran from into `ROLE_CHARTER_PY`/`ROLE_BRIEF_PY`. The regeneration ran from this repo's
+WORKTREE checkout, so those two lines in all 7 files came out baked to the worktree's own
+transient `.claude/worktrees/<agent>/...` path -- wrong for a committed artifact meant to run
+against the real checkout. Those two lines, in all 7 files, were then corrected BY HAND to the
+real checkout's path; the commit message half-disclosed this, this file did not.
+
+THIS FOLLOW-UP PASS (review finding 2) closes the gap instead of leaving it a one-time manual
+patch: tools/workflow_compile.py gained an honest `--repo-root` flag / `AUTOHARN_REPO_ROOT` env
+var (refusing a nonexistent path) so a compile invoked from a worktree can bake the REAL
+checkout's path without hand-editing afterward, run_fixtures.py's new W5 case extends the
+standing regression to catch a future worktree-path recurrence in the committed copies, and all
+7 copies were regenerated AGAIN through the entry point WITH the override -- this time
+genuinely never hand-edited, byte-identical to a fresh compile. run_fixtures.py in this
+directory re-proves the fixed, GREEN side as a standing regression: the identical
+check_charter() call against the served ./led, after registering the same charter via
+tools/role_charter.py's own register flow, now returns rc=0 with "IN-FORCE charter
+registration" in its output -- and (W1b, added this pass) the SAME call against the pre-fix
+`./legacy/led` default still returns rc=1 with the identical stub text even AFTER that real,
+in-force charter is registered, re-proving the severe part of this finding as a standing case
+rather than leaving it only in this banked transcript.
