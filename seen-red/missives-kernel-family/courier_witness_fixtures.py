@@ -28,7 +28,16 @@ top of it): one enclosing try/finally around the WHOLE per-row loop, keyed on a 
 reason, foreclosing the class at the shape level rather than guarding it at each site a reviewer
 happens to find.
 
-All three reproduced RED against either a deliberately reverted (never committed, discarded)
+MODERATE-SILENT residue (re-lap review, fix round, 2026-07-26): every scenario above reproduces
+a FAILURE; nothing asserted the converse -- that a fully successful batch prints NO
+"BATCH ABORTED" banner. Closed by `all_accepted_batch_case()`: a GREEN positive control (an
+all-accepted, ≥2-row batch through the real self boundary) plus a RED-capability demonstration
+against `_completed_flag_broken_courier`'s copy (the `completed` flag's initializer flipped
+`False` -> `True`, the review's own named example) -- witnessed silently dropping row 1's
+abort-time outcome on the SAME `_BatchLossHandler` scenario `batch_witness_loss_case` already
+uses, where the real, unmutated courier still reports it.
+
+All three (plus the residue above) reproduced RED against either a deliberately reverted (never committed, discarded)
 copy of the pre-fix code, or the byte-identical 8a2d25e commit (fetched via `git show`, never
 hand-reconstructed) -- and GREEN against the real, current `courier` -- a REAL boundary_service.py
 instance (scratch port, never 8433/8422) plus REAL mock counterpart (and, for the round-2
@@ -38,8 +47,10 @@ reviewer's own fixed report describes.
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -297,6 +308,46 @@ class _SelfMidBatchRefusalHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class _AllAcceptedHandler(BaseHTTPRequestHandler):
+    """world=mockworld3: POSITIVE CONTROL for the batch-witness fix (fix round, re-lap review
+    residue, MODERATE-SILENT: every OTHER scenario in this file reproduces a FAILURE -- nothing
+    asserted the converse, that a fully successful batch prints NO "BATCH ABORTED" banner). Both
+    rows are entirely well-formed and distinct (different threads/seqs), so both accept cleanly
+    through the real self boundary with no mid-batch abort of any kind."""
+    ROW1 = {"id": 1, "ts": "2026-07-26T00:00:00+00:00", "statement": "row one, all-accepted",
+            "missive_act": "request", "missive_seq": 1, "missive_cites": None,
+            "missive_thread": "mockworld3/ok-1", "missive_protocol": 1,
+            "missive_provenance": "xrow:mockworld3:1:" + "d" * 64,
+            "missive_disposition": None, "missive_responds_to": None,
+            "missive_author_world": "mockworld3", "missive_addressee_world": "selfworld"}
+    ROW2 = {"id": 2, "ts": "2026-07-26T00:00:01+00:00", "statement": "row two, all-accepted",
+            "missive_act": "request", "missive_seq": 2, "missive_cites": None,
+            "missive_thread": "mockworld3/ok-2", "missive_protocol": 1,
+            "missive_provenance": "xrow:mockworld3:2:" + "e" * 64,
+            "missive_disposition": None, "missive_responds_to": None,
+            "missive_author_world": "mockworld3", "missive_addressee_world": "selfworld"}
+
+    def log_message(self, fmt, *a):
+        pass
+
+    def do_GET(self):
+        if self.path.startswith("/d/mockworld3/health"):
+            body = json.dumps({"world": "mockworld3", "service_principal": None,
+                               "capabilities": {}, "protocol_version": "1",
+                               "authn_mode": "single-operator"}).encode()
+        elif self.path.startswith("/d/mockworld3/views/missive_outbound"):
+            body = (json.dumps([self.ROW1, self.ROW2]).encode()
+                    if "after_id=0" in self.path or "after_id=" not in self.path
+                    else json.dumps([]).encode())
+        else:
+            self.send_response(404); self.end_headers(); self.wfile.write(b'{"detail":"nf"}')
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+
 class _RefusalHandler(BaseHTTPRequestHandler):
     """world configurable via class attribute WORLD -- health OK, outbound 404s."""
     WORLD = "refusalworld"
@@ -483,6 +534,117 @@ def _at_8a2d25e_courier(tmp_path: str) -> None:
                             "-- this checkout's history does not contain that commit.")
     with open(tmp_path, "w") as f:
         f.write(cp.stdout)
+
+
+def _completed_flag_broken_courier(tmp_path: str) -> None:
+    """A throwaway copy of the CURRENT, real `courier` with exactly one line changed: the
+    `completed` flag's initializer flipped `False` -> `True` -- the re-lap review's own named
+    example of a future edit that "breaks the completed-flag logic" ("e.g. sets completed=True
+    before the loop"). This does not touch the all-accepted positive control's own output (a
+    clean run prints nothing either way, mutated or not -- the flag ends up True at the finally
+    check regardless of when it was set); it is witnessed instead against `_BatchLossHandler`'s
+    existing mid-batch-abort scenario, where the difference is stark: with the flag pre-set,
+    `finally`'s `if not completed` guard reads false EVEN THOUGH THE LOOP NEVER REACHED ITS OWN
+    `completed = True` line, so the abort's accumulated outcomes -- which the real, unmutated
+    courier flushes via `_print_batch_report` -- are silently dropped entirely. Never committed;
+    discarded after use."""
+    with open(COURIER) as f:
+        text = f.read()
+    old = "    outcomes: list[str] = []\n    completed = False\n    try:"
+    new = ("    outcomes: list[str] = []\n"
+           "    completed = True  # BROKEN (fixture-injected): pre-set, see this file's "
+           "_completed_flag_broken_courier docstring\n"
+           "    try:")
+    if old not in text:
+        raise RuntimeError("RED REPRO SETUP FAILED: completed-flag initializer text not found -- "
+                            "courier's own body has changed shape; update this fixture.")
+    with open(tmp_path, "w") as f:
+        f.write(text.replace(old, new))
+
+
+def all_accepted_batch_case() -> None:
+    """POSITIVE CONTROL closing the re-lap review's MODERATE-SILENT residue: every scenario
+    above in this file reproduces a FAILURE; nothing asserted the converse -- that a fully
+    successful batch (every row accepted, no mid-batch abort of any kind) prints NO
+    "BATCH ABORTED" banner anywhere. A future edit that breaks the `completed`-flag logic in
+    courier's `run_counterpart` try/finally (the review's own example: pre-setting the flag
+    before the loop even starts) would sail through every check above -- none of them assert
+    silence on a clean run, only that a BROKEN run's own particular two rows are reported.
+
+    GREEN (the actual positive control): two well-formed, distinct rows (`_AllAcceptedHandler`)
+    through the real self boundary (the SAME running `boundary_service.py` instance `main()`
+    already started) -- asserts exit 0, both rows' outcomes appear in main()'s own
+    one-line-per-counterpart summary (`recorded=[...]` with two entries), and the string
+    "BATCH ABORTED" appears NOWHERE in stdout+stderr.
+
+    RED-capability (the flag-mutation demonstration this fix round asked for, so the new check
+    is not merely a check that could never fail): re-runs `_BatchLossHandler`'s own existing
+    mid-batch-abort scenario (row 1 kernel-refused on a malformed provenance shape, row 2
+    `_require`-refused on a missing field) against `_completed_flag_broken_courier`'s copy --
+    with the flag pre-satisfied, NEITHER row 1's outcome NOR the "BATCH ABORTED" banner itself
+    appears anywhere, even though the run still fails loudly (nonzero exit; the propagated
+    `CourierConfigError` from row 2's `_require` is untouched by this mutation -- only the
+    outcome WITNESS is lost). GREEN (same abort scenario, real unmutated courier): both the
+    banner and row 1's outcome are present, confirming the MUTATION -- not the scenario -- is
+    what causes the loss."""
+    ok_srv, ok_port = _serve(_AllAcceptedHandler)
+    try:
+        _wait_up(ok_port, "/d/mockworld3/health")
+        toml_ok = "/tmp/mkf_courier_allok.toml"
+        _write_toml(toml_ok, f"http://127.0.0.1:{_SELF_PORT}",
+                    {"mockworld3": f"http://127.0.0.1:{ok_port}"})
+        cp = _run_courier(COURIER, toml_ok)
+        out = cp.stdout + cp.stderr
+        print("  positive control stdout+stderr:\n" + "\n".join(f"    {l}" for l in out.splitlines()))
+        recorded_match = re.search(r"pulled=2 new=2 recorded=(\[[^\]]*\]) dedup-raced=0", out)
+        # recorded=[...] carries real kernel-assigned row_ids (never the counterpart's own
+        # served 'id' field, which is unrelated) -- checked by COUNT (two entries), not by value.
+        _check("positive control: exit 0 on an all-accepted batch", cp.returncode == 0)
+        _check("positive control: both rows' outcomes appear in the normal summary "
+               "(recorded=[...] carries two row_id entries)",
+               recorded_match is not None
+               and len(ast.literal_eval(recorded_match.group(1))) == 2)
+        _check('positive control: "BATCH ABORTED" appears NOWHERE for a fully successful batch',
+               "BATCH ABORTED" not in out)
+    finally:
+        ok_srv.shutdown()
+
+    # RED-capability: the SAME abort scenario _BatchLossHandler already provides (used above by
+    # batch_witness_loss_case), now against a copy of courier with the completed flag broken.
+    loss_srv, loss_port = _serve(_BatchLossHandler)
+    try:
+        _wait_up(loss_port, "/d/mockworld/health")
+        toml_loss = "/tmp/mkf_courier_flagbroken.toml"
+        _write_toml(toml_loss, f"http://127.0.0.1:{_SELF_PORT}", {"mockworld": f"http://127.0.0.1:{loss_port}"})
+
+        broken_path = "/tmp/mkf_courier_flagbroken.py"
+        _completed_flag_broken_courier(broken_path)
+        broken_env = dict(os.environ)
+        broken_env["PYTHONPATH"] = SERVING + os.pathsep + broken_env.get("PYTHONPATH", "")
+        cp = sh(["python3", broken_path, "--courier-toml", toml_loss], cwd=REPO, env=broken_env)
+        red_out = cp.stdout + cp.stderr
+        print("  RED (completed-flag broken) stdout+stderr:\n" +
+              "\n".join(f"    {l}" for l in red_out.splitlines()))
+        _check("RED (flag broken): the abort's own banner is now MISSING entirely, despite a "
+               "genuine mid-batch abort", "BATCH ABORTED" not in red_out)
+        _check("RED (flag broken): row 1's kernel-refusal outcome is ALSO silently lost "
+               "(not merely the banner text)", "missive_provenance_shape" not in red_out)
+        _check("RED (flag broken): the run still fails loudly (nonzero exit) -- only the "
+               "outcome WITNESS is lost, not the failure itself", cp.returncode != 0)
+        os.remove(broken_path)
+
+        # GREEN: same scenario, real courier -- banner and row 1's outcome both present. Already
+        # proven by batch_witness_loss_case above; re-asserted here so this case is self-
+        # contained and its RED leg has a directly comparable GREEN leg in the SAME function.
+        cp = _run_courier(COURIER, toml_loss)
+        green_out = cp.stdout + cp.stderr
+        print("  GREEN (real courier, same abort scenario) stdout+stderr:\n" +
+              "\n".join(f"    {l}" for l in green_out.splitlines()))
+        _check("GREEN: the real courier still prints the banner and row 1's outcome for the "
+               "SAME abort scenario the broken copy silently ate",
+               "BATCH ABORTED" in green_out and "missive_provenance_shape" in green_out)
+    finally:
+        loss_srv.shutdown()
 
 
 def post_write_midbatch_refusal_case() -> None:
@@ -681,6 +843,10 @@ pgkern = "{kern}"
         # Self-contained (both self AND counterpart mocked -- see post_write_midbatch_refusal_
         # case's own docstring for why); does not touch the real boundary_proc/schema above.
         post_write_midbatch_refusal_case()
+        print("\n### all-accepted batch positive control (moderate-silent residue, fix round)")
+        # Uses the real boundary_proc/schema above (via the module-global _SELF_PORT) for its
+        # GREEN leg, and _BatchLossHandler's existing abort scenario for its RED-capability leg.
+        all_accepted_batch_case()
     finally:
         if boundary_proc is not None:
             boundary_proc.terminate()

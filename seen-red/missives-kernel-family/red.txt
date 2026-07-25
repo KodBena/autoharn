@@ -230,3 +230,61 @@ exit 0 standalone; scratch schemas (`mkf*`, `mkfrace*`, `mkfcourier*`) verified 
 every run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'` empty post-run). No live
 port touched (8433/8422 untouched; every fixture in this round used ephemeral loopback ports or
 fully mocked HTTP servers). No ledger writes against a real deployment.
+
+=== APPENDIX, MICRO FIX ROUND, 2026-07-26: MODERATE-SILENT residue closed
+    (`all_accepted_batch_case`, courier_witness_fixtures.py) ===
+
+The re-lap review of this branch's courier batch-witness work CLEARED with one MODERATE-SILENT
+residue: every scenario above reproduces a FAILURE; nothing asserted the converse -- that a
+fully successful batch (all rows accepted, no mid-batch abort) prints NO "BATCH ABORTED" banner.
+A future edit that breaks the `completed`-flag logic in courier's `run_counterpart` try/finally
+(e.g. sets `completed=True` before the loop) would pass everything currently running above,
+because none of it checks for silence on a clean run.
+
+CLOSED by `all_accepted_batch_case()` (new): a positive control (two well-formed, distinct rows,
+`_AllAcceptedHandler`, world=mockworld3) through the real self boundary, asserting exit 0, both
+rows' outcomes present in main()'s own summary line (`recorded=[...]` with two entries), and
+"BATCH ABORTED" nowhere in stdout+stderr -- PLUS a RED-capability demonstration
+(`_completed_flag_broken_courier`): a throwaway copy of the CURRENT, real `courier` with exactly
+one line changed (the `completed` flag's initializer flipped `False` -> `True`, the review's own
+named example), run against `_BatchLossHandler`'s existing mid-batch-abort scenario (the same
+one `batch_witness_loss_case` above uses) -- with the flag pre-set, the abort's own banner AND
+row 1's kernel-refusal outcome are BOTH silently dropped, even though the run still fails loudly
+(nonzero exit; only the outcome WITNESS is lost). GREEN, same scenario, real unmutated courier:
+banner and row 1's outcome both present.
+
+WITNESSED, verbatim, this run (2026-07-26, `python3 seen-red/missives-kernel-family/
+courier_witness_fixtures.py`, exit 0):
+
+    ### all-accepted batch positive control (moderate-silent residue, fix round)
+      positive control stdout+stderr:
+        courier: mockworld3: pulled=2 new=2 recorded=[12, 13] dedup-raced=0
+      [ok] positive control: exit 0 on an all-accepted batch
+      [ok] positive control: both rows' outcomes appear in the normal summary (recorded=[...] carries two row_id entries)
+      [ok] positive control: "BATCH ABORTED" appears NOWHERE for a fully successful batch
+      RED (completed-flag broken) stdout+stderr:
+        courier: mockworld: a row served from /d/mockworld/views/missive_outbound is missing expected field 'missive_act' (row id=2) -- the counterpart's own served shape has drifted from this client's contract. Refused loudly rather than crashing on a bare KeyError; check that counterpart's own boundary_service.py/kernel version.
+        courier: exiting 1 (kernel-refused-or-config-error) -- this code covers BOTH a kernel write refusal (a missive the kernel refused for cause) and this client's own drifted-shape/config refusal (CourierConfigError); see the per-counterpart lines above to tell which one this run hit.
+      [ok] RED (flag broken): the abort's own banner is now MISSING entirely, despite a genuine mid-batch abort
+      [ok] RED (flag broken): row 1's kernel-refusal outcome is ALSO silently lost (not merely the banner text)
+      [ok] RED (flag broken): the run still fails loudly (nonzero exit) -- only the outcome WITNESS is lost, not the failure itself
+      GREEN (real courier, same abort scenario) stdout+stderr:
+        courier: mockworld: BATCH ABORTED mid-pass -- 1 row outcome(s) already decided THIS run, reported now so they are never silently lost:
+          row id=1 thread='mockworld/batch-1' seq=1: refused (NOT dedup): new row for relation "ledger" violates check constraint "missive_provenance_shape"
+        courier: mockworld: a row served from /d/mockworld/views/missive_outbound is missing expected field 'missive_act' (row id=2) -- the counterpart's own served shape has drifted from this client's contract. Refused loudly rather than crashing on a bare KeyError; check that counterpart's own boundary_service.py/kernel version.
+        courier: exiting 1 (kernel-refused-or-config-error) -- this code covers BOTH a kernel write refusal (a missive the kernel refused for cause) and this client's own drifted-shape/config refusal (CourierConfigError); see the per-counterpart lines above to tell which one this run hit.
+      [ok] GREEN: the real courier still prints the banner and row 1's outcome for the SAME abort scenario the broken copy silently ate
+
+    courier_witness_fixtures: all cases behaved as expected. ✓
+
+WITNESSED, same appendix: `python3 gates/no_lazy_imports.py` exit 0; `python3
+gates/fixture_census.py` exit 0 (162 seen-red gates, clean); `python3
+seen-red/missives-kernel-family/run_fixtures.py` exit 0 end to end (this new case plus every
+scenario above, all green). Scratch schema `mkfcourier_scratch`/`mkfcourier_scratch_kernel`
+verified dropped after the run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'`
+empty post-run). No live port touched (8433/8422 untouched); this appendix's new scenario uses
+the SAME already-running scratch `boundary_service.py` instance `main()` starts for the rest of
+this file, plus one more ephemeral loopback mock counterpart. No ledger writes against a real
+deployment. Throwaway broken-copy files (`/tmp/mkf_courier_flagbroken.py`) removed after use, per
+this file's existing convention; `.toml` scratch files under /tmp are left behind, matching this
+file's existing (pre-existing, unchanged) convention for every other scenario here.
