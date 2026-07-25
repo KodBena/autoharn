@@ -1,14 +1,18 @@
-# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 2)
+# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 3)
 
 <!-- doc-attest-exempt: ADR-0018 consult deliverable, authored 2026-07-25 by a fresh-context
-Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md. REVISION 2,
-same day: reworked point-by-point against the maintainer's feedback round (clarity per
-ADR-0017, two-facts-into-one splits per ADR-0008, published-literature grounding added and
-verified). Awaiting the maintainer's re-read and cherry-pick into ADR-0021 before that ADR
-is ratified; ADR-0017 A:B:C legibility rounds to follow. Removal condition: strike this
-marker when the maintainer's cherry-pick disposition is recorded — points merged into
-ADR-0021 live there under its own attestation; this file then stands as the dated consult
-record. -->
+Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md. REVISION 3,
+same day: revision 2 applied the maintainer's feedback round (clarity per ADR-0017,
+two-facts-into-one splits per ADR-0008, verified literature grounding); revision 3 repairs
+the fresh-context B round's findings on revision 2 (split-count correction; the
+citation-or-disclaimer contract enforced on every point; FMEA verified and cited as the
+detectability-axis analogue; audience-frame and gloss repairs). Awaiting the maintainer's
+re-read and cherry-pick into ADR-0021 before that ADR is ratified. Editorial note for the
+ratification pass, kept out of the point bodies: point 17's rule (review debt survives
+merge) is candidate ADR-0021 PREAMBLE material per the maintainer's own feedback-round
+reading. Removal condition: strike this marker when the maintainer's cherry-pick
+disposition is recorded — points merged into ADR-0021 live there under its own attestation;
+this file then stands as the dated consult record. -->
 
 ## What this document is
 
@@ -31,9 +35,10 @@ predicates, not names). It proposes material around them.
 
 Format, for cherry-picking: each point is numbered and self-contained — one imperative a
 reviewer can execute, a one-line reason, and its grounding. No point depends on another;
-order is presentational only. Revision 2 renumbers: two points from revision 1 were split
-under ADR-0008 (each was two facts wearing one number), so the count is now 21. Each point
-notes its revision-1 ancestor so the feedback round can be traced.
+order is presentational only. Revision 2 renumbered: three points from revision 1 were
+split under ADR-0008 (each was two facts wearing one number: rev-1 point 9 into 9 and 10,
+rev-1 point 12 into 13 and 14, rev-1 point 15 into 17 and 18), so the count is 18 + 3 = 21.
+Each point notes its revision-1 ancestor so the feedback rounds can be traced.
 
 ---
 
@@ -119,12 +124,18 @@ knows something went wrong) and some fail silently (a plausible wrong answer, a 
 gets noted, the silent kind wins regardless of apparent size.
 *Reason:* a loud defect costs a diagnosis; a silent one costs whatever gets built on the
 wrong answer before anyone notices.
-*Grounding:* campaign — the ratified strengthened review tier holds a review axis open on
-silent-wrong-answer findings while letting loud-and-honest findings of equal nominal
-severity through (row 1231); composes with ADR-0002's loudness hierarchy read from the
-reviewer's side. No direct published analogue found for detectability-weighted review
-severity; stated as campaign-derived. *(Rev. 1 point 6, internal severity vocabulary
-removed.)*
+*Grounding:* campaign — the maintainer ratified a stricter convergence rule for the
+highest-cost surfaces under which a review only concludes when a lap finds no
+silent-failing defects, while equally-sized loud-failing defects do not hold it open
+(row 1231); composes with ADR-0002's loudness hierarchy read from the reviewer's side.
+Literature — the FMEA methodology (Failure Mode and Effects Analysis, standard in
+reliability engineering for decades) makes Detection a first-class risk axis alongside
+Severity and Occurrence: a failure mode's priority is the product of all three, so a
+hard-to-detect failure outranks an equally severe easy-to-detect one. FMEA grades failure
+modes in a designed process rather than findings in a code review, so it is cited as the
+analogue for the axis (detectability as a first-class component of priority), not for this
+point's specific triage rule. *(Rev. 1 point 6, internal severity vocabulary removed;
+FMEA analogue added at the B round's correction.)*
 
 **7. Reproduce a reported defect before acting on the report.**
 In plain terms: a reviewer's finding is a claim, subject to the same evidence discipline as
@@ -177,8 +188,7 @@ became a review axis or a follow-on work item rather than evaporating at merge (
 **11. When the change contains tests or fixtures, review each one as an actor with a blast
 radius: check that it cannot reach any real store — by construction, not by current
 circumstance.**
-(The imperative, disambiguated: this is an instruction to review the tests, not a compound
-noun.) Ask where the test CAN write under a wrong working directory, an inherited
+Ask where the test CAN write under a wrong working directory, an inherited
 environment variable, or a stale resolution path — not where it is observed to write on the
 happy path.
 *Reason:* a test that reaches a real store only by accident today will reach it again on
@@ -206,9 +216,12 @@ docstring or document names must exist on disk where named.**
 *Reason:* a reference to a nonexistent artifact fails the first reader who follows it, and
 the author — who knew what they meant — is the one reader who never follows it.
 *Grounding:* campaign — a docstring claimed fixtures that exist nowhere; another claimed a
-git-absent fallback that does not exist (rows 1230, 1236). Composes with ADR-0017 Rule 2 (a
-reference is a resolvable artifact, not a gesture), applied at code review rather than doc
-review. *(Rev. 1 point 12, first fact; split per ADR-0008.)*
+git-absent fallback that does not exist (rows 1230, 1236). Law — composes with ADR-0017
+Rule 2 (a reference is a resolvable artifact, not a gesture), applied at code review rather
+than doc review. Campaign-derived beyond that; no published analogue verified — link-checker
+tooling exists as practice, but no published review-discipline source naming a reviewer's
+duty to dereference prose referents was found. *(Rev. 1 point 12, first fact; split per
+ADR-0008.)*
 
 **14. For every universally-phrased sentence in the change's prose, ask "true for which
 targets, worlds, and times?" and check it against each member of that set, not just the
@@ -217,7 +230,9 @@ instance in front of the author.**
 claims to cover.
 *Grounding:* campaign — a CLAUDE.md sentence was unscoped and false for every newborn world,
 contradicted by its own sibling edit (row 1230). Law — ADR-0000's quantification-universe
-discipline, brought down to prose. *(Rev. 1 point 12, second fact; split per ADR-0008.)*
+discipline, brought down to prose. Campaign-derived beyond that; no published analogue
+found for scope-quantifying a change's descriptive sentences as a review step. *(Rev. 1
+point 12, second fact; split per ADR-0008.)*
 
 **15. When a mechanical guard refuses your own act mid-review or mid-merge, treat the
 refusal as the system working: route the act to its proper principal and record the refusal
@@ -254,14 +269,15 @@ accurate" (row 1251). *(Rev. 1 point 14, recursion objection addressed.)*
 reached the trunk unreviewed, or reviewed under a since-tightened bar, is still owed its
 review.**
 This is an organizational rule about when review debt expires (it does not), separate from
-the conduct rule in point 18 about what to do with a post-merge finding. Candidate for
-hoisting into ADR-0021's preamble rather than the appendix, per the maintainer's own reading
-at the feedback round.
+the conduct rule in point 18 about what to do with a post-merge finding.
 *Reason:* the defect does not know it was merged; merge changes where the code sits, not
 whether it was examined.
 *Grounding:* campaign — when the bar tightened, post-merge blind review was dispatched for
-already-merged commits, and it found a real severe (rows 1229, 1230). *(Rev. 1 point 15,
-first fact; split per ADR-0008.)*
+already-merged commits, and it found a real severe (rows 1229, 1230). Literature — the
+commit-then-review practice documented across large industrial and open-source projects:
+trusted developers may commit before review, and the change still receives its review after
+landing — commit and review-discharge are separate events (Rigby & Bird 2013). *(Rev. 1
+point 15, first fact; split per ADR-0008.)*
 
 **18. Record and disposition a post-merge finding on the same footing as a pre-merge one —
 a reviewed fix-forward on the record, never a quiet patch that protects a clean history.**
@@ -309,8 +325,10 @@ series ends when a lap finds nothing at the declared severity.
 *Reason:* the campaign's finding-sets were disjoint across laps; stopping after any fixed N
 would have shipped whatever lap N+1 was going to catch.
 *Grounding:* campaign — one review axis needed five laps, each finding strictly narrower
-(rows 1250, 1255); the same iterate-to-clean shape ADR-0020's second subsidiary clause
-ratified for meaning witnesses. Literature — Fagan's exit criterion: rework is not accepted
+(rows 1250, 1255); the same iterate-to-clean shape this project's ADR-0020 ratified for its
+meaning-preservation witness (after a repair, a fresh reader re-reads the transformed
+document until a pass finds no severe meaning change). Literature — Fagan's exit criterion:
+rework is not accepted
 on the author's word; non-trivial rework triggers re-inspection by the team, repeated until
 the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
 
@@ -332,6 +350,11 @@ the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
   Development." *IBM Systems Journal* 15(3), 182–211. (Inspection phases including rework,
   follow-up — moderator verifies fixes and that fixes introduced no new defects — and
   re-inspection criteria.)
+- Failure Mode and Effects Analysis (FMEA) — the Severity × Occurrence × Detection /
+  Risk Priority Number framework, standard in reliability engineering for decades (military
+  and automotive practice; widely documented in the methodology literature). Cited for one
+  verified structural fact: Detection (detectability) is a first-class axis of a failure
+  mode's priority, co-equal with Severity and Occurrence.
 - Feathers, M. (2004). *Working Effectively with Legacy Code.* Prentice Hall.
   (Characterization tests: record current behavior before changing it.)
 - Humble, J., & Farley, D. (2010). *Continuous Delivery.* Addison-Wesley. (Smoke-testing
@@ -341,6 +364,10 @@ the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
   code.)
 - Myers, G. J. (1979). *The Art of Software Testing.* Wiley. (Testing as executing with the
   intent of finding errors; the psychology of confirmation-biased input selection.)
+- Rigby, P. C., & Bird, C. (2013). "Convergent Contemporary Software Peer Review
+  Practices." *Proc. ESEC/FSE 2013.* (Review-then-commit vs commit-then-review across
+  industrial and open-source projects; in commit-then-review, landing a change does not
+  discharge its review.)
 - Vaughan, D. (1996). *The Challenger Launch Decision.* University of Chicago Press.
   (Normalization of deviance: accepted rule-deviations shift the baseline.)
 - Wiegers, K. E. (2002). *Peer Reviews in Software: A Practical Guide.* Addison-Wesley.
