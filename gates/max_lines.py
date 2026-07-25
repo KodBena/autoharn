@@ -211,7 +211,14 @@ BASELINE: dict[str, int] = {
     # READ MODE docstring paragraph corrected and aligned with gates/doc_shapes.py's identical
     # fix (finding 3); `main()`'s report-mode branch forces `use_tree=True`. Genuinely new
     # decision logic and its own reasoning, not padding. Witnessed growth.
-    "gates/doc_attestation_presence.py":                900,
+    # Reconciled +5 to 905 (2026-07-26 second fix round, the confirming lap's own residuals):
+    # `_git_ignored_rel_paths()`'s two bare `git -C doc_root ...` calls (a second, previously-
+    # missed site of the same bypass this file's own prior reconciliation just closed for
+    # `_tracked_md`) routed through `_staged_read.run_git`, with an inline comment explaining why
+    # the census missed it the first time; the now-dead `import subprocess` removed (net cost of
+    # the fix, not padding -- the removal partially offsets the added explanatory lines). Written
+    # plain, no golfing; witnessed growth.
+    "gates/doc_attestation_presence.py":                905,
     # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
     # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
@@ -264,7 +271,13 @@ BASELINE: dict[str, int] = {
     # legacy/led unconditionally) plus the docstring update explaining the re-sequencing. Genuinely
     # new decision-boundary logic, not padding. Written plain, no golfing.
     "tools/setup_tui/signed_genesis.py":                532,
-    "gates/interpreter_boundary_lint.py":               498,
+    # Reconciled +1 to 499 (2026-07-26 fix round, the staged-vs-tree confirming lap's residual
+    # finding 2): `tracked_py_files` routed through `_staged_read.run_git` -- a net one-line
+    # comment cost after the `import subprocess` removal and the call-site swap wash out. Not
+    # padding: this was one of the two out-of-scope-census gates judged trivially safe to route
+    # rather than write a standing justification for leaving unrouted (see
+    # gates/_staged_read.py's run_git docstring). Written plain, no golfing.
+    "gates/interpreter_boundary_lint.py":               499,
     "hooks/stamp_intercept.py":                         482,
     # NEW to BASELINE, 461 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
     # was 375 lines, under ceiling, before this build. The CLI surface gains three new flags
@@ -349,7 +362,13 @@ BASELINE: dict[str, int] = {
     # BASELINE entry and this comment for gates/doc_attestation_presence.py's parallel reconciling
     # -- the same self-measuring-census cost paid again, one commission later. Exact count below
     # measured AFTER every edit in this file is in place, not guessed.
-    "gates/max_lines.py":                                438,
+    # Reconciled again, 2026-07-26 SECOND fix round (the confirming lap's four residuals): three
+    # more BASELINE entries reconciled inline (doc_attestation_presence.py, +5 for the
+    # _git_ignored_rel_paths route-through; interpreter_boundary_lint.py, +1 for its own
+    # route-through) plus this entry, and this comment, for the exact same self-measuring-census
+    # cost paid a third time. Exact count below measured AFTER every edit in this file is in
+    # place, not guessed.
+    "gates/max_lines.py":                                457,
 }
 
 

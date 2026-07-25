@@ -100,7 +100,91 @@ def run_git(args: list, **kwargs):
     the SAME fragility class, closed here rather than left standing on that coincidence. Every
     caller above (`read_staged_bytes` et al.) is left calling `subprocess.run` directly rather
     than rerouted through this wrapper, to keep this change additive and their own already-
-    reviewed code untouched byte-for-byte."""
+    reviewed code untouched byte-for-byte.
+
+    ADDENDUM, 2026-07-26 (second fresh-context review pass, same ledger row): a second call site
+    inside gates/doc_attestation_presence.py -- `_git_ignored_rel_paths()`'s `rev-parse
+    --is-inside-work-tree` probe and its `check-ignore --stdin` batch call, both feeding
+    `discover_md`'s deployment-facing listing -- carried the identical unrouted shape and was
+    missed by the first pass because it lives inside a `-> set[str] | None` helper rather than one
+    of the obviously-named `tracked_*` enumerations the census went looking for. Routed here too,
+    alongside `_tracked_md` in the same file.
+
+    THE SIX-GATE CENSUS THIS CLOSES OUT (same review pass; the full "does every bare
+    `subprocess.run(['git', ...])` shape in this repo route through here" question, asked and
+    answered rather than left implied by the five/now-six sites converted above). Exactly six
+    OTHER gates carry the same bare shape and are deliberately left OUT of this conversion, each
+    for a stated reason -- never silently:
+
+      gate                              | live in hooks/pre-commit?     | disposition
+      ----------------------------------|--------------------------------|---------------------------
+      gates/staging_guard.py            | yes, blocking, FIRST           | UNROUTED, correct-by-role:
+                                         |                                | every `git` call here
+                                         |                                | (`diff --cached`,
+                                         |                                | `rev-parse --verify
+                                         |                                | MERGE_HEAD/HEAD`,
+                                         |                                | `merge-base`) omits `-C`
+                                         |                                | entirely and reads the
+                                         |                                | hook's own invocation cwd
+                                         |                                | (a git hook's cwd is
+                                         |                                | already the worktree
+                                         |                                | root) -- there is no
+                                         |                                | `-C <dir>` redirection
+                                         |                                | for an inherited GIT_DIR
+                                         |                                | to misresolve; the bug
+                                         |                                | this module closes is
+                                         |                                | specifically a `-C`
+                                         |                                | confusion, and this file
+                                         |                                | never does that.
+      gates/fixture_census.py           | yes, blocking                  | UNROUTED, correct-by-role:
+                                         |                                | `tracked_files()`'s `-C
+                                         |                                | ROOT` always names THIS
+                                         |                                | file's own repo root
+                                         |                                | (derived from `__file__`,
+                                         |                                | never a caller-supplied
+                                         |                                | path) -- the one directory
+                                         |                                | GIT_DIR already agrees is
+                                         |                                | the toplevel, so even the
+                                         |                                | pre-fix misresolution
+                                         |                                | ("return the passed dir as
+                                         |                                | toplevel") lands on the
+                                         |                                | truth here. Also already
+                                         |                                | reasoned in hooks/
+                                         |                                | pre-commit for the
+                                         |                                | (separate) staged-vs-tree
+                                         |                                | question this same census
+                                         |                                | answered for it.
+      gates/layout_census.py            | wired but DISABLED (maintainer | UNROUTED, not nested in a
+                                         | ruling 2026-07-09)             | LIVE hook path -- a
+                                         |                                | disabled stanza's bytes
+                                         |                                | never run at commit time
+                                         |                                | today; revisit alongside
+                                         |                                | re-enabling it, not before.
+      gates/doc-legibility/check.py     | yes, REPORT-ONLY (never        | UNROUTED: `-C ROOT` here
+                                         | blocks a commit)               | also names this file's own
+                                         |                                | hardcoded repo root
+                                         |                                | (correct-by-role, same
+                                         |                                | shape as fixture_census.py
+                                         |                                | above) -- and even were
+                                         |                                | that wrong, the blast
+                                         |                                | radius is a printed-only
+                                         |                                | finding, never a wrongly
+                                         |                                | PASSED or wrongly BLOCKED
+                                         |                                | commit.
+      gates/doc_tables.py               | no -- wired nowhere, mentioned | ROUTED (2026-07-26): no
+                                         | nowhere                        | live-hook shield to justify
+                                         |                                | leaving it, and the
+                                         |                                | conversion is a mechanical
+                                         |                                | one-line swap -- cheaper to
+                                         |                                | fix than to keep writing
+                                         |                                | this row.
+      gates/interpreter_boundary_lint.py| no -- wired nowhere, mentioned | ROUTED (2026-07-26): same
+                                         | nowhere                        | reasoning as doc_tables.py
+                                         |                                | immediately above.
+
+    The two ROUTED rows import `run_git` the same way `gates/doc_attestation_presence.py` does
+    (`sys.path.insert` + `from _staged_read import run_git`); both were verified to produce
+    byte-identical `--gate`/report output before and after the swap (no new/dropped findings)."""
     kwargs.setdefault("env", _subprocess_env())
     return subprocess.run(["git", *args], **kwargs)
 

@@ -105,11 +105,12 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 # v1 scope: Python sources under these five trees only (see module docstring for why shell is
 # excluded). Matches git ls-files pathspecs, so vendored submodules (tools/autoharn-panel,
@@ -447,11 +448,17 @@ def violations_in(path: Path, base: Path = REPO) -> list[str]:
 
 
 def tracked_py_files(root: Path) -> list[Path]:
+    """Routed through _staged_read.run_git (2026-07-26, gates-staged-vs-tree-blindness
+    fresh-context review, ledger row 1234): the same bare `subprocess.run(["git", "-C", ...])`
+    shape the census named this gate for -- this gate is wired nowhere in hooks/pre-commit today
+    (see gates/_staged_read.py's run_git docstring for the full six-gate disposition), but the
+    conversion is trivially safe and strictly cheaper than carrying a written justification for
+    leaving it, so it is routed rather than left on the same coincidence the census flagged."""
     files: list[Path] = []
     seen: set[Path] = set()
     for spec in SCOPE_PATHSPECS:
-        r = subprocess.run(["git", "-C", str(root), "ls-files", spec],
-                            capture_output=True, text=True, check=True)
+        r = run_git(["-C", str(root), "ls-files", spec],
+                     capture_output=True, text=True, check=True)
         for line in r.stdout.splitlines():
             p = root / line
             if p in seen:

@@ -260,7 +260,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -496,8 +495,14 @@ def _git_ignored_rel_paths(doc_root: Path, rel_paths: list[str]) -> set[str] | N
     tree with no git at all still gets every `.md` file it always got (the false-CLEAN fix
     `discover_md` exists to preserve, see that function's docstring)."""
     try:
-        probe = subprocess.run(
-            ["git", "-C", str(doc_root), "rev-parse", "--is-inside-work-tree"],
+        # Routed through _staged_read.run_git (2026-07-26, second site in this module -- see
+        # `_tracked_md`'s own comment above and gates/_staged_read.py's run_git docstring for the
+        # full six-gate census this belongs to): the identical GIT_DIR-inheritance class the
+        # gates-staged-vs-tree-blindness fresh-context review flagged, this call site missed on
+        # the first pass because it lives in a `-> set[str] | None` helper rather than one of the
+        # obvious `tracked_*`-named enumerations the census went looking for.
+        probe = run_git(
+            ["-C", str(doc_root), "rev-parse", "--is-inside-work-tree"],
             capture_output=True, text=True, timeout=8)
     except (OSError, FileNotFoundError):
         return None  # no git binary on PATH
@@ -510,8 +515,8 @@ def _git_ignored_rel_paths(doc_root: Path, rel_paths: list[str]) -> set[str] | N
         # subprocess per file) and exits 0 (>=1 match), 1 (no match), or 128 (fatal git error,
         # e.g. a corrupt repo) -- 128 degrades to the same "can't tell, don't filter" contract
         # as no-git-at-all, rather than risk silently widening or narrowing the scope.
-        out = subprocess.run(
-            ["git", "-C", str(doc_root), "check-ignore", "--stdin"],
+        out = run_git(
+            ["-C", str(doc_root), "check-ignore", "--stdin"],
             input="\n".join(rel_paths) + "\n", capture_output=True, text=True, timeout=15)
     except (OSError, FileNotFoundError):
         return None

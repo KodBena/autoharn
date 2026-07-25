@@ -41,13 +41,14 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at mod
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 from markdown_tables import find_tables  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 EXCLUDED_PREFIXES = ("judgment/", "vestigial_documentation/")
 
@@ -60,8 +61,14 @@ def _excluded(relpath: str) -> "str | None":
 
 
 def _tracked_md() -> list:
-    out = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "*.md"],
-                          capture_output=True, text=True, check=True)
+    """Routed through _staged_read.run_git (2026-07-26, gates-staged-vs-tree-blindness
+    fresh-context review, ledger row 1234): the same bare `subprocess.run(["git", "-C", ...])`
+    shape the census named this gate for -- this gate is wired nowhere in hooks/pre-commit today
+    (see gates/_staged_read.py's run_git docstring for the full six-gate disposition), but the
+    conversion is trivially safe and strictly cheaper than carrying a written justification for
+    leaving it, so it is routed rather than left on the same coincidence the census flagged."""
+    out = run_git(["-C", str(REPO_ROOT), "ls-files", "*.md"],
+                   capture_output=True, text=True, check=True)
     return [l for l in out.stdout.splitlines() if l.strip()]
 
 
