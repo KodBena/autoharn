@@ -1,59 +1,55 @@
 #!/usr/bin/env python3
 """_pin_guard_resolve.py -- pure-AST binding/argv resolution helpers for
-gates/fixture_deployment_pin_guard.py (split out, ledger row 1249 fix-round 2, fresh-context
-strengthened-tier review that BLOCKED 26c7c48). No I/O, no printing, no subprocess calls of its
+gates/fixture_deployment_pin_guard.py (split out, ledger row 1249 fix-round 2; fix-round 3
+replaces the fix-round-2 replay engine with a PROVE-OR-REFUSE inversion -- see that file's own
+POSTURE section for the full narrative/history). No I/O, no printing, no subprocess calls of its
 own -- every function here takes an already-parsed `ast.Module` (or a piece of one) and returns a
 resolution, never a verdict string; `fixture_deployment_pin_guard.py` owns all message text and
-orchestration, this module owns only "what does this expression spell".
+orchestration, this module owns only "what does this expression spell" and "is this argv
+dataflow provable".
 
-FIX-ROUND-2 CONTENT (per-finding, matched to the blocking verdict):
-  - Finding 1 (waiver-blanket, THE BLOCKER): `_resolve_verb_element` no longer returns a
-    binding's `Assign` node as a waiver-checkable span -- it returns only the resolved verb
-    name. The caller (fixture_deployment_pin_guard.py) checks the waiver token ONLY against the
-    enclosing Call's own line span, never a constant's binding line, so one waiver on
-    `AUTOHARN = REPO / "autoharn"` no longer blankets every later use of AUTOHARN.
-  - Finding 2 + 4 (post-binding argv mutation / append-built-from-empty-list): `_ListState` +
-    `simulate_list_states` replay, in source-line order, every literal (re)binding,
-    `.append`/`.insert`/`.extend`, subscript-assignment, `del`, and `+=` this module can see for
-    each top-level Name, producing a best-known final element list. A mutation this cannot
-    prove safe (dynamic index, non-literal extend/insert, non-list augassign) marks the name
-    OPAQUE -- but only a name that was ever "sensitive" (carried a repo-verb-resolvable element
-    at some point) surfaces as a flagged call; an opaque-but-never-sensitive name (an ordinary
-    git/psql argv list with a dynamic flag) is silently out of scope, same as it always was.
-  - Finding 3 (os.path.join / PurePath.joinpath): `_names_repo_verb_join` recognizes
-    `os.path.join(REPO, "led")` (and the `str(REPO)` variant) and `REPO.joinpath("led")` as the
-    same verb-path shape as the `REPO / "led"` BinOp/f-string forms it already covered.
+THE CONTRACT this module implements: an argv is provable only in two shapes; everything else that
+is ever SENSITIVE (an element resolves to one of this repo's own operator-verb paths via
+`resolve_verb_element`, see `resolve_tracked_names`) is UNPROVEN.
+  1. A direct inline literal (List/Tuple) AT THE CALL SITE -- no Name involved, analyzed exactly
+     as in prior rounds (`fixture_deployment_pin_guard.py`'s own CHECK 1 handles this shape).
+  2. A Name bound EXACTLY ONCE to a literal List/Tuple, with ZERO other qualifying events (see
+     `analyze_names`) anywhere in the file -- use that one binding's literal elements.
+  3. Everything else sensitive: UNPROVEN, refused outright, never approximated from a partial or
+     stale reconstruction.
 
-WHAT THIS MODULE STILL DOES NOT CLAIM (unchanged blind spots from the prior round, restated
-here since this is now where the resolution logic lives):
+A name that is NEVER sensitive (an ordinary git/psql argv list with a dynamic flag) stays
+completely out of scope, unflagged -- same as every prior round.
+
+"ZERO other events" is RAW and CONSERVATIVE, scope-blind by design (no control-flow, no
+line-order, no replay -- there is nothing left to get the ORDER of wrong, closing round-2's
+findings C/D and the round-3 commission's findings A/B; see `analyze_names`'s own docstring for
+the exact event list: more-than-one literal binding, a non-literal rebind, any list-mutating
+method call, any subscript/slice assignment or `del`, `+=`, an ALIAS (`x = y`, either direction --
+CONTAMINATES rather than follows: if either name is ever sensitive, BOTH come back unproven), or
+being passed as a bare Name argument to any call other than the argv-sink call itself (a wrapper
+this module cannot see inside of is exactly the hazard, not the use site).
+
+WHAT THIS MODULE STILL DOES NOT CLAIM:
   - Only ONE hop of Name-binding indirection is resolved for the verb-path CONSTANT convention
-    (`_verb_path_bindings`); a constant imported from another module (`from helper import LED`)
-    is invisible -- this gate is a single-file AST census, not a cross-module resolver, and
-    stops at the file boundary by construction.
-  - `simulate_list_states` is LINE-ORDER ONLY, not control-flow aware: an `if`/`else` or a loop
-    body is read as though every branch always executed in textual order. This can both over-
-    and under-approximate a list's true runtime contents; it is a census heuristic over a
-    fixture corpus of straight-line scripts, not a symbolic executor. A name only becomes
-    "opaque" (unproven) when this module cannot follow a mutation at all -- it never silently
-    trusts a stale, pre-mutation snapshot (the finding-2 defect), which is the property that
-    matters for this gate's purpose.
+    (`verb_path_bindings`); a constant imported from another module (`from helper import LED`)
+    is invisible -- single-file AST census, stops at the file boundary by construction.
+  - A path/argv that never appears as a literal or tracked list in this file (behind a function
+    parameter with no local binding, built by string formatting this module doesn't parse, held
+    in a dict/attribute rather than a bare Name) has no elements to inspect and so cannot be
+    judged sensitive -- stays silently out of scope, same blind spot every prior round carried.
 """
 from __future__ import annotations
 
 import ast
 
 REPO_LIKE_NAMES = {"REPO", "AUTOHARN_ROOT", "EXEC_ROOT", "REPO_ROOT"}
+SUBPROCESS_CALL_ATTRS = {"run", "Popen", "check_call", "check_output", "call"}
+_LIST_MUTATOR_METHODS = ("append", "insert", "extend", "remove", "pop", "sort", "reverse", "clear")
 
 
 def _const_str(node: ast.expr | None) -> str | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
-
-
-def _const_int(node: ast.expr | None) -> int | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, int) \
-            and not isinstance(node.value, bool):
-        return node.value
-    return None
 
 
 def _unwrap_str_call(node: ast.expr) -> ast.expr:  # `str(X)` -> `X`
@@ -107,7 +103,7 @@ def _verb_from_join_parts(parts: list[str] | None, shim_verbs: set[str], libexec
 
 
 def _os_path_join_parts(node: ast.Call, repo_names: set[str]) -> list[str] | None:
-    """`os.path.join(REPO, "a", "b")` (or `os.path.join(str(REPO), ...)`) -> `["a","b"]`; None if not that shape (finding 3)."""
+    """`os.path.join(REPO, "a", "b")` (or `os.path.join(str(REPO), ...)`) -> `["a","b"]`; None if not that shape."""
     f = node.func
     if not (isinstance(f, ast.Attribute) and f.attr == "join"
             and isinstance(f.value, ast.Attribute) and f.value.attr == "path"
@@ -123,7 +119,7 @@ def _os_path_join_parts(node: ast.Call, repo_names: set[str]) -> list[str] | Non
 
 
 def _joinpath_parts(node: ast.Call, repo_names: set[str]) -> list[str] | None:
-    """`REPO.joinpath("a", "b")` (or `str(REPO).joinpath(...)`) -> `["a","b"]`; None otherwise (finding 3)."""
+    """`REPO.joinpath("a", "b")` (or `str(REPO).joinpath(...)`) -> `["a","b"]`; None otherwise."""
     f = node.func
     if not (isinstance(f, ast.Attribute) and f.attr == "joinpath"):
         return None
@@ -180,8 +176,7 @@ def verb_path_bindings(tree: ast.Module, repo_names: set[str], shim_verbs: set[s
                         libexec_verbs: set[str]) -> dict[str, str]:
     """Name -> verb per top-level `NAME = <repo-verb-join-expr>` binding (the DOMINANT
     convention: LED_TMPL/ATTEST_TAGS/AUTOHARN). Deliberately NOT keyed to the defining Assign
-    node (finding 1: that was the waiver-blanket bug) -- callers check waivers only at the USE
-    site."""
+    node -- callers check waivers only at the USE site, never a constant's binding line."""
     out: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and len(node.targets) == 1 \
@@ -196,7 +191,7 @@ def resolve_verb_element(elt: ast.expr, repo_names: set[str], shim_verbs: set[st
                           libexec_verbs: set[str], verb_bindings: dict[str, str]) -> str | None:
     """Whether `elt` names this repo's own operator-verb path, direct or one hop of the
     module-constant convention. Returns the verb name only -- never a waiver-checkable node
-    (finding 1: the caller waives at the USE site, never the binding)."""
+    (the caller waives at the USE site, never the binding)."""
     direct = names_repo_verb_join(elt, repo_names, shim_verbs, libexec_verbs)
     if direct:
         return direct
@@ -221,145 +216,185 @@ def dispatcher_invocation_is_safe(elts: list[ast.expr], i: int, libexec_verbs: s
     return s not in libexec_verbs
 
 
-class ListState:
-    """Best-known state of a top-level Name bound to a List/Tuple, as of the LAST simulated
-    mutation this module could follow. `elts is None` iff `opaque` -- a mutation happened that
-    this module cannot prove the effect of (dynamic index, non-literal extend/insert, non-list
-    `+=`)."""
-    __slots__ = ("elts", "opaque", "sensitive")
+def is_argv_sink_call(node: ast.Call) -> bool:
+    """A call whose argv-carrying argument IS the use site CHECK 1 judges (`os.system`, or a
+    `SUBPROCESS_CALL_ATTRS` name/attribute call) -- passing a tracked name INTO this kind of call
+    is not an event against it; every OTHER call it's passed into counts (wrapper-indirection)."""
+    f = node.func
+    if isinstance(f, ast.Attribute) and f.attr == "system" and isinstance(f.value, ast.Name) \
+            and f.value.id == "os":
+        return True
+    return (isinstance(f, ast.Attribute) and f.attr in SUBPROCESS_CALL_ATTRS) \
+        or (isinstance(f, ast.Name) and f.id in SUBPROCESS_CALL_ATTRS)
+
+
+class NameFacts:
+    """Scope-blind facts about one top-level Name that might be an argv list: every literal
+    List/Tuple binding, every element fed into it by a mutation, and how many OTHER qualifying
+    events (see module docstring) touched it. `alias_of` records `x = y` Name-to-Name assigns for
+    `resolve_tracked_names`'s contamination step -- never "followed", only contaminates."""
+    __slots__ = ("literal_bindings", "event_count", "payload_elts", "alias_of")
 
     def __init__(self) -> None:
-        self.elts: list[ast.expr] = []
-        self.opaque = False
-        self.sensitive = False  # ever carried a repo-verb-resolvable element
+        self.literal_bindings: list[list[ast.expr]] = []
+        self.event_count = 0
+        self.payload_elts: list[ast.expr] = []
+        self.alias_of: set[str] = set()
 
 
-def _is_sensitive_elt(elt: ast.expr, repo_names: set[str], shim_verbs: set[str],
-                       libexec_verbs: set[str], verb_bindings: dict[str, str]) -> bool:
-    return resolve_verb_element(elt, repo_names, shim_verbs, libexec_verbs, verb_bindings) is not None
+def analyze_names(tree: ast.Module) -> dict[str, NameFacts]:
+    """One scope-blind pass collecting, per top-level Name, every literal binding and every OTHER
+    qualifying event (see module docstring). No line-order, no control-flow, no replay: provability
+    (`resolve_tracked_names`) depends only on COUNTS and SET MEMBERSHIP here, never on where in
+    the file something sits relative to something else."""
+    facts: dict[str, NameFacts] = {}
 
+    def get(name: str) -> NameFacts:
+        return facts.setdefault(name, NameFacts())
 
-def simulate_list_states(tree: ast.Module, repo_names: set[str], shim_verbs: set[str],
-                          libexec_verbs: set[str], verb_bindings: dict[str, str]
-                          ) -> dict[str, ListState]:
-    """Replays, in (lineno, col_offset) order, every top-level literal (re)binding,
-    `.append`/`.insert`/`.extend`, subscript-assignment, `del`, and `+=` this module can follow
-    for each Name, to approximate its FINAL element list (finding 2/4: a stale, pre-mutation
-    snapshot is exactly the escape the prior round shipped). LINE-ORDER ONLY, no control-flow
-    awareness -- see module docstring. A name that becomes opaque without ever being
-    `sensitive` is DROPPED (not returned) -- an ordinary argv list this gate has no repo-verb
-    interest in stays silent, same as before this fix."""
-    events: list[tuple[int, int, str, str, object]] = []
     for node in ast.walk(tree):
-        ln = getattr(node, "lineno", 0)
-        col = getattr(node, "col_offset", 0)
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             t = node.targets[0]
             if isinstance(t, ast.Name):
                 if isinstance(node.value, (ast.List, ast.Tuple)):
-                    events.append((ln, col, "bind", t.id, list(node.value.elts)))
+                    get(t.id).literal_bindings.append(list(node.value.elts))
+                elif isinstance(node.value, ast.Name):
+                    f = get(t.id)
+                    f.alias_of.add(node.value.id)
+                    f.event_count += 1
                 else:
-                    events.append((ln, col, "unbind", t.id, None))
+                    get(t.id).event_count += 1
             elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
-                idx = _const_int(t.slice)
-                events.append((ln, col, "sub_set" if idx is not None else "opaque",
-                               t.value.id, (idx, node.value)))
-        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) \
-                and isinstance(node.op, ast.Add):
+                f = get(t.value.id)
+                f.event_count += 1
+                if isinstance(node.value, (ast.List, ast.Tuple)):
+                    f.payload_elts.extend(node.value.elts)
+                else:
+                    f.payload_elts.append(node.value)
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            f = get(node.target.id)
+            f.event_count += 1
             if isinstance(node.value, (ast.List, ast.Tuple)):
-                events.append((ln, col, "extend", node.target.id, list(node.value.elts)))
+                f.payload_elts.extend(node.value.elts)
             else:
-                events.append((ln, col, "opaque", node.target.id, None))
+                f.payload_elts.append(node.value)
         elif isinstance(node, ast.Delete):
             for t in node.targets:
                 if isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
-                    idx = _const_int(t.slice)
-                    events.append((ln, col, "del" if idx is not None else "opaque", t.value.id, idx))
+                    get(t.value.id).event_count += 1
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) \
-                and node.func.attr in ("append", "insert", "extend"):
-            name = node.func.value.id
+                and node.func.attr in _LIST_MUTATOR_METHODS:
+            f = get(node.func.value.id)
+            f.event_count += 1
             if node.func.attr == "append" and node.args:
-                events.append((ln, col, "append", name, node.args[0]))
+                f.payload_elts.append(node.args[0])
+            elif node.func.attr == "insert" and len(node.args) >= 2:
+                f.payload_elts.append(node.args[1])
             elif node.func.attr == "extend" and node.args:
                 arg0 = node.args[0]
                 if isinstance(arg0, (ast.List, ast.Tuple)):
-                    events.append((ln, col, "extend", name, list(arg0.elts)))
+                    f.payload_elts.extend(arg0.elts)
                 else:
-                    events.append((ln, col, "opaque", name, None))
-            elif node.func.attr == "insert" and len(node.args) >= 2:
-                idx = _const_int(node.args[0])
-                events.append((ln, col, "insert" if idx is not None else "opaque",
-                                name, (idx, node.args[1])))
-    events.sort(key=lambda e: (e[0], e[1]))
+                    f.payload_elts.append(arg0)
+            # remove/pop/sort/reverse/clear: no reconstructible payload, the event_count bump
+            # above is what matters -- these can delete or reorder a sensitive element in place.
 
-    states: dict[str, ListState] = {}
+    # "passed as a bare argument to a call this module cannot see inside" -- everywhere except
+    # the argv-sink call itself (that call IS the use site, not a mutation of its argument).
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or is_argv_sink_call(node):
+            continue
+        for a in list(node.args) + [kw.value for kw in node.keywords]:
+            if isinstance(a, ast.Name):
+                get(a.id).event_count += 1
 
-    def _mark_sensitive(name: str, elt: ast.expr) -> None:
-        if name in states and _is_sensitive_elt(elt, repo_names, shim_verbs, libexec_verbs, verb_bindings):
-            states[name].sensitive = True
-
-    for ln, col, kind, name, payload in events:
-        if kind == "bind":
-            st = ListState()
-            st.elts = list(payload)  # type: ignore[arg-type]
-            states[name] = st
-            for e in st.elts:
-                _mark_sensitive(name, e)
-        elif kind == "unbind":
-            states.pop(name, None)
-        elif kind == "opaque":
-            states.setdefault(name, ListState()).opaque = True
-            states[name].elts = []
-        elif kind == "append":
-            st = states.get(name)
-            if st is not None and not st.opaque:
-                st.elts.append(payload)  # type: ignore[arg-type]
-                _mark_sensitive(name, payload)  # type: ignore[arg-type]
-        elif kind == "extend":
-            st = states.get(name)
-            if st is not None and not st.opaque:
-                st.elts.extend(payload)  # type: ignore[arg-type]
-                for e in payload:  # type: ignore[union-attr]
-                    _mark_sensitive(name, e)
-        elif kind == "insert":
-            st = states.get(name)
-            idx, val = payload  # type: ignore[misc]
-            if st is not None and not st.opaque and 0 <= idx <= len(st.elts):
-                st.elts.insert(idx, val)
-                _mark_sensitive(name, val)
-        elif kind == "sub_set":
-            st = states.get(name)
-            idx, val = payload  # type: ignore[misc]
-            if st is not None and not st.opaque and 0 <= idx < len(st.elts):
-                st.elts[idx] = val
-                _mark_sensitive(name, val)
-            elif st is not None:
-                st.opaque = True
-                st.elts = []
-        elif kind == "del":
-            st = states.get(name)
-            idx = payload
-            if st is not None and not st.opaque and isinstance(idx, int) and 0 <= idx < len(st.elts):
-                del st.elts[idx]
-            elif st is not None:
-                st.opaque = True
-                st.elts = []
-
-    return {name: st for name, st in states.items() if not st.opaque or st.sensitive}
+    return facts
 
 
-def argv_elements(arg: ast.expr, list_states: dict[str, ListState]) -> tuple[list[ast.expr] | None, bool]:
-    """`(elements, opaque_sensitive)` for one Call argument. `opaque_sensitive` True means: this
-    was a repo-verb-bearing argv list at some point and was later mutated in a way this module
-    cannot statically verify -- the caller should refuse it directly rather than trust stale
-    elements (finding 2/4). Otherwise `elements` is the inline List/Tuple, the tracked Name's
-    best-known contents, or None if `arg` isn't a list-ish expression this module tracks."""
+class ArgvVerdict:
+    """Resolution for one tracked, SENSITIVE Name: `elts` is the provable literal list when
+    `unproven` is False, else always None -- no partial/stale fallback by construction."""
+    __slots__ = ("elts", "unproven")
+
+    def __init__(self, elts: list[ast.expr] | None, unproven: bool) -> None:
+        self.elts = elts
+        self.unproven = unproven
+
+
+def resolve_tracked_names(tree: ast.Module, repo_names: set[str], shim_verbs: set[str],
+                           libexec_verbs: set[str], verb_bindings: dict[str, str]
+                           ) -> dict[str, ArgvVerdict]:
+    """Per Name (only SENSITIVE names appear here -- see module docstring): PROVABLE (case 2)
+    iff exactly one literal binding, no alias, zero other qualifying events anywhere in the file
+    -- then `elts` is that one binding. Otherwise UNPROVEN. Aliasing (`x = y`) merges `x`/`y`
+    into one component: if EITHER is ever sensitive, BOTH come back unproven regardless of either
+    one's own local event count (closes the one-hop-alias finding)."""
+    facts = analyze_names(tree)
+
+    parent: dict[str, str] = {name: name for name in facts}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for name, f in list(facts.items()):
+        for other in f.alias_of:
+            if other not in parent:
+                parent[other] = other
+                facts.setdefault(other, NameFacts())
+            union(name, other)
+
+    components: dict[str, list[str]] = {}
+    for name in parent:
+        components.setdefault(find(name), []).append(name)
+
+    out: dict[str, ArgvVerdict] = {}
+    for members in components.values():
+        elements: list[ast.expr] = []
+        for m in members:
+            f = facts.get(m)
+            if f is None:
+                continue
+            for binding in f.literal_bindings:
+                elements.extend(binding)
+            elements.extend(f.payload_elts)
+        sensitive = any(
+            resolve_verb_element(e, repo_names, shim_verbs, libexec_verbs, verb_bindings) is not None
+            for e in elements
+        )
+        if not sensitive:
+            continue
+        provable = len(members) == 1
+        if provable:
+            only_facts = facts[members[0]]
+            provable = len(only_facts.literal_bindings) == 1 and only_facts.event_count == 0
+        verdict = ArgvVerdict(elts=list(facts[members[0]].literal_bindings[0]), unproven=False) \
+            if provable else ArgvVerdict(elts=None, unproven=True)
+        for m in members:
+            out[m] = verdict
+
+    return out
+
+
+def argv_provenance(arg: ast.expr, tracked: dict[str, ArgvVerdict]) -> tuple[list[ast.expr] | None, bool]:
+    """`(elements, unproven)` for one Call argument. `unproven` True means: this name is
+    repo-verb-bearing at some point in the file and this module cannot prove its argv dataflow
+    safe -- the caller must refuse outright, never approximate. Otherwise `elements` is the
+    inline List/Tuple, a fully-provable Name's one literal binding, or None if `arg` is neither
+    (an ordinary call argument, or a Name this module has no sensitive interest in)."""
     if isinstance(arg, (ast.List, ast.Tuple)):
         return list(arg.elts), False
-    if isinstance(arg, ast.Name) and arg.id in list_states:
-        st = list_states[arg.id]
-        if st.opaque:
+    if isinstance(arg, ast.Name) and arg.id in tracked:
+        v = tracked[arg.id]
+        if v.unproven:
             return None, True
-        return st.elts, False
+        return v.elts, False
     return None, False

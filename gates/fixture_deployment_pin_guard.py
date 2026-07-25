@@ -18,58 +18,92 @@ served `led` against the LIVE kernel, writing garbage rows. Three doors, all gua
       sidesteps (a)/(b) entirely: a shell string's repo-path spelling is unenumerable.
 
 Grep/AST CENSUS gate (gates/no_lazy_imports.py's own family), not a dataflow prover. Binding
-and argv resolution AST helpers live in gates/_pin_guard_resolve.py (split this fix-round to
-keep both files well under ADR-0007's 400-line ceiling with room for full disclosure -- see
-POSTURE below); this file owns the entry point, the checks that walk each file, and every
-verdict/waiver string.
+and argv resolution AST helpers live in gates/_pin_guard_resolve.py (split to keep both files
+well under ADR-0007's 400-line ceiling); this file owns the entry point, the checks that walk
+each file, and every verdict/waiver string.
 
-POSTURE, ROUND 2 (fresh-context strengthened-tier re-lap BLOCKED 26c7c48; this commit is that
-fix-round). Round 1 shipped a per-line waiver and a one-hop constant/argv-list resolver; round
-2's reviewer showed the waiver span was wrong (attached to a BINDING, blanketing every later use)
-and three further live evasions. Per finding, fixed vs. disclosed:
-  1. FIXED (the blocker): waiver span is now the USE site (the Call's own line/lines) only,
-     never a constant's binding line -- gates/_pin_guard_resolve.py's `resolve_verb_element` /
-     `verb_path_bindings` return verb NAMES, never an Assign node, so there is nothing left to
-     mis-waive at the binding.
-  2. FIXED: post-binding argv mutation (`cmd[1] = "led"` after `cmd = [str(AUTOHARN), "--help"]`)
-     is caught by `_pin_guard_resolve.simulate_list_states`, which replays subscript-assignment,
-     `.append`/`.insert`/`.extend`, `del`, and `+=` in source order to reconstruct the argv
-     list's final contents rather than trusting the original literal.
-  3. FIXED: `os.path.join(REPO, "led")` and `REPO.joinpath("led")` (this corpus's OWN idiom in
-     ~15 real non-verb-path files) are now recognized alongside the `/`-BinOp and f-string
-     shapes.
-  4. FIXED (same mechanism as #2): argv built via `.append()` from an empty-list binding is
-     reconstructed by the same simulation, not just the initial (empty) literal.
-  5. FIXED: CHECK 1 now scans every positional arg of a Call, not only `args[0]` -- closes
-     `functools.partial(subprocess.run, argv)` (argv is `args[1]` of the `partial(...)` call
-     itself) without hand-listing `functools.partial` as a special case.
-  6. DISCLOSED, not fixed: a verb-path constant imported from another module
-     (`from helper import LED`) is invisible -- this is a single-file AST census, not a
-     cross-module resolver, and stops at the file boundary by construction (restated in
-     gates/_pin_guard_resolve.py's own docstring, the module that would have to grow a resolver
-     to close this).
-  7. FIXED: a waiver comment on a line that hosts more than one statement (`x = 1;
-     subprocess.run(...)  # waiver: ...`) no longer silences anything on that line -- see
-     `_ambiguous_statement_lines` / `_span_has_waiver` below. A waiver must sit on a line with
-     exactly one statement, so it can never bless a second, unrelated one sharing the line.
+POSTURE, ROUND 3 -- A SHAPE CHANGE (fresh-context strengthened-tier review BLOCKED 8821dff,
+round 2's `simulate_list_states` replay engine, with two HIGH SILENT holes: (A) a name made
+opaque by a dynamic-index/slice assign or non-literal `.extend` BEFORE it ever carried a
+sensitive element silently dropped every LATER sensitive append -- excluded from the final dict,
+no flag; (B) a one-hop alias (`b = cmd; b.append(str(REPO/'led'))`) was read as an "unbind" event
+for `b`, silently discarded, while `cmd`'s own stale state kept being checked as if the append
+had never happened. Plus two disclosed-but-real approximations: (C) the replay's line-number sort
+had zero scope awareness, so a helper defined above and called later replayed its mutation BEFORE
+the binding it poisons; (D) branch/loop textual-order under-approximation.
 
-ROUND 1 POSTURE (unchanged, kept for context): FULL INVERSION (refuse any subprocess-spawning
-file outright absent a waiver) was measured against the real tree and rejected: ~150 of 203
-in-scope files make a direct subprocess call, overwhelmingly git/psql/ls with nothing to do with
-this repo's own verbs. CHECK 1 stays scoped to this repo's own operator-verb shapes,
+THE ORCHESTRATOR'S RULING, proven out over three rounds by three successive reviewers: static
+analysis of arbitrary Python dataflow always loses one rung up to the next live evasion -- every
+additional replay rule is just the next silent hole waiting to be found. So this round INVERTS
+the posture instead of shipping a fourth replay refinement. This gate now PROVES safety only for
+argv shapes it can fully see, and refuses everything else that ever touches this repo's own verb
+vocabulary as UNPROVEN, with a waiver escape hatch:
+  1. A direct inline literal (List/Tuple) argv AT THE CALL SITE -- provable, analyzed exactly as
+     every prior round did (no Name involved at all).
+  2. A Name-bound argv whose binding is a literal AND which has ZERO other qualifying events
+     anywhere in the file (any `.append`/`.extend`/`.insert`/subscript/slice/`del`/`+=`/alias-
+     assign/pass-to-another-call -- scope-blind, conservative: if it can't be ruled out, it
+     counts) -- provable, use the binding literal.
+  3. EVERYTHING ELSE that is ever "sensitive" (an element anywhere resolves to one of this
+     repo's own operator-verb paths) -- UNPROVEN. Refused outright, naming the call line, the
+     reason ("argv dataflow not statically provable"), and the waiver instruction.
+`simulate_list_states` and its line-order replay are DELETED (gates/_pin_guard_resolve.py's
+`analyze_names` / `resolve_tracked_names` replace it) -- there is no more "final contents" to
+reconstruct, so there is no more order to get wrong: this is what DISSOLVES round-2's findings C
+and D and this round's findings A and B, rather than patching around them. Aliasing (`x = y`)
+does not get followed -- it CONTAMINATES: if either name is ever sensitive, BOTH are unproven,
+regardless of either one's own local event count (closes finding B directly).
+
+MEASURED against the real tree (this fix-round): the inversion's false-positive surface --
+Name-bound argv lists that are sensitive but fail the "exactly one literal binding, zero other
+events" test -- was ONE file, `seen-red/fixture-deployment-pin-guard/run_fixtures.py`'s own
+`RED_WRAPPER_INDIRECTED`/`RED_SUBSCRIPT_MUTATION`/`RED_APPEND_BUILT_ARGV` synthetic RED fixtures
+(they are SUPPOSED to refuse now -- that is the honest verdict for a wrapper-indirected or
+post-binding-mutated argv, not a false positive against real code). No REAL file under
+seen-red/**, instruments/**, or kernel/fixtures/** newly refuses under the inversion; every real
+driver in this corpus invokes its argv as a direct inline literal at the subprocess call site
+(CHECK 1's original, always-provable shape), never through a tracked Name with a disqualifying
+event. Below ~10 files by a wide margin -- no blanket-waiving or refactor was needed this round.
+
+ROUND 1/2 findings, disposition unchanged by this round except where noted:
+  1. (round 2) Waiver span is the USE site (the Call's own line/lines) only, never a constant's
+     binding line -- unaffected by this round's inversion.
+  2/4. (round 2, SUPERSEDED this round) Post-binding argv mutation used to be "fixed" by
+     replaying the mutation; round 3 instead refuses these shapes outright as UNPROVEN -- see
+     POSTURE above. The replay is deleted, not patched.
+  3. (round 2) `os.path.join`/`.joinpath` recognized alongside `/`-BinOp and f-string shapes --
+     unaffected, still lives in `names_repo_verb_join`.
+  5. (round 2) CHECK 1 scans every positional Call argument, not only `args[0]` -- unaffected.
+  6. DISCLOSED, not fixed: a verb-path constant imported from another module is invisible --
+     single-file AST census, stops at the file boundary by construction (still true).
+  7. (round 2) A waiver on a semicolon-sharing line never counts -- unaffected.
+
+ROUND 1 POSTURE (unchanged, kept for context): FULL INVERSION OF SCOPE (refuse any subprocess-
+spawning file outright absent a waiver) was measured against the real tree and rejected: ~150 of
+203 in-scope files make a direct subprocess call, overwhelmingly git/psql/ls with nothing to do
+with this repo's own verbs. CHECK 1 stays scoped to this repo's own operator-verb shapes,
 CALLEE-AGNOSTIC. `os.system`/`shell=True` is DEFAULT-DENIED OUTRIGHT (zero existing occurrences,
-zero-false-positive ban). Every refusal carries a per-line WAIVER_TOKEN escape hatch.
+zero-false-positive ban). Every refusal carries a per-line WAIVER_TOKEN escape hatch. (Round 3's
+inversion is a NARROWER, different move: it does not refuse every subprocess-spawning file, only
+the Name-bound argv shapes this gate cannot prove safe for its own verb vocabulary.)
 
-WHAT THIS DOES NOT CLAIM:
+WHAT THIS GATE NOW CLAIMS, AND DOES NOT CLAIM (the honest summary this round's commission asked
+for): it PROVES a call is safe only when its argv is a literal at the call site or a Name with
+exactly one literal binding and no other event touching it anywhere in the file; every other
+argv that ever carries one of this repo's own verb paths is REFUSED-AS-UNPROVEN, never
+approximated -- there is no code path left in this gate that trusts a partial, stale, or
+best-effort reconstruction of a mutable list's contents. A waiver at the refusing call site is
+the only way past a such a refusal, and it is a reviewed claim, not a silent bypass. What it does
+NOT claim: safety for argv that never appears as a literal or tracked Name in this file at all
+(a function parameter, a dict value, ad hoc string formatting), or for a verb-path constant
+imported from another module -- both are disclosed blind spots, not silently-passed cases, and an
+argv this gate has no repo-verb interest in at all (an ordinary git/psql invocation) stays out of
+scope exactly as before.
+
+WHAT THIS DOES NOT CLAIM (mechanical detail, carried forward):
   - A NAME-LIST census over each file's own REPO/REPO_ROOT/AUTOHARN_ROOT/EXEC_ROOT convention,
-    not alias/call-graph analysis. `simulate_list_states` (round 2) follows append/insert/
-    extend/subscript-assign/del/+=  for ONE Name at a time, in LINE ORDER ONLY -- no
-    control-flow awareness (a branch/loop is read as if every arm always ran in textual order;
-    see gates/_pin_guard_resolve.py's own docstring). A path/argv behind a function parameter,
-    a dict value, piecemeal string concat this module doesn't recognize, or a name that is
-    reassigned inside a branch this gate reads straight through, stays invisible or
-    approximated, never silently trusted past the point this module can no longer follow it
-    (an unfollowable mutation on a name that was ever repo-verb-bearing is flagged, not ignored).
+    not alias/call-graph analysis. See gates/_pin_guard_resolve.py's own docstring for the exact
+    provable-vs-unproven contract and the full list of qualifying events.
   - Cross-module constant import (finding 6 above) -- named, not fixed.
   - Verb vocabulary: shim-verbs.sh's SHIM_VERBS_ALL (root shims/scaffold set) + literal
     "autoharn", sourced live -- DIFFERENT roster from libexec/autoharn/'s own live directory
@@ -81,9 +115,8 @@ WHAT THIS DOES NOT CLAIM:
   - The fourth leak kind -- reading whatever deployment.json sits in os.getcwd() -- is
     `serve_existing_world`'s own job (this gate's complement, not its duplicate).
   - WAIVER_TOKEN is presence-only; it cannot judge whether the stated reason is sound. A waiver
-    is a claim reviewed like any other, never a silent bypass -- and (round 2) never one that
-    can leak from a binding line to every use, or from one statement to a semicolon-sharing
-    neighbor.
+    is a claim reviewed like any other, never a silent bypass, and never one that can leak from
+    a binding line to every use, or from one statement to a semicolon-sharing neighbor.
 
 SCOPE: seen-red/**/*.py, instruments/**/*.py, kernel/fixtures/**/*.py (submodules excluded).
 Exit 0 clean (or every match waived); exit 1 naming every offending line otherwise.
@@ -99,11 +132,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # gates/_pin_guard_resolve.py, same dir
 from _pin_guard_resolve import (  # noqa: E402  (path insert above must run first)
-    argv_elements,
+    SUBPROCESS_CALL_ATTRS,
+    argv_provenance,
     dispatcher_invocation_is_safe,
     repo_like_or_default,
+    resolve_tracked_names,
     resolve_verb_element,
-    simulate_list_states,
     verb_path_bindings,
 )
 
@@ -111,7 +145,6 @@ REPO = Path(__file__).resolve().parents[1]
 SCAN_DIRS = ("seen-red", "instruments", "kernel/fixtures")
 DISPATCHER_NAME = "autoharn"  # execs into libexec/autoharn/<verb>; same hazard, one hop removed
 WAIVER_TOKEN = "fixture-scratch-pinning-guard-waiver:"
-SUBPROCESS_CALL_ATTRS = {"run", "Popen", "check_call", "check_output", "call"}
 
 def _shim_verb_names() -> set[str]:
     """Root-shim/scaffold verb roster (shim-verbs.sh SHIM_VERBS_ALL + dispatcher name) -- a DIFFERENT roster from `_libexec_verb_names()` (see module docstring)."""
@@ -233,7 +266,7 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
     lines = src.splitlines()
     repo_names = repo_like_or_default(tree)
     verb_bindings = verb_path_bindings(tree, repo_names, shim_verbs, libexec_verbs)
-    list_states = simulate_list_states(tree, repo_names, shim_verbs, libexec_verbs, verb_bindings)
+    tracked = resolve_tracked_names(tree, repo_names, shim_verbs, libexec_verbs, verb_bindings)
     environ_aliases = _environ_aliases(tree)
     ambiguous_lines = _ambiguous_statement_lines(tree)
     out: list[str] = []
@@ -244,25 +277,32 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
 
     # CHECK 1 (leak class a): argv names a REPO-rooted verb path (root shim, libexec/autoharn/
     # <verb>, or the autoharn dispatcher) instead of a scaffolded scratch copy. Callee-agnostic,
-    # scans EVERY positional Call argument (round 2, finding 5 -- not just args[0], so
-    # `functools.partial(subprocess.run, argv)` is covered), resolving one hop of argv-list-Name
-    # AND verb-path-constant indirection, with post-binding mutation replayed (round 2, findings
-    # 2/4) rather than trusted from the original literal.
+    # scans EVERY positional Call argument (not just args[0], so `functools.partial(subprocess.run,
+    # argv)` is covered). PROVE-OR-REFUSE (fix-round 3, see POSTURE): an argv is analyzed only when
+    # it is a direct inline literal at the call site, or a Name proven safe by
+    # `resolve_tracked_names` (exactly one literal binding, zero other events anywhere in the
+    # file); every other argv that ever carried one of this repo's own verb paths is refused
+    # outright as UNPROVEN, never approximated from a partial or stale reconstruction.
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         if _span_has_waiver(node, lines, ambiguous_lines):
             continue
         for arg in node.args:
-            elts, opaque_sensitive = argv_elements(arg, list_states)
-            if opaque_sensitive:
+            elts, unproven = argv_provenance(arg, tracked)
+            if unproven:
                 name = arg.id if isinstance(arg, ast.Name) else "?"
                 _flag(node.lineno,
-                      f"argv list `{name}` carried a repo-rooted verb element at some point but "
-                      f"was later mutated (subscript-assign/`.insert`/non-literal `.extend`/`del` "
-                      f"with a non-constant index, or a non-list `+=`) in a way this gate cannot "
-                      f"statically verify -- static safety proof voided (row 1249 fix-round 2, "
-                      f"finding 2/4). Use a direct inline literal or waive at this call site.")
+                      f"argv `{name}` is repo-verb-bearing (resolves to one of this repo's own "
+                      f"operator-verb paths at some point) but its dataflow is not statically "
+                      f"provable -- rebound more than once, mutated (`.append`/`.extend`/"
+                      f"`.insert`/subscript/slice/`del`/`+=`/`.remove`/`.pop`/`.sort`/`.reverse`/"
+                      f"`.clear`), aliased (`x = y`), or passed as a bare argument to another "
+                      f"call anywhere in this file -- argv dataflow not statically provable, so "
+                      f"this gate refuses rather than trust a partial or stale reconstruction "
+                      f"(row 1249 fix-round 3: PROVE-OR-REFUSE, not better simulation). Use a "
+                      f"direct inline literal argv at this call site, or waive here naming the "
+                      f"reviewed invariant that makes it safe.")
                 continue
             if elts is None:
                 continue

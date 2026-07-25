@@ -90,6 +90,45 @@ RED (semicolon-shared waiver line): `_x = 1; subprocess.run([str(AUTOHARN), "led
 ...` -- a waiver comment on a line hosting two statements no longer counts (a future edit could
 otherwise slip an unrelated second statement onto an already-waived line and inherit its cover).
 
+FIX-ROUND 3 (fresh-context strengthened-tier review BLOCKED 8821dff, the round-2 replay engine;
+PROVE-OR-REFUSE inversion, see gates/fixture_deployment_pin_guard.py's own POSTURE section for
+the full account). Three EXPECTATION CHANGES on existing specimens above -- each still refuses
+(still RED), only the REASON changes, tracing directly to the inversion, never to convenience:
+RED_WRAPPER_INDIRECTED, RED_SUBSCRIPT_MUTATION, and RED_APPEND_BUILT_ARGV now report "argv
+dataflow not statically provable" (an UNPROVEN Name-bound argv) instead of naming a specific
+resolved verb -- the round-2 replay engine used to trust its own reconstruction of these three
+shapes' final contents; round 3 refuses them outright instead of reconstructing, which is the
+more honest verdict for a wrapper-indirected or post-binding-mutated argv. No existing GREEN
+case changes.
+
+New RED-first specimens, one per commission finding (A, B) plus a demonstration that findings
+C/D DISSOLVE rather than get patched (see gate docstring):
+
+RED (finding A, opaque-before-sensitive): `cmd = []; cmd[i] = "x"` (dynamic-index subscript
+assign) BEFORE `cmd.append(str(REPO / "led"))` -- the round-2 replay engine's `opaque` flag was
+set at the FIRST event regardless of sensitivity, and once opaque, LATER appends were silently
+skipped (never marked sensitive, never returned at all): the whole name vanished from the
+gate's view. Refused now: this gate no longer tracks a "final contents" reconstruction to skip
+appends into, so there is nothing to silently drop -- any qualifying event on a name that is
+EVER sensitive makes it unproven, unconditionally.
+
+RED (finding B, one-hop alias append): `b = cmd; b.append(str(REPO / "led"))` -- the round-2
+replay engine read `b = cmd` as an "unbind" event for `b` (since the RHS wasn't a list literal),
+discarding `b` entirely without ever recording the alias; `b.append(...)` was then invisible
+(no tracked state for `b`), and `cmd`'s own separately-tracked state was checked as if the
+append had never happened. Refused now: an alias assign (`x = y`) is tracked and CONTAMINATES
+both names -- if either is ever sensitive, both come back unproven.
+
+RED (findings C/D dissolve, branch + textual order no longer matter): `cmd = ["status"]`
+followed by `if flag: cmd.append(str(REPO / "led"))` -- under the round-2 replay engine this
+needed a control-flow judgment (did this arm run?) that a textual-order replay could not make
+soundly (finding D), and a helper defined above but called later would have replayed its
+mutation out of true execution order (finding C). Round 3 needs no such judgment: refused
+unconditionally, because ANY qualifying event anywhere in the file counts, branch or no branch,
+above or below, and it is exactly as much a REFUSAL as if the append always ran -- the safe
+(fail-closed) side of the ambiguity coincides with the flagged side, for every case, by
+construction.
+
 Runs against throwaway tempfile copies; zero residue in the repo itself."""
 from __future__ import annotations
 
@@ -352,6 +391,51 @@ def run_it():
     _x = 1; return subprocess.run([str(AUTOHARN), "led"], capture_output=True, text=True)  # fixture-scratch-pinning-guard-waiver: bogus, shares this line with an unrelated statement
 '''
 
+# --- fix-round-3 RED specimens (fresh-context strengthened-tier review that BLOCKED 8821dff,
+# the round-2 replay engine) -- each is one commission finding, see module docstring above.
+
+RED_OPAQUE_BEFORE_SENSITIVE = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it(i):
+    cmd = []
+    cmd[i] = "placeholder"
+    cmd.append(str(REPO / "led"))
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_ALIAS_APPEND = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    cmd = ["status"]
+    b = cmd
+    b.append(str(REPO / "led"))
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_BRANCH_ORDER_DISSOLVED = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it(flag):
+    cmd = ["status"]
+    if flag:
+        cmd.append(str(REPO / "led"))
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
 
 def _run_gate(*paths: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(GATE), *[str(p) for p in paths]],
@@ -392,6 +476,10 @@ def main() -> int:
             "red-joinpath.py": (RED_JOINPATH, True, "led"),
             "red-partial-argv.py": (RED_PARTIAL_ARGV, True, "led"),
             "red-semicolon-shared-waiver.py": (RED_SEMICOLON_SHARED_WAIVER, True, "led"),
+            # --- fix-round-3 specimens (fresh-context strengthened-tier review, BLOCKED 8821dff) -
+            "red-opaque-before-sensitive.py": (RED_OPAQUE_BEFORE_SENSITIVE, True, "provable"),
+            "red-alias-append.py": (RED_ALIAS_APPEND, True, "provable"),
+            "red-branch-order-dissolved.py": (RED_BRANCH_ORDER_DISSOLVED, True, "provable"),
         }
         for fname, (content, should_be_bad, verb) in specimens.items():
             spath = tmp_path / fname
