@@ -133,7 +133,7 @@ For the full detail — the exact command shape, and how this option differs fro
 read [USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) (the founding closure record,
 now carrying a forward pointer to the heritage doc above)
 and [USER-CONFIGURATION.md's own
-section](USER-CONFIGURATION.md#bootstraptrack-worksh--a-standing-work-tracker-not-a-governed-world).
+section](USER-CONFIGURATION.md#bootstrapnew-projectsh---profile-tracker--a-standing-work-tracker-not-a-governed-world).
 
 ### 3b. Run a governed Claude Code session: `bootstrap/new-project.sh --new-world`
 
