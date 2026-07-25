@@ -8,7 +8,8 @@ project — what do you actually type to get it reviewed for legibility by a fre
 reader, and how do you record that the review happened?** It is written for an **adopter** — an
 operator or agent working inside a project that was scaffolded FROM autoharn (the framework whose
 tooling this project's `led`/`pickup`/`attest-doc` verbs, and this page, all come from), using
-either `bootstrap/new-project.sh` or `bootstrap/track-work.sh`. It is the step-by-step walkthrough
+either `bootstrap/new-project.sh` (classic/`--new-world`/`--profile tracker` modes alike). It is
+the step-by-step walkthrough
 ("what you type, what you should see") for the discipline autoharn calls the **A:B:C
 fresh-context audit loop**. The loop itself, and why it exists, is defined in autoharn's own
 `law/adr/0017-the-zero-context-reader.md` (the "zero-context reader" tenet) and operationalized

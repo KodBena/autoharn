@@ -181,7 +181,7 @@ domain's directory, never the other's: **autoharn's own law** — Rung 1's signe
 `law/keys/*.asc`, fingerprint stated in `law/keys/README.md`; that directory is scoped
 exclusively to autoharn's own law-signing and knows nothing of any downstream deployment.
 **Every scaffolded deployment** — a world (`new-project.sh --new-world`) or a standing
-project (`track-work.sh`) — carries its OWN `keys/` directory next to its own
+project (`new-project.sh --profile tracker`) — carries its OWN `keys/` directory next to its own
 `deployment.json`, and `verify-commission` (Rung 2) and any future signed-head verification
 path (Rung 3) resolve only THAT deployment's `keys/`, never autoharn's `law/keys/` — an end
 user standing up a deployment commits their signing key to their own project, never to this

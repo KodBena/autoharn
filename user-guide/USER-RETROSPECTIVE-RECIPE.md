@@ -249,7 +249,7 @@ Read that document in full first, and read the predecessor retrospective named b
 before writing anything — its could-not-answer list is your first duty, not an afterthought.
 
 DEPLOYMENT UNDER REVIEW: {DEPLOYMENT_PATH}
-  (e.g. /home/bork/w/vdc/1/run12, or a standing bootstrap/track-work.sh deployment)
+  (e.g. /home/bork/w/vdc/1/run12, or a standing `new-project.sh --profile tracker` deployment)
 LEDGER: {LEDGER_SCHEMA} / {LEDGER_KERNEL_SCHEMA} on {DB_HOST}
 PREDECESSOR RETROSPECTIVE (re-ask its could-not-answer list first): {PREDECESSOR_DOC_PATH}
   (omit this line and state so explicitly if this is the first retrospective for this

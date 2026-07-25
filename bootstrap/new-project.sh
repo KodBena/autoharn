@@ -78,6 +78,47 @@
 # named "rewire led to read deployment.json live" as future work — that landed 2026-07-11, "live
 # verbs" above; led/judge/pickup all read deployment.json live now, same as the PreToolUse hooks
 # always have.)
+#
+# --profile tracker mode (FABLE-TRACK-WORK-RETIREMENT-SPEC.md, ledger row 1271, retiring
+# `bootstrap/track-work.sh`): a THIRD mode on this ONE scaffold, alongside classic
+# --schema/--kern/--role and --new-world, for the case track-work.sh used to serve — "give ANY
+# directory a STANDING, indefinite-lifetime work tracker" — modernized rather than reproduced
+# byte-for-byte. Usage:
+#   bootstrap/new-project.sh <dest-dir> --profile tracker --name <name> --db <db> --host <host> \
+#       [--schema <schema>] [--kern <kern>] [--role <role>] [--force]
+# `--name` is REQUIRED in this mode (mirrors track-work.sh's own one derivation input) and derives
+# --schema/--kern/--role the same way --new-world derives them from a world name, unless an
+# explicit override is given. This mode:
+#   - applies the FULL CURRENT kernel lineage (identical apply list --new-world uses below, always
+#     through the current head — never a frozen-at-birth-era cap: track-work.sh's own s25 cap was
+#     an artifact of the era it was written in, not a deliberate ceiling this mode inherits) to a
+#     fresh schema pair, including the stamp-secret/genesis-seed/s40-s43 birth sequence — the same
+#     code path --new-world uses (ADR-0012 P1: one birth sequence, not two drifting copies). The
+#     stamp secret ends up provisioned-but-unread here exactly as it is for the kernel's own inert
+#     subsystems more generally: harmless, not a defect (see "Why the full chain, unwired" in
+#     user-guide/USER-WORK-STATUS-OFFERING.md, generalized here to the stamp secret specifically).
+#   - writes deployment.json + this deployment's OWN keys/ (its GPG keyring, never autoharn's own
+#     law/keys/), attestations/, roles/, the full live-verb shim set (SHIM_VERBS_ALL,
+#     bootstrap/shim-verbs.sh), legacy/, and orchlog -- the SAME unconditional scaffold-writing
+#     code every mode already runs below.
+#   - configures the boundary to be SERVED VIA ensure-running rather than a standing daemon: picks
+#     a free port, writes boundary-multiplex.toml, and writes boundary_url/boundary_deployment
+#     into deployment.json -- but does NOT start the service now. serving/ensure_running.py's
+#     `ensure_running_or_leave_unreachable` (already wired into every served shim template) spawns
+#     it as a detached child on this deployment's FIRST `./led`/`./pickup`/etc. call. This is what
+#     dissolved track-work.sh's own "a standing tracker runs no boundary service by design"
+#     rationale (BACKLOG-era `legacy/led` gap) -- the boundary is no longer a thing that must be
+#     stood up by hand or wired into a hook; it is a thing that appears the moment it is needed.
+#   - wires **NO hooks and NO governance preamble** -- deliberately, in track-work.sh's own words,
+#     preserved verbatim: **"a standing project is not a governed world."** No `.claude/`
+#     settings.json/governed_files.json/apparatus.json/HOOKS.md, no root CLAUDE.md, no portable-
+#     ADR LAW section. Every row this deployment's `./led` writes lands unstamped
+#     (stamp_agent/stamp_session/stamp_hmac all NULL, stamp_verified=false) -- visible in
+#     `./led --recent`, not hidden -- exactly track-work.sh's own honest-unwired-store posture,
+#     now on the full current lineage instead of a capped one.
+#   - refuses combined with --new-world (a deployment is either a governed world or a standing
+#     tracker, never both at once), with --pin (track-work.sh never supported pinning; out of
+#     scope for this mode), and with --governed (nothing to govern -- no change-gate is wired).
 set -eu
 
 # Captured BEFORE any argument parsing consumes "$@", so the PROVENANCE header this script writes
@@ -109,6 +150,17 @@ LINEAGE_HEAD="$(cd "$_LINEAGE_DIR" && ls s*.sql 2>/dev/null | grep -v '\.detect\
 usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]" >&2
+    echo "       $0 <dest-dir> --profile tracker --name <name> --db <db> --host <host> [--schema <schema>]" >&2
+    echo "           [--kern <kern>] [--role <role>] [--force]" >&2
+    echo "         (--profile tracker: a STANDING work tracker, not a governed world -- retires" >&2
+    echo "          bootstrap/track-work.sh, modernized. --name is REQUIRED (derives --schema/" >&2
+    echo "          --kern/--role from it unless given explicitly). Applies the FULL CURRENT" >&2
+    echo "          kernel lineage (s\${LINEAGE_HEAD} as of this run, never a frozen-era cap)," >&2
+    echo "          configures the boundary via ensure-running (auto-spawns on first ./led/etc" >&2
+    echo "          call -- no standing daemon started at scaffold time), and wires NO hooks and" >&2
+    echo "          NO governance CLAUDE.md preamble -- 'a standing project is not a governed" >&2
+    echo "          world' (track-work.sh's own words, preserved). Refused combined with" >&2
+    echo "          --new-world, --pin, or --governed.)" >&2
     echo "         (--boundary-url <url> --boundary-deployment <name> write deployment.json's two" >&2
     echo "          new served-shim keys, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md" >&2
     echo "          §5 -- both optional; the rebased led/pickup/asof-export/distance-to-clean" >&2
@@ -148,6 +200,7 @@ DEST="$1"; shift
 NAME=""
 FORCE=0
 NEW_WORLD=""
+PROFILE=""
 GOVERNED=""
 DB=""; HOST=""; SCHEMA=""; KERN=""; ROLE=""
 # design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 (ledger decision row 1631):
@@ -194,6 +247,7 @@ while [ $# -gt 0 ]; do
         --boundary-url) BOUNDARY_URL="$2"; shift 2 ;;
         --boundary-deployment) BOUNDARY_DEPLOYMENT="$2"; shift 2 ;;
         --new-world) NEW_WORLD="$2"; shift 2 ;;
+        --profile) PROFILE="$2"; shift 2 ;;
         --governed) GOVERNED="$2"; shift 2 ;;
         --pin) PIN="$2"; shift 2 ;;
         --pin-url) PIN_URL="$2"; shift 2 ;;
@@ -223,6 +277,73 @@ if [ -n "$PIN_URL" ] && [ -z "$PIN" ]; then
     echo "new-project.sh: --pin-url given without --pin submodule -- it has nothing to apply to." >&2
     exit 2
 fi
+# --profile tracker: validated BEFORE derivation, same posture as the --pin/--new-world checks
+# above -- doubt about a flag combination's legality is refused loudly, not guessed at.
+if [ -n "$PROFILE" ] && [ "$PROFILE" != "tracker" ]; then
+    echo "new-project.sh: --profile '$PROFILE' is not a recognized value -- only 'tracker' is" >&2
+    echo "                supported today (bootstrap/track-work.sh's retirement target)." >&2
+    exit 2
+fi
+if [ -n "$PROFILE" ] && [ -n "$NEW_WORLD" ]; then
+    echo "new-project.sh: --profile cannot be combined with --new-world -- a deployment is either" >&2
+    echo "                a governed WORLD or a standing work tracker, never both at once (see" >&2
+    echo "                this script's own header comment, 'a standing project is not a" >&2
+    echo "                governed world'). Drop one or the other." >&2
+    exit 2
+fi
+if [ "$PROFILE" = "tracker" ] && [ -n "$PIN" ]; then
+    echo "new-project.sh: --profile tracker cannot be combined with --pin -- out of scope for" >&2
+    echo "                this mode (bootstrap/track-work.sh never supported pinning either)." >&2
+    exit 2
+fi
+if [ "$PROFILE" = "tracker" ] && [ -n "$GOVERNED" ]; then
+    echo "new-project.sh: --profile tracker wires NO change-gate at all (no hooks are wired in" >&2
+    echo "                this mode) -- --governed has nothing to apply to. Drop it, or drop" >&2
+    echo "                --profile tracker for a governed --new-world scaffold." >&2
+    exit 2
+fi
+if [ "$PROFILE" = "tracker" ] && [ -z "$NAME" ]; then
+    echo "new-project.sh: --profile tracker requires --name -- it derives --schema/--kern/--role" >&2
+    echo "                from it (mirrors bootstrap/track-work.sh's own one derivation input)." >&2
+    usage
+fi
+# HAZARD FOUND IN REACH, FIXED HERE (CLAUDE.md's hazard-flagging duty), checked BEFORE any DB
+# work below: --name feeds TWO independent, INCOMPATIBLE allowlists in this mode --
+# serving/boundary_multiplex_config.py's own deployment-name contract, `[a-z0-9-]{1,64}` (spec
+# §2, no underscores/uppercase), for boundary_deployment; and the SQL-identifier allowlist
+# checked further below, `[A-Za-z0-9_]+` (no hyphens), for the derived SCHEMA/KERN/ROLE. Their
+# INTERSECTION is `[a-z0-9]+` -- checked here, once, for a single clear rule instead of letting
+# --name pass this check with a hyphen only to refuse two allowlist-checks later citing SCHEMA
+# (confusing two-step diagnostic). Discovered live during this build: an unchecked derivation
+# silently wrote a boundary-multiplex.toml the boundary service refuses to load at start-up
+# (service.log: "deployment name '...' does not match ^[a-z0-9-]{1,64}$") against a scratch name
+# that was perfectly legal SQL-identifier-wise. Refused here, loudly, before any schema/kernel DDL
+# runs -- rather than silently lowercasing/stripping characters (a silent transform risks a
+# collision the operator never asked for). NOTE FOR A FUTURE READER: this same INCOMPATIBILITY is
+# independently reachable through tools/setup_tui/idtypes.py's `WorldName` (allows
+# `[A-Za-z0-9_]+`) feeding `steps_boundary.py`'s `boundary_deployment = world` unchecked -- a
+# DIFFERENT screen/call path, out of this build's own scope to fix, flagged here rather than
+# silently routed around.
+if [ "$PROFILE" = "tracker" ] && [ -z "$BOUNDARY_URL" ] && [ -z "$BOUNDARY_DEPLOYMENT" ]; then
+    case "$NAME" in
+        *[!a-z0-9]*|"") _tracker_name_bad=1 ;;
+        *) _tracker_name_bad=0 ;;
+    esac
+    if [ "$_tracker_name_bad" -eq 1 ]; then
+        echo "new-project.sh: REFUSED -- --profile tracker's --name ('$NAME') must match" >&2
+        echo "                [a-z0-9]+ (lowercase letters and digits only) -- the intersection" >&2
+        echo "                of the boundary service's own deployment-name contract" >&2
+        echo "                ([a-z0-9-]{1,64}, no underscores/uppercase -- serving/" >&2
+        echo "                boundary_multiplex_config.py spec §2) and the SQL-identifier" >&2
+        echo "                allowlist ([A-Za-z0-9_]+, no hyphens) --name also derives" >&2
+        echo "                --schema/--kern/--role from. Pick a compliant --name, or supply" >&2
+        echo "                --boundary-url/--boundary-deployment explicitly with a compliant" >&2
+        echo "                label (and --schema/--kern/--role explicitly too, if --name itself" >&2
+        echo "                must stay outside [a-z0-9]+). Nothing was touched." >&2
+        exit 1
+    fi
+    unset _tracker_name_bad
+fi
 if [ -n "$NEW_WORLD" ]; then
     # Derive, never require, the three names that must agree (P1: one source -- the world name --
     # not three hand-typed strings the caller must keep in sync). An explicit --schema/--kern/--role
@@ -230,6 +351,12 @@ if [ -n "$NEW_WORLD" ]; then
     [ -n "$SCHEMA" ] || SCHEMA="$NEW_WORLD"
     [ -n "$KERN" ] || KERN="${NEW_WORLD}_kernel"
     [ -n "$ROLE" ] || ROLE="${NEW_WORLD}_rw"
+elif [ "$PROFILE" = "tracker" ]; then
+    # Identical derivation, from --name instead of a world name -- track-work.sh's own contract,
+    # unchanged (an explicit --schema/--kern/--role override still wins).
+    [ -n "$SCHEMA" ] || SCHEMA="$NAME"
+    [ -n "$KERN" ] || KERN="${NAME}_kernel"
+    [ -n "$ROLE" ] || ROLE="${NAME}_rw"
 fi
 [ -n "$DB" ] && [ -n "$HOST" ] && [ -n "$SCHEMA" ] && [ -n "$KERN" ] && [ -n "$ROLE" ] || usage
 
@@ -257,6 +384,25 @@ for _name in "$SCHEMA" "$KERN" "$ROLE"; do
     esac
 done
 unset _name
+
+# FULL_LINEAGE: the ONE gate that decides whether this run applies the full kernel birth chain
+# (preflight guard, DDL apply, stamp secret, genesis seed, s40/s43 birth sequence) -- true for
+# BOTH --new-world and --profile tracker, which now share this exact code path (ADR-0012 P1: one
+# birth sequence, not two drifting copies of stamp-secret/genesis-seed/principal-registration
+# logic). WORLD_LABEL is the human-readable name used in this run's own echo lines below, since
+# $NEW_WORLD is empty in tracker mode.
+FULL_LINEAGE=0
+[ -n "$NEW_WORLD" ] && FULL_LINEAGE=1
+[ "$PROFILE" = "tracker" ] && FULL_LINEAGE=1
+if [ -n "$NEW_WORLD" ]; then
+    WORLD_LABEL="$NEW_WORLD"
+else
+    WORLD_LABEL="$NAME (--profile tracker)"
+fi
+# The scratch-naming test below (used to decide whether the printed teardown-world.sh recovery
+# command needs --force-non-scratch) applies to --new-world's own $NEW_WORLD name when present,
+# and to --name otherwise (tracker mode has no separate world name).
+SCRATCH_NAME_CHECK="${NEW_WORLD:-$NAME}"
 
 # LINEAGE_CHAIN: what kernel DDL THIS scaffold run applied (or didn't), for the PROVENANCE header
 # below -- the honest record of which sNN deltas this world was born on, so a future reader never
@@ -437,7 +583,41 @@ if [ "$PIN" = "submodule" ]; then
     EXEC_ROOT="$PROJECT_ROOT/.autoharn"
 fi
 
-if [ -n "$NEW_WORLD" ]; then
+if [ "$FULL_LINEAGE" -eq 1 ]; then
+    # --profile tracker's OWN idempotent-force contract, mirrored from the retired
+    # bootstrap/track-work.sh (ledger row 1271, "mirror the semantics of track-work.sh"):
+    # that script's own --force NEVER re-ran kernel DDL against a schema that already carried it
+    # ("--force's job is 're-point/rewrite deployment.json and the verb shims', never 're-run
+    # kernel DDL a second time'" -- its own header comment) -- it checked whether the kernel
+    # schema already existed and, if so, SKIPPED the DDL apply entirely, continuing straight to
+    # deployment.json/shims/principals. `--new-world` never had this idempotent-force shape (a
+    # world is born once; the DB-SIDE PRE-FLIGHT GUARD below refuses unconditionally on ANY
+    # existing relation, by design) -- sharing this file's FULL_LINEAGE code path between the two
+    # modes would otherwise silently REGRESS track-work.sh's own documented --force contract for
+    # tracker deployments (discovered live during this build: a `--profile tracker ... --force`
+    # re-scaffold against an already-birthed deployment hit the SAME hard preflight refusal
+    # `--new-world` uses, which never happened under the retired script). Fixed here, scoped
+    # strictly to `--profile tracker`: skip the preflight-guard + DDL-apply block below entirely
+    # when this profile's own kernel schema already exists, regardless of --force (mirroring
+    # track-work.sh's own KERNEL_ALREADY_APPLIED check) -- the birth sequence further below still
+    # runs its own idempotent existence checks (already provisioned / already registered), so
+    # deployment.json, the verb shims, and the principals still re-derive correctly either way.
+    SKIP_LINEAGE_APPLY=0
+    if [ "$PROFILE" = "tracker" ]; then
+        _tracker_kernel_exists="$(printf '%s\n' "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = :'kern');" \
+            | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)"
+        if [ "$_tracker_kernel_exists" = "t" ]; then
+            SKIP_LINEAGE_APPLY=1
+            echo "-- $WORLD_LABEL: kernel schema '$KERN' already exists -- SKIPPING the DDL"
+            echo "   re-apply (bootstrap/track-work.sh's own --force contract, mirrored: re-running"
+            echo "   the full birth chain against an already-migrated schema is not safe -- CREATE"
+            echo "   OR REPLACE VIEW cannot drop columns intermediate deltas already added). --force"
+            echo "   here re-derives deployment.json + the verb shims + the boundary config + the"
+            echo "   principals only; it does not touch existing kernel structure or ledger rows."
+        fi
+        unset _tracker_kernel_exists
+    fi
+if [ "$SKIP_LINEAGE_APPLY" -ne 1 ]; then
     # DB-SIDE PRE-FLIGHT GUARD (ledger row 1148's ratified direction, reproduced mechanism):
     # `CREATE TABLE IF NOT EXISTS` silently SKIPS a wrong-shaped leftover relation from a prior,
     # partial birth, and s15-schema.sql's later `INSERT ... ON CONFLICT (db_role)` then dies
@@ -460,7 +640,7 @@ if [ -n "$NEW_WORLD" ]; then
         # teardown command this refusal prints is the EXACT command that will succeed, including
         # the --force-non-scratch flag when (and only when) the world name needs it.
         PREFLIGHT_FORCE_FLAG=""
-        case "$NEW_WORLD" in
+        case "$SCRATCH_NAME_CHECK" in
             run[0-9]*|s[0-9]*|faqwit*|svcfx*|probeworld*|*_scratch) ;;
             *) PREFLIGHT_FORCE_FLAG=" --force-non-scratch" ;;
         esac
@@ -473,14 +653,14 @@ if [ -n "$NEW_WORLD" ]; then
         echo "                a wrong-shaped leftover table, and s15's own ON CONFLICT (db_role)" >&2
         echo "                insert later dies because that skipped table's PK was never created." >&2
         echo "                Clear it first with the sanctioned teardown verb, then re-run:" >&2
-        echo "                    bootstrap/teardown-world.sh $NEW_WORLD --db $DB --host $HOST \\" >&2
+        echo "                    bootstrap/teardown-world.sh $SCRATCH_NAME_CHECK --db $DB --host $HOST \\" >&2
         echo "                        --schema $SCHEMA --kern $KERN --role $ROLE$PREFLIGHT_FORCE_FLAG" >&2
         echo "                Nothing was touched -- no DDL below has run yet." >&2
         exit 1
     fi
     unset -f _preflight_psql_in
 
-    echo "-- new-world '$NEW_WORLD': applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s44 + s45 + s46 + s47 + s48 + s49 + s50 + s51 + s52 + s53 + s54 + s55 + s56 + s57 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
+    echo "-- $WORLD_LABEL: applying high_watermark_1.sql + s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s44 + s45 + s46 + s47 + s48 + s49 + s50 + s51 + s52 + s53 + s54 + s55 + s56 + s57 to $DB (schema=$SCHEMA kern=$KERN role=$ROLE) --"
     psql -h "$HOST" -d "$DB" -v ON_ERROR_STOP=1 \
         -v schema="$SCHEMA" -v kern="$KERN" -v role="$ROLE" \
         -f "$AUTOHARN_ROOT/kernel/lineage/high_watermark_1.sql" \
@@ -523,6 +703,7 @@ if [ -n "$NEW_WORLD" ]; then
         -f "$AUTOHARN_ROOT/kernel/lineage/s56-reservation-residue.sql" \
         -f "$AUTOHARN_ROOT/kernel/lineage/s57-obligation-revocation-event.sql"
     echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s44 + s45 + s46 + s47 + s48 + s49 + s50 + s51 + s52 + s53 + s54 + s55 + s56 + s57 included -- s29's migration_epoch naturally seeds 0 on this empty ledger, see that file's own AMENDMENT header; s30 needs no epoch machinery of its own, HISTORY: safe; s40's own birth acts run below, after the seeds; s45 licenses principal_binding_active on the two standing-lifecycle kinds and is honored by the standing declarations below, which now carry the flag; s56/s57 are view-only/new-write-path respectively, neither needs a birth-sequence act of its own)"
+fi
 
     # _psql_in: SQL text is always fed on stdin, never via -c -- psql's :'var'/:"var" bind-variable
     # interpolation (verified live against a real server, psql 18.3) is only performed for input it
@@ -531,7 +712,7 @@ if [ -n "$NEW_WORLD" ]; then
     # commit 0ce5055 (ledger row 1637) and this file's own allowlist block above.
     _psql_in() { printf '%s\n' "$1"; }
 
-    echo "-- new-world '$NEW_WORLD': seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
+    echo "-- $WORLD_LABEL: seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
     chmod 700 "$PROJECT_ROOT/.claude/secrets"
     SECRET_FILE="$PROJECT_ROOT/.claude/secrets/stamp_secret.hex"
@@ -562,7 +743,7 @@ if [ -n "$NEW_WORLD" ]; then
     # section explains why: its only job is making two worlds' row-1 hashes differ, not
     # confidentiality), so it is generated and inserted directly, with no on-disk file mirroring
     # the stamp-secret pattern's chmod-600 ceremony -- there is nothing here that needs hiding.
-    echo "-- new-world '$NEW_WORLD': seeding the row_hash chain's genesis seed (idempotent) --"
+    echo "-- $WORLD_LABEL: seeding the row_hash chain's genesis seed (idempotent) --"
     HAVE_GENESIS=$(_psql_in "SELECT count(*) FROM :\"kern\".chain_genesis;" \
         | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA 2>/dev/null || echo "0")
     if [ "$HAVE_GENESIS" = "1" ]; then
@@ -609,7 +790,7 @@ if [ -n "$NEW_WORLD" ]; then
     # authenticates as needs its own declared standing, witnessed here at scaffold time as
     # session_user) and the write-boundary tool principal's registration (step 4 -- s43
     # Element 6: the identity that authors every write_refused row).
-    echo "-- new-world '$NEW_WORLD': s40/s43 birth sequence (author event, dual standing declarations, reviewer/commissioner/write-boundary ceremony) --"
+    echo "-- $WORLD_LABEL: s40/s43 birth sequence (author event, dual standing declarations, reviewer/commissioner/write-boundary ceremony) --"
     LOGIN_ROLE=$(psql -h "$HOST" -d "$DB" -tAc "SELECT session_user;")
     HAVE_AUTHOR_EVENT=$(_psql_in "SELECT count(*) FROM :\"schema\".ledger l JOIN :\"kern\".principal p ON p.id = l.principal_subject WHERE l.kind = 'principal_registered' AND p.name = 'author';" \
         | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v kern="$KERN" -tA)
@@ -704,6 +885,40 @@ SQL
             echo "   (3/4) '${_pname}' registered through the boundary ceremony (class ${_pclass}, registrar author)"
         fi
     done
+fi
+
+# --profile tracker: the boundary is served via ensure-running, not a standing daemon -- pick a
+# free port, write boundary-multiplex.toml, and let BOUNDARY_URL/BOUNDARY_DEPLOYMENT (still empty
+# unless the caller passed --boundary-url/--boundary-deployment explicitly -- explicit always
+# wins) flow into the SAME deployment.json writer every mode already shares below. Nothing is
+# started now: serving/ensure_running.py's `ensure_running_or_leave_unreachable` (already wired
+# into every served shim template) spawns it as a detached child on this deployment's FIRST
+# `./led`/`./pickup`/etc call -- this is the mechanism that dissolved track-work.sh's own
+# "a standing tracker runs no boundary service by design" rationale (that script's `legacy/led`
+# gap): the boundary is no longer a thing an operator stands up by hand, it is a thing that
+# appears the moment it is needed.
+if [ "$PROFILE" = "tracker" ] && [ -z "$BOUNDARY_URL" ] && [ -z "$BOUNDARY_DEPLOYMENT" ]; then
+    echo "-- --profile tracker: boundary via ensure-running (no daemon started now) --"
+    TRACKER_PORT="$("$PY" -c "import sys; sys.path.insert(0, '$AUTOHARN_ROOT'); from tools.setup_tui.probes import free_port; print(free_port())")"
+    BOUNDARY_URL="http://127.0.0.1:$TRACKER_PORT"
+    BOUNDARY_DEPLOYMENT="$NAME"
+    TRACKER_TOML="$PROJECT_ROOT/boundary-multiplex.toml"
+    if [ -f "$TRACKER_TOML" ] && [ "$FORCE" -ne 1 ]; then
+        echo "   $TRACKER_TOML already exists -- left untouched (pass --force to replace it)"
+    else
+        cat > "$TRACKER_TOML" <<TRACKERTOML
+[deployments.$NAME]
+pghost = "$HOST"
+pgdatabase = "$DB"
+pguser = "$ROLE"
+pgschema = "$SCHEMA"
+pgkern = "$KERN"
+TRACKERTOML
+        echo "   wrote $TRACKER_TOML (port $TRACKER_PORT, section [deployments.$NAME])"
+    fi
+    echo "   deployment.json will carry boundary_url=$BOUNDARY_URL boundary_deployment=$NAME --"
+    echo "   the first ./led/./pickup/./distance-to-clean/./asof-export call in this deployment"
+    echo "   spawns the boundary automatically (ensure-running); no daemon is running yet."
 fi
 
 echo "-- deployment.json --"
@@ -893,6 +1108,23 @@ sedsubst() {
 # doc guaranteed in every scaffold mode, pinned or not, new-world or classic) and into root
 # CLAUDE.md too when --new-world writes one (auto-loaded at session start). --no-law suppresses
 # this entirely -- an adopter who wants no ADR pointers says so explicitly, once.
+#
+# --profile tracker SKIPS THIS ENTIRE SECTION, through the CLAUDE.md-writing block further below
+# (everything up to the `rm -f "$LAW_SECTION_FILE"` line) -- NO .claude/ hooks wiring, NO
+# governance CLAUDE.md preamble, NO portable-ADR LAW section, in track-work.sh's own words,
+# preserved verbatim: **"a standing project is not a governed world."**
+if [ "$PROFILE" = "tracker" ]; then
+    LAW_SECTION_FILE=""
+    echo "-- .claude/ wiring / CLAUDE.md / LAW section: SKIPPED (--profile tracker) --"
+    echo "   'a standing project is not a governed world' (bootstrap/track-work.sh's own words,"
+    echo "   preserved) -- no change-gate, no stamp interception, no Stop-gate, no CLAUDE.md"
+    echo "   governance preamble. Every row this deployment's ./led writes lands UNSTAMPED"
+    echo "   (stamp_agent/stamp_session/stamp_hmac all NULL, stamp_verified=false), visible in"
+    echo "   ./led --recent, not hidden -- the honest state of an unwired store. Hook wiring"
+    echo "   remains a separate, deliberate act: copy new-project.sh's own .claude/ wiring stanzas"
+    echo "   by hand (or re-scaffold this same directory with --new-world instead) if this"
+    echo "   deployment should later become a governed world."
+else
 LAW_SECTION_FILE="$PROJECT_ROOT/.claude/.law-section.md.tmp"
 if [ "$LAW_SECTION" -eq 1 ]; then
     echo "-- LAW section (portable ADR subset, design/MAINT-ADR-PORTABILITY-SPEC.md) --"
@@ -1048,7 +1280,8 @@ if [ -n "$NEW_WORLD" ]; then
     sed -i -e "/^__LAW_SECTION__\$/r $LAW_SECTION_FILE" -e "/^__LAW_SECTION__\$/d" "$PROJECT_ROOT/CLAUDE.md"
     echo "wrote CLAUDE.md (governance preamble, auto-loaded at session start)"
 fi
-rm -f "$LAW_SECTION_FILE"
+fi
+rm -f "$LAW_SECTION_FILE" 2>/dev/null || true
 
 # the ten verbs (led, judge, pickup, audit, distance-to-clean, verify-commission, verify-chain,
 # asof-export, attest-doc, doctor): thin shims,
@@ -1270,6 +1503,31 @@ if [ -n "$NEW_WORLD" ]; then
     echo "broken\" (design/MAINT-GPG-TRUST-LAYER.md §4). Full walkthrough, including WHY --head verifies"
     echo "before it will print anything: user-guide/USER-GPG-TRUST-LAYER-FAQ.md."
     echo "----- END MAINTAINER SIGNING BLOCK -----"
+elif [ "$PROFILE" = "tracker" ]; then
+    echo "This is a STANDING deployment (--profile tracker), not a run-scoped world: it has no run"
+    echo "number, is never settled into dust, and has no defined end -- it persists for this"
+    echo "project's lifetime, the same way an issue tracker does. NO hooks were wired (deliberate"
+    echo "-- 'a standing project is not a governed world', track-work.sh's own words, preserved)."
+    echo ""
+    echo "  cd $PROJECT_ROOT"
+    echo "  ./led work open first-item \"Describe the first thing to track\"   # boundary auto-spawns"
+    echo "  ./pickup            # live resume brief, including every open work item in full"
+    echo "  ./distance-to-clean # composed closure-debt read"
+    echo "  ./led work claim <slug>  /  ./led work close <slug> shipped --witness \"<ref>\""
+    echo "  ./led work violations    # cycles / dangling deps / duplicate opens"
+    echo "  ./doctor                 # is this deployment set up right? (witnessed lines)"
+    echo ""
+    echo "The FIRST call to any of the above spawns the boundary service automatically (a detached"
+    echo "child; logs at $PROJECT_ROOT/service.log) -- nothing is running yet at this line."
+    echo ""
+    echo "Rows written here via ./led are UNSTAMPED (stamp_agent/stamp_session/stamp_hmac all"
+    echo "NULL, stamp_verified=false) until a separate, deliberate act wires change_gate/"
+    echo "stamp_intercept/clean_exit and provisions a stamp secret (copy new-project.sh's own"
+    echo ".claude/ wiring stanzas by hand, or re-scaffold this directory with --new-world instead)."
+    echo ""
+    echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
+    echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
+    echo "to VERIFIED -- ./verify-commission --id <id>; see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."

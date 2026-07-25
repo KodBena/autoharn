@@ -11,7 +11,8 @@ instead of you re-explaining which tool to use every session — the piece
 ("Task-shape" — the category of problem a tool solves, such
 as "finite enumeration" or "convex allocation" — is the thread this whole page is organized
 around; every row below names one.) If you are adopting autoharn — cloning it, or running
-`bootstrap/new-project.sh` / `bootstrap/track-work.sh` against your own project directory — this
+`bootstrap/new-project.sh` (classic, `--new-world`, or `--profile tracker`) against your own
+project directory — this
 is the page you edit once at adoption, then again whenever you bless or mandate a new tool. It
 assumes no prior context: not this repository's design history, not the session that produced
 this template, nothing but what is written here and what it links to.
