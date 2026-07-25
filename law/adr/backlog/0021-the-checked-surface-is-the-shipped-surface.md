@@ -7,7 +7,7 @@ maintainer's to reshape. -->
 
 DRAFT — Fable-authored 2026-07-25 at the maintainer's direction ("the only thing I could
 make of it is a new review-class ADR"), awaiting his ratification. Provenance: the
-2026-07-23 review campaign ([postmortem](history/POSTMORTEM-REVIEW-CAMPAIGN-2026-07-23.md),
+2026-07-23 review campaign ([postmortem](../history/POSTMORTEM-REVIEW-CAMPAIGN-2026-07-23.md),
 ledger rows 1229–1260) witnessed one defect structure in four independent habitats, none
 of them covered by ADR-0020's meaning axis or the row-1887 search-breadth clauses:
 
