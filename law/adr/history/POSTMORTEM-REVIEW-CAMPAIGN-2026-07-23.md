@@ -6,8 +6,9 @@ note in the CANDIDATE 1 section below) — the substantive disposition this mark
 original removal condition asked for is therefore recorded inline. This marker stays in
 place, with an UPDATED condition, only because this ADR-0017 polish pass ran without
 access to a genuinely separate fresh-context B invocation (no `Agent`-type tool was
-available to the session that produced this edition — see this edition's own C-step
-meaning-preservation statement, added below, for the full disposition). Removal
+available to the session that produced this edition; that edition's meaning-preservation
+statement is recorded in the "C-step meaning-preservation statement" section at the end
+of this document). Removal
 condition, updated: strike this marker once a fresh-context B — a provably separate
 invocation, per the A:B:C recipe (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — has read
 this edition and the attestation is recorded per that recipe's step 6. -->
@@ -166,10 +167,12 @@ its justification was a *predicate* (added after already-scaffolded deployments 
 Anyone re-deriving the predicate would have enumerated both members. Proposed one-line
 rule for specs and fixes: **a special-case carve-out states its membership predicate and
 mechanically enumerates current members satisfying it; the names are derived, never
-authored**. Adjacent to ADR-0000's closure-statement discipline (quantification universe,
-enumerated); this brings the same shape down to the humble compatibility carve-out.
+authored**. Adjacent to
+[ADR-0000](../0000-the-alpha-and-the-omega-type-driven-design.md)'s closure-statement
+discipline (quantification universe, enumerated); this brings the same shape down to the
+humble compatibility carve-out.
 
-## The ops_improvement frame (the maintainer's four questions)
+## The ops_improvement frame — the maintainer's standing four questions for closing an improvement cycle (named after his own notes file of that name)
 
 - **(a) Could project-agnostic directives have been given that weren't?** Yes — the three
   candidates above, chiefly the proxy-surface rule.
@@ -194,6 +197,19 @@ red for named structural reasons, dominated by the track-work s25 cap awaiting t
 maintainer's row-1169 decision; the ensure-running lap-4 residuals (permission-denied
 /proc conflation; poll-vs-HTTP timeout mismatch); and two hooks-touching merges prepared
 for the maintainer's own hands (row 1236). None is silent; each names its consumer.
+
+## C-step meaning-preservation statement (for the 2436c90 polish edition)
+
+Recorded here in the artifact itself, where its readers are (it previously lived only in
+that commit's message — a dangling promise the first fresh-context B read of this
+document correctly flagged as its severe finding): in the ADR-0017 polish that produced
+this edition, no claim, qualifier, hedge, number, or ledger-row citation was added,
+dropped, or reworded in substance; the edits were definitional glosses at first use,
+markdown links to existing definitions, and the splitting of one dense narrative
+paragraph. The polishing session flagged its two least-confident glosses; the
+"superclass catches" parenthetical has since been independently verified accurate
+against the merged code (`gates/deep_walk_recursion_guard.py` and its seen-red family)
+by that same fresh-context B round.
 
 ## License
 
