@@ -123,21 +123,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-# fixture-scratch-pinning-guard-waiver: every real invocation of AUTOHARN in this fixture is
-# either --help/-h/"service"/an unrecognized-verb probe (statically safe, see
-# gates/fixture_deployment_pin_guard.py's own _dispatcher_invocation_is_safe -- the dispatcher's
-# own source returns/execs into an env-parameterized script before ever touching a deployment
-# path in every one of those cases) or, in case_f_real_invocation_reaches_libexec /
+# Every real invocation of AUTOHARN in this fixture is either --help/-h/"service"/an
+# unrecognized-verb probe (statically safe, see gates/fixture_deployment_pin_guard.py's own
+# `dispatcher_invocation_is_safe` -- the dispatcher's own source returns/execs into an
+# env-parameterized script before ever touching a deployment path in every one of those cases,
+# so those call sites need no waiver at all) or, in case_f_real_invocation_reaches_libexec /
 # case_g_help_sweep_never_writes, `[str(AUTOHARN), verb, "--help"]` where `verb` is a LOOP
-# VARIABLE this gate's static census cannot read the value of. That loop is scoped, by this
-# fixture's own construction, to the PARSED dispatch table's verb names each always paired with a
-# literal trailing "--help" (never a real write) -- proven non-mutating for real by case
-# g-help-sweep-never-writes's own git-status-byte-identical witness taken before/after the full
-# sweep. This waiver is scoped to THAT invariant, not a blanket exemption for this binding --
-# a future edit pairing AUTOHARN with a variable verb WITHOUT a trailing --help would need its
-# own fresh review. gates/fixture_deployment_pin_guard.py review, 2026-07-26.
+# VARIABLE this gate's static census cannot read the value of -- those TWO call sites carry
+# their own waiver comment, at the call, not here (round-2 review fix, finding 1: a waiver on
+# THIS binding line used to blanket every use of AUTOHARN below, including any future unreviewed
+# one; gates/fixture_deployment_pin_guard.py review, 2026-07-26).
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-AUTOHARN = REPO_ROOT / "autoharn"  # fixture-scratch-pinning-guard-waiver: see comment block above
+AUTOHARN = REPO_ROOT / "autoharn"
 LIBEXEC = REPO_ROOT / "libexec" / "autoharn"
 
 # The ten relocated verbs -- named here, once, as this fixture's OWN expectation (not derived
@@ -392,8 +389,14 @@ def case_f_real_invocation_reaches_libexec() -> bool:
     help_out = _run([str(AUTOHARN), "--help"]).stdout
     verbs = sorted(_parsed_table_verbs(help_out) - {"service"})
     ok = True
+    # `verb` ranges only over the parsed dispatch table, always paired with a literal trailing
+    # "--help" (never a real write) -- proven non-mutating by case_g_help_sweep_never_writes's
+    # own git-status-byte-identical witness. A future edit pairing AUTOHARN with a variable verb
+    # WITHOUT a trailing --help needs its own fresh review (gates/fixture_deployment_pin_guard.py
+    # review, 2026-07-26).
     for verb in verbs:
-        r = _run([str(AUTOHARN), verb, "--help"])
+        r = _run(  # fixture-scratch-pinning-guard-waiver: see comment above this loop
+            [str(AUTOHARN), verb, "--help"])
         combined = r.stdout + r.stderr
         if r.returncode == 127 or _EXEC_FAILURE_SIGNATURE in combined:
             print(f"f-real-invocation-reaches-libexec: FAIL -- 'autoharn {verb} --help' exit "
@@ -469,8 +472,12 @@ def case_g_help_sweep_never_writes() -> bool:
                              cwd=str(REPO_ROOT)).stdout
     help_out = _run([str(AUTOHARN), "--help"]).stdout
     _run([str(AUTOHARN), "service", "--help"])
+    # Same scoped invariant as case f's own loop (verb ranges over the parsed dispatch table,
+    # always paired with a literal --help) -- proven non-mutating by THIS case's own before/after
+    # git-status comparison below.
     for verb in sorted(_parsed_table_verbs(help_out) - {"service"}):
-        _run([str(AUTOHARN), verb, "--help"])
+        _run(  # fixture-scratch-pinning-guard-waiver: see comment above this loop
+            [str(AUTOHARN), verb, "--help"])
     after = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True,
                             cwd=str(REPO_ROOT)).stdout
     if before != after:

@@ -43,13 +43,16 @@ REPO = HERE.parents[1]
 # fixture invokes directly via `sys.executable` -- pointing at the real relocated implementation
 # instead (the alias shim itself is exercised separately by
 # seen-red/umbrella-cli-dispatch-parity/run_fixtures.py's own case c).
-# fixture-scratch-pinning-guard-waiver: attest-tags is a repo-specific verb (never scaffolded
-# into a world -- see its own module docstring) that takes --repo/--keys-dir as EXPLICIT CLI
-# flags (every call site below passes both) and never reads PICKUP_DEPLOYMENT or resolves any
-# deployment.json at all (confirmed by reading libexec/autoharn/attest-tags's own source) -- it
-# does not have the dirname($0)-hardcoded-and-env-blind hazard this gate guards against, unlike
-# the ten led/judge/pickup/... verb shims. gates/fixture_deployment_pin_guard.py review, 2026-07-26.
-ATTEST_TAGS = REPO / "libexec" / "autoharn" / "attest-tags"  # fixture-scratch-pinning-guard-waiver: see comment block above
+# attest-tags is a repo-specific verb (never scaffolded into a world -- see its own module
+# docstring) that takes --repo/--keys-dir as EXPLICIT CLI flags (every call site below passes
+# both) and never reads PICKUP_DEPLOYMENT or resolves any deployment.json at all (confirmed by
+# reading libexec/autoharn/attest-tags's own source) -- it does not have the
+# dirname($0)-hardcoded-and-env-blind hazard this gate guards against, unlike the ten
+# led/judge/pickup/... verb shims. The waiver itself lives on `_attest`'s own call below (the
+# ONE real use site, round-2 review fix: a waiver on THIS binding line would blanket every call,
+# which is exactly the finding-1 defect gates/fixture_deployment_pin_guard.py's review caught).
+# gates/fixture_deployment_pin_guard.py review, 2026-07-26.
+ATTEST_TAGS = REPO / "libexec" / "autoharn" / "attest-tags"
 
 KEYGEN_BATCH_TEMPLATE = """%no-protection
 Key-Type: eddsa
@@ -64,6 +67,21 @@ Expire-Date: 0
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, **kw)
+
+
+def _attest(scratch_repo: Path, keys_dir: Path) -> subprocess.CompletedProcess[str]:
+    """The ONE real ATTEST_TAGS use site (round-2 review fix: five near-duplicate call sites
+    used to each need their own copy-pasted waiver comment or share one blanket binding-line
+    waiver -- neither is honest; one wrapper, one waiver, five callers)."""
+    return sh([
+        sys.executable, str(ATTEST_TAGS),
+        # fixture-scratch-pinning-guard-waiver: see the comment block above ATTEST_TAGS's own
+        # binding for the full reasoning -- --repo/--keys-dir passed explicitly every call, no
+        # PICKUP_DEPLOYMENT/deployment.json read. (Waiver sits INSIDE this call's own line span,
+        # not on the binding above -- round-2 review fix, finding 1: a binding-line waiver used
+        # to blanket every use.)
+        "--repo", str(scratch_repo), "--keys-dir", str(keys_dir), "--json",
+    ])
 
 
 def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
@@ -128,8 +146,7 @@ def main() -> int:
         gpg_env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
 
         # --- a: no tags at all -> the RATIFIED commit is uncovered, exit 1 ---------------------
-        ra = sh([sys.executable, str(ATTEST_TAGS), "--repo", str(scratch_repo),
-                  "--keys-dir", str(keys_dir), "--json"])
+        ra = _attest(scratch_repo, keys_dir)
         ok_a = ra.returncode == 1 and f'"sha": "{commit_a}"' in ra.stdout and '"ok": false' in ra.stdout
         check("a-no-tags-uncovered-claim", ok_a,
               f"exit={ra.returncode} commit={commit_a[:12]} in_output={commit_a in ra.stdout}", failures)
@@ -144,16 +161,14 @@ def main() -> int:
         # never reaches the per-tag verdict loop): a tag exists to check, but nothing exists to
         # check it against. Tested here, between signing and committing the pubkey, because this
         # is the only window where a tag is present and the keys dir is genuinely empty.
-        rb0 = sh([sys.executable, str(ATTEST_TAGS), "--repo", str(scratch_repo),
-                   "--keys-dir", str(keys_dir), "--json"])
+        rb0 = _attest(scratch_repo, keys_dir)
         ok_b0 = (rt.returncode == 0 and rb0.returncode == 1
                  and '"verdict": "UNVERIFIABLE"' in rb0.stdout and '"ok": false' in rb0.stdout)
         check("b0-unverifiable-tag-exists-no-committed-key", ok_b0,
               f"tag_exit={rt.returncode} attest_exit={rb0.returncode}", failures)
 
         export_pub(gnupghome, test_fpr, keys_dir / "test-key.asc")
-        rb = sh([sys.executable, str(ATTEST_TAGS), "--repo", str(scratch_repo),
-                  "--keys-dir", str(keys_dir), "--json"])
+        rb = _attest(scratch_repo, keys_dir)
         ok_b = (rt.returncode == 0 and rb.returncode == 0
                 and '"verdict": "GOOD"' in rb.stdout and '"ok": true' in rb.stdout)
         check("b-good-signed-tag-verifies", ok_b,
@@ -166,8 +181,7 @@ def main() -> int:
         r2 = git(scratch_repo, "rev-parse", "HEAD")
         commit_c = r2.stdout.strip()
         git(scratch_repo, "tag", "ratified/unsigned-fixture", commit_c)
-        rc = sh([sys.executable, str(ATTEST_TAGS), "--repo", str(scratch_repo),
-                  "--keys-dir", str(keys_dir), "--json"])
+        rc = _attest(scratch_repo, keys_dir)
         ok_c = (rc.returncode == 1
                 and '"tag": "ratified/unsigned-fixture"' in rc.stdout
                 and '"verdict": "BAD"' in rc.stdout
@@ -179,8 +193,7 @@ def main() -> int:
         rt2 = git(scratch_repo, "tag", "-s", "ratified/forged-fixture", "-m",
                   "forged: signed by an uncommitted key", commit_c,
                   env={**__import__("os").environ, **gpg_env})
-        rd = sh([sys.executable, str(ATTEST_TAGS), "--repo", str(scratch_repo),
-                  "--keys-dir", str(keys_dir), "--json"])
+        rd = _attest(scratch_repo, keys_dir)
         ok_d = (rt2.returncode == 0 and rd.returncode == 1
                 and '"tag": "ratified/forged-fixture"' in rd.stdout
                 and '"verdict": "BAD"' in rd.stdout)

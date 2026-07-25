@@ -17,32 +17,60 @@ served `led` against the LIVE kernel, writing garbage rows. Three doors, all gua
   (c) spawning via a shell string (`os.system(...)`, `shell=True`) instead of an argv list --
       sidesteps (a)/(b) entirely: a shell string's repo-path spelling is unenumerable.
 
-Grep/AST CENSUS gate (gates/no_lazy_imports.py's own family), not a dataflow prover.
+Grep/AST CENSUS gate (gates/no_lazy_imports.py's own family), not a dataflow prover. Binding
+and argv resolution AST helpers live in gates/_pin_guard_resolve.py (split this fix-round to
+keep both files well under ADR-0007's 400-line ceiling with room for full disclosure -- see
+POSTURE below); this file owns the entry point, the checks that walk each file, and every
+verdict/waiver string.
 
-POSTURE (fresh-context strengthened-tier review, this fix-round -- BLOCKS MERGE on the prior
-version; full reasoning and the false-positive measurement live in this fix's commit report, not
-duplicated here). Finding 4: the prior CHECK 1 (subprocess.{run,...}, inline List/Tuple first
-arg) under-delivers -- the real corpus's dominant shape is a WRAPPER call or a module CONSTANT
-bound once (`LED_TMPL`, `ATTEST_TAGS`, `AUTOHARN`) and referenced by name, essentially never an
-inline literal. FULL INVERSION (refuse any subprocess-spawning file outright absent a waiver) was
-measured against the real tree and rejected: ~150 of 203 in-scope files make a direct subprocess
-call, overwhelmingly git/psql/ls with nothing to do with this repo's own verbs -- inversion would
-force waivers onto ~50 files for unrelated reasons. Shape shipped, the HONEST MIDDLE:
-  - CHECK 1 stays scoped to this repo's own operator-verb shapes (now incl. libexec/autoharn/
-    <verb> and the bare `autoharn` dispatcher), CALLEE-AGNOSTIC, resolving ONE hop of Name-binding
-    indirection (argv list AND verb-path constant) -- closes finding 4 without a call-graph.
-  - os.system/shell=True (finding 1) is DEFAULT-DENIED OUTRIGHT rather than pattern-matched
-    inside the string (would recreate finding 4's own gap one level down) -- zero existing
-    occurrences in the corpus, so a zero-false-positive ban.
-  - Every refusal carries a per-line/per-binding WAIVER_TOKEN escape hatch (textual presence,
-    same convention as gates/deep_walk_recursion_guard.py) -- PER-LINE, not per-file, so a waiver
-    never blesses an unrelated future line. Exactly TWO real files needed one under this shape.
+POSTURE, ROUND 2 (fresh-context strengthened-tier re-lap BLOCKED 26c7c48; this commit is that
+fix-round). Round 1 shipped a per-line waiver and a one-hop constant/argv-list resolver; round
+2's reviewer showed the waiver span was wrong (attached to a BINDING, blanketing every later use)
+and three further live evasions. Per finding, fixed vs. disclosed:
+  1. FIXED (the blocker): waiver span is now the USE site (the Call's own line/lines) only,
+     never a constant's binding line -- gates/_pin_guard_resolve.py's `resolve_verb_element` /
+     `verb_path_bindings` return verb NAMES, never an Assign node, so there is nothing left to
+     mis-waive at the binding.
+  2. FIXED: post-binding argv mutation (`cmd[1] = "led"` after `cmd = [str(AUTOHARN), "--help"]`)
+     is caught by `_pin_guard_resolve.simulate_list_states`, which replays subscript-assignment,
+     `.append`/`.insert`/`.extend`, `del`, and `+=` in source order to reconstruct the argv
+     list's final contents rather than trusting the original literal.
+  3. FIXED: `os.path.join(REPO, "led")` and `REPO.joinpath("led")` (this corpus's OWN idiom in
+     ~15 real non-verb-path files) are now recognized alongside the `/`-BinOp and f-string
+     shapes.
+  4. FIXED (same mechanism as #2): argv built via `.append()` from an empty-list binding is
+     reconstructed by the same simulation, not just the initial (empty) literal.
+  5. FIXED: CHECK 1 now scans every positional arg of a Call, not only `args[0]` -- closes
+     `functools.partial(subprocess.run, argv)` (argv is `args[1]` of the `partial(...)` call
+     itself) without hand-listing `functools.partial` as a special case.
+  6. DISCLOSED, not fixed: a verb-path constant imported from another module
+     (`from helper import LED`) is invisible -- this is a single-file AST census, not a
+     cross-module resolver, and stops at the file boundary by construction (restated in
+     gates/_pin_guard_resolve.py's own docstring, the module that would have to grow a resolver
+     to close this).
+  7. FIXED: a waiver comment on a line that hosts more than one statement (`x = 1;
+     subprocess.run(...)  # waiver: ...`) no longer silences anything on that line -- see
+     `_ambiguous_statement_lines` / `_span_has_waiver` below. A waiver must sit on a line with
+     exactly one statement, so it can never bless a second, unrelated one sharing the line.
+
+ROUND 1 POSTURE (unchanged, kept for context): FULL INVERSION (refuse any subprocess-spawning
+file outright absent a waiver) was measured against the real tree and rejected: ~150 of 203
+in-scope files make a direct subprocess call, overwhelmingly git/psql/ls with nothing to do with
+this repo's own verbs. CHECK 1 stays scoped to this repo's own operator-verb shapes,
+CALLEE-AGNOSTIC. `os.system`/`shell=True` is DEFAULT-DENIED OUTRIGHT (zero existing occurrences,
+zero-false-positive ban). Every refusal carries a per-line WAIVER_TOKEN escape hatch.
 
 WHAT THIS DOES NOT CLAIM:
-  - A NAME-LIST census over each file's own REPO/REPO_ROOT/AUTOHARN_ROOT/EXEC_ROOT convention, not
-    alias/call-graph analysis. One hop of Name-binding resolved (argv list, verb-path constant); a
-    path/argv behind TWO+ hops, a function parameter, a dict value, or piecemeal string concat
-    stays invisible.
+  - A NAME-LIST census over each file's own REPO/REPO_ROOT/AUTOHARN_ROOT/EXEC_ROOT convention,
+    not alias/call-graph analysis. `simulate_list_states` (round 2) follows append/insert/
+    extend/subscript-assign/del/+=  for ONE Name at a time, in LINE ORDER ONLY -- no
+    control-flow awareness (a branch/loop is read as if every arm always ran in textual order;
+    see gates/_pin_guard_resolve.py's own docstring). A path/argv behind a function parameter,
+    a dict value, piecemeal string concat this module doesn't recognize, or a name that is
+    reassigned inside a branch this gate reads straight through, stays invisible or
+    approximated, never silently trusted past the point this module can no longer follow it
+    (an unfollowable mutation on a name that was ever repo-verb-bearing is flagged, not ignored).
+  - Cross-module constant import (finding 6 above) -- named, not fixed.
   - Verb vocabulary: shim-verbs.sh's SHIM_VERBS_ALL (root shims/scaffold set) + literal
     "autoharn", sourced live -- DIFFERENT roster from libexec/autoharn/'s own live directory
     listing (carries attest-tags/migrate, omits verify-commission/attest-doc) -- each shape
@@ -53,7 +81,9 @@ WHAT THIS DOES NOT CLAIM:
   - The fourth leak kind -- reading whatever deployment.json sits in os.getcwd() -- is
     `serve_existing_world`'s own job (this gate's complement, not its duplicate).
   - WAIVER_TOKEN is presence-only; it cannot judge whether the stated reason is sound. A waiver
-    is a claim reviewed like any other, never a silent bypass.
+    is a claim reviewed like any other, never a silent bypass -- and (round 2) never one that
+    can leak from a binding line to every use, or from one statement to a semicolon-sharing
+    neighbor.
 
 SCOPE: seen-red/**/*.py, instruments/**/*.py, kernel/fixtures/**/*.py (submodules excluded).
 Exit 0 clean (or every match waived); exit 1 naming every offending line otherwise.
@@ -67,9 +97,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # gates/_pin_guard_resolve.py, same dir
+from _pin_guard_resolve import (  # noqa: E402  (path insert above must run first)
+    argv_elements,
+    dispatcher_invocation_is_safe,
+    repo_like_or_default,
+    resolve_verb_element,
+    simulate_list_states,
+    verb_path_bindings,
+)
+
 REPO = Path(__file__).resolve().parents[1]
 SCAN_DIRS = ("seen-red", "instruments", "kernel/fixtures")
-REPO_LIKE_NAMES = {"REPO", "AUTOHARN_ROOT", "EXEC_ROOT", "REPO_ROOT"}
 DISPATCHER_NAME = "autoharn"  # execs into libexec/autoharn/<verb>; same hazard, one hop removed
 WAIVER_TOKEN = "fixture-scratch-pinning-guard-waiver:"
 SUBPROCESS_CALL_ATTRS = {"run", "Popen", "check_call", "check_output", "call"}
@@ -100,152 +139,25 @@ def _read_source(path: Path) -> str | None:
     except (OSError, UnicodeDecodeError):
         return None
 
-def _repo_join_targets(tree: ast.Module) -> set[str]:  # top-level names bound to a REPO-like Path
-    bound: set[str] = set()
+def _ambiguous_statement_lines(tree: ast.Module) -> set[int]:
+    """Linenos hosting MORE THAN ONE top-level statement (semicolon-sharing, finding 7) -- a
+    waiver comment on such a line is refused (see `_span_has_waiver`): it can't be trusted to
+    describe only the statement it looks like it sits next to."""
+    counts: dict[int, int] = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
-                and isinstance(node.targets[0], ast.Name) and node.targets[0].id in REPO_LIKE_NAMES:
-            bound.add(node.targets[0].id)
-    return bound
+        if isinstance(node, ast.stmt):
+            counts[node.lineno] = counts.get(node.lineno, 0) + 1
+    return {ln for ln, n in counts.items() if n > 1}
 
-def _repo_like_or_default(tree: ast.Module) -> set[str]:
-    return _repo_join_targets(tree) or set(REPO_LIKE_NAMES)
-
-def _const_str(node: ast.expr | None) -> str | None:
-    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
-
-def _unwrap_str_call(node: ast.expr) -> ast.expr:  # `str(X)` -> `X`
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "str" \
-            and len(node.args) == 1:
-        return node.args[0]
-    return node
-
-def _peel_join_chain(node: ast.expr, repo_names: set[str]) -> list[str] | None:
-    """Peels a `<expr> / "<component>"` BinOp chain to its ordered components iff the base is a bare Name in `repo_names` and every right side is a string constant; None otherwise."""
-    parts: list[str] = []
-    cur = node
-    while isinstance(cur, ast.BinOp) and isinstance(cur.op, ast.Div):
-        right = _const_str(cur.right)
-        if right is None:
-            return None
-        parts.append(right)
-        cur = cur.left
-    if isinstance(cur, ast.Name) and cur.id in repo_names:
-        parts.reverse()
-        return parts
-    return None
-
-def _verb_from_join_parts(parts: list[str], shim_verbs: set[str], libexec_verbs: set[str]
-                           ) -> str | None:
-    """Which operator-verb shape `parts` spells: `<verb>`/`legacy/<verb>` (vs `shim_verbs`) or `libexec/autoharn/<verb>` (vs `libexec_verbs`) -- None otherwise (e.g. the SAFE `.tmpl` shape)."""
-    if len(parts) == 1 and parts[0] in shim_verbs:
-        return parts[0]
-    if len(parts) == 2 and parts[0] == "legacy" and parts[1] in shim_verbs:
-        return parts[1]
-    if len(parts) == 3 and parts[0] == "libexec" and parts[1] == "autoharn" and parts[2] in libexec_verbs:
-        return parts[2]
-    return None
-
-def _names_repo_verb_join(node: ast.expr, repo_names: set[str], shim_verbs: set[str],
-                           libexec_verbs: set[str]) -> str | None:
-    """The offending verb if `node` spells one of this repo's operator-verb paths, optionally `str(...)`-wrapped, or via f-string/`+`-concat."""
-    node = _unwrap_str_call(node)
-    all_verbs = shim_verbs | libexec_verbs
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        parts = _peel_join_chain(node, repo_names)
-        return _verb_from_join_parts(parts, shim_verbs, libexec_verbs) if parts is not None else None
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left, right = node.left, node.right
-        right_s = _const_str(right)
-        if right_s and isinstance(left, ast.Call) and isinstance(left.func, ast.Name) \
-                and left.func.id == "str" and len(left.args) == 1 \
-                and isinstance(left.args[0], ast.Name) and left.args[0].id in repo_names:
-            tail = right_s.strip("/")
-            for v in all_verbs:
-                if (v in shim_verbs and (tail == v or tail.endswith(f"legacy/{v}"))) \
-                        or (v in libexec_verbs and tail.endswith(f"libexec/autoharn/{v}")):
-                    return v
-        return None
-    if isinstance(node, ast.JoinedStr):
-        for i, part in enumerate(node.values):
-            if isinstance(part, ast.FormattedValue) and isinstance(part.value, ast.Name) \
-                    and part.value.id in repo_names and i + 1 < len(node.values):
-                nxt = node.values[i + 1]
-                if isinstance(nxt, ast.Constant) and isinstance(nxt.value, str):
-                    tail = nxt.value.lstrip("/")
-                    for v in all_verbs:
-                        if v in shim_verbs and (tail == v or tail.startswith(f"{v}/")
-                                                 or tail.startswith(f"{v} ")
-                                                 or tail.startswith(f"legacy/{v}")):
-                            return v
-                        if v in libexec_verbs and tail.startswith(f"libexec/autoharn/{v}"):
-                            return v
-        return None
-    return None
-
-def _verb_path_bindings(tree: ast.Module, repo_names: set[str], shim_verbs: set[str],
-                         libexec_verbs: set[str]) -> dict[str, tuple[str, ast.Assign]]:
-    """Name -> (verb, defining-Assign) per top-level `NAME = <repo-verb-join-expr>` binding (the DOMINANT convention: LED_TMPL/ATTEST_TAGS/AUTOHARN) -- closes finding 4, one hop."""
-    out: dict[str, tuple[str, ast.Assign]] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
-                and isinstance(node.targets[0], ast.Name):
-            verb = _names_repo_verb_join(node.value, repo_names, shim_verbs, libexec_verbs)
-            if verb:
-                out[node.targets[0].id] = (verb, node)
-    return out
-
-def _bound_list_literals(tree: ast.Module) -> dict[str, ast.List | ast.Tuple]:
-    """Name -> last List/Tuple literal assigned to it anywhere (pre-built-argv: `cmd = [...]; subprocess.run(cmd)`). Last-assignment-wins, module-wide -- a census simplification."""
-    out: dict[str, ast.List | ast.Tuple] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
-                and isinstance(node.targets[0], ast.Name) \
-                and isinstance(node.value, (ast.List, ast.Tuple)):
-            out[node.targets[0].id] = node.value
-    return out
-
-def _span_has_waiver(node: ast.AST, lines: list[str]) -> bool:
-    """WAIVER_TOKEN presence anywhere from `node`'s first to last line inclusive."""
+def _span_has_waiver(node: ast.AST, lines: list[str], ambiguous_lines: set[int]) -> bool:
+    """WAIVER_TOKEN presence anywhere from `node`'s first to last line inclusive -- but a token
+    sitting on an AMBIGUOUS (semicolon-sharing) line never counts (finding 7)."""
     start = node.lineno
     end = getattr(node, "end_lineno", None) or start
-    return any(1 <= n <= len(lines) and WAIVER_TOKEN in lines[n - 1] for n in range(start, end + 1))
-
-def _argv_elements(first_arg: ast.expr, bound_lists: dict[str, ast.List | ast.Tuple]
-                    ) -> list[ast.expr]:
-    """`first_arg` itself if inline List/Tuple, or (one hop) the List/Tuple bound to it if a bare Name in `bound_lists`. Empty otherwise."""
-    if isinstance(first_arg, (ast.List, ast.Tuple)):
-        return list(first_arg.elts)
-    if isinstance(first_arg, ast.Name) and first_arg.id in bound_lists:
-        return list(bound_lists[first_arg.id].elts)
-    return []
-
-def _resolve_verb_element(elt: ast.expr, repo_names: set[str], shim_verbs: set[str],
-                           libexec_verbs: set[str],
-                           verb_bindings: dict[str, tuple[str, ast.Assign]]
-                           ) -> tuple[str, ast.AST] | None:
-    """Whether `elt` names this repo's own operator-verb path, direct or one hop of the module-constant convention. Returns (verb, waiver-node): the call site, or the binding's own Assign."""
-    direct = _names_repo_verb_join(elt, repo_names, shim_verbs, libexec_verbs)
-    if direct:
-        return direct, elt
-    unwrapped = _unwrap_str_call(elt)
-    if isinstance(unwrapped, ast.Name) and unwrapped.id in verb_bindings:
-        return verb_bindings[unwrapped.id]
-    return None
-
-def _dispatcher_invocation_is_safe(elts: list[ast.expr], i: int, libexec_verbs: set[str]) -> bool:
-    """Safe by the dispatcher's OWN branching: bare `autoharn`, `--help`/`-h`/`help` (returns
-    before LIBEXEC), `service` (env-parameterized libexec/autoharn-service), or any non-relocated
-    constant (refused before touching anything). Only a REAL verb constant, or a non-constant
-    (a loop variable), is dangerous -- fail-safe: unknown stays flagged."""
-    if i + 1 >= len(elts):
-        return True
-    s = _const_str(elts[i + 1])
-    if s is None:
-        return False
-    if s in {"--help", "-h", "help", "service"}:
-        return True
-    return s not in libexec_verbs
+    for n in range(start, end + 1):
+        if 1 <= n <= len(lines) and WAIVER_TOKEN in lines[n - 1] and n not in ambiguous_lines:
+            return True
+    return False
 
 def _is_environ_attr(node: ast.expr, environ_aliases: set[str]) -> bool:
     """Whether `node` denotes the LIVE os.environ mapping -- bare attribute or tracked alias (NOT `.copy()`, an independent dict, the sanctioned pattern)."""
@@ -264,6 +176,9 @@ def _environ_aliases(tree: ast.Module) -> set[str]:
                 and isinstance(node.value.value, ast.Name) and node.value.value.id == "os":
             out.add(node.targets[0].id)
     return out
+
+def _const_str(node: ast.expr | None) -> str | None:
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 def _is_environ_pickup_deployment_subscript_assign(node: ast.Assign, environ_aliases: set[str]) -> bool:
     """`os.environ["PICKUP_DEPLOYMENT"] = ...` (direct or via a tracked alias)."""
@@ -316,10 +231,11 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
     except SyntaxError:
         return []
     lines = src.splitlines()
-    repo_names = _repo_like_or_default(tree)
-    verb_bindings = _verb_path_bindings(tree, repo_names, shim_verbs, libexec_verbs)
-    bound_lists = _bound_list_literals(tree)
+    repo_names = repo_like_or_default(tree)
+    verb_bindings = verb_path_bindings(tree, repo_names, shim_verbs, libexec_verbs)
+    list_states = simulate_list_states(tree, repo_names, shim_verbs, libexec_verbs, verb_bindings)
     environ_aliases = _environ_aliases(tree)
+    ambiguous_lines = _ambiguous_statement_lines(tree)
     out: list[str] = []
     display = str(path.relative_to(REPO)) if path.is_relative_to(REPO) else str(path)
 
@@ -328,19 +244,33 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
 
     # CHECK 1 (leak class a): argv names a REPO-rooted verb path (root shim, libexec/autoharn/
     # <verb>, or the autoharn dispatcher) instead of a scaffolded scratch copy. Callee-agnostic,
-    # resolves one hop of argv-list AND verb-path-constant indirection.
+    # scans EVERY positional Call argument (round 2, finding 5 -- not just args[0], so
+    # `functools.partial(subprocess.run, argv)` is covered), resolving one hop of argv-list-Name
+    # AND verb-path-constant indirection, with post-binding mutation replayed (round 2, findings
+    # 2/4) rather than trusted from the original literal.
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and node.args:
-            elts = _argv_elements(node.args[0], bound_lists)
+        if not isinstance(node, ast.Call):
+            continue
+        if _span_has_waiver(node, lines, ambiguous_lines):
+            continue
+        for arg in node.args:
+            elts, opaque_sensitive = argv_elements(arg, list_states)
+            if opaque_sensitive:
+                name = arg.id if isinstance(arg, ast.Name) else "?"
+                _flag(node.lineno,
+                      f"argv list `{name}` carried a repo-rooted verb element at some point but "
+                      f"was later mutated (subscript-assign/`.insert`/non-literal `.extend`/`del` "
+                      f"with a non-constant index, or a non-list `+=`) in a way this gate cannot "
+                      f"statically verify -- static safety proof voided (row 1249 fix-round 2, "
+                      f"finding 2/4). Use a direct inline literal or waive at this call site.")
+                continue
+            if elts is None:
+                continue
             for i, elt in enumerate(elts):
-                resolved = _resolve_verb_element(elt, repo_names, shim_verbs, libexec_verbs,
-                                                  verb_bindings)
-                if resolved is None:
+                verb = resolve_verb_element(elt, repo_names, shim_verbs, libexec_verbs, verb_bindings)
+                if verb is None:
                     continue
-                verb, waiver_node = resolved
-                if verb == DISPATCHER_NAME and _dispatcher_invocation_is_safe(elts, i, libexec_verbs):
-                    continue
-                if _span_has_waiver(waiver_node, lines) or _span_has_waiver(node, lines):
+                if verb == DISPATCHER_NAME and dispatcher_invocation_is_safe(elts, i, libexec_verbs):
                     continue
                 _flag(node.lineno,
                       f"call invokes THIS CHECKOUT'S OWN `{verb}` (a REPO-rooted path, or a "
@@ -352,7 +282,7 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
     # CHECK 1b (leak class c): os.system(...)/shell=True sidesteps CHECK 1's argv-shape matching
     # entirely; DEFAULT-DENIED, not pattern-matched (see POSTURE).
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or _span_has_waiver(node, lines):
+        if not isinstance(node, ast.Call) or _span_has_waiver(node, lines, ambiguous_lines):
             continue
         if _is_os_system_call(node):
             _flag(node.lineno, "`os.system(...)` spawns via a shell string, never an argv list -- "
@@ -366,7 +296,7 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) \
                 and _is_environ_pickup_deployment_subscript_assign(node, environ_aliases) \
-                and not _span_has_waiver(node, lines):
+                and not _span_has_waiver(node, lines, ambiguous_lines):
             _flag(node.lineno,
                   "`os.environ[\"PICKUP_DEPLOYMENT\"] = ...` (directly or aliased) mutates the "
                   "PROCESS-GLOBAL environment instead of pinning per-subprocess (build a local "
@@ -374,7 +304,7 @@ def violations_in(path: Path, shim_verbs: set[str], libexec_verbs: set[str]) -> 
                   "own `env=` kwarg -- row 1249).")
         elif isinstance(node, ast.Call):
             kind = _environ_mutation_call_kind(node, environ_aliases)
-            if kind and not _span_has_waiver(node, lines):
+            if kind and not _span_has_waiver(node, lines, ambiguous_lines):
                 _flag(node.lineno,
                       f"`os.environ.{kind}(...)` (directly or aliased) merges PICKUP_DEPLOYMENT "
                       f"into the PROCESS-GLOBAL environment -- same violation as a direct "

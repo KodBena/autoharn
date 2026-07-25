@@ -54,8 +54,41 @@ site) -- refused (this fix-round's own CHECK 1 broadening: callee-agnostic, one 
 argv-list-variable AND verb-path-constant resolution).
 
 GREEN (waived invocation stays clean): the SAME `REPO / "led"` shape as the first RED case, but
-with a `# fixture-scratch-pinning-guard-waiver: <reason>` comment on the binding's own line --
-must NOT be flagged (the escape hatch this fix-round's POSTURE section commits to).
+with a `# fixture-scratch-pinning-guard-waiver: <reason>` comment on the CALL's own line (round-2
+review fix: a waiver on the binding's own line no longer counts at all -- see RED_WAIVER_BLANKET
+below for exactly why) -- must NOT be flagged (the escape hatch this fix-round's POSTURE section
+commits to).
+
+FIX-ROUND 2 (fresh-context strengthened-tier review BLOCKED commit 26c7c48; this run_fixtures.py
+update is that round's own red-first bank -- every reviewer-verified evasion below reproduces red
+against the PRIOR gate version were it re-run, and green against the current one):
+
+RED (waiver-blanket, THE BLOCKER): a waiver comment sitting on a constant's BINDING line
+(`AUTOHARN = REPO / "autoharn"  # waiver: ...`) used to silence EVERY later use of that constant,
+including a separate, never-reviewed real verb invocation lower in the same file. Refused now:
+the waiver only counts on the Call's own line, so the unrelated second call is still flagged.
+
+RED (post-binding subscript-mutation): `cmd = [str(AUTOHARN), "--help"]` (safe on its own, per
+`dispatcher_invocation_is_safe`) followed by `cmd[1] = "led"` then `subprocess.run(cmd)` -- the
+prior gate judged the ORIGINAL literal safe and never saw the mutation; refused now (argv-list
+simulation replays the subscript-assignment before judging).
+
+RED (append-built argv from an empty list): `cmd = []; cmd.append(str(AUTOHARN));
+cmd.append("led"); subprocess.run(cmd)` -- the prior gate's `_bound_list_literals` only ever saw
+the initial (empty) literal; refused now (same simulation).
+
+RED (os.path.join / PurePath.joinpath): `os.path.join(REPO, "led")` and `(REPO).joinpath("led")`
+-- this repo's OWN idiom in ~15 real non-verb-path files, invisible to the prior gate's
+BinOp/f-string-only matcher; both refused now.
+
+RED (functools.partial argv as a non-first positional arg): `functools.partial(subprocess.run,
+[str(AUTOHARN), "led"])` -- the argv list is `partial`'s SECOND positional argument, never
+`args[0]` of any call the prior gate inspected; refused now (CHECK 1 scans every positional arg
+of every Call, not only the first).
+
+RED (semicolon-shared waiver line): `_x = 1; subprocess.run([str(AUTOHARN), "led"])  # waiver:
+...` -- a waiver comment on a line hosting two statements no longer counts (a future edit could
+otherwise slip an unrelated second statement onto an already-waived line and inherit its cover).
 
 Runs against throwaway tempfile copies; zero residue in the repo itself."""
 from __future__ import annotations
@@ -208,11 +241,115 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-LED = REPO / "led"  # fixture-scratch-pinning-guard-waiver: synthetic GREEN specimen, proven safe by construction (test-only)
+LED = REPO / "led"
 
 
 def run_it():
-    return subprocess.run([str(LED), "finding", "hello"], capture_output=True, text=True)
+    # Waiver sits on the CALL's own line below, not on LED's binding above (round-2 review fix,
+    # finding 1: a binding-line waiver used to blanket every use).
+    return subprocess.run([str(LED), "finding", "hello"], capture_output=True, text=True)  # fixture-scratch-pinning-guard-waiver: synthetic GREEN specimen, proven safe by construction (test-only)
+'''
+
+# --- fix-round-2 RED specimens (fresh-context strengthened-tier review that BLOCKED 26c7c48) --
+
+RED_WAIVER_BLANKET = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+AUTOHARN = REPO / "autoharn"  # fixture-scratch-pinning-guard-waiver: dispatcher, --help only, safe
+
+
+def run_it_help():
+    return subprocess.run([str(AUTOHARN), "--help"], capture_output=True, text=True)
+
+
+def run_it_close_ledger_work():
+    # NOT waived, and not a dispatcher-safe --help/-h/service/unknown-verb call: this used to
+    # slip through under the binding's own waiver above (the blanket-exemption bug).
+    return subprocess.run([str(AUTOHARN), "led", "work", "close", "--force"],
+                          capture_output=True, text=True)
+'''
+
+RED_SUBSCRIPT_MUTATION = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+AUTOHARN = REPO / "autoharn"
+
+
+def run_it():
+    cmd = [str(AUTOHARN), "--help"]
+    cmd[1] = "led"
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_APPEND_BUILT_ARGV = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+AUTOHARN = REPO / "autoharn"
+
+
+def run_it():
+    cmd = []
+    cmd.append(str(AUTOHARN))
+    cmd.append("led")
+    return subprocess.run(cmd, capture_output=True, text=True)
+'''
+
+RED_OS_PATH_JOIN = '''\
+import os
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run([os.path.join(REPO, "led"), "finding", "hello"],
+                          capture_output=True, text=True)
+'''
+
+RED_JOINPATH = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run([str(REPO.joinpath("led")), "finding", "hello"],
+                          capture_output=True, text=True)
+'''
+
+RED_PARTIAL_ARGV = '''\
+import functools
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+AUTOHARN = REPO / "autoharn"
+
+
+def run_it():
+    runner = functools.partial(subprocess.run, [str(AUTOHARN), "led"],
+                                capture_output=True, text=True)
+    return runner()
+'''
+
+RED_SEMICOLON_SHARED_WAIVER = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+AUTOHARN = REPO / "autoharn"
+
+
+def run_it():
+    _x = 1; return subprocess.run([str(AUTOHARN), "led"], capture_output=True, text=True)  # fixture-scratch-pinning-guard-waiver: bogus, shares this line with an unrelated statement
 '''
 
 
@@ -247,6 +384,14 @@ def main() -> int:
             "red-environ-alias.py": (RED_ENVIRON_ALIAS, True, None),
             "red-wrapper-indirected.py": (RED_WRAPPER_INDIRECTED, True, "led"),
             "green-waived-led.py": (GREEN_WAIVED_LED, False, None),
+            # --- fix-round-2 evasions (fresh-context strengthened-tier review, BLOCKED 26c7c48) -
+            "red-waiver-blanket.py": (RED_WAIVER_BLANKET, True, "led"),
+            "red-subscript-mutation.py": (RED_SUBSCRIPT_MUTATION, True, "led"),
+            "red-append-built-argv.py": (RED_APPEND_BUILT_ARGV, True, "led"),
+            "red-os-path-join.py": (RED_OS_PATH_JOIN, True, "led"),
+            "red-joinpath.py": (RED_JOINPATH, True, "led"),
+            "red-partial-argv.py": (RED_PARTIAL_ARGV, True, "led"),
+            "red-semicolon-shared-waiver.py": (RED_SEMICOLON_SHARED_WAIVER, True, "led"),
         }
         for fname, (content, should_be_bad, verb) in specimens.items():
             spath = tmp_path / fname
