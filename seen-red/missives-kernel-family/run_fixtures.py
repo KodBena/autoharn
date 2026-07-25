@@ -401,7 +401,23 @@ END $$;
         print(a2_cp.stderr, file=sys.stderr)
     a2_ok = a2_cp.returncode == 0
 
-    if FAILURES or not race_ok or not a2_ok:
+    # courier findings (batch-witness accumulation, exit-code aggregation) -- SEVERE/SILENT,
+    # strengthened-tier review: this file (gates/fixture_census.py's OWN registered entry point
+    # for the whole family) invoked concurrent_race_fixtures.py and amendment2_transport_fixture.py
+    # as subprocesses but had ZERO reference to courier_witness_fixtures.py, so the standing
+    # workflow would never catch a regression in either courier fix -- fixture_census.py is
+    # presence-only (a file existing on disk, tracked in git) and cannot see that the file it
+    # never runs proves nothing on its own. Same invocation shape as the two siblings above, same
+    # one-registered-fixture-per-dir discipline.
+    courier_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "courier_witness_fixtures.py")
+    courier_cp = sh([sys.executable, courier_script])
+    print(courier_cp.stdout)
+    if courier_cp.stderr:
+        print(courier_cp.stderr, file=sys.stderr)
+    courier_ok = courier_cp.returncode == 0
+
+    if FAILURES or not race_ok or not a2_ok or not courier_ok:
         if FAILURES:
             print(f"\nmissives-kernel-family seen-red: {len(FAILURES)} FAILURE(S): {FAILURES}")
         if not race_ok:
@@ -410,6 +426,9 @@ END $$;
         if not a2_ok:
             print("\nmissives-kernel-family seen-red: amendment2_transport_fixture.py FAILED "
                   f"(exit {a2_cp.returncode})")
+        if not courier_ok:
+            print("\nmissives-kernel-family seen-red: courier_witness_fixtures.py FAILED "
+                  f"(exit {courier_cp.returncode})")
         return 1
     print("\nmissives-kernel-family seen-red: all cases behaved as expected. ✓")
     return 0

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Seen-red specimen for TWO courier findings (strengthened-tier review lap 2, serving axis):
+"""Seen-red specimen for THREE courier findings across two strengthened-tier review laps,
+serving axis:
 
-MODERATE-SILENT (courier:123-207, batch-witness loss): when `_require()` raises on row N
-mid-batch, earlier rows' outcomes (accepted AND refused) in the SAME run vanished from the
-operator-facing report -- the reviewer witnessed a kernel-refused row 1 reported NOWHERE on
-stdout when row 2 tripped `_require()`. FIX: `run_counterpart()` now accumulates a per-row
-`outcomes` list AS PROCESSED and, on a mid-batch `_require()` raise, prints the accumulated
-outcomes via `_print_batch_report()` before the exception propagates.
+MODERATE-SILENT, lap 2 round 1 (courier:123-207, batch-witness loss, ORIGINAL shape): when
+`_require()` raises on row N mid-batch, earlier rows' outcomes (accepted AND refused) in the
+SAME run vanished from the operator-facing report -- the reviewer witnessed a kernel-refused
+row 1 reported NOWHERE on stdout when row 2 tripped `_require()`. FIX (round 1, since
+superseded -- see the SEVERE-SILENT entry below): `run_counterpart()` accumulated a per-row
+`outcomes` list AS PROCESSED and, on a mid-batch `_require()` raise, printed the accumulated
+outcomes via `_print_batch_report()` before the exception propagated.
 
 MODERATE-LOUD (courier:226-277, per-counterpart exit-code collapse): counterpart-side
 `ProtocolVersionMismatch`/`BoundaryUnreachable`/`BoundaryRefusal`/`CourierConfigError` all
@@ -15,10 +17,23 @@ now tags each counterpart failure with bcc's own code for its class and, if ever
 run belongs to ONE class, exits with THAT code; mixed classes exit 1 with a stderr line
 enumerating every class seen.
 
-Both reproduced RED against a deliberately reverted (never committed, discarded) copy of the
-pre-fix code, and GREEN against the real, current `courier` -- a REAL boundary_service.py
-instance (scratch port, never 8433/8422) plus REAL mock counterpart HTTP servers (stdlib
-http.server, not stubbed at the Python-object level) reproducing each exact scenario the
+SEVERE-SILENT, lap 2 round 2 (the fix round on THIS delta, ledger row 1263's build): round 1's
+fix above only wrapped `_require()`'s payload-construction calls in try/except --
+`bcc.post_write()`, called right after and OUTSIDE that try, can raise `BoundaryRefusal` (any
+non-200 -- a transient 503/429 mid-batch is realistic, not an edge case) or `BoundaryUnreachable`
+(a dropped connection) on ANY row N, reproducing the EXACT SAME loss class round 1's own
+docstring claimed closed. FIX (this round, SUPERSEDING round 1's per-site guard, not layered on
+top of it): one enclosing try/finally around the WHOLE per-row loop, keyed on a `completed` flag
+-- `_print_batch_report` runs in `finally` whenever the loop did not run to completion, for ANY
+reason, foreclosing the class at the shape level rather than guarding it at each site a reviewer
+happens to find.
+
+All three reproduced RED against either a deliberately reverted (never committed, discarded)
+copy of the pre-fix code, or the byte-identical 8a2d25e commit (fetched via `git show`, never
+hand-reconstructed) -- and GREEN against the real, current `courier` -- a REAL boundary_service.py
+instance (scratch port, never 8433/8422) plus REAL mock counterpart (and, for the round-2
+finding, mocked self -- see `_SelfMidBatchRefusalHandler`'s own docstring for why) HTTP servers
+(stdlib http.server, not stubbed at the Python-object level) reproducing each exact scenario the
 reviewer's own fixed report describes.
 """
 from __future__ import annotations
@@ -192,6 +207,96 @@ class _BatchLossHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class _MidBatchOutboundHandler(BaseHTTPRequestHandler):
+    """world=mockworld2: TWO well-formed outbound rows addressed to selfworld -- both pass
+    courier's own _require() cleanly (unlike _BatchLossHandler above, this scenario's defect
+    lives entirely on the SELF side, not in a drifted counterpart shape)."""
+    ROW1 = {"id": 1, "ts": "2026-07-25T00:00:00+00:00", "statement": "row one, mid-batch",
+            "missive_act": "request", "missive_seq": 1, "missive_cites": None,
+            "missive_thread": "mockworld2/mb-1", "missive_protocol": 1,
+            "missive_provenance": "xrow:mockworld2:1:" + "b" * 64,
+            "missive_disposition": None, "missive_responds_to": None,
+            "missive_author_world": "mockworld2", "missive_addressee_world": "selfworld"}
+    ROW2 = {"id": 2, "ts": "2026-07-25T00:00:01+00:00", "statement": "row two, mid-batch",
+            "missive_act": "request", "missive_seq": 2, "missive_cites": None,
+            "missive_thread": "mockworld2/mb-2", "missive_protocol": 1,
+            "missive_provenance": "xrow:mockworld2:2:" + "c" * 64,
+            "missive_disposition": None, "missive_responds_to": None,
+            "missive_author_world": "mockworld2", "missive_addressee_world": "selfworld"}
+
+    def log_message(self, fmt, *a):
+        pass
+
+    def do_GET(self):
+        if self.path.startswith("/d/mockworld2/health"):
+            body = json.dumps({"world": "mockworld2", "service_principal": None,
+                               "capabilities": {}, "protocol_version": "1",
+                               "authn_mode": "single-operator"}).encode()
+        elif self.path.startswith("/d/mockworld2/views/missive_outbound"):
+            body = (json.dumps([self.ROW1, self.ROW2]).encode()
+                    if "after_id=0" in self.path or "after_id=" not in self.path
+                    else json.dumps([]).encode())
+        else:
+            self.send_response(404); self.end_headers(); self.wfile.write(b'{"detail":"nf"}')
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class _SelfMidBatchRefusalHandler(BaseHTTPRequestHandler):
+    """Stands in as courier's OWN boundary (`self_base`), mocked deliberately (unlike the two
+    cases above, which run against a REAL boundary_service.py instance) -- this scenario needs
+    precise control over the SELF-side write response per row, which a real kernel would never
+    manufacture on demand (a transient 503/429 from the kernel's own boundary is a realistic
+    infrastructure event, not something `kernel.ledger_write` can be coaxed into producing for a
+    specific row in a fixture). Row 1's write is accepted (200); row 2's write is refused at the
+    BOUNDARY (503, a `BoundaryRefusal` -- OUTSIDE any try/except courier's own `_require()` ever
+    guarded, finding 2's exact reproduction). `WRITE_COUNT` is a per-subclass counter (each case
+    below mints a fresh subclass via `type()` so RED and GREEN each start at zero)."""
+    WRITE_COUNT = 0
+
+    def log_message(self, fmt, *a):
+        pass
+
+    def do_GET(self):
+        if self.path.startswith("/d/selfworld/health"):
+            body = json.dumps({"world": "selfworld", "service_principal": None,
+                               "capabilities": {}, "protocol_version": "1",
+                               "authn_mode": "single-operator"}).encode()
+        elif self.path.startswith("/d/selfworld/standing/principals"):
+            body = json.dumps([{"id": 1, "name": "courier", "agent_class": "tool"}]).encode()
+        elif self.path.startswith("/d/selfworld/views/missive_receipts"):
+            body = json.dumps([]).encode()  # nothing recorded yet -- high_water stays 0.
+        else:
+            self.send_response(404); self.end_headers(); self.wfile.write(b'{"detail":"nf"}')
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        if self.path != "/d/selfworld/write/ledger":
+            self.send_response(404); self.end_headers(); self.wfile.write(b'{"detail":"nf"}')
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)  # drain the request body -- its contents are not this scenario's point.
+        type(self).WRITE_COUNT += 1
+        if type(self).WRITE_COUNT == 1:
+            self.send_response(200)
+            body = json.dumps({"disposition": "accepted", "row_id": 100,
+                               "sqlstate": None, "refusal_id": None, "message": None}).encode()
+        else:
+            self.send_response(503)  # a transient boundary refusal -- BoundaryRefusal, non-200.
+            body = json.dumps({"detail": "simulated transient boundary failure "
+                                          "(e.g. a 503/429) mid-batch"}).encode()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+
 class _RefusalHandler(BaseHTTPRequestHandler):
     """world configurable via class attribute WORLD -- health OK, outbound 404s."""
     WORLD = "refusalworld"
@@ -266,14 +371,22 @@ def _write_toml(path: str, self_base: str, counterparts: dict[str, str]) -> None
 
 
 def _reverted_courier_no_batch_report(tmp_path: str) -> None:
-    """A throwaway copy of `courier` with the batch-witness-loss fix reverted (no `outcomes`
-    accumulation, no `_print_batch_report` call) -- reproduces the reviewer's own finding.
+    """A throwaway copy of `courier` with BOTH batch-witness-loss fixes reverted (no `outcomes`
+    accumulation, no `_print_batch_report` call at all) -- reproduces the ORIGINAL, round-1
+    finding (a mid-batch `_require()` raise loses every earlier row's outcome outright). The
+    `old` text below is matched against the CURRENT tree's `run_counterpart` (round-2 shape:
+    the enclosing try/finally, finding 2's own fix) so this stays in sync as courier's own body
+    evolves; the SEPARATE round-2 regression (a mid-batch `post_write()` raise, outside any
+    `_require()`-scoped try/except) is reproduced by `post_write_midbatch_refusal_case` below
+    against the byte-identical 8a2d25e commit fetched from git history, not a hand-edited copy
+    of this file's own `old`/`new` strings -- two different priors, two different mechanisms.
     Never committed; discarded after use."""
     with open(COURIER) as f:
         text = f.read()
     old = '''    outcomes: list[str] = []
-    for r in candidates:
-        try:
+    completed = False
+    try:
+        for r in candidates:
             payload = {
                 "kind": "missive_received",
                 "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
@@ -286,30 +399,31 @@ def _reverted_courier_no_batch_report(tmp_path: str) -> None:
                 "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
                 "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
             }
-        except CourierConfigError:
-            _print_batch_report(counterpart, outcomes)
-            raise
-        if r.get("missive_responds_to") is not None:
-            payload["missive_responds_to"] = r["missive_responds_to"]
-        if r.get("missive_cites") is not None:
-            payload["missive_cites"] = r["missive_cites"]
-        exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
-        if exit_code == 0:
-            recorded.append(verdict["row_id"])
-            outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                            f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
-        else:
-            msg = verdict.get("message") or ""
-            if "already exists" in msg and "exactly-once RECORDING" in msg:
-                dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+            if r.get("missive_responds_to") is not None:
+                payload["missive_responds_to"] = r["missive_responds_to"]
+            if r.get("missive_cites") is not None:
+                payload["missive_cites"] = r["missive_cites"]
+            exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
+            if exit_code == 0:
+                recorded.append(verdict["row_id"])
                 outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                                f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
+                                f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
             else:
-                errors.append(
-                    f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
-                    f"NOT as a dedup race: {msg}")
-                outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                                f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
+                msg = verdict.get("message") or ""
+                if "already exists" in msg and "exactly-once RECORDING" in msg:
+                    dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
+                else:
+                    errors.append(
+                        f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
+                        f"NOT as a dedup race: {msg}")
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
+        completed = True
+    finally:
+        if not completed:
+            _print_batch_report(counterpart, outcomes)
 
     return {
         "pulled": len(outbound), "new": len(candidates),
@@ -353,6 +467,91 @@ def _reverted_courier_no_batch_report(tmp_path: str) -> None:
                             "courier's own body has changed shape; update this fixture.")
     with open(tmp_path, "w") as f:
         f.write(text.replace(old, new))
+
+
+def _at_8a2d25e_courier(tmp_path: str) -> None:
+    """The `courier` script BYTE-IDENTICAL to commit 8a2d25e (fetched via `git show`, never
+    hand-reconstructed) -- the exact code the strengthened-tier review's finding 2 was raised
+    against: `_require()`'s payload-construction calls are wrapped in try/except, but
+    `bcc.post_write()` (called right after, OUTSIDE that try) is not, so a `BoundaryRefusal`/
+    `BoundaryUnreachable` it raises on row N escapes uncaught with no batch-report flush. Never
+    committed to this checkout; discarded after use."""
+    cp = subprocess.run(["git", "show", "8a2d25e:courier"], capture_output=True, text=True,
+                        cwd=REPO, check=True)
+    if not cp.stdout.strip():
+        raise RuntimeError("RED REPRO SETUP FAILED: `git show 8a2d25e:courier` returned nothing "
+                            "-- this checkout's history does not contain that commit.")
+    with open(tmp_path, "w") as f:
+        f.write(cp.stdout)
+
+
+def post_write_midbatch_refusal_case() -> None:
+    """SEVERE-SILENT, the second courier finding (strengthened-tier review lap 2): the
+    batch-witness fix landed in 8a2d25e only wraps `_require()`'s payload-construction calls in
+    try/except -- `bcc.post_write()`, called right after and OUTSIDE that try, can raise
+    `BoundaryRefusal` (any non-200 -- a transient 503/429 mid-batch is realistic, not an edge
+    case) or `BoundaryUnreachable` (a dropped connection) on ANY row N; against 8a2d25e's own
+    code that exception then escapes `run_counterpart` uncaught, `_print_batch_report` is never
+    called, and every row before N's decided outcome (accepted or kernel-refused) is lost --
+    reproducing the exact defect class the delta's own docstring claims closed.
+
+    Reproduced here with row 1 accepted at courier's OWN self boundary (mocked -- see
+    `_SelfMidBatchRefusalHandler`'s own docstring for why self is mocked in this one case) and
+    row 2's write to that SAME self boundary refused (503): RED against the byte-identical
+    8a2d25e commit (row 1's acceptance reported NOWHERE once row 2's post_write raises), GREEN
+    against the current tree (the enclosing try/finally flushes row 1's outcome before the
+    BoundaryRefusal propagates)."""
+    counter_srv, counter_port = _serve(_MidBatchOutboundHandler)
+    try:
+        _wait_up(counter_port, "/d/mockworld2/health")
+        toml_path = "/tmp/mkf_courier_midbatch.toml"
+
+        # RED: courier AS COMMITTED AT 8a2d25e.
+        red_path = "/tmp/mkf_courier_midbatch_8a2d25e.py"
+        _at_8a2d25e_courier(red_path)
+        red_self_cls = type("_SelfMidBatchRefusalHandlerRed", (_SelfMidBatchRefusalHandler,),
+                            {"WRITE_COUNT": 0})
+        red_srv, red_port = _serve(red_self_cls)
+        try:
+            _wait_up(red_port, "/d/selfworld/health")
+            _write_toml(toml_path, f"http://127.0.0.1:{red_port}",
+                        {"mockworld2": f"http://127.0.0.1:{counter_port}"})
+            red_env = dict(os.environ)
+            red_env["PYTHONPATH"] = SERVING + os.pathsep + red_env.get("PYTHONPATH", "")
+            cp = sh(["python3", red_path, "--courier-toml", toml_path], cwd=REPO, env=red_env)
+            red_out = cp.stdout + cp.stderr
+            print("  RED (8a2d25e) stdout+stderr:\n" + "\n".join(f"    {l}" for l in red_out.splitlines()))
+            _check("RED (8a2d25e): row 1's accepted outcome (row_id=100) is reported NOWHERE "
+                   "once row 2's post_write is refused mid-batch",
+                   "row_id=100" not in red_out)
+            _check("RED (8a2d25e): the run still fails loudly (nonzero exit) -- it is the "
+                   "SILENT LOSS of row 1's outcome that is the defect, not a missed failure",
+                   cp.returncode != 0)
+        finally:
+            red_srv.shutdown()
+        os.remove(red_path)
+
+        # GREEN: the real, current courier -- row 1's outcome must survive the propagated
+        # BoundaryRefusal from row 2's post_write.
+        green_self_cls = type("_SelfMidBatchRefusalHandlerGreen", (_SelfMidBatchRefusalHandler,),
+                              {"WRITE_COUNT": 0})
+        green_srv, green_port = _serve(green_self_cls)
+        try:
+            _wait_up(green_port, "/d/selfworld/health")
+            _write_toml(toml_path, f"http://127.0.0.1:{green_port}",
+                        {"mockworld2": f"http://127.0.0.1:{counter_port}"})
+            cp = _run_courier(COURIER, toml_path)
+            green_out = cp.stdout + cp.stderr
+            print("  GREEN stdout+stderr:\n" + "\n".join(f"    {l}" for l in green_out.splitlines()))
+            _check("GREEN: row 1's accepted outcome (row_id=100) IS reported despite row 2's "
+                   "mid-batch post_write refusal",
+                   "recorded row_id=100" in green_out)
+            _check("GREEN: the BoundaryRefusal itself still propagates and fails the run loudly "
+                   "(exit 3, boundary-refused)", cp.returncode == 3)
+        finally:
+            green_srv.shutdown()
+    finally:
+        counter_srv.shutdown()
 
 
 def batch_witness_loss_case(schema: str, kern: str, role: str) -> None:
@@ -478,6 +677,10 @@ pgkern = "{kern}"
         batch_witness_loss_case(schema, kern, role)
         print("\n### exit-code aggregation (moderate-loud)")
         exit_code_aggregation_cases(schema, kern, role)
+        print("\n### post_write-time mid-batch refusal (severe-silent, lap 2 finding 2)")
+        # Self-contained (both self AND counterpart mocked -- see post_write_midbatch_refusal_
+        # case's own docstring for why); does not touch the real boundary_proc/schema above.
+        post_write_midbatch_refusal_case()
     finally:
         if boundary_proc is not None:
             boundary_proc.terminate()

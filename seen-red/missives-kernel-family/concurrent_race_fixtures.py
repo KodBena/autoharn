@@ -511,6 +511,14 @@ def race_3way(schema: str, kern: str, role: str) -> None:
            dispositions.count("accepted") <= 1)
     _check("RACE (3-way): at least one of three accepted (the race was genuinely contested)",
            dispositions.count("accepted") == 1)
+    # MODERATE (strengthened-tier review lap 2): accepting a raw statement-timeout exception here
+    # as an "ok" loser outcome is a REAL caller-facing limit, not merely a fixture-comment detail
+    # -- a loser under genuine 3-way contention can get an untaught driver exception instead of
+    # the typed, teaching refusal §2.4 promises everywhere else in this family. This fixture is
+    # not the place to design that away (it is the honest reproduction of the limit, not the
+    # fix); the limit itself is disclosed in design/FABLE-MISSIVES-KERNEL-SPEC.md §12 (Honest
+    # Limits) -- the orchestrator is adding its own entry there in a separate pass. Do NOT edit
+    # the spec from this fixture; this comment is the pointer, not the disclosure itself.
     losers_ok = all(
         d == "refused" or (d == "EXCEPTION" and "statement timeout" in (results[t][1] or ""))
         for t, d in zip(("A", "B", "C"), dispositions) if d != "accepted"

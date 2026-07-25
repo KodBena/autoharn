@@ -175,17 +175,28 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
     dedup_raced = 0
     errors: list[str] = []
     # BATCH-WITNESS LOSS, FOUND AND CLOSED (strengthened-tier review lap 2, witness-axis
-    # moderate-silent -- reviewer's own reproduction: row 1 kernel-refused, row 2 missing
-    # missive_act; row 1's own outcome was reported NOWHERE on stdout once row 2's _require()
-    # raised, because the per-counterpart summary line (main()'s own print) only ever runs
-    # AFTER run_counterpart() returns -- a mid-batch raise means it never returns, and every
-    # earlier row's outcome (accepted OR kernel-refused) vanishes with it, an unwitnessed claim
-    # by omission. FIX: `outcomes` accumulates one line per row AS PROCESSED (not merely at the
-    # end); on a mid-batch `_require()` raise, the accumulated outcomes are PRINTED here, before
-    # the exception propagates -- so row 1's outcome is on stdout regardless of what row 2 does.
+    # SEVERE-SILENT on the second lap: the first fix only wrapped `_require()` -- the
+    # payload-construction calls -- in a try/except, leaving `bcc.post_write()` (called right
+    # after, OUTSIDE that try) free to raise `BoundaryRefusal` (any non-200: a transient 503/429
+    # is realistic mid-batch, not an edge case) or `BoundaryUnreachable` (a connection drop) on
+    # ANY row N, which reproduced the EXACT SAME loss class the first fix's own docstring
+    # claimed closed. THE ADR-0000 QUESTION ASKED: what shape makes outcome-loss
+    # UNREPRESENTABLE, rather than guarded at each site some reviewer happened to find? Taken:
+    # one enclosing try/finally around the WHOLE per-row loop, keyed on a `completed` flag --
+    # `_print_batch_report` runs in `finally` whenever the loop did not run to completion, for
+    # ANY reason (a drifted row shape, a boundary refusal, a dropped connection, or a defect
+    # class nobody has hit yet). This forecloses the class at the shape level: there is now
+    # exactly one path by which a row can be processed (append its outcome, in order) and
+    # exactly one path by which the batch ends (normal completion prints nothing here -- main()
+    # owns the summary line -- and abnormal completion prints everything decided so far) --
+    # no second call site to keep in sync, no future addition to this loop can reopen the loss
+    # by skipping a try/except that isn't there to skip. (Prior lap's per-site guard is
+    # SUPERSEDED, not layered: the try/except around payload construction alone is removed --
+    # the enclosing try/finally now covers it too, one home for the flush, ADR-0012 P1.)
     outcomes: list[str] = []
-    for r in candidates:
-        try:
+    completed = False
+    try:
+        for r in candidates:
             payload = {
                 "kind": "missive_received",
                 "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
@@ -198,30 +209,31 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
                 "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
                 "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
             }
-        except CourierConfigError:
-            _print_batch_report(counterpart, outcomes)
-            raise
-        if r.get("missive_responds_to") is not None:
-            payload["missive_responds_to"] = r["missive_responds_to"]
-        if r.get("missive_cites") is not None:
-            payload["missive_cites"] = r["missive_cites"]
-        exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
-        if exit_code == 0:
-            recorded.append(verdict["row_id"])
-            outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                            f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
-        else:
-            msg = verdict.get("message") or ""
-            if "already exists" in msg and "exactly-once RECORDING" in msg:
-                dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+            if r.get("missive_responds_to") is not None:
+                payload["missive_responds_to"] = r["missive_responds_to"]
+            if r.get("missive_cites") is not None:
+                payload["missive_cites"] = r["missive_cites"]
+            exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
+            if exit_code == 0:
+                recorded.append(verdict["row_id"])
                 outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                                f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
+                                f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
             else:
-                errors.append(
-                    f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
-                    f"NOT as a dedup race: {msg}")
-                outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
-                                f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
+                msg = verdict.get("message") or ""
+                if "already exists" in msg and "exactly-once RECORDING" in msg:
+                    dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
+                else:
+                    errors.append(
+                        f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
+                        f"NOT as a dedup race: {msg}")
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
+        completed = True
+    finally:
+        if not completed:
+            _print_batch_report(counterpart, outcomes)
 
     return {
         "pulled": len(outbound), "new": len(candidates),
@@ -230,20 +242,37 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
 
 
 def _print_batch_report(counterpart: str, outcomes: list[str]) -> None:
-    """The ONE place the accumulated per-row outcomes for a batch-in-progress are printed
-    (strengthened-tier review lap 2, witness-axis moderate-silent) -- called BOTH from the
-    mid-batch abort path above and, harmlessly, would be redundant with main()'s own per-row
-    lines on a clean finish (main() does not re-print these; this function is the abort-path's
-    own flush, not a second reporting mechanism -- ADR-0012 P1, still one home: main() reports
-    the SUMMARY, this reports the IN-PROGRESS BATCH the summary never got to compute)."""
-    if not outcomes:
-        print(f"courier: {counterpart}: BATCH ABORTED before any row in this pass completed "
-              f"(no accepted/refused outcomes to report).")
-        return
-    print(f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
-          f"already decided THIS run, reported now so they are never silently lost:")
-    for line in outcomes:
-        print(f"  {line}")
+    """The ONE place the accumulated per-row outcomes for an ABORTED batch are printed
+    (strengthened-tier review lap 2, witness-axis severe-silent). Called ONLY from
+    `run_counterpart`'s enclosing `finally`, and only when the per-row loop did not run to
+    completion -- on a CLEAN finish this function is never called at all: main() prints its own
+    one-line-per-counterpart SUMMARY (`pulled=... new=... recorded=... dedup-raced=...`), never
+    a line per row, so there is no redundancy to reconcile (corrected from this docstring's own
+    prior claim that main() prints per-row lines on a clean finish -- it does not; MINOR finding,
+    fixed here rather than left standing).
+
+    DEFENSIVE, by construction (finding 2's own follow-on: this function must never itself raise
+    and thereby eat the ORIGINAL exception the `finally` block is flushing outcomes ahead of --
+    an exception raised while merely PRINTING would replace, in the caller's traceback, the real
+    defect with a formatting bug in the reporting path, the opposite of this fix's point).
+    `outcomes` is a list of plain, already-formatted strings by construction (built by
+    `run_counterpart` itself, never fed a foreign shape) -- but the guard costs nothing and
+    covers a defect class no one has hit yet, same reflex as the rest of this fix."""
+    try:
+        if not outcomes:
+            print(f"courier: {counterpart}: BATCH ABORTED before any row in this pass completed "
+                  f"(no accepted/refused outcomes to report).")
+            return
+        print(f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
+              f"already decided THIS run, reported now so they are never silently lost:")
+        for line in outcomes:
+            print(f"  {line}")
+    except Exception as e:  # noqa: BLE001 -- must never mask the real exception in flight above us.
+        sys.stderr.write(
+            f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
+            f"were decided this run, but formatting them for the report itself failed ({e!r}); "
+            f"the underlying exception that triggered this flush is unaffected and still "
+            f"propagates.\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -332,12 +361,28 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"courier: {counterpart}: LOUD non-dedup refusal: {err}\n")
             failure_codes.add(1)  # kernel-refused -- bcc's own code 1, unchanged meaning.
 
+    class_names = {3: "boundary-refused", 4: "boundary-unreachable/protocol-mismatch",
+                   1: "kernel-refused-or-config-error"}
+
     if not failure_codes:
         return 0
     if len(failure_codes) == 1:
-        return next(iter(failure_codes))
-    class_names = {3: "boundary-refused", 4: "boundary-unreachable/protocol-mismatch",
-                   1: "kernel-refused-or-config-error"}
+        code = next(iter(failure_codes))
+        # MINOR (strengthened-tier review lap 2): class 1 is a UNION of two distinct causes --
+        # a kernel refusal for cause (a missive the kernel refused, e.g. a duplicate) and this
+        # client's own drifted-shape/config refusal (CourierConfigError) -- the mixed-class path
+        # below already disclosed that conflation via `class_names[1]`'s own name; the uniform
+        # path exited bare with no clarifying text, so a caller seeing a bare `1` here had no
+        # cheaper way to learn the code is overloaded than reading this function's source. Same
+        # note, same wording, on the one path that lacked it -- one home for the disclosure
+        # (class_names), not a second string to keep in sync.
+        if code == 1:
+            sys.stderr.write(
+                f"courier: exiting 1 ({class_names[1]}) -- this code covers BOTH a kernel "
+                f"write refusal (a missive the kernel refused for cause) and this client's own "
+                f"drifted-shape/config refusal (CourierConfigError); see the per-counterpart "
+                f"lines above to tell which one this run hit.\n")
+        return code
     seen = ", ".join(f"{c} ({class_names.get(c, '?')})" for c in sorted(failure_codes))
     sys.stderr.write(f"courier: MIXED failure classes across this run's counterparts: {seen} "
                      f"-- exiting 1 (mixed); see the per-counterpart lines above for which "

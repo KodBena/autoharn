@@ -132,3 +132,101 @@ Additionally witnessed live (this build's own manual pass, schemas s58r3/s58r3b,
     existence, are unchanged by the view-body re-issue).
 
 amendment2_transport_fixture: red (pre-A2) and green (post-A2) both confirmed. (exit 0)
+
+=== FIX ROUND on the FINAL ROUND itself (strengthened-tier review, fresh-context, BLOCKS MERGE
+    against 8a2d25e -- this section banks the disposition of that review's findings 1-5) ===
+
+FINDING 1 (SEVERE/SILENT): courier_witness_fixtures.py was never invoked by run_fixtures.py --
+run_fixtures.py called concurrent_race_fixtures.py and amendment2_transport_fixture.py as
+subprocesses but had zero reference to the third file, and gates/fixture_census.py is
+presence-only (git-tracked, not re-executed), so a regression in either courier fix would never
+be caught by the standing workflow. FIX: run_fixtures.py now also invokes
+courier_witness_fixtures.py as a subprocess, same pattern as its two siblings, and folds its
+exit code into the family's own pass/fail. WITNESSED: `python3 seen-red/missives-kernel-family/
+run_fixtures.py` now prints "### batch-witness-loss (moderate-silent)" / "### exit-code
+aggregation (moderate-loud)" / "### post_write-time mid-batch refusal (severe-silent, lap 2
+finding 2)" and "courier_witness_fixtures: all cases behaved as expected." INSIDE the family's
+own single run, exit 0 end to end.
+
+FINDING 2 (SEVERE/SILENT): the batch-witness fix landed in 8a2d25e only wrapped `_require()`'s
+payload-construction calls in try/except (courier:189-203) -- `bcc.post_write()`, called right
+after and OUTSIDE that try, can raise `BoundaryRefusal` (any non-200 -- a transient 503/429 is
+realistic, not an edge case) or `BoundaryUnreachable` (a dropped connection) on ANY row N; the
+exception then escaped `run_counterpart` uncaught, `_print_batch_report` was never called, and
+every row before N's decided outcome (accepted or kernel-refused) was silently lost -- the exact
+defect class the delta's own docstring claimed closed.
+
+THE ADR-0000 QUESTION ASKED, AND THE SHAPE CHOSEN: what makes outcome-loss UNREPRESENTABLE
+rather than guarded at the two sites now known? Taken: one enclosing try/finally around the
+WHOLE per-row loop in `run_counterpart`, keyed on a `completed` flag set only after the loop runs
+to exhaustion -- `_print_batch_report` runs in the `finally` clause whenever `completed` is still
+False, for ANY exception escaping the loop body (a drifted row shape, a boundary refusal, a
+dropped connection, or a defect class nobody has hit yet), not merely the two named so far. The
+per-site try/except around payload construction is REMOVED, not layered under the new one --
+there is now exactly one call site that can flush the batch report, and no future addition to
+this loop can reopen the loss by skipping a guard that no longer exists to skip (ADR-0012 P1,
+one home). `_print_batch_report` itself is made defensive (try/except around its own formatting
+loop) so a formatting bug in the report can never mask the real exception in flight above it.
+
+Extended courier_witness_fixtures.py with the missing scenario (a NEW mock self-boundary handler,
+`_SelfMidBatchRefusalHandler`, and a new mock counterpart, `_MidBatchOutboundHandler`, both
+disclosed in their own docstrings): a post_write-time refusal on row N=2 after row 1 succeeds.
+
+RED, against the BYTE-IDENTICAL commit 8a2d25e (fetched via `git show 8a2d25e:courier`, never
+hand-reconstructed -- `_at_8a2d25e_courier`), witnessed 2026-07-26:
+
+  RED (8a2d25e) stdout+stderr:
+    courier: mockworld2: BOUNDARY REFUSED: HTTP 503: {'detail': 'simulated transient boundary failure (e.g. a 503/429) mid-batch'}
+  [ok] RED (8a2d25e): row 1's accepted outcome (row_id=100) is reported NOWHERE once row 2's post_write is refused mid-batch
+  [ok] RED (8a2d25e): the run still fails loudly (nonzero exit) -- it is the SILENT LOSS of row 1's outcome that is the defect, not a missed failure
+
+GREEN, against this repo's current tree, same run:
+
+  GREEN stdout+stderr:
+    courier: mockworld2: BATCH ABORTED mid-pass -- 1 row outcome(s) already decided THIS run, reported now so they are never silently lost:
+      row id=1 thread='mockworld2/mb-1' seq=1: accepted (recorded row_id=100)
+    courier: mockworld2: BOUNDARY REFUSED: HTTP 503: {'detail': 'simulated transient boundary failure (e.g. a 503/429) mid-batch'}
+  [ok] GREEN: row 1's accepted outcome (row_id=100) IS reported despite row 2's mid-batch post_write refusal
+  [ok] GREEN: the BoundaryRefusal itself still propagates and fails the run loudly (exit 3, boundary-refused)
+
+FINDING 3 (MODERATE): race_3way's `losers_ok` accepting a raw statement-timeout exception under
+3-way contention as an "ok" loser outcome is a real caller-facing limit (a loser can get an
+untaught exception instead of §2.4's promised typed teaching), and it lived only in a fixture
+comment. Per instruction, the spec (Fable-authored) is NOT edited here -- the orchestrator is
+amending §12 Honest Limits separately. FIX: a one-line comment added at `losers_ok` in
+concurrent_race_fixtures.py pointing at design/FABLE-MISSIVES-KERNEL-SPEC.md §12 as the
+disclosure's one home, naming that this fixture reproduces the limit honestly rather than
+designing it away. Re-run of concurrent_race_fixtures.py (2026-07-26) shows the exact scenario
+this comment now documents actually occurring live: connection C hit
+"canceling statement due to statement timeout" under real 3-way contention on the shared toy db,
+caught and classified by `losers_ok` as the disclosed benign case, not a raw unclassified
+exception -- the limit is real, not hypothetical.
+
+FINDING 4 (MINOR): exit-class 1 conflates CourierConfigError with kernel-refused-for-cause; the
+mixed-class path disclosed this via `class_names[1]`'s own name, but the uniform-class-1 path
+exited bare with no clarifying text. FIX: the same one-line stderr note (reusing `class_names[1]`,
+one home for the string) now prints on the uniform-1 exit path too. WITNESSED (batch-witness-loss
+case, GREEN, above): `courier: exiting 1 (kernel-refused-or-config-error) -- this code covers
+BOTH a kernel write refusal ... and this client's own drifted-shape/config refusal
+(CourierConfigError); see the per-counterpart lines above to tell which one this run hit.`
+
+FINDING 5 (MINOR): `_print_batch_report`'s docstring claimed main() prints per-row lines on a
+clean finish; main() only ever prints one SUMMARY line per counterpart
+(`pulled=... new=... recorded=... dedup-raced=...`), never a line per row. FIX: docstring
+corrected to state what main() actually prints, and to state plainly that `_print_batch_report`
+is called ONLY on an aborted (non-clean) finish -- there was never a redundancy to reconcile.
+
+FOLLOW-ON FROM FINDING 2's SHAPE: `_print_batch_report` wrapped in its own try/except so a
+defect in formatting the accumulated outcomes can never raise past the `finally` block and
+replace the ORIGINAL exception (the real defect in flight) with a reporting-path bug -- disclosed
+in the function's own docstring, not merely asserted here.
+
+WITNESSED END TO END, this fix round (2026-07-26): `python3 gates/no_lazy_imports.py` clean;
+`python3 gates/fixture_census.py` clean (162 seen-red gates, courier_witness_fixtures.py among
+the tracked, registered fixtures); `python3 seen-red/missives-kernel-family/run_fixtures.py`
+exit 0 (all three courier scenarios plus the original LIVE RED/lifecycle/race/AMENDMENT-2 cases
+above, all still green); `python3 seen-red/missives-kernel-family/concurrent_race_fixtures.py`
+exit 0 standalone; scratch schemas (`mkf*`, `mkfrace*`, `mkfcourier*`) verified dropped after
+every run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'` empty post-run). No live
+port touched (8433/8422 untouched; every fixture in this round used ephemeral loopback ports or
+fully mocked HTTP servers). No ledger writes against a real deployment.
