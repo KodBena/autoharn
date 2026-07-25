@@ -170,7 +170,52 @@ CHAIN = [
     "s55-dispatch-grain-independence.sql",
     "s56-reservation-residue.sql",
     "s57-obligation-revocation-event.sql",
+    "s58-missive-substrate.sql",
+    "s59-missive-views.sql",
 ]
+# s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
+# ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
+# columns plus TWO genuinely new kind-shape idioms this codebase had none of before -- found live
+# running this gate against the extended chain, not assumed from the spec's own text (the spec's
+# own anticipated classifier edit -- for the TWO-MEMBER-KIND-SET two-way idiom,
+# `(kind IN ('missive_sent','missive_received')) = (col IS NOT NULL)` -- turned out UNNECESSARY:
+# Postgres canonicalizes `kind IN (a,b)` to `kind = ANY (ARRAY[...])`, already read by
+# _KIND_ANY_RE, and _TWO_WAY_RE is a bare unanchored substring search, so the six two-way
+# missive_* columns over the two-member kind-set classify cleanly with ZERO classifier edits,
+# disclosed here rather than silently carried out anyway):
+#   * MANDATORY-ON-KIND (`kind <> 'K' OR col IS NOT NULL` -- the mirror image of s43's own
+#     FORBIDDEN-ON-KIND, `col IS NULL OR kind <> 'K'`): missive_disposition_mandatory_on_disposed.
+#     New regex (_MANDATORY_ON_KIND_RE), new manifest (MANDATORY_ON_KIND_MANIFEST), checked in the
+#     same early position as FORBIDDEN-ON-KIND (both share the "kind <>" prefix _extract_kinds
+#     cannot read, and _ONE_WAY_A_RE would otherwise half-match "col IS NOT NULL" as if it were
+#     "col IS NULL").
+#   * KIND-OR-VALUE-PERMITTED (`col IS NULL OR kind = 'K' OR other_col = 'V'` -- a THREE-way
+#     disjunction this codebase had no idiom for: the value is permitted on a WHOLE kind OR on one
+#     VALUE of a different, already kind-scoped column): missive_disposition_allowed_homes. New
+#     regex (_KIND_OR_VALUE_RE), new manifest (KIND_OR_VALUE_MANIFEST), checked in the same early
+#     position (its own "(col IS NULL) OR (kind" prefix is the SAME false-match hazard
+#     _ONE_WAY_A_RE poses for MANDATORY-ON-KIND, one level over).
+# missive_disposition therefore carries THREE catalog CHECKs classified across three DIFFERENT
+# manifests (MANDATORY_ON_KIND_MANIFEST, KIND_OR_VALUE_MANIFEST, plus its ordinary value-vocabulary
+# CHECK, out of scope by the classifier's own first test) -- no MANIFEST_BY_COLUMN row of its own
+# (that slot is one-shape-per-column; this column's shape is the compound of the two new idioms,
+# not a single whole-column iff/implication). The nine OTHER missive_* columns (missive_protocol,
+# missive_author_world, missive_addressee_world, missive_thread, missive_seq, missive_act --
+# two-way over the two-member kind-set; missive_responds_to, missive_cites -- one-way over the
+# same set; missive_provenance -- two-way over missive_received ALONE, spec §13 item 1) are new
+# ordinary MANIFEST_BY_COLUMN rows below, GENERATED like s53's _BELIEF_COLS. s59 (kernel/lineage/
+# s59-missive-views.sql) ships view-only, zero new columns/kinds/CHECKs -- verified live, no
+# MANIFEST change of any kind.
+# AMENDMENT 1 (design/FABLE-MISSIVES-KERNEL-SPEC.md, 2026-07-25, maintainer-ratified "yes to the
+# column") adds an ELEVENTH missive_* column, missive_regards -- missive_disposed's subject,
+# moved OFF the pre-existing `regards` column (this delta ORIGINALLY reused `regards`, which
+# s15's validate_review trigger-locks to kind='review' ONLY, refusing every missive_disposed
+# write live -- the build's own primary finding, round 1; MANDATORY_ON_KIND_MANIFEST's
+# (regards, missive_disposed) row, which documented that conflict, is REMOVED by the amendment,
+# below). missive_regards is an ORDINARY two-way iff (MANIFEST_BY_COLUMN, mechanism=CHECK) --
+# simpler than the MANDATORY-ON-KIND/FORBIDDEN-ON-KIND idiom pair used for missive_disposition's
+# own compound shape, and sufficient here: "forbidden on every kind except missive_disposed,
+# mandatory there" IS a two-way iff by construction, no new idiom owed.
 # s50-52/s54/s55/s56: no MANIFEST change. s53 (v2 B1): nine `belief` columns below; five coupling
 # CHECKs are off VALUES not `kind`, no entry owed. s57 (row 1150): two columns below.
 # s46/s47/s48/s49 each extend this SAME gate's scratch CHAIN and each ship ZERO new columns/kinds
@@ -610,6 +655,46 @@ for _col in ("obligation_revoked_scope", "obligation_revoke_reason"):
     MANIFEST.append(dict(column=_col, kinds=("obligation_revoked",), arity="two-way", mechanism="CHECK",
                          constraint=f"{_col}_kind_shape", defining_delta="s57-obligation-revocation-event.sql",
                          reason="mandatory, non-empty (s57)."))
+# s58: nine ordinary missive_* columns (GENERATED, ADR-0012 P1 SSOT -- the s53 _BELIEF_COLS
+# precedent). Six two-way over the two-member envelope kind-set; two one-way over the same set;
+# missive_provenance two-way over missive_received ALONE (spec §13 item 1 -- FORBIDDEN on
+# missive_sent, a row cannot carry its own row_hash).
+_MISSIVE_ENVELOPE_KINDS = ("missive_sent", "missive_received")
+_MISSIVE_COLS = (
+    ("missive_protocol", "two-way", _MISSIVE_ENVELOPE_KINDS, "= 1 (v1 closed); missive_protocol_check."),
+    ("missive_author_world", "two-way", _MISSIVE_ENVELOPE_KINDS, "sending world; self-missive refused by missive_self_missive_refused."),
+    ("missive_addressee_world", "two-way", _MISSIVE_ENVELOPE_KINDS, "receiving world."),
+    ("missive_thread", "two-way", _MISSIVE_ENVELOPE_KINDS, "<minting_world>/<slug>; missive_thread_shape."),
+    ("missive_seq", "two-way", _MISSIVE_ENVELOPE_KINDS, "author-local sequence, >= 1; missive_seq_check."),
+    ("missive_act", "two-way", _MISSIVE_ENVELOPE_KINDS, "the closed five-act vocabulary; missive_act_check."),
+    ("missive_responds_to", "one-way", _MISSIVE_ENVELOPE_KINDS, "mandatory on response/ack/withdrawal via missive_responds_to_coupling (spelled off VALUE, not kind)."),
+    ("missive_cites", "one-way", _MISSIVE_ENVELOPE_KINDS, "non-empty when present via missive_cites_nonempty; token shape/existence via validate_missive_tokens."),
+)
+for _col, _arity, _kinds, _reason in _MISSIVE_COLS:
+    MANIFEST.append(dict(column=_col, kinds=_kinds, arity=_arity, mechanism="CHECK",
+                         constraint=f"{_col}_kind_shape", defining_delta="s58-missive-substrate.sql", reason=_reason))
+MANIFEST.append(dict(column="missive_provenance", kinds=("missive_received",), arity="two-way",
+                     mechanism="CHECK", constraint="missive_provenance_kind_shape",
+                     defining_delta="s58-missive-substrate.sql",
+                     reason="two-way over missive_received ALONE (spec §13 item 1): the "
+                            "author-side token is MINTED by s59's missive_outbound view at serve "
+                            "time, never stored on missive_sent -- a row cannot carry its own "
+                            "row_hash."))
+# AMENDMENT 1 (2026-07-25, "yes to the column"): missive_regards, a NEW dedicated column --
+# missive_disposed's subject, moved OFF the pre-existing `regards` column (trigger-locked by
+# s15's validate_review to kind='review' ONLY, witnessed live to refuse every missive_disposed
+# write when reused there -- the build's own primary finding, round 1). Ordinary two-way iff:
+# FORBIDDEN on every kind except missive_disposed, MANDATORY there -- `regards` and
+# validate_review are UNTOUCHED (see this file's own note above, where the conflicted
+# MANDATORY_ON_KIND_MANIFEST row for (regards, missive_disposed) was REMOVED).
+MANIFEST.append(dict(column="missive_regards", kinds=("missive_disposed",), arity="two-way",
+                     mechanism="CHECK", constraint="missive_regards_kind_shape",
+                     defining_delta="s58-missive-substrate.sql",
+                     reason="the missive_received row a missive_disposed event regards -- "
+                            "mandatory on exactly that kind, forbidden elsewhere. Self-FK to "
+                            "ledger(id) for structural existence; the KIND correlation (must be "
+                            "missive_received) is validate_missive_regards' own cross-row check, "
+                            "AMENDMENT 1's dedicated trigger."))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 
@@ -680,6 +765,59 @@ CROSS_COLUMN_COUPLING_MANIFEST = [
 CROSS_COLUMN_BY_CONNAME = {row["constraint"]: row for row in CROSS_COLUMN_COUPLING_MANIFEST}
 assert len(CROSS_COLUMN_BY_CONNAME) == len(CROSS_COLUMN_COUPLING_MANIFEST), \
     "duplicate constraint in CROSS_COLUMN_COUPLING_MANIFEST -- SSOT violated"
+
+# ================================================================================================
+# MANDATORY_ON_KIND_MANIFEST -- a SIXTH manifest (see the _MANDATORY_ON_KIND_RE comment above):
+# `kind <> 'K' OR col IS NOT NULL` -- a column MANDATORY on exactly one kind (the mirror image of
+# FORBIDDEN-ON-KIND, which forbids rather than requires). Keyed (column, kind). First instance:
+# s58's missive_disposition_mandatory_on_disposed.
+# ================================================================================================
+MANDATORY_ON_KIND_MANIFEST = [
+    dict(column="missive_disposition", kind="missive_disposed",
+         mechanism="CHECK", constraint="missive_disposition_mandatory_on_disposed",
+         defining_delta="s58-missive-substrate.sql",
+         reason="design/FABLE-MISSIVES-KERNEL-SPEC.md §2.3 note 2: the disposition event must "
+                "carry a typed disposition -- mandatory on kind=missive_disposed. missive_"
+                "disposition is ALSO legal (not mandatory) on an acknowledgment missive_sent row "
+                "(missive_disposition_allowed_homes/KIND_OR_VALUE_MANIFEST below) and mandatory "
+                "there too (missive_disposition_mandatory_on_ack, spelled off missive_act's VALUE, "
+                "out of this manifest's scope by the classifier's first test -- no `kind` literal)."),
+]
+# AMENDMENT 1 (design/FABLE-MISSIVES-KERNEL-SPEC.md, 2026-07-25, maintainer-ratified "yes to the
+# column") REMOVES the (regards, missive_disposed) row this manifest ORIGINALLY carried here --
+# that row documented a genuine, witnessed-live conflict (regards is trigger-locked by s15's
+# validate_review to kind='review' ONLY, refusing any non-review row naming it; a spec-literal
+# build could never write a missive_disposed row). The amendment moves missive_disposed's
+# subject to a NEW dedicated column, missive_regards -- regards and validate_review are
+# UNTOUCHED, so no MANDATORY-ON-KIND (nor any other) fact about `regards` is added by s58/s59
+# anymore; the conflict this row recorded no longer exists to record. missive_regards' own
+# kind-shape correlation is an ORDINARY two-way iff (below, MANIFEST_BY_COLUMN, mechanism=CHECK)
+# -- simpler than the MANDATORY-ON-KIND/FORBIDDEN-ON-KIND idiom pair, and sufficient: "FORBIDDEN
+# on every kind except missive_disposed, MANDATORY there" IS a two-way iff by construction.
+MANDATORY_ON_KIND_BY_KEY = {(row["column"], row["kind"]): row for row in MANDATORY_ON_KIND_MANIFEST}
+assert len(MANDATORY_ON_KIND_BY_KEY) == len(MANDATORY_ON_KIND_MANIFEST), \
+    "duplicate (column, kind) in MANDATORY_ON_KIND_MANIFEST -- SSOT violated"
+
+# ================================================================================================
+# KIND_OR_VALUE_MANIFEST -- a SEVENTH manifest (see the _KIND_OR_VALUE_RE comment above):
+# `col IS NULL OR kind = 'K' OR other_col = 'V'` -- a value permitted on a WHOLE kind OR on one
+# VALUE of a different, already kind-scoped column. Keyed by constraint name (both columns
+# involved may already hold their own manifest rows; this tracks the ADDITIONAL three-way
+# permission, not a competing shape for either alone). First instance: s58's
+# missive_disposition_allowed_homes.
+# ================================================================================================
+KIND_OR_VALUE_MANIFEST = [
+    dict(constraint="missive_disposition_allowed_homes", column="missive_disposition",
+         kind="missive_disposed", other_column="missive_act", other_value="acknowledgment",
+         defining_delta="s58-missive-substrate.sql",
+         reason="design/FABLE-MISSIVES-KERNEL-SPEC.md §2.3 note 2: missive_disposition is legal "
+                "on the disposition event (kind=missive_disposed) and on the acknowledgment "
+                "missive_sent row (missive_act=acknowledgment) -- nowhere else. The value crosses "
+                "TYPED in the acknowledgment, never prose-only (ADR-0008/ADR-0020)."),
+]
+KIND_OR_VALUE_BY_CONNAME = {row["constraint"]: row for row in KIND_OR_VALUE_MANIFEST}
+assert len(KIND_OR_VALUE_BY_CONNAME) == len(KIND_OR_VALUE_MANIFEST), \
+    "duplicate constraint in KIND_OR_VALUE_MANIFEST -- SSOT violated"
 
 # CORE_COLUMNS: every OTHER live ledger column, confirmed NOT kind-scoped (see module docstring's
 # "MANIFEST SCOPE" paragraph for how amends/amends_scope/answers were checked). A column that is
@@ -810,6 +948,22 @@ _FORBIDDEN_ON_KIND_RE = re.compile(r"\((\w+) IS NULL\)\s*OR\s*\(kind <> '([^']+)
 # competing shape declaration for either column alone.
 _CROSS_COLUMN_COUPLING_RE = re.compile(
     r"kind <> '([^']+)'(?:::\w+)?\)\s*OR\s*\(\((\w+) IS NULL\)\s*=\s*\((\w+) = '([^']+)'")
+# s58's missive_disposition_mandatory_on_disposed, the SIXTH idiom (found authoring s58,
+# kernel/lineage/s58-missive-substrate.sql): MANDATORY-ON-KIND, `kind <> '<K>' OR
+# (<col> IS NOT NULL)` -- the mirror image of FORBIDDEN-ON-KIND (which negates the column;
+# this negates the kind). Checked in the same early position as FORBIDDEN-ON-KIND/CROSS-COLUMN-
+# COUPLING (its own "kind <>" prefix is the same _extract_kinds blind spot). Tracked in its own
+# manifest, MANDATORY_ON_KIND_MANIFEST, keyed (column, kind).
+_MANDATORY_ON_KIND_RE = re.compile(
+    r"kind <> '([^']+)'(?:::\w+)?\)\s*OR\s*\((\w+) IS NOT NULL\)")
+# s58's missive_disposition_allowed_homes, the SEVENTH idiom: KIND-OR-VALUE-PERMITTED,
+# `(<col> IS NULL) OR (kind = '<K>') OR (<other_col> = '<V>')` -- a THREE-way disjunction: the
+# value is permitted on a WHOLE kind OR on one VALUE of a DIFFERENT, already kind-scoped column.
+# Checked in the same early position (shares FORBIDDEN-ON-KIND's/MANDATORY-ON-KIND's "(col IS
+# NULL) OR (kind" false-match hazard against _ONE_WAY_A_RE). Tracked in its own manifest,
+# KIND_OR_VALUE_MANIFEST, keyed by constraint name.
+_KIND_OR_VALUE_RE = re.compile(
+    r"\((\w+) IS NULL\)\s*OR\s*\(kind = '([^']+)'(?:::\w+)?\)\s*OR\s*\((\w+) = '([^']+)'(?:::\w+)?\)")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -830,6 +984,22 @@ def classify_kind_shape(conname: str, defn: str):
     (column, kinds, arity)."""
     if "kind" not in defn:
         return None
+    m_kv = _KIND_OR_VALUE_RE.search(defn)
+    if m_kv:
+        # checked FIRST, ahead of FORBIDDEN-ON-KIND/MANDATORY-ON-KIND/_ONE_WAY_A_RE: its own
+        # "(col IS NULL) OR (kind" prefix is the identical false-match hazard those pose for each
+        # other, and it is the MOST specific of the three shapes (three captured groups) so it
+        # must win the match before a shorter idiom's regex partially consumes the same text.
+        col, kind, other_col, other_val = m_kv.group(1), m_kv.group(2), m_kv.group(3), m_kv.group(4)
+        if "kind" in (col, other_col):
+            return ("UNPARSEABLE", conname, defn)
+        return ("KIND-OR-VALUE", col, kind, other_col, other_val, conname)
+    m_mk = _MANDATORY_ON_KIND_RE.search(defn)
+    if m_mk:
+        kind, col = m_mk.group(1), m_mk.group(2)
+        if col == "kind":
+            return ("UNPARSEABLE", conname, defn)
+        return ("MANDATORY-ON-KIND", col, kind, conname)
     m_fk = _FORBIDDEN_ON_KIND_RE.search(defn)
     if m_fk:
         # checked FIRST: this idiom carries "IS NULL" and a bare `(col IS NULL) OR (kind`
@@ -907,9 +1077,25 @@ def assert_manifest(schema: str) -> list[str]:
     partial_value_shapes: dict[tuple[str, str], tuple] = {}   # (column, value) -> (kinds, conname)
     forbidden_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
     cross_column_shapes: dict[str, tuple] = {}   # conname -> (kind, col_a, col_b, literal)
+    mandatory_on_kind_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
+    kind_or_value_shapes: dict[str, tuple] = {}   # conname -> (col, kind, other_col, other_val)
     for conname, defn in check_defs.items():
         parsed = classify_kind_shape(conname, defn)
         if parsed is None:
+            continue
+        if parsed[0] == "MANDATORY-ON-KIND":
+            _, col, mkind, _conname = parsed
+            key = (col, mkind)
+            if key in mandatory_on_kind_shapes:
+                violations.append(
+                    f"(column, kind) {key!r} carries MULTIPLE MANDATORY-ON-KIND CHECKs "
+                    f"({mandatory_on_kind_shapes[key]!r} and {conname!r}) -- one home only.")
+                continue
+            mandatory_on_kind_shapes[key] = conname
+            continue
+        if parsed[0] == "KIND-OR-VALUE":
+            _, col, kv_kind, other_col, other_val, _conname = parsed
+            kind_or_value_shapes[conname] = (col, kv_kind, other_col, other_val)
             continue
         if parsed[0] == "FORBIDDEN-ON-KIND":
             _, col, fkind, _conname = parsed
@@ -928,13 +1114,15 @@ def assert_manifest(schema: str) -> list[str]:
         if parsed[0] == "UNPARSEABLE":
             violations.append(
                 f"UNPARSEABLE kind-mentioning CHECK {parsed[1]!r} ({parsed[2]!r}) -- this "
-                f"gate's classifier recognizes only the five shapes MANIFEST/"
+                f"gate's classifier recognizes only the seven shapes MANIFEST/"
                 f"VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST/"
-                f"CROSS_COLUMN_COUPLING_MANIFEST declare (two-way iff, one-way implication, "
+                f"CROSS_COLUMN_COUPLING_MANIFEST/MANDATORY_ON_KIND_MANIFEST/"
+                f"KIND_OR_VALUE_MANIFEST declare (two-way iff, one-way implication, "
                 f"PARTIAL-VALUE single-value implication, FORBIDDEN-ON-KIND, "
-                f"CROSS-COLUMN-COUPLING). Either this is a NEW kind-shape idiom "
-                f"(extend classify_kind_shape and the relevant manifest together) or it is not "
-                f"truly kind-scoped (rename it off 'kind' to stop tripping this gate).")
+                f"CROSS-COLUMN-COUPLING, MANDATORY-ON-KIND, KIND-OR-VALUE-PERMITTED). Either "
+                f"this is a NEW kind-shape idiom (extend classify_kind_shape and the relevant "
+                f"manifest together) or it is not truly kind-scoped (rename it off 'kind' to "
+                f"stop tripping this gate).")
             continue
         if parsed[0] == "PARTIAL-VALUE":
             _, col, literal, kinds, _conname = parsed
@@ -1077,11 +1265,61 @@ def assert_manifest(schema: str) -> list[str]:
                 f"declares a CROSS-COLUMN-COUPLING CHECK but no such CHECK exists in the live "
                 f"catalog -- stale manifest row or a dropped constraint.")
 
+    # 2e. every catalog MANDATORY-ON-KIND CHECK must match its MANDATORY_ON_KIND_MANIFEST row
+    for (col, mkind), conname in mandatory_on_kind_shapes.items():
+        row = MANDATORY_ON_KIND_BY_KEY.get((col, mkind))
+        if row is None:
+            violations.append(
+                f"UNLICENSED MANDATORY-ON-KIND CHECK {conname!r}: column {col!r} is mandatory "
+                f"on kind {mkind!r} by the catalog, but no MANDATORY_ON_KIND_MANIFEST row "
+                f"declares it. Add it to MANDATORY_ON_KIND_MANIFEST in "
+                f"gates/kind_shape_manifest_gate.py with its reason, or remove the constraint "
+                f"if it should not exist.")
+    # 3e. every MANDATORY_ON_KIND_MANIFEST row must exist in the catalog
+    for row in MANDATORY_ON_KIND_MANIFEST:
+        key = (row["column"], row["kind"])
+        if row["mechanism"] == "CHECK" and key not in mandatory_on_kind_shapes:
+            violations.append(
+                f"MANDATORY_ON_KIND_MANIFEST row for column {row['column']!r} kind "
+                f"{row['kind']!r} declares mechanism=CHECK (constraint={row['constraint']!r}) "
+                f"but no such CHECK exists in the live catalog -- stale manifest row or a "
+                f"dropped constraint.")
+
+    # 2f. every catalog KIND-OR-VALUE CHECK must match its KIND_OR_VALUE_MANIFEST row exactly
+    for conname, (col, kv_kind, other_col, other_val) in kind_or_value_shapes.items():
+        row = KIND_OR_VALUE_BY_CONNAME.get(conname)
+        if row is None:
+            violations.append(
+                f"UNLICENSED KIND-OR-VALUE-PERMITTED CHECK {conname!r}: column {col!r} permitted "
+                f"on kind {kv_kind!r} OR {other_col!r}={other_val!r} by the catalog, but no "
+                f"KIND_OR_VALUE_MANIFEST row declares it. Add it with its reason, or remove the "
+                f"constraint if it should not exist.")
+            continue
+        if (row["column"], row["kind"], row["other_column"], row["other_value"]) != (col, kv_kind, other_col, other_val):
+            violations.append(
+                f"KIND-OR-VALUE-PERMITTED CHECK {conname!r}: catalog shape disagrees with "
+                f"KIND_OR_VALUE_MANIFEST's declared shape -- drifted.")
+    # 3f. every KIND_OR_VALUE_MANIFEST row must exist in the catalog
+    for row in KIND_OR_VALUE_MANIFEST:
+        if row["constraint"] not in kind_or_value_shapes:
+            violations.append(
+                f"KIND_OR_VALUE_MANIFEST row for constraint {row['constraint']!r} declares a "
+                f"KIND-OR-VALUE-PERMITTED CHECK but no such CHECK exists in the live catalog -- "
+                f"stale manifest row or a dropped constraint.")
+
     # 4. every payload-like (non-core) column must be licensed, whether or not it carries a
     #    catalog CHECK -- this is what catches a column with NO CHECK at all (the seen-red case:
     #    mechanism="CHECK"-shaped hazard that never got its CHECK written).
+    # s58's missive_disposition carries NO MANIFEST_BY_COLUMN row of its own (its shape is the
+    # COMPOUND of two new manifests, MANDATORY_ON_KIND_MANIFEST + KIND_OR_VALUE_MANIFEST -- see
+    # this file's own CHAIN-section comment on s58) -- columns fully licensed via either of those
+    # two manifests are exempted from the bare MANIFEST_BY_COLUMN test here, the same way a
+    # FORBIDDEN_ON_KIND_MANIFEST-only column (none exist today; supersedes is also CORE) would be.
+    _mandatory_only_cols = {row["column"] for row in MANDATORY_ON_KIND_MANIFEST}
+    _kind_or_value_cols = {row["column"] for row in KIND_OR_VALUE_MANIFEST}
     for col in columns:
-        if col in CORE_COLUMNS or col in MANIFEST_BY_COLUMN:
+        if (col in CORE_COLUMNS or col in MANIFEST_BY_COLUMN
+                or col in _mandatory_only_cols or col in _kind_or_value_cols):
             continue
         violations.append(
             f"UNLICENSED PAYLOAD COLUMN {col!r}: not in CORE_COLUMNS (structural/universal) and "

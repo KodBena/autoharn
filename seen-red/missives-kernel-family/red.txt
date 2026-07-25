@@ -1,0 +1,290 @@
+SEEN-RED evidence for the MISSIVES kernel family (kernel/lineage/s58-missive-substrate.sql,
+s59-missive-views.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263).
+
+=== HISTORICAL RED (round 1 of this build, pre-AMENDMENT 1, 2026-07-25) ===
+
+Witnessed live, both at the raw SQL boundary function (kernel.ledger_write / kernel.missive_
+dispose) and at the HTTP boundary (POST /d/{deployment}/write/missive_dispose), on the
+pre-amendment s58-missive-substrate.sql that carried missive_disposed's subject on the
+pre-existing `regards` column:
+
+    Ledger policy: regards is reserved for kind=review.
+
+(s15-schema.sql's validate_review trigger, unedited through all 57 prior deltas, refusing any
+non-review row naming a non-NULL regards.) Every missive_disposed write was refused here,
+unconditionally, before reaching validate_missive_disposition. Banked as the build's own primary
+finding (commit 4881a8f), resolved by AMENDMENT 1 (a new dedicated column, missive_regards).
+
+=== LIVE RED (this directory's run_fixtures.py, exercised 2026-07-25 against a real scratch
+    schema pair, teardown to zero residue on exit) ===
+
+  [ok] RED: missive_regards on a non-missive_disposed row refused
+  [ok] RED: missive_regards naming a nonexistent row refused, taught
+  [ok] RED: courier writing a non-missive_received kind refused (Q3)
+  [ok] GREEN: lawful missive_sent accepted (control)
+  [ok] RED: duplicate (thread, seq) missive_sent refused (dedup)
+
+NOTICE:  RESULT: refused / missive policy: missive_regards row 1 (kind 'principal_registered') is not a missive_received row -- a disposition regards a RECEIPT, nothing else (design/FABLE-MISSIVES-KERNEL-SPEC.md AMENDMENT 1).
+
+NOTICE:  RESULT: refused / missive policy: missive_regards row 999999 does not exist (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, AMENDMENT 1). Nothing was recorded.
+
+NOTICE:  RESULT: refused / missive policy: the courier principal records arrivals and NOTHING else (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 4, Q3 ratified row 1157) -- attempted kind 'decision'. The only path from "missive arrived" to local work, decision, belief, or disposition is a non-courier local principal's own attributable write citing the receipt (Q4). Nothing was recorded.
+
+NOTICE:  RESULT: accepted / <NULL>
+
+NOTICE:  RESULT: refused / missive policy: a missive_sent row already exists for (thread='seenredworld/t1', seq=1) -- the global identity's author-side half is a one-time fact (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2, §13 item 5).
+
+missives-kernel-family seen-red: all cases behaved as expected. (exit 0)
+
+=== FULL DISPOSE/ACKNOWLEDGE LIFECYCLE (strengthened-tier review, witness-axis moderate --
+    the exact leg AMENDMENT 1 unblocked had no GREEN case banked; added, two-schema pair) ===
+
+  [ok] LIFECYCLE: send accepted (peer world)
+  [ok] LIFECYCLE: sent row's provenance token resolved
+  [ok] LIFECYCLE: receive (courier pull) accepted
+  [ok] LIFECYCLE: dispose accepted (the leg AMENDMENT 1 unblocked)
+  [ok] LIFECYCLE: acknowledgment row verified on missive_outbound (act=acknowledgment, disposition=consumed)
+  [ok] LIFECYCLE: bare re-disposition refused
+  [ok] LIFECYCLE: supersession-based re-disposition accepted
+
+NOTICE:  LIFECYCLE send: accepted / row=6
+NOTICE:  LIFECYCLE receive: accepted / row=15
+NOTICE:  LIFECYCLE dispose: accepted / disp_row=16
+NOTICE:  LIFECYCLE re-dispose (bare): refused / missive policy: receipt 15 already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.
+NOTICE:  LIFECYCLE re-dispose (supersedes): accepted / row=20
+
+=== CONCURRENCY RACES (strengthened-tier review, kernel axis, one severe -- reproduced live by
+    the reviewer with two concurrent psql sessions; concurrent_race_fixtures.py, real psycopg
+    connections, real threading, real Postgres MVCC blocking -- not simulated) ===
+
+RACE 1 (dedup) and RACE 2 (re-disposition) RED, reproduced 2026-07-25 against a DELIBERATELY
+REVERTED copy of kernel/lineage/s58-missive-substrate.sql (the two unique partial indexes
+NOT created; the pg_advisory_xact_lock line removed from validate_missive_disposition) --
+never committed to the tree, applied only to a throwaway scratch schema for this one
+reproduction, then discarded:
+
+  A: ('accepted', None)
+  B: ('accepted', None)          <- RACE 1: BOTH accepted, a duplicate committed
+  [FAIL] RACE 1: B refused (post-fix concurrency backstop, not a raw exception)
+
+  A: ('accepted', None)
+  B: ('accepted', None)          <- RACE 2: BOTH accepted, two contradictory in-force
+                                    dispositions of the SAME receipt, each minting its own
+                                    acknowledgment
+  [FAIL] RACE 2: B refused (advisory-lock serialization, not a raw exception)
+
+POST-FIX (this repo's current tree, THIS directory's own concurrent_race_fixtures.py, live
+2026-07-25):
+
+  === RACE 1: dedup (missive_received), two real concurrent connections ===
+  A: ('accepted', None)
+  B: ('refused', "missive policy: a missive_received row already exists for (author_world='raceauthor', thread='raceauthor/race-1', seq=1) -- at-least-once delivery converts to exactly-once RECORDING (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 2); this refusal is itself journaled, so re-delivery stays visible, never silent. [raced: caught at the missive_received_dedup_uq unique index, ADR-0021 Rule B -- the sequential-case EXISTS check in validate_missive_dedup lost this race, the index caught it]")
+  [ok] RACE 1: A accepted
+  [ok] RACE 1: B refused (post-fix concurrency backstop, not a raw exception)
+  [ok] RACE 1: B's refusal carries the SAME teaching text as the sequential case (exactly-once RECORDING), not a raw 23505/constraint name
+
+  === RACE 2: re-disposition, two real concurrent connections ===
+  [ok] RACE 2 setup: seed receipt written
+  A: ('accepted', None)
+  B: ('refused', 'missive policy: receipt 9 already carries an in-force disposition -- a second disposition is refused unless this write SUPERSEDES exactly that prior disposition (same-kind re-disposition, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.4 item 5, §2.5). Nothing was recorded.')
+  [ok] RACE 2: A accepted
+  [ok] RACE 2: B refused (advisory-lock serialization, not a raw exception)
+  [ok] RACE 2: B's refusal carries the SAME in-force-disposition teaching text
+
+missives-kernel-family concurrent races: both races closed, post-fix. (exit 0)
+
+=== AMENDMENT 2 (missive_outbound as append-complete transport, 2026-07-25, maintainer-
+    ratified "yes") -- the reviewer's exact reproduction: two ORDINARY SEQUENTIAL writes, no
+    race (amendment2_transport_fixture.py) ===
+
+RED (pre-A2, `missive_outbound FROM ledger_current`, applied to a throwaway scratch schema via
+a deliberately reverted copy of s59-missive-views.sql -- never committed, discarded after this
+one reproduction):
+
+  send seq=1 (request) -> accepted
+  send seq=2 (withdrawal, supersedes seq=1) -> accepted
+  SELECT count(*) FROM missive_outbound WHERE missive_thread='worlda/a2fixture';
+  RED (pre-A2, ledger_current-sourced): missive_outbound row count = 1
+  [ok] RED: pre-A2 view silently drops the superseded original (count == 1)
+
+  -- i.e. the addressee's courier would see ONLY the withdrawal: a withdrawal citing a
+  -- provenance token for a message it never received and never will; missive_stale cannot
+  -- correlate (the original never arrived).
+
+GREEN (post-A2, this repo's current tree, `missive_outbound FROM ledger`):
+
+  GREEN (post-A2, append-complete): missive_outbound row count = 2
+  [ok] GREEN: post-A2 view delivers BOTH rows (count == 2)
+
+Additionally witnessed live (this build's own manual pass, schemas s58r3/s58r3b, torn down):
+  - direct SQL: missive_outbound on the SENDING world shows BOTH id=8 (seq=1) and id=11 (seq=2),
+    in id order; ledger_current on the SAME world shows ONLY id=11 -- confirming the defect is
+    real and the fix (raw `ledger`) is what closes it.
+  - real courier run (`./courier`) against a live boundary_service.py instance (scratch port
+    8495, never 8433/8422): `courier: worlda: pulled=2 new=2 recorded=[8, 9] dedup-raced=0`.
+  - receiving world's missive_stale, post-pull: one row, id=8 (the original, seq=1),
+    superseding_id=9 (the withdrawal), superseding_act=withdrawal -- CORRELATING CORRECTLY,
+    because the original actually arrived.
+  - ./judge re-verified AGREE on all four capable layers post-amendment.
+  - detect siblings (s58-missive-substrate.detect.sql, s59-missive-views.detect.sql)
+    re-verified both polarities (t on the amended chain, f on a fresh pre-s58 chain) --
+    unaffected by AMENDMENT 2 (their own fingerprint facts, kind CHECK membership and view
+    existence, are unchanged by the view-body re-issue).
+
+amendment2_transport_fixture: red (pre-A2) and green (post-A2) both confirmed. (exit 0)
+
+=== FIX ROUND on the FINAL ROUND itself (strengthened-tier review, fresh-context, BLOCKS MERGE
+    against 8a2d25e -- this section banks the disposition of that review's findings 1-5) ===
+
+FINDING 1 (SEVERE/SILENT): courier_witness_fixtures.py was never invoked by run_fixtures.py --
+run_fixtures.py called concurrent_race_fixtures.py and amendment2_transport_fixture.py as
+subprocesses but had zero reference to the third file, and gates/fixture_census.py is
+presence-only (git-tracked, not re-executed), so a regression in either courier fix would never
+be caught by the standing workflow. FIX: run_fixtures.py now also invokes
+courier_witness_fixtures.py as a subprocess, same pattern as its two siblings, and folds its
+exit code into the family's own pass/fail. WITNESSED: `python3 seen-red/missives-kernel-family/
+run_fixtures.py` now prints "### batch-witness-loss (moderate-silent)" / "### exit-code
+aggregation (moderate-loud)" / "### post_write-time mid-batch refusal (severe-silent, lap 2
+finding 2)" and "courier_witness_fixtures: all cases behaved as expected." INSIDE the family's
+own single run, exit 0 end to end.
+
+FINDING 2 (SEVERE/SILENT): the batch-witness fix landed in 8a2d25e only wrapped `_require()`'s
+payload-construction calls in try/except (courier:189-203) -- `bcc.post_write()`, called right
+after and OUTSIDE that try, can raise `BoundaryRefusal` (any non-200 -- a transient 503/429 is
+realistic, not an edge case) or `BoundaryUnreachable` (a dropped connection) on ANY row N; the
+exception then escaped `run_counterpart` uncaught, `_print_batch_report` was never called, and
+every row before N's decided outcome (accepted or kernel-refused) was silently lost -- the exact
+defect class the delta's own docstring claimed closed.
+
+THE ADR-0000 QUESTION ASKED, AND THE SHAPE CHOSEN: what makes outcome-loss UNREPRESENTABLE
+rather than guarded at the two sites now known? Taken: one enclosing try/finally around the
+WHOLE per-row loop in `run_counterpart`, keyed on a `completed` flag set only after the loop runs
+to exhaustion -- `_print_batch_report` runs in the `finally` clause whenever `completed` is still
+False, for ANY exception escaping the loop body (a drifted row shape, a boundary refusal, a
+dropped connection, or a defect class nobody has hit yet), not merely the two named so far. The
+per-site try/except around payload construction is REMOVED, not layered under the new one --
+there is now exactly one call site that can flush the batch report, and no future addition to
+this loop can reopen the loss by skipping a guard that no longer exists to skip (ADR-0012 P1,
+one home). `_print_batch_report` itself is made defensive (try/except around its own formatting
+loop) so a formatting bug in the report can never mask the real exception in flight above it.
+
+Extended courier_witness_fixtures.py with the missing scenario (a NEW mock self-boundary handler,
+`_SelfMidBatchRefusalHandler`, and a new mock counterpart, `_MidBatchOutboundHandler`, both
+disclosed in their own docstrings): a post_write-time refusal on row N=2 after row 1 succeeds.
+
+RED, against the BYTE-IDENTICAL commit 8a2d25e (fetched via `git show 8a2d25e:courier`, never
+hand-reconstructed -- `_at_8a2d25e_courier`), witnessed 2026-07-26:
+
+  RED (8a2d25e) stdout+stderr:
+    courier: mockworld2: BOUNDARY REFUSED: HTTP 503: {'detail': 'simulated transient boundary failure (e.g. a 503/429) mid-batch'}
+  [ok] RED (8a2d25e): row 1's accepted outcome (row_id=100) is reported NOWHERE once row 2's post_write is refused mid-batch
+  [ok] RED (8a2d25e): the run still fails loudly (nonzero exit) -- it is the SILENT LOSS of row 1's outcome that is the defect, not a missed failure
+
+GREEN, against this repo's current tree, same run:
+
+  GREEN stdout+stderr:
+    courier: mockworld2: BATCH ABORTED mid-pass -- 1 row outcome(s) already decided THIS run, reported now so they are never silently lost:
+      row id=1 thread='mockworld2/mb-1' seq=1: accepted (recorded row_id=100)
+    courier: mockworld2: BOUNDARY REFUSED: HTTP 503: {'detail': 'simulated transient boundary failure (e.g. a 503/429) mid-batch'}
+  [ok] GREEN: row 1's accepted outcome (row_id=100) IS reported despite row 2's mid-batch post_write refusal
+  [ok] GREEN: the BoundaryRefusal itself still propagates and fails the run loudly (exit 3, boundary-refused)
+
+FINDING 3 (MODERATE): race_3way's `losers_ok` accepting a raw statement-timeout exception under
+3-way contention as an "ok" loser outcome is a real caller-facing limit (a loser can get an
+untaught exception instead of §2.4's promised typed teaching), and it lived only in a fixture
+comment. Per instruction, the spec (Fable-authored) is NOT edited here -- the orchestrator is
+amending §12 Honest Limits separately. FIX: a one-line comment added at `losers_ok` in
+concurrent_race_fixtures.py pointing at design/FABLE-MISSIVES-KERNEL-SPEC.md §12 as the
+disclosure's one home, naming that this fixture reproduces the limit honestly rather than
+designing it away. Re-run of concurrent_race_fixtures.py (2026-07-26) shows the exact scenario
+this comment now documents actually occurring live: connection C hit
+"canceling statement due to statement timeout" under real 3-way contention on the shared toy db,
+caught and classified by `losers_ok` as the disclosed benign case, not a raw unclassified
+exception -- the limit is real, not hypothetical.
+
+FINDING 4 (MINOR): exit-class 1 conflates CourierConfigError with kernel-refused-for-cause; the
+mixed-class path disclosed this via `class_names[1]`'s own name, but the uniform-class-1 path
+exited bare with no clarifying text. FIX: the same one-line stderr note (reusing `class_names[1]`,
+one home for the string) now prints on the uniform-1 exit path too. WITNESSED (batch-witness-loss
+case, GREEN, above): `courier: exiting 1 (kernel-refused-or-config-error) -- this code covers
+BOTH a kernel write refusal ... and this client's own drifted-shape/config refusal
+(CourierConfigError); see the per-counterpart lines above to tell which one this run hit.`
+
+FINDING 5 (MINOR): `_print_batch_report`'s docstring claimed main() prints per-row lines on a
+clean finish; main() only ever prints one SUMMARY line per counterpart
+(`pulled=... new=... recorded=... dedup-raced=...`), never a line per row. FIX: docstring
+corrected to state what main() actually prints, and to state plainly that `_print_batch_report`
+is called ONLY on an aborted (non-clean) finish -- there was never a redundancy to reconcile.
+
+FOLLOW-ON FROM FINDING 2's SHAPE: `_print_batch_report` wrapped in its own try/except so a
+defect in formatting the accumulated outcomes can never raise past the `finally` block and
+replace the ORIGINAL exception (the real defect in flight) with a reporting-path bug -- disclosed
+in the function's own docstring, not merely asserted here.
+
+WITNESSED END TO END, this fix round (2026-07-26): `python3 gates/no_lazy_imports.py` clean;
+`python3 gates/fixture_census.py` clean (162 seen-red gates, courier_witness_fixtures.py among
+the tracked, registered fixtures); `python3 seen-red/missives-kernel-family/run_fixtures.py`
+exit 0 (all three courier scenarios plus the original LIVE RED/lifecycle/race/AMENDMENT-2 cases
+above, all still green); `python3 seen-red/missives-kernel-family/concurrent_race_fixtures.py`
+exit 0 standalone; scratch schemas (`mkf*`, `mkfrace*`, `mkfcourier*`) verified dropped after
+every run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'` empty post-run). No live
+port touched (8433/8422 untouched; every fixture in this round used ephemeral loopback ports or
+fully mocked HTTP servers). No ledger writes against a real deployment.
+
+=== APPENDIX, MICRO FIX ROUND, 2026-07-26: MODERATE-SILENT residue closed
+    (`all_accepted_batch_case`, courier_witness_fixtures.py) ===
+
+The re-lap review of this branch's courier batch-witness work CLEARED with one MODERATE-SILENT
+residue: every scenario above reproduces a FAILURE; nothing asserted the converse -- that a
+fully successful batch (all rows accepted, no mid-batch abort) prints NO "BATCH ABORTED" banner.
+A future edit that breaks the `completed`-flag logic in courier's `run_counterpart` try/finally
+(e.g. sets `completed=True` before the loop) would pass everything currently running above,
+because none of it checks for silence on a clean run.
+
+CLOSED by `all_accepted_batch_case()` (new): a positive control (two well-formed, distinct rows,
+`_AllAcceptedHandler`, world=mockworld3) through the real self boundary, asserting exit 0, both
+rows' outcomes present in main()'s own summary line (`recorded=[...]` with two entries), and
+"BATCH ABORTED" nowhere in stdout+stderr -- PLUS a RED-capability demonstration
+(`_completed_flag_broken_courier`): a throwaway copy of the CURRENT, real `courier` with exactly
+one line changed (the `completed` flag's initializer flipped `False` -> `True`, the review's own
+named example), run against `_BatchLossHandler`'s existing mid-batch-abort scenario (the same
+one `batch_witness_loss_case` above uses) -- with the flag pre-set, the abort's own banner AND
+row 1's kernel-refusal outcome are BOTH silently dropped, even though the run still fails loudly
+(nonzero exit; only the outcome WITNESS is lost). GREEN, same scenario, real unmutated courier:
+banner and row 1's outcome both present.
+
+WITNESSED, verbatim, this run (2026-07-26, `python3 seen-red/missives-kernel-family/
+courier_witness_fixtures.py`, exit 0):
+
+    ### all-accepted batch positive control (moderate-silent residue, fix round)
+      positive control stdout+stderr:
+        courier: mockworld3: pulled=2 new=2 recorded=[12, 13] dedup-raced=0
+      [ok] positive control: exit 0 on an all-accepted batch
+      [ok] positive control: both rows' outcomes appear in the normal summary (recorded=[...] carries two row_id entries)
+      [ok] positive control: "BATCH ABORTED" appears NOWHERE for a fully successful batch
+      RED (completed-flag broken) stdout+stderr:
+        courier: mockworld: a row served from /d/mockworld/views/missive_outbound is missing expected field 'missive_act' (row id=2) -- the counterpart's own served shape has drifted from this client's contract. Refused loudly rather than crashing on a bare KeyError; check that counterpart's own boundary_service.py/kernel version.
+        courier: exiting 1 (kernel-refused-or-config-error) -- this code covers BOTH a kernel write refusal (a missive the kernel refused for cause) and this client's own drifted-shape/config refusal (CourierConfigError); see the per-counterpart lines above to tell which one this run hit.
+      [ok] RED (flag broken): the abort's own banner is now MISSING entirely, despite a genuine mid-batch abort
+      [ok] RED (flag broken): row 1's kernel-refusal outcome is ALSO silently lost (not merely the banner text)
+      [ok] RED (flag broken): the run still fails loudly (nonzero exit) -- only the outcome WITNESS is lost, not the failure itself
+      GREEN (real courier, same abort scenario) stdout+stderr:
+        courier: mockworld: BATCH ABORTED mid-pass -- 1 row outcome(s) already decided THIS run, reported now so they are never silently lost:
+          row id=1 thread='mockworld/batch-1' seq=1: refused (NOT dedup): new row for relation "ledger" violates check constraint "missive_provenance_shape"
+        courier: mockworld: a row served from /d/mockworld/views/missive_outbound is missing expected field 'missive_act' (row id=2) -- the counterpart's own served shape has drifted from this client's contract. Refused loudly rather than crashing on a bare KeyError; check that counterpart's own boundary_service.py/kernel version.
+        courier: exiting 1 (kernel-refused-or-config-error) -- this code covers BOTH a kernel write refusal (a missive the kernel refused for cause) and this client's own drifted-shape/config refusal (CourierConfigError); see the per-counterpart lines above to tell which one this run hit.
+      [ok] GREEN: the real courier still prints the banner and row 1's outcome for the SAME abort scenario the broken copy silently ate
+
+    courier_witness_fixtures: all cases behaved as expected. ✓
+
+WITNESSED, same appendix: `python3 gates/no_lazy_imports.py` exit 0; `python3
+gates/fixture_census.py` exit 0 (162 seen-red gates, clean); `python3
+seen-red/missives-kernel-family/run_fixtures.py` exit 0 end to end (this new case plus every
+scenario above, all green). Scratch schema `mkfcourier_scratch`/`mkfcourier_scratch_kernel`
+verified dropped after the run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'`
+empty post-run). No live port touched (8433/8422 untouched); this appendix's new scenario uses
+the SAME already-running scratch `boundary_service.py` instance `main()` starts for the rest of
+this file, plus one more ephemeral loopback mock counterpart. No ledger writes against a real
+deployment. Throwaway broken-copy files (`/tmp/mkf_courier_flagbroken.py`) removed after use, per
+this file's existing convention; `.toml` scratch files under /tmp are left behind, matching this
+file's existing (pre-existing, unchanged) convention for every other scenario here.

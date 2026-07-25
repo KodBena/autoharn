@@ -82,7 +82,22 @@ CHAIN = [
     "s55-dispatch-grain-independence.sql",
     "s56-reservation-residue.sql",
     "s57-obligation-revocation-event.sql",
+    "s58-missive-substrate.sql",
+    "s59-missive-views.sql",
 ]
+# s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row
+# 1263, AS AMENDED by AMENDMENT 1 2026-07-25) extends this SAME gate's scratch CHAIN. It ships
+# FOUR new raw-`ledger` readers by design (validate_missive_dedup, validate_missive_courier_scope,
+# validate_missive_disposition, and AMENDMENT 1's validate_missive_regards; entries below) and
+# re-issues validate_supersession_target with three more missive_* branches (existing entry
+# updated in place, the s45/s53 precedent). s59 (kernel/lineage/s59-missive-views.sql, AS AMENDED
+# by AMENDMENT 2 2026-07-25): FIVE of its six views factor through ledger_current exclusively
+# (the s31 discipline, stated in its own header) -- classify clean with NO allowlist entry;
+# missive_outbound is the ONE declared exception -- AMENDMENT 2 re-issues it to read raw
+# `ledger` (superseded missive_sent rows included -- transport is not truth, that view's own
+# header carries the full witnessed defect/fix) -- entry below, the s56 review_verdicts / s37
+# work_violation_history precedent (a declared raw/history reader by design, needing no
+# additional GRANT: SELECT on raw `ledger` has been granted to `:role` since s15).
 # s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md,
 # maintainer-ratified 2026-07-22) extends this SAME gate's scratch CHAIN. discharging_attest
 # (RE-ISSUED, s32's own object, WHERE clause widened only) keeps its standing posture -- no raw
@@ -300,12 +315,50 @@ ALLOWLIST: dict[str, str] = {
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
     "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43 R6, widened s45 "
-                                    "§3.4, widened s53 §3.2 item 4): a single row-addressed read "
-                                    "of the supersession TARGET's (kind, principal_db_role, "
-                                    "principal_subject, actor) -- write_refused? standing-"
-                                    "lifecycle identity restated? belief kind/actor restated? -- "
-                                    "same history-typed reasoning as validate_review, four "
-                                    "columns now instead of one.",
+                                    "§3.4, widened s53 §3.2 item 4, widened s58 §2.5/Q7): a "
+                                    "single row-addressed read of the supersession TARGET's "
+                                    "(kind, principal_db_role, principal_subject, actor, "
+                                    "missive_thread, regards) -- write_refused? standing-"
+                                    "lifecycle identity restated? belief kind/actor restated? "
+                                    "missive_sent same-thread successor? missive_received "
+                                    "refused outright? missive_disposed same-regards "
+                                    "re-disposition? -- same history-typed reasoning as "
+                                    "validate_review, six columns now instead of four.",
+    "validate_missive_dedup": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 2): raw "
+                              "`ledger` reads for received-side AND sent-side (author_world, "
+                              "thread, seq) uniqueness -- HISTORY-typed by design (a superseded "
+                              "receipt still blocks re-receipt; a superseded sent row still "
+                              "blocks a duplicate seq), same reasoning as validate_review one "
+                              "field over.",
+    "validate_missive_courier_scope": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 4, "
+                                      "Q3 ratified row 1157): a single row-addressed read of "
+                                      "kernel.principal by name ('courier') -- row-addressed "
+                                      "forensics, not a truth projection; fires on EVERY insert.",
+    "validate_missive_disposition": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 5): a "
+                                    "single row-addressed read of the regards TARGET's (kind, "
+                                    "missive_act), plus a raw-ledger re-disposition check -- "
+                                    "same history-typed reasoning as validate_supersession_"
+                                    "target one field over.",
+    "validate_missive_regards": "write-boundary BEFORE INSERT trigger (design/FABLE-MISSIVES-"
+                                "KERNEL-SPEC.md AMENDMENT 1, 2026-07-25): a single row-addressed "
+                                "read of the missive_regards TARGET's kind -- must be an "
+                                "in-world missive_received row; same history-typed reasoning as "
+                                "validate_review one field over.",
+    "missive_outbound": "DECLARED raw/history reader by design (design/FABLE-MISSIVES-KERNEL-"
+                        "SPEC.md AMENDMENT 2, 2026-07-25, maintainer-ratified \"yes\"): the "
+                        "served transport feed reads raw `ledger` -- EVERY missive_sent row "
+                        "ever written, superseded included -- because transport is not truth "
+                        "(the pre-amendment ledger_current-sourced body silently dropped a "
+                        "missive superseded before its first courier pull, witnessed live with "
+                        "two ordinary sequential writes, no race). Mirrors s56's own "
+                        "review_verdicts / s37's work_violation_history precedent one family "
+                        "over -- 'every row ever sent, never thinner'.",
+    "validate_missive_tokens": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 3): row:<id> "
+                               "token existence check on missive_cites -- the s48/s52 idiom, "
+                               "reused verbatim (artifact: tokens read kernel.artifact, outside "
+                               "this gate's :schema universe; xrow: tokens are shape-checked "
+                               "only, deliberately NOT existence-checked -- isolation is "
+                               "founding, s58 §2.4 item 3's own disclosure).",
     "validate_review_witness_existence": "write-boundary BEFORE INSERT trigger (s48, Delta 1 of "
                                          "design/FABLE-KERNEL-INTAKE-PAIR-SPEC.md): a single "
                                          "existence check per cited row:<id> token in the "

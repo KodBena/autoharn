@@ -311,6 +311,18 @@ class ObligationRevokeWriteIntFields(BaseModel):
     actor: int | None = None
 
 
+class MissiveDisposeWriteIntFields(BaseModel):
+    """design/FABLE-MISSIVES-KERNEL-SPEC.md §2.7/§3's enumeration authority for
+    `POST /d/{deployment}/write/missive_dispose` (`kernel.missive_dispose`, kernel/lineage/
+    s58-missive-substrate.sql): its closed contract's TWO bigint-typed keys (`receipt`,
+    required -- the missive_received row id; `actor`, optional -- the standing set_actor
+    default otherwise); `disposition` (the closed vocabulary) and `statement` (optional) are
+    text, out of this model's scope."""
+
+    receipt: int | None = None
+    actor: int | None = None
+
+
 class ArtifactWriteIntFields(BaseModel):
     """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B's enumeration authority for
     `POST /d/{deployment}/artifacts` (`kernel.artifact_write`, kernel/lineage/

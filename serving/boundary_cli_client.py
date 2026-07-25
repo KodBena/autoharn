@@ -346,12 +346,25 @@ _SLUG_FIELD_OVERRIDE: dict[str, str] = {
     # the default 'slug' -- work_item_violations/work_review_gap/work_item_current/work_startable
     # all key on the default 'slug' and need no entry here.
     "work_edge_parent": "child_slug",
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md §3 (kernel/lineage/s59-missive-views.sql, ledger row
+    # 1263): missive_open_threads keys on missive_thread, not the default 'slug' -- the other
+    # five missive views all key on the default 'id' (VIEW_REGISTRY, boundary_service.py) and
+    # need no entry here.
+    "missive_open_threads": "missive_thread",
 }
 _ID_FIELD_OVERRIDE: dict[str, str] = {
     "question_status": "question_id",
     "review_stamp_distinctness": "review_id",
     "model_attestations": "row_id",
     "model_defeated_rows": "attest_id",
+    # strengthened-tier review, serving moderate (in reach, latent KeyError class): these two
+    # views (design/FABLE-RESERVATION-RESIDUE-SPEC.md §2, kernel/lineage/s56-reservation-
+    # residue.sql) were already registered in boundary_service.py's own VIEW_REGISTRY keyed on
+    # review_id (not the default 'id') but had no matching entry here -- a caller pulling either
+    # through get_all_rows(cursor="after_id") would hit `page[-1][id_field]` with id_field
+    # defaulted to 'id', a KeyError on the FIRST page (neither view carries a bare 'id' column).
+    "reservations_outstanding": "review_id",
+    "review_verdicts": "review_id",
 }
 
 

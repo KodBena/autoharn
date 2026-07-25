@@ -1,0 +1,394 @@
+#!/usr/bin/env python3
+"""courier -- design/FABLE-MISSIVES-KERNEL-SPEC.md §5: the scripted, receiver-pull, local-
+boundary-only courier verb. Repo-root executable (the spec's own §5 instruction, "Repo-root
+executable `courier`" -- NOT routed through the `./autoharn <verb>` umbrella dispatcher, a
+deliberate, disclosed construction choice: this spec's own text predates and does not name the
+umbrella-CLI migration, and wiring a new verb into `autoharn`'s dispatch table + its
+seen-red/umbrella-cli-dispatch-parity fixture is out of this build's own declared scope --
+named here rather than silently decided; a future pass may rebase this file into
+libexec/autoharn/courier the same way led/pickup/judge were, under its own commission).
+
+CONFIGURATION: courier.toml beside boundary-multiplex.toml (spec §5):
+
+    [courier]
+    authn = "single-operator"          # the NAMED EMPTY SLOT (row 1162) -- any other value
+                                        # refused at load with teach-text naming this slot.
+    self = "worlda"                    # this world's deployment name (must equal
+                                        # kernel.world_identity's own world_name).
+    self_base = "http://127.0.0.1:8400"
+
+    [courier.counterparts]
+    worldb = "http://127.0.0.1:8400"   # world name -> boundary base URL.
+
+PER COUNTERPART, ONE PASS (spec §5, steps 1-4):
+  1. GET {self_base}/d/{self}/views/missive_receipts (paginated) -> the set of already-recorded
+     (author_world=C, thread, seq) and the high-water max(provenance_row_id) for C.
+  2. GET {counterpart_base}/d/{C}/views/missive_outbound?after_id=<high-water> (paginated to
+     exhaustion). Client-side filter missive_addressee_world == self (spec §13 item 4 -- no
+     ?addressee= route parameter exists) and set-diff against step 1.
+  3. For each new missive, in served-id order: POST {self_base}/d/{self}/write/ledger with the
+     served envelope columns verbatim, kind='missive_received', actor=the courier principal's
+     id (resolved once per run by name). A 'refused' verdict carrying the dedup teach-text is
+     the race backstop -- logged, counted, the pass continues (idempotent by construction).
+     Any other refusal, and any infra/typed failure, is a LOUD nonzero exit naming the leg.
+  4. Report, witness-grade: per counterpart, pulled/new/recorded/dedup-raced counts with row
+     ids -- WITNESSED lines, no umbrella claims.
+
+THE COURIER NEVER: writes to a foreign boundary (its only POST target is self_base), writes any
+non-receipt kind (the kernel's own validate_missive_courier_scope trigger enforces this even if
+this script erred), dispositions, acknowledges, or summarizes (ADR-0020: transport never
+transforms) -- spec §5's own "THE COURIER NEVER" paragraph, restated as code discipline.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import tomllib
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / "serving"))
+
+import boundary_cli_client as bcc  # noqa: E402
+
+
+class CourierConfigError(Exception):
+    """A malformed/incomplete courier.toml -- refused loudly, never guessed (ADR-0002)."""
+
+
+def load_courier_config(path: Path) -> dict:
+    if not path.exists():
+        raise CourierConfigError(
+            f"courier: no courier.toml at {path} -- create it beside boundary-multiplex.toml "
+            f"(design/FABLE-MISSIVES-KERNEL-SPEC.md §5 names its exact shape; see this "
+            f"script's own module docstring for a worked example).")
+    try:
+        raw = tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise CourierConfigError(f"courier: courier.toml at {path} is not valid TOML: {e}") from e
+    cfg = raw.get("courier")
+    if not isinstance(cfg, dict):
+        raise CourierConfigError(
+            f"courier: courier.toml at {path} carries no [courier] table.")
+    authn = cfg.get("authn")
+    if authn != "single-operator":
+        raise CourierConfigError(
+            f"courier: courier.toml's authn={authn!r} is not the ratified v1 value "
+            f"'single-operator' (row 1162's own named empty slot -- ANY other value is refused "
+            f"at load; a future trust model arrives as a new protocol version and a ratified "
+            f"spec, never a retrofit -- design/FABLE-MISSIVES-KERNEL-SPEC.md §5).")
+    self_name = cfg.get("self")
+    self_base = cfg.get("self_base")
+    counterparts = cfg.get("counterparts")
+    if not self_name or not self_base or not isinstance(counterparts, dict) or not counterparts:
+        raise CourierConfigError(
+            f"courier: courier.toml at {path} is missing one of self/self_base/counterparts "
+            f"(all required, non-empty; design/FABLE-MISSIVES-KERNEL-SPEC.md §5).")
+    return {"self": self_name, "self_base": self_base.rstrip("/"), "counterparts": counterparts}
+
+
+def resolve_courier_actor_id(self_base: str, self_name: str) -> int:
+    """GET /d/{self}/standing/principals, resolved once per run by name (spec §5 step 3) --
+    never re-derived per missive."""
+    rows = bcc.get_json(self_base, f"/d/{self_name}/standing/principals")
+    for r in rows if isinstance(rows, list) else []:
+        if r.get("name") == "courier":
+            return int(r["id"])
+    raise CourierConfigError(
+        f"courier: world {self_name!r} has no registered 'courier' principal -- the s58 birth "
+        f"step was skipped (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.6; bootstrap/new-project.sh "
+        f"registers it at a future world's birth).")
+
+
+def _require(r: dict, key: str, *, route: str, counterpart: str) -> object:
+    """The ONE place a served row's missing expected field becomes a named, teaching refusal
+    (strengthened-tier review, serving severe) instead of a bare KeyError/traceback -- a
+    drifted counterpart shape (a served view missing a column this client's contract expects)
+    is exactly the class the courier is MOST exposed to (it talks to a boundary this world's
+    own operator does not control, spec §5's own "the client most exposed to skew"). Names the
+    route, the counterpart, the missing field, and the row's own `id` (if present) so the
+    operator can go look at the served shape directly, never a bare stack trace."""
+    if key not in r:
+        raise CourierConfigError(
+            f"courier: {counterpart}: a row served from {route} is missing expected field "
+            f"{key!r} (row id={r.get('id', '?')!r}) -- the counterpart's own served shape has "
+            f"drifted from this client's contract. Refused loudly rather than crashing on a "
+            f"bare KeyError; check that counterpart's own boundary_service.py/kernel version.")
+    return r[key]
+
+
+def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: str,
+                     counterpart_base: str) -> dict:
+    """One pass for one counterpart (spec §5 steps 1-4). Returns a witness-grade report dict:
+    {pulled, new, recorded: [row_id...], dedup_raced: [count], errors: [...],
+    outcomes: [one line per row processed, in order -- the batch-witness-loss fix, see
+    _print_batch_report()'s own docstring]}.
+
+    HANDSHAKE (strengthened-tier review, serving severe): the courier talks to TWO independent
+    boundaries per run -- self (checked ONCE in main(), before this function is ever called)
+    and THIS counterpart (checked HERE, before step 1, once per counterpart per run) -- the
+    counterpart is the client's OWN "most exposed to skew" peer, spec's own words, and a
+    drifted shape there used to surface as a raw KeyError deep in the row-processing loop
+    below; the handshake now catches an incompatible PROTOCOL VERSION before any row is even
+    fetched, and _require() (above) catches a drifted ROW SHAPE at the exact field that's
+    missing, both refusing with teaching rather than a bare traceback."""
+    counterpart_base = counterpart_base.rstrip("/")
+    bcc.check_protocol_version(f"{counterpart_base}/d/{counterpart}", counterpart_base)
+
+    # step 1: already-recorded (author_world=C, thread, seq) + high-water provenance_row_id.
+    receipts_route = f"/d/{self_name}/views/missive_receipts"
+    receipts = bcc.get_all_rows(self_base, receipts_route)
+    recorded_keys = set()
+    high_water_candidates = []
+    for r in receipts:
+        author_world = _require(r, "missive_author_world", route=receipts_route, counterpart=self_name)
+        if author_world != counterpart:
+            continue
+        thread = _require(r, "missive_thread", route=receipts_route, counterpart=self_name)
+        seq = _require(r, "missive_seq", route=receipts_route, counterpart=self_name)
+        recorded_keys.add((author_world, thread, seq))
+        high_water_candidates.append(
+            _require(r, "provenance_row_id", route=receipts_route, counterpart=self_name))
+    high_water = max(high_water_candidates, default=0)
+
+    # step 2: the counterpart's outbound feed, paginated, client-side addressee filter + set-diff.
+    outbound_route = f"/d/{counterpart}/views/missive_outbound"
+    outbound = bcc.get_all_rows(counterpart_base, outbound_route, limit=1000)
+    outbound = [r for r in outbound
+                if _require(r, "id", route=outbound_route, counterpart=counterpart) > high_water]
+    candidates = []
+    for r in outbound:
+        addressee = _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart)
+        if addressee != self_name:
+            continue
+        key = (_require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
+               _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
+               _require(r, "missive_seq", route=outbound_route, counterpart=counterpart))
+        if key not in recorded_keys:
+            candidates.append(r)
+    candidates.sort(key=lambda r: r["id"])
+
+    recorded: list[int] = []
+    dedup_raced = 0
+    errors: list[str] = []
+    # BATCH-WITNESS LOSS, FOUND AND CLOSED (strengthened-tier review lap 2, witness-axis
+    # SEVERE-SILENT on the second lap: the first fix only wrapped `_require()` -- the
+    # payload-construction calls -- in a try/except, leaving `bcc.post_write()` (called right
+    # after, OUTSIDE that try) free to raise `BoundaryRefusal` (any non-200: a transient 503/429
+    # is realistic mid-batch, not an edge case) or `BoundaryUnreachable` (a connection drop) on
+    # ANY row N, which reproduced the EXACT SAME loss class the first fix's own docstring
+    # claimed closed. THE ADR-0000 QUESTION ASKED: what shape makes outcome-loss
+    # UNREPRESENTABLE, rather than guarded at each site some reviewer happened to find? Taken:
+    # one enclosing try/finally around the WHOLE per-row loop, keyed on a `completed` flag --
+    # `_print_batch_report` runs in `finally` whenever the loop did not run to completion, for
+    # ANY reason (a drifted row shape, a boundary refusal, a dropped connection, or a defect
+    # class nobody has hit yet). This forecloses the class at the shape level: there is now
+    # exactly one path by which a row can be processed (append its outcome, in order) and
+    # exactly one path by which the batch ends (normal completion prints nothing here -- main()
+    # owns the summary line -- and abnormal completion prints everything decided so far) --
+    # no second call site to keep in sync, no future addition to this loop can reopen the loss
+    # by skipping a try/except that isn't there to skip. (Prior lap's per-site guard is
+    # SUPERSEDED, not layered: the try/except around payload construction alone is removed --
+    # the enclosing try/finally now covers it too, one home for the flush, ADR-0012 P1.)
+    outcomes: list[str] = []
+    completed = False
+    try:
+        for r in candidates:
+            payload = {
+                "kind": "missive_received",
+                "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
+                "actor": actor_id,
+                "missive_protocol": _require(r, "missive_protocol", route=outbound_route, counterpart=counterpart),
+                "missive_author_world": _require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
+                "missive_addressee_world": _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart),
+                "missive_thread": _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
+                "missive_seq": _require(r, "missive_seq", route=outbound_route, counterpart=counterpart),
+                "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
+                "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
+            }
+            if r.get("missive_responds_to") is not None:
+                payload["missive_responds_to"] = r["missive_responds_to"]
+            if r.get("missive_cites") is not None:
+                payload["missive_cites"] = r["missive_cites"]
+            exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
+            if exit_code == 0:
+                recorded.append(verdict["row_id"])
+                outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
+            else:
+                msg = verdict.get("message") or ""
+                if "already exists" in msg and "exactly-once RECORDING" in msg:
+                    dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
+                else:
+                    errors.append(
+                        f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
+                        f"NOT as a dedup race: {msg}")
+                    outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                    f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
+        completed = True
+    finally:
+        if not completed:
+            _print_batch_report(counterpart, outcomes)
+
+    return {
+        "pulled": len(outbound), "new": len(candidates),
+        "recorded": recorded, "dedup_raced": dedup_raced, "errors": errors, "outcomes": outcomes,
+    }
+
+
+def _print_batch_report(counterpart: str, outcomes: list[str]) -> None:
+    """The ONE place the accumulated per-row outcomes for an ABORTED batch are printed
+    (strengthened-tier review lap 2, witness-axis severe-silent). Called ONLY from
+    `run_counterpart`'s enclosing `finally`, and only when the per-row loop did not run to
+    completion -- on a CLEAN finish this function is never called at all: main() prints its own
+    one-line-per-counterpart SUMMARY (`pulled=... new=... recorded=... dedup-raced=...`), never
+    a line per row, so there is no redundancy to reconcile (corrected from this docstring's own
+    prior claim that main() prints per-row lines on a clean finish -- it does not; MINOR finding,
+    fixed here rather than left standing).
+
+    DEFENSIVE, by construction (finding 2's own follow-on: this function must never itself raise
+    and thereby eat the ORIGINAL exception the `finally` block is flushing outcomes ahead of --
+    an exception raised while merely PRINTING would replace, in the caller's traceback, the real
+    defect with a formatting bug in the reporting path, the opposite of this fix's point).
+    `outcomes` is a list of plain, already-formatted strings by construction (built by
+    `run_counterpart` itself, never fed a foreign shape) -- but the guard costs nothing and
+    covers a defect class no one has hit yet, same reflex as the rest of this fix."""
+    try:
+        if not outcomes:
+            print(f"courier: {counterpart}: BATCH ABORTED before any row in this pass completed "
+                  f"(no accepted/refused outcomes to report).")
+            return
+        print(f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
+              f"already decided THIS run, reported now so they are never silently lost:")
+        for line in outcomes:
+            print(f"  {line}")
+    except Exception as e:  # noqa: BLE001 -- must never mask the real exception in flight above us.
+        sys.stderr.write(
+            f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
+            f"were decided this run, but formatting them for the report itself failed ({e!r}); "
+            f"the underlying exception that triggered this flush is unaffected and still "
+            f"propagates.\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--courier-toml", default=None,
+                    help="path to courier.toml (default: beside this script)")
+    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+
+    toml_path = Path(args.courier_toml) if args.courier_toml else HERE / "courier.toml"
+    try:
+        cfg = load_courier_config(toml_path)
+    except CourierConfigError as e:
+        sys.stderr.write(f"{e}\n")
+        return 4
+
+    self_name, self_base = cfg["self"], cfg["self_base"]
+
+    # HANDSHAKE, self (strengthened-tier review, serving severe): the courier talks to TWO
+    # independent boundaries every run -- self and each counterpart -- and previously checked
+    # NEITHER's protocol version, though this is exactly the client most exposed to skew (spec
+    # §5's own point: it is the one verb that ALWAYS crosses a world boundary, by construction).
+    # Checked ONCE here, before anything else; each counterpart is checked once per pass inside
+    # run_counterpart (below) -- a mismatch on EITHER side maps to the same standard teaching
+    # refusal + exit 4 every other rebased shim already uses (report_protocol_mismatch).
+    try:
+        bcc.check_protocol_version(f"{self_base}/d/{self_name}", self_base)
+    except bcc.ProtocolVersionMismatch as e:
+        return bcc.report_protocol_mismatch("courier", e)
+    except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable) as e:
+        sys.stderr.write(f"courier: self ({self_base}): {e}\n")
+        return 4
+
+    try:
+        actor_id = resolve_courier_actor_id(self_base, self_name)
+    except (CourierConfigError, bcc.BoundaryRefusal, bcc.BoundaryUnreachable) as e:
+        sys.stderr.write(f"courier: {e}\n")
+        return 4
+
+    # EXIT-CODE CLASS AGGREGATION (strengthened-tier review lap 2, serving moderate-loud):
+    # bcc's OWN docstring defends a four-code vocabulary (0/1/3/4, see serving/
+    # boundary_cli_client.py's module docstring) precisely so a caller inspecting an exit code
+    # alone can tell WHICH kind of thing went wrong -- boundary-unreachable/protocol-incompatible
+    # (4) is a fundamentally different situation from a boundary-level refusal (3), which is
+    # again different from a kernel write refusal or this client's own drifted-shape refusal (1).
+    # Collapsing every counterpart's failure to a bare 1 defeats that discipline. THE RULE
+    # (stated here, the one home for it): each counterpart failure is tagged with bcc's own exit
+    # code for its class (4: ProtocolVersionMismatch/BoundaryUnreachable -- "no usable response
+    # to classify"; 3: BoundaryRefusal -- a typed boundary-level refusal; 1: CourierConfigError
+    # -- this client's own drifted-shape refusal, and any kernel-refused row inside an otherwise-
+    # successful pass, per bcc's own "kernel refused" code). If EVERY failure this run belongs
+    # to ONE class, the run exits with THAT class's code -- the exit code stays a reliable,
+    # single-fact signal in the common case (one counterpart down, or all counterparts down the
+    # SAME way). Mixed classes exit 1 (the least-specific code, matching what an unclassified
+    # failure has always meant) WITH a final stderr line enumerating every class actually seen,
+    # so a caller inspecting only stderr never has to guess.
+    failure_codes: set[int] = set()
+    for counterpart, counterpart_base in cfg["counterparts"].items():
+        try:
+            report = run_counterpart(self_base, self_name, actor_id, counterpart, counterpart_base)
+        except bcc.ProtocolVersionMismatch as e:
+            sys.stderr.write(f"courier: {counterpart}: ")
+            bcc.report_protocol_mismatch("courier", e)
+            failure_codes.add(4)
+            continue
+        except bcc.BoundaryRefusal as e:
+            sys.stderr.write(f"courier: {counterpart}: BOUNDARY REFUSED: {e}\n")
+            failure_codes.add(3)
+            continue
+        except bcc.BoundaryUnreachable as e:
+            sys.stderr.write(f"courier: {counterpart}: BOUNDARY UNREACHABLE: {e}\n")
+            failure_codes.add(4)
+            continue
+        except CourierConfigError as e:
+            # _require()'s own drifted-shape refusal (strengthened-tier review, serving severe)
+            # -- named field, named counterpart, never a bare traceback. No dedicated bcc exit
+            # code exists for a client-side shape defect (only 0/1/3/4 are ratified, and this is
+            # none of 0/3/4) -- classed as 1, the least-specific "something else went wrong" code.
+            sys.stderr.write(f"{e}\n")
+            failure_codes.add(1)
+            continue
+
+        print(f"courier: {counterpart}: pulled={report['pulled']} new={report['new']} "
+              f"recorded={report['recorded']} dedup-raced={report['dedup_raced']}")
+        for err in report["errors"]:
+            sys.stderr.write(f"courier: {counterpart}: LOUD non-dedup refusal: {err}\n")
+            failure_codes.add(1)  # kernel-refused -- bcc's own code 1, unchanged meaning.
+
+    class_names = {3: "boundary-refused", 4: "boundary-unreachable/protocol-mismatch",
+                   1: "kernel-refused-or-config-error"}
+
+    if not failure_codes:
+        return 0
+    if len(failure_codes) == 1:
+        code = next(iter(failure_codes))
+        # MINOR (strengthened-tier review lap 2): class 1 is a UNION of two distinct causes --
+        # a kernel refusal for cause (a missive the kernel refused, e.g. a duplicate) and this
+        # client's own drifted-shape/config refusal (CourierConfigError) -- the mixed-class path
+        # below already disclosed that conflation via `class_names[1]`'s own name; the uniform
+        # path exited bare with no clarifying text, so a caller seeing a bare `1` here had no
+        # cheaper way to learn the code is overloaded than reading this function's source. Same
+        # note, same wording, on the one path that lacked it -- one home for the disclosure
+        # (class_names), not a second string to keep in sync.
+        if code == 1:
+            sys.stderr.write(
+                f"courier: exiting 1 ({class_names[1]}) -- this code covers BOTH a kernel "
+                f"write refusal (a missive the kernel refused for cause) and this client's own "
+                f"drifted-shape/config refusal (CourierConfigError); see the per-counterpart "
+                f"lines above to tell which one this run hit.\n")
+        return code
+    seen = ", ".join(f"{c} ({class_names.get(c, '?')})" for c in sorted(failure_codes))
+    sys.stderr.write(f"courier: MIXED failure classes across this run's counterparts: {seen} "
+                     f"-- exiting 1 (mixed); see the per-counterpart lines above for which "
+                     f"counterpart hit which class.\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
