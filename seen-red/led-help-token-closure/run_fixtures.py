@@ -36,15 +36,21 @@ CURRENT served `led`:
   - mid-sentence dash-leading prose (not the first word): unaffected, still accepted and
     written -- the false-positive case this item's own first-word-only bound protected against
     genuinely still does not trip.
-  - REDISCOVERED GAP, NAMED NOT SILENCED: `led decision help` (a BARE, non-dash "help" as the
-    first statement word) is NOT specially handled anywhere in the current CLI -- it is ordinary
-    argparse a positional, and IS COMMITTED to the ledger verbatim ("led: row N written.",
-    statement="help"). This is the SAME defect class the original item existed to close (a
-    help-seeking word landing as a permanent, content-free ledger row), reopened by the rebase
+  - REDISCOVERED GAP, NOW CLOSED (ledger row 1246, this repair pass): `led decision help` (a
+    BARE, non-dash "help" as the first statement word) used to be NOT specially handled anywhere
+    in the current CLI -- ordinary argparse positional, COMMITTED to the ledger verbatim ("led:
+    row N written.", statement="help"), the SAME defect class the original item existed to close
+    (a help-seeking word landing as a permanent, content-free ledger row), reopened by the rebase
     for this ONE non-dash-prefixed token specifically (every dash-prefixed help/bogus-flag token
-    is still safely refused, per the legs above). Flagged here, not fixed here: restoring a
-    per-subcommand help classifier is a CLI feature change, outside a fixture-migration pass's
-    own mandate -- see this build's own final report for the standing recommendation.
+    was already still safely refused, per the legs above). CLOSED by extending the EXISTING
+    garbage-statement guard (ledger row 1159, `_cli_usage_guard_violation` in
+    bootstrap/templates/led.tmpl) with a fourth, closed-vocabulary fingerprint
+    (`_BARE_HELP_STATEMENT_TOKENS`): a statement that is, once whitespace-normalized and
+    casefolded, EXACTLY one of a closed set of bare help-seeking words ("help", "-h", "--help",
+    "h", "?") and nothing else, is now REFUSED with teach-text, same as any other garbage-
+    statement match -- and the SAME `--statement-really-contains-cli-text` override that already
+    exists for the other three fingerprints works here too (this is one guard, extended, not a
+    new one).
 
 CASES (all live subprocess runs of the real `./led` against a real scratch deployment; ADOPT
 moved off bootstrap/track-work.sh onto `new-project.sh --new-world`, ledger row 1170 -- a
@@ -59,9 +65,10 @@ the s43 write boundary the served `led` now REQUIRES for every write, by any tra
                                     dash-prefixed forms. `./led decision help` (the bare-word
                                     form) is SEPARATELY covered by REDISCOVERED-GAP-BARE-HELP
                                     below, not folded in here (its own behavior differs).
-  REDISCOVERED-GAP-BARE-HELP    -- `./led decision help`: ACCEPTED and WRITTEN verbatim (row
-                                    count grows by one, stored statement = "help") -- named,
-                                    live-witnessed regression, see module docstring.
+  REDISCOVERED-GAP-BARE-HELP    -- `./led decision help`: NOW CLOSED (ledger row 1246) --
+                                    REFUSED by the extended garbage-statement guard, row count
+                                    unchanged, teach-text names the bare-help-word fingerprint;
+                                    see module docstring.
   GREEN-HELP-REVIEW             -- `./led review <id> attest self-review --help`: exit 0,
                                     argparse's OWN usage on stderr (that subparser keeps
                                     add_help=True), row count unchanged.
@@ -231,29 +238,29 @@ def main() -> int:
                   f"{'PASS' if ok else 'FAIL'}")
 
         # ------------------------------------------------------------- REDISCOVERED-GAP-BARE-HELP
-        # NAMED, NOT SILENCED (see this file's own module docstring): `led decision help` is ordinary
-        # argparse prose now -- accepted and WRITTEN verbatim. This is the exact defect class the
-        # item existed to close, reopened by the CLI rebase for this one non-dash-prefixed token.
-        # Recorded here as an OBSERVED CURRENT FACT (grows by one, statement stored verbatim), not
-        # papered over as a pass -- a future CLI fix that restores the classifier should flip this
-        # case back to "unchanged", at which point it stops being a rediscovered gap.
+        # NOW CLOSED (ledger row 1246, this repair pass -- see this file's own module docstring):
+        # `led decision help` used to be ordinary argparse prose, accepted and WRITTEN verbatim.
+        # The extended garbage-statement guard (bootstrap/templates/led.tmpl's
+        # `_BARE_HELP_STATEMENT_TOKENS` fingerprint) now REFUSES it before any write is attempted
+        # -- asserted here as "row count unchanged, refused, teach-text names the fingerprint",
+        # the mirror image of what this case asserted while the gap was open.
         before = _ledger_row_count(dest)
         r = _run(dest, "led", "decision", "help")
         after = _ledger_row_count(dest)
-        stored = _psql("-q", "-tA", "-c", f"SET ROLE {ROLE};",
-                        "-c", f"SELECT statement FROM {SCHEMA}.ledger WHERE id = {after};"
-                        ).stdout.strip() if after == before + 1 else None
-        gap_reproduced = r.returncode == 0 and after == before + 1 and stored == "help"
+        refused = r.returncode != 0
+        unchanged = before == after
+        teaches = "bare help-seeking word" in r.stderr
+        gap_closed = refused and unchanged and teaches
         print(f"REDISCOVERED-GAP-BARE-HELP: exit={r.returncode} row-count before={before} "
-              f"after={after} stored_statement={stored!r} -- gap_reproduced={gap_reproduced} "
-              f"(a bare 'help' word is committed verbatim; see module docstring's REDISCOVERED GAP "
-              f"paragraph -- this is EXPECTED CURRENT BEHAVIOR, not a fixture failure, and not "
-              f"silently accepted as fine either)")
-        if not gap_reproduced:
-            failures.append(f"REDISCOVERED-GAP-BARE-HELP: expected the KNOWN gap to reproduce "
-                             f"(accepted+written+stored='help') but observed something else -- "
-                             f"exit={r.returncode} before={before} after={after} stored={stored!r}\n"
-                             f"STDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
+              f"after={after} refused={refused} unchanged={unchanged} teaches={teaches} -- "
+              f"gap_closed={gap_closed} (a bare 'help' word is now REFUSED by the extended "
+              f"garbage-statement guard, ledger row 1246 -- see module docstring's REDISCOVERED "
+              f"GAP paragraph)")
+        if not gap_closed:
+            failures.append(f"REDISCOVERED-GAP-BARE-HELP: expected the guard to REFUSE (row "
+                             f"count unchanged, teach-text naming the bare-help fingerprint) but "
+                             f"observed something else -- exit={r.returncode} before={before} "
+                             f"after={after}\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
 
         # ------------------------------------------------------------------- GREEN-HELP-REVIEW
         if seed_id is not None:

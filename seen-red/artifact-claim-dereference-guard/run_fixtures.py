@@ -23,60 +23,81 @@ imports), exactly the pattern seen-red/led-help-token-closure/run_fixtures.py an
 already use. Every `led` invocation below runs against THAT scratch project, never the repo's own
 deployment.json.
 
-REDISCOVERED-GAP, NAMED NOT SILENCED (ledger row 1245 -- open work item, the SAME REDISCOVERED-GAP
-treatment seen-red/led-help-token-closure/run_fixtures.py already banks): live-witnessed against
-the CURRENT served CLI (bootstrap/templates/led.tmpl), the --evidence path-dereference guard and
-the path-shaped-statement warning this fixture exists to prove are BOTH ENTIRELY ABSENT --
-`--evidence` is accepted as an ordinary shared flag (see led.tmpl's `_SHARED_FLAG_NAMES` /
-`cmd_generic`'s `payload["evidence"] = shared["--evidence"]`) and stored VERBATIM with zero
-dereference check of any kind: a dead path, a bare directory, anything, is accepted and written.
-Likewise, no scan of $statement for path-shaped tokens exists anywhere in the current CLI -- no
-warning ever fires, for any statement. This is a REBASE FEATURE-LOSS (row 1245's own finding),
-not a fixture bug: the cases below assert the OBSERVED CURRENT BEHAVIOR (guard absent, everything
-accepted, no warning ever fires) as NAMED GAPS, loudly labeled REDISCOVERED-GAP-*, rather than
-silently passing (or silently failing) against a guard that used to exist. row 1245's own repair
-should flip every REDISCOVERED-GAP-* case's assertions back to the original RED/WARN expectations
-once the guard is reimplemented in the served path -- at which point those cases stop being gaps.
+GAP CLOSED (ledger row 1245, this repair pass): both the --evidence path-dereference guard and
+the path-shaped-statement warning are REIMPLEMENTED in the served CLI
+(bootstrap/templates/led.tmpl's `_evidence_dereference_violation`/`_warn_path_shaped_in_statement`
+functions, wired into `cmd_generic` right after the existing garbage-statement/grammar pre-flight
+checks, and `_warn_path_shaped_in_statement` additionally wired into `cmd_review`). This is a
+CLI-SIDE re-implementation, deliberately at the SAME layer the existing garbage-statement guard
+(ledger row 1159) and the eight ported statement grammars already live at (cmd_generic's own
+pre-flight, before any payload is ever built) -- the check dereferences THIS OPERATOR'S OWN
+filesystem, which only the CLI process (running on the operator's own checkout) can see; the
+boundary service may run on a different host entirely, so a boundary-side dereference would
+inspect the WRONG filesystem for a local `--evidence <path>` claim.
 
-CASES, as currently, honestly observed against scratch (no case is silently green-by-vacuity --
-every assertion below states which fact it is checking and why):
+Every case below was RED against the served CLI before this repair (see this file's own git
+history for the dated live-witness of the gap) and is GREEN now that the guard/warning are back --
+the REDISCOVERED-GAP-* case names are KEPT (not renamed) so this file's own history stays
+legible: they now assert the GUARD HOLDS, the mirror image of what they asserted while the gap
+was open.
 
-REDISCOVERED-GAP (used to be RED -- must refuse, no row written -- now silently ACCEPTED):
-  - REDISCOVERED-GAP-DEAD-EVIDENCE-PATH: a dead --evidence path is ACCEPTED, a row is written,
-    no refusal, no teach-text -- the artifact-claim-without-dereference guard does not fire.
+CASES, live-witnessed against scratch (no case is silently green-by-vacuity -- every assertion
+below states which fact it is checking and why):
+
+REDISCOVERED-GAP, NOW CLOSED (must refuse, no row written -- and it does):
+  - REDISCOVERED-GAP-DEAD-EVIDENCE-PATH: a dead --evidence path is REFUSED, no row written,
+    teach-text cites the 896-899 specimen class -- the artifact-claim-without-dereference guard
+    fires.
   - REDISCOVERED-GAP-BARE-DIRECTORY-EVIDENCE: a bare (no trailing slash) EXISTING directory
-    passed as --evidence is ACCEPTED, a row is written -- the directory-acceptance gap this
-    item's OWN fix once closed is back, because the whole guard is gone, not because the
-    directory-vs-file distinction regressed on its own.
+    passed as --evidence is REFUSED, no row written -- the directory-vs-file distinction this
+    item's own night-build-defect-repair follow-on originally closed is back.
 
-STILL GREEN (unaffected by the gap -- these never depended on the guard's write-side behavior):
-  - a live --evidence FILE: MUST ACCEPT, real row lands, round-trip verified (true before AND
-    after the gap -- a real file was always meant to be accepted).
+STILL GREEN (unaffected either way -- these never depended on the guard's refusal-side behavior):
+  - a live --evidence FILE: MUST ACCEPT, real row lands, round-trip verified.
   - an --evidence directory explicitly cited via a trailing "/": MUST ACCEPT (same reasoning).
 
-REDISCOVERED-GAP (used to WARN-but-write -- the asymmetry demonstration -- now writes with NO
-warning at all, because the scanner itself does not exist):
+REDISCOVERED-GAP, NOW CLOSED (used to WARN-but-write; the warning is back):
   - REDISCOVERED-GAP-STATEMENT-PATH-NO-WARNING: a statement containing a dead path-shaped token
-    still writes (unaffected), but NO warning is printed -- warn_path_shaped_in_statement() (or
-    whatever replaced it) does not exist in the served path.
+    still writes (unaffected -- WARN-only, never a refusal), and a WARNING is printed --
+    `_warn_path_shaped_in_statement` fires.
   - REDISCOVERED-GAP-STATEMENT-MULTI-PATH-NO-WARNING: three dead path-shaped tokens in one
-    statement still writes, still with NO warning at all (not once-per-token, not once total --
-    AUTOHARN_BACKFLOW finding 5's own fix has nothing left to regress, because there is no
-    warning of any kind left to fire).
+    statement still write, with exactly ONE preamble + a three-item list (AUTOHARN_BACKFLOW
+    finding 5's own collapse-the-spam fix, preserved by the reimplementation), not once per token.
 
-STILL GREEN, BUT NOTE THE CAVEAT (passes today for a DIFFERENT reason than it used to):
-  - a statement containing a row:<id> citation: no warning fires -- true today, but ONLY because
-    NOTHING triggers a warning right now, not because the scanner correctly excludes row:
-    citations from its scope. Once row 1245 restores the scanner, this case's assertion (no
-    warning) must be re-verified for the RIGHT reason.
-  - a statement containing a URL: same caveat as the row:<id> case above.
+GREEN, RIGHT REASON NOW VERIFIED (the caveat this file used to carry while the gap was open):
+  - a statement containing a row:<id> citation: no warning fires -- now verified for the RIGHT
+    reason (the scanner exists and correctly excludes row: citations from its scope), not merely
+    because nothing scans at all.
+  - a statement containing a URL: same, now verified for the right reason (the scanner exists and
+    correctly excludes URLs).
+
+THIRD GUARD-TRIO MEMBER ADDED (strengthened-tier fresh-context review of THIS arc's own guard-trio
+commit, MODERATE/SILENT finding, 2026-07-25): legacy-led.tmpl's `review` case called
+`warn_content_free_review_statement` immediately alongside `warn_path_shaped_in_statement` (git
+show 93affa0^, the `review` case body -- both calls back to back right after `statement="$*"`),
+but only the path-shape scanner was ported into `cmd_review` when this arc's repair landed --
+the content-free sibling guard was silently left behind, so a content-free `led review` statement
+(run12 ledger row 20's own specimen, `"test"`, 4 chars) discharging a countersign obligation got
+no CLI-side catch at all outside `engine/review_gap_audit.py`'s own retroactive, discharge-scoped
+check. Ported here too, `_warn_content_free_review_statement`, wired into `cmd_review` alongside
+the path-shape scanner (legacy's own call order preserved: content-free check first). New cases,
+same real-served-CLI pattern as every case above:
+  - RED-FIRST-CONTENT-FREE-REVIEW-STATEMENT: `led review` on a content-free statement (run12's
+    own 4-char specimen) still writes (WARN-only, never a refusal), and a WARNING naming
+    engine/review_gap_audit.py / tracker item `content-free-review-audit` is printed. Captured RED
+    against the pre-repair led.tmpl (this repair's own parent commit, guard absent -> silent),
+    GREEN after (guard ported -> warns) -- see this dir's red.txt for the dated dual capture.
+  - GREEN-GENUINE-REVIEW-STATEMENT-NO-WARNING: a review statement of ordinary length gets NO
+    content-free warning -- verified for the right reason (the guard exists and correctly passes
+    a genuine statement), not merely because nothing checks at all.
 
 Usage: python3 seen-red/artifact-claim-dereference-guard/run_fixtures.py
-Exit 0 if every case matches observed current behavior; 1 otherwise. Lazy imports banned.
+Exit 0 if every case matches expected (guard-holds) behavior; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -128,8 +149,13 @@ def _drop_scratch() -> None:
           "-c", f"DROP ROLE IF EXISTS {ROLE};")
 
 
-def _run_led(dest: Path, *args: str) -> tuple[int, str, str]:
-    cp = subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True)
+def _run_led(dest: Path, *args: str, env: dict | None = None) -> tuple[int, str, str]:
+    full_env = None
+    if env:
+        full_env = os.environ.copy()
+        full_env.update(env)
+    cp = subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True,
+                         env=full_env)
     return cp.returncode, cp.stdout, cp.stderr
 
 
@@ -147,34 +173,44 @@ def _current_max_id(dest: Path) -> int:
 
 
 def gap_dead_evidence_path_accepted() -> None:
-    print("# REDISCOVERED-GAP-DEAD-EVIDENCE-PATH -- a dead --evidence path used to REFUSE; "
-          "row 1245: the guard is gone, so it is now silently ACCEPTED. Named, not silenced.")
+    print("# REDISCOVERED-GAP-DEAD-EVIDENCE-PATH, NOW CLOSED -- a dead --evidence path must "
+          "REFUSE (row 1245's repair: the guard is back).")
     before = _current_max_id(DEST)
     rc, out, err = _run_led(DEST, "--evidence", "/tmp/does-not-exist-nbdr-fixture-xyz",
                              "decision", f"{TAG}: dead evidence path probe")
     after = _current_max_id(DEST)
-    _check("OBSERVED: guard does NOT refuse (exit 0)", rc == 0)
-    _check("OBSERVED: a row WAS written (max id advanced by one) -- the gap, reproduced",
-           after == before + 1)
-    _check("OBSERVED: no teach-text about the 896-899 specimen class (nothing to cite -- "
-           "the guard was never consulted)", "896-899" not in err)
+    _check("guard REFUSES (nonzero exit)", rc != 0)
+    _check("no row was written (max id unchanged)", after == before)
+    _check("teach-text cites the 896-899 specimen class", "896-899" in err)
 
 
 def gap_bare_directory_evidence_accepted() -> None:
-    print("# REDISCOVERED-GAP-BARE-DIRECTORY-EVIDENCE -- a bare (no trailing slash) EXISTING "
-          "directory used to REFUSE; row 1245: now silently ACCEPTED. Named, not silenced.")
+    print("# REDISCOVERED-GAP-BARE-DIRECTORY-EVIDENCE, NOW CLOSED -- a bare (no trailing "
+          "slash) EXISTING directory must REFUSE (row 1245's repair: the directory-vs-file "
+          "distinction is back).")
     before = _current_max_id(DEST)
-    rc, out, err = _run_led(DEST, "--evidence", "bootstrap",
+    # REAL BUG, FOUND AND FIXED IN THIS SAME REPAIR PASS: the scratch-rewire commit (edd0cb1)
+    # truncated this probe's value from the ORIGINAL fixture's own "bootstrap/templates" (git
+    # show 6361c82) down to a bare "bootstrap" -- losing the "/" that makes a value PATH-SHAPED
+    # at all (`_is_path_shaped`'s own rule, ported byte-faithfully off legacy's `/*|./*|*/*` case
+    # pattern: a value with NO "/" anywhere, and not starting with "/" or "./", is never
+    # path-shaped, so the guard never even LOOKS at it -- silently vacuous, not merely wrong).
+    # Worse, the scratch project scaffold (bootstrap/new-project.sh --new-world) carries no
+    # "bootstrap/" tree of its own at all, so even the untruncated value would not have existed
+    # in THIS DEST regardless. ".claude/logs" is a real, EXISTING directory every scaffolded
+    # project carries (bootstrap/new-project.sh's own apparatus.json/logs scaffold), and it
+    # genuinely contains a "/" -- the value this case actually needs to exercise the check.
+    rc, out, err = _run_led(DEST, "--evidence", ".claude/logs",
                              "decision", f"{TAG}: bare directory evidence probe")
     after = _current_max_id(DEST)
-    _check("OBSERVED: guard does NOT refuse the bare directory (exit 0)", rc == 0)
-    _check("OBSERVED: a row WAS written (max id advanced by one) -- the gap, reproduced",
-           after == before + 1)
+    _check("guard REFUSES the bare directory (nonzero exit)", rc != 0)
+    _check("no row was written (max id unchanged)", after == before)
+    _check("teach-text names it a DIRECTORY, not a file", "DIRECTORY" in err)
 
 
 def green_live_file_evidence() -> None:
     print("# GREEN — a live --evidence FILE: MUST ACCEPT, real row lands, round-trip verified "
-          "(unaffected by the gap -- a real file was always meant to be accepted)")
+          "(unaffected either way -- a real file was always meant to be accepted)")
     rc, out, err = _run_led(DEST, "--evidence", "led",
                              "decision", f"{TAG}: live file evidence probe")
     _check("guard ACCEPTS (exit 0)", rc == 0)
@@ -185,7 +221,7 @@ def green_live_file_evidence() -> None:
 
 def green_explicit_directory_evidence() -> None:
     print("# GREEN — --evidence directory cited via trailing slash: MUST ACCEPT "
-          "(unaffected by the gap)")
+          "(unaffected either way)")
     rc, out, err = _run_led(DEST, "--evidence", "legacy/",
                              "decision", f"{TAG}: explicit trailing-slash directory probe")
     _check("guard ACCEPTS the explicitly-cited directory (exit 0)", rc == 0)
@@ -195,21 +231,22 @@ def green_explicit_directory_evidence() -> None:
 
 
 def gap_statement_path_no_warning() -> None:
-    print("# REDISCOVERED-GAP-STATEMENT-PATH-NO-WARNING -- a dead path-shaped token in "
-          "STATEMENT prose used to WARN-but-write; row 1245: it still writes, but the warning "
-          "no longer fires at all (the scanner is gone). Named, not silenced.")
+    print("# REDISCOVERED-GAP-STATEMENT-PATH-NO-WARNING, NOW CLOSED -- a dead path-shaped "
+          "token in STATEMENT prose must WARN-but-write (row 1245's repair: the scanner is "
+          "back).")
     rc, out, err = _run_led(DEST, "decision",
                              f"{TAG}: about to write /tmp/does-not-exist-nbdr-statement-probe next")
-    _check("write still succeeds (exit 0, unaffected)", rc == 0)
-    _check("OBSERVED: NO warning is printed at all (the scanner does not exist -- the gap, "
-           "reproduced; this is NOT the guard correctly staying silent, it is the guard being "
-           "absent)", "WARNING" not in err)
+    _check("write still succeeds (exit 0, WARN-only, never a refusal)", rc == 0)
+    _check("a WARNING IS printed (the scanner fires)", "WARNING" in err)
+    _check("the flagged token itself is echoed in the warning",
+           "/tmp/does-not-exist-nbdr-statement-probe" in err)
 
 
 def gap_statement_multiple_path_tokens_no_warning() -> None:
-    print("# REDISCOVERED-GAP-STATEMENT-MULTI-PATH-NO-WARNING -- THREE dead path-shaped tokens "
-          "in one STATEMENT used to fire ONE preamble + a list (AUTOHARN_BACKFLOW finding 5's "
-          "own fix); row 1245: now NO warning fires at all, for any count. Named, not silenced.")
+    print("# REDISCOVERED-GAP-STATEMENT-MULTI-PATH-NO-WARNING, NOW CLOSED -- THREE dead "
+          "path-shaped tokens in one STATEMENT must fire ONE preamble + a list (AUTOHARN_"
+          "BACKFLOW finding 5's own fix, preserved by the reimplementation), not once per "
+          "token.")
     tok_a = "/tmp/does-not-exist-nbdr-multi-a"
     tok_b = "/tmp/does-not-exist-nbdr-multi-b"
     tok_c = "./tmp/does-not-exist-nbdr-multi-c"
@@ -217,30 +254,75 @@ def gap_statement_multiple_path_tokens_no_warning() -> None:
         DEST, "decision",
         f"{TAG}: about to write {tok_a} and {tok_b} then {tok_c} across three separate files",
     )
-    _check("write still succeeds (exit 0, unaffected)", rc == 0)
-    _check("OBSERVED: NO preamble line fires (finding 5's own fix has nothing left to regress "
-           "-- there is no warning mechanism left to over-print)",
-           err.count("led: WARNING -- the statement contains") == 0)
-    _check("OBSERVED: none of the three tokens are echoed in a warning list (nothing scans for "
-           "them)", tok_a not in err and tok_b not in err and tok_c not in err)
+    _check("write still succeeds (exit 0, WARN-only, never a refusal)", rc == 0)
+    _check("exactly ONE preamble line fires (finding 5's own collapse-the-spam fix holds)",
+           err.count("led: WARNING -- the statement contains") == 1)
+    _check("all three tokens are echoed in the ONE warning's list",
+           tok_a in err and tok_b in err and tok_c in err)
 
 
 def green_row_citation_untouched() -> None:
-    print("# GREEN (caveat: passes today for a DIFFERENT reason) — row:<id> citation in "
-          "statement: no warning fires -- true, but only because NOTHING triggers a warning "
-          "right now, not because the scanner correctly excludes row: citations. Re-verify for "
-          "the right reason once row 1245 lands.")
+    print("# GREEN, RIGHT REASON NOW VERIFIED — row:<id> citation in statement: no warning "
+          "fires, and now for the RIGHT reason (the scanner exists and correctly excludes "
+          "row: citations from its scope), not merely because nothing scans at all.")
     rc, out, err = _run_led(DEST, "decision", f"{TAG}: row:1 citation untouched probe")
     _check("write succeeds (exit 0)", rc == 0)
     _check("no path-shape WARNING fires for a row: citation", "WARNING" not in err)
 
 
 def green_url_untouched() -> None:
-    print("# GREEN (caveat: passes today for a DIFFERENT reason) — URL in statement: no "
-          "warning fires -- same caveat as the row:<id> case above.")
+    print("# GREEN, RIGHT REASON NOW VERIFIED — URL in statement: no warning fires, now "
+          "verified for the right reason (the scanner exists and correctly excludes URLs).")
     rc, out, err = _run_led(DEST, "decision", f"{TAG}: https://example.com/nbdr-probe untouched")
     _check("write succeeds (exit 0)", rc == 0)
     _check("no path-shape WARNING fires for a URL", "WARNING" not in err)
+
+
+def red_first_content_free_review_statement() -> None:
+    print("# RED-FIRST-CONTENT-FREE-REVIEW-STATEMENT -- `led review` on a content-free "
+          "statement (run12 ledger row 20's own 4-char specimen, verbatim) still writes "
+          "(WARN-only, never a refusal), and now prints a WARNING naming the "
+          "content-free-review-audit tracker item (strengthened-tier review finding, this arc: "
+          "the guard was byte-faithfully ported off legacy-led.tmpl's own "
+          "warn_content_free_review_statement, but silently left un-wired from cmd_review when "
+          "the sibling path-shape scanner was reinstated).")
+    rc0, out0, err0 = _run_led(DEST, "decision", f"{TAG}: content-free-review target row")
+    assert rc0 == 0, f"could not seed a target row: {out0!r} {err0!r}"
+    target_id = _current_max_id(DEST)
+    rc1, out1, err1 = _run_led(DEST, "register-principal", "acdg-reviewer", "model",
+                                "--purpose", "artifact-claim-dereference-guard fixture "
+                                "content-free-review case")
+    assert rc1 == 0, f"could not register reviewer principal: {out1!r} {err1!r}"
+    rc, out, err = _run_led(DEST, "review", str(target_id), "attest", "self-review", "test",
+                             env={"LED_ACTOR": "acdg-reviewer"})
+    _check("write still succeeds (exit 0, WARN-only, never a refusal)", rc == 0)
+    _check("a WARNING is printed (the content-free guard fires)", "WARNING" in err)
+    _check("the warning names this tracker item",
+           "content-free-review-audit" in err)
+    _check("the warning points at the retroactive check (./audit --review-gap)",
+           "review-gap" in err)
+    _check("the warning states the normalized 4-char length of the specimen",
+           "4" in err and "whitespace-normalized" in err)
+
+
+def green_genuine_review_statement_no_warning() -> None:
+    print("# GREEN, RIGHT REASON VERIFIED — a review statement of ordinary length gets NO "
+          "content-free warning: verified for the right reason (the guard exists and correctly "
+          "passes a genuine statement), not merely because nothing checks at all.")
+    rc0, out0, err0 = _run_led(DEST, "decision", f"{TAG}: genuine-review target row")
+    assert rc0 == 0, f"could not seed a target row: {out0!r} {err0!r}"
+    target_id = _current_max_id(DEST)
+    rc1, out1, err1 = _run_led(DEST, "register-principal", "acdg-reviewer-2", "model",
+                                "--purpose", "artifact-claim-dereference-guard fixture "
+                                "genuine-review case")
+    assert rc1 == 0, f"could not register reviewer principal: {out1!r} {err1!r}"
+    rc, out, err = _run_led(
+        DEST, "review", str(target_id), "attest", "self-review",
+        f"Confirmed: reviewed this decision's statement directly against the stated criteria "
+        f"row {target_id}; matches exactly, no discrepancies found ({TAG}).",
+        env={"LED_ACTOR": "acdg-reviewer-2"})
+    _check("write succeeds (exit 0)", rc == 0)
+    _check("no content-free WARNING fires for a genuine-length statement", "WARNING" not in err)
 
 
 DEST: Path
@@ -283,6 +365,8 @@ def main() -> int:
         gap_statement_multiple_path_tokens_no_warning()
         green_row_citation_untouched()
         green_url_untouched()
+        red_first_content_free_review_statement()
+        green_genuine_review_statement_no_warning()
     except BaseException as exc:  # noqa: BLE001 -- last-resort net, see led-help-token-closure's
         # own identical fix for the reasoning: an uncaught exception here must not leak the
         # boundary_service subprocess or the scratch schema/kern/role.
@@ -302,19 +386,20 @@ def main() -> int:
         raise crashed_with
 
     if FAILURES:
-        print(f"\nSPECIMEN INERT — {len(FAILURES)} check(s) failed against the OBSERVED CURRENT "
-              f"BEHAVIOR this fixture now expects: {FAILURES}\nscratch left standing as "
-              f"evidence:\n  tempdir: {tmpdir}\n  schema: {SCHEMA}/{KERN}/role {ROLE} "
-              f"(db {PGDB}@{PGHOST})")
+        print(f"\nSPECIMEN RED — {len(FAILURES)} check(s) failed against the EXPECTED "
+              f"(guard-holds) BEHAVIOR this fixture now requires: {FAILURES}\nscratch left "
+              f"standing as evidence:\n  tempdir: {tmpdir}\n  schema: {SCHEMA}/{KERN}/role "
+              f"{ROLE} (db {PGDB}@{PGHOST})")
         return 1
 
     _drop_scratch()
     shutil.rmtree(tmpdir, ignore_errors=True)
-    print(f"\n# artifact-claim-dereference-guard: all cases match OBSERVED CURRENT BEHAVIOR -- "
-          f"the --evidence dereference guard and the path-shaped-statement warning are BOTH "
-          f"ABSENT from the served CLI (ledger row 1245, open work item), reproduced here as "
-          f"REDISCOVERED-GAP-* cases rather than silently passed or silently failed. "
-          f"Scratch torn down to zero residue. Tag: {TAG}")
+    print(f"\n# artifact-claim-dereference-guard: all cases match EXPECTED (guard-holds) "
+          f"BEHAVIOR -- the --evidence dereference guard, the path-shaped-statement warning, "
+          f"and the content-free-review-statement warning are ALL wired into the served CLI "
+          f"(ledger row 1245 + this arc's own strengthened-tier-review follow-up), the "
+          f"REDISCOVERED-GAP-*/RED-FIRST-* cases now asserting each guard holds rather than the "
+          f"gap reproducing. Scratch torn down to zero residue. Tag: {TAG}")
     return 0
 
 

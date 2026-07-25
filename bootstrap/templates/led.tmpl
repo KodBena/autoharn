@@ -54,9 +54,17 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deploymen
 
 sys.path.insert(0, str(AUTOHARN / "serving"))
 sys.path.insert(0, str(AUTOHARN / "filing"))
+sys.path.insert(0, str(AUTOHARN / "engine"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
     import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
+    import review_gap_thresholds as rgt  # noqa: E402  (guard-trio port, ledger row 1600's sibling
+    # finding: the ONE HOME (ADR-0012 P1) for the content-free-review-statement threshold/
+    # normalization is engine/review_gap_thresholds.py -- legacy-led.tmpl (bash) had to shell out
+    # to it via a python3 subprocess because bash cannot import Python; this served CLI is ALREADY
+    # Python, so the house idiom is a direct top-of-file import, same shape as the `bcc`/`er`
+    # imports immediately above, never a second hand-copied threshold or a subprocess round trip
+    # for a fact this same interpreter can just import.
 except ImportError as _e:
     print(f"led: cannot import autoharn's serving/boundary_cli_client.py under "
           f"AUTOHARN={AUTOHARN} ({_e.__class__.__name__}: {_e})", file=sys.stderr)
@@ -1334,6 +1342,22 @@ _CLI_USAGE_LINE_RE = re.compile(r'(?:^|\n)\s*usage:\s', re.IGNORECASE)
 _CLI_USAGE_FLAG_RE = re.compile(r'(?:^|\s)--[a-zA-Z][\w-]*')
 _CLI_USAGE_FLAG_RUN_THRESHOLD = 3
 
+# ledger row 1246 (led-decision-help-garbage-gap): the CLI-usage-guard fingerprint (1) above
+# already catches a `--help`/`--foo` DASH-prefixed token anywhere in the statement -- but a BARE,
+# non-dash help-seeking word as the ENTIRE statement (`led decision help`) matches none of the
+# three existing fingerprints (no dash, no 'usage:' line, no flag run) and was never a member of
+# LED_FLAG_VOCAB/`refuse_flag_in_statement`'s own vocabulary either (that guard only refuses a
+# statement word that is an EXACT match for a KNOWN led FLAG token -- `help` gates no ledger
+# column, so it was never a member -- seen-red/led-help-token-closure/run_fixtures.py's own
+# REDISCOVERED-GAP-BARE-HELP module docstring). This is the SAME defect class the garbage-
+# statement guard exists to close (a help-seeking, content-free word landing as a PERMANENT
+# ledger row) reopened by the CLI rebase for exactly this one non-dash-prefixed token class.
+# Enumerated here as a CLOSED vocabulary (never a substring/prefix match -- "please help me
+# understand X" is ordinary prose and must stay accepted): the statement, once whitespace-
+# normalized and casefolded, is EXACTLY one of these bare, dash-free help-seeking tokens, and
+# carries no other word.
+_BARE_HELP_STATEMENT_TOKENS = {"help", "-h", "--help", "h", "?"}
+
 
 def _cli_usage_guard_violation(statement: str) -> str | None:
     """Ledger row 1159 (garbage-statement guard, class-ratified fail-safe additive-refusal
@@ -1341,15 +1365,22 @@ def _cli_usage_guard_violation(statement: str) -> str | None:
     ./led and always too afraid to try, lest I add something to the ledger by mistake... fumbled
     agent invocations have WRITTEN CLI usage text into a ledger as permanent rows.' This is a
     HEURISTIC NET OVER THE CLASS (ADR-0011 Rule 4), never an exhaustive parser of every CLI's
-    own usage-text shape -- three independent, deliberately loose fingerprints, any one of which
+    own usage-text shape -- four independent, deliberately loose fingerprints, any one of which
     is enough: (1) a bare `--help` token (the single most common fumbled-invocation residue);
     (2) a `usage:` line (argparse's/legacy-led.tmpl's own convention, and this file's own,
     verbatim); (3) a RUN of three or more `--flag`-shaped tokens (captured multi-option usage/
     help text reads as a dense cluster of these; an ordinary prose statement essentially never
-    does). Returns the violation's own human-readable reason, or None when the statement is
-    clean. Runs ONLY on the generic <kind> <statement...> write path (cmd_generic), exactly
-    where `led review`/`led work *` do NOT run it -- those build their statements from typed
-    fields, never raw user free text captured from a terminal."""
+    does); (4) the WHOLE statement, whitespace-normalized, is nothing but a bare help-seeking word
+    (ledger row 1246 -- `_BARE_HELP_STATEMENT_TOKENS`, a closed vocabulary, exact match only, so
+    prose that merely CONTAINS the word 'help' is never caught). Returns the violation's own
+    human-readable reason, or None when the statement is clean. Runs ONLY on the generic <kind>
+    <statement...> write path (cmd_generic), exactly where `led review`/`led work *` do NOT run
+    it -- those build their statements from typed fields, never raw user free text captured from
+    a terminal."""
+    if statement.split() and statement.strip().casefold() in _BARE_HELP_STATEMENT_TOKENS:
+        return ("is nothing but a bare help-seeking word "
+                f"({sorted(_BARE_HELP_STATEMENT_TOKENS)}) -- a help-seeking invocation, not "
+                "authored ledger content")
     if _CLI_USAGE_HELP_TOKEN_RE.search(statement):
         return "contains a bare '--help' token"
     if _CLI_USAGE_LINE_RE.search(statement):
@@ -1359,6 +1390,171 @@ def _cli_usage_guard_violation(statement: str) -> str | None:
         sample = ", ".join(sorted({h.strip() for h in flag_hits})[:5])
         return f"contains a run of {len(flag_hits)} option-flag-shaped tokens ({sample}, ...)"
     return None
+
+
+# --- artifact-claim-dereference-guard (ledger row 1245, CLI-REBASE FEATURE-LOSS repair) --------
+# REHOMED HERE, CLI-SIDE, deliberately: this is the SAME layer the garbage-statement guard above
+# and the eight statement grammars above THAT already live at (cmd_generic's own pre-flight,
+# right before a payload is ever built) -- a check against THIS OPERATOR'S OWN FILESYSTEM, which
+# only the CLI process (running on the operator's own checkout) can see; the boundary service
+# (serving/boundary_service.py) runs wherever the deployment's boundary_url points, not
+# necessarily this filesystem at all, so a boundary-side dereference would be dereferencing the
+# WRONG filesystem for a local `--evidence <path>` claim. Ported byte-faithfully off the legacy
+# tool's own final shape (git show b77ee7a, then the night-build-defect-repair follow-on
+# recovered from the pre-retirement legacy-led.tmpl at commit 93affa0^ -- see this item's own
+# ledger row 1245 and seen-red/artifact-claim-dereference-guard/run_fixtures.py's REDISCOVERED-GAP
+# cases, which this repair flips back from "gap reproduced" to "guard holds").
+#
+# THE ORIGINAL SPECIMEN CLASS (ledger rows 896-899): row 896 recorded an artifact-written-at-
+# <path> claim; row 897 is the correction -- the Write silently landed at a DIFFERENT, mistyped
+# path, so "the Write call returned success" witnessed A path, not THE claimed path; row 898
+# names the cheap universal check the specimen skipped (ls/wc of the exact claimed path) and the
+# class itself, artifact-claim-without-dereference; row 899 opened the item. Detection is
+# PATH-SHAPED, not "any string that could be a filesystem location" -- deliberately narrow so
+# free-text evidence (commit lists, prose, ledger citations) is never mistaken for a path:
+#   - row:<id> (led's own existing bare-reference citation form -- "a bare reference uses refs")
+#     and anything containing "://" (a URL) are NEVER path-shaped -- never checked, no exception
+#     needed because they were never claiming a LOCAL dereferenceable path in the first place.
+#   - anything starting with "/" or "./", or containing a "/" path separator anywhere, IS
+#     path-shaped -- cheap to check, so it is checked, unconditionally, before the write below.
+def _is_path_shaped(token: str) -> bool:
+    if token.startswith("row:") or "://" in token:
+        return False
+    return token.startswith("/") or token.startswith("./") or "/" in token
+
+
+def _evidence_dereference_violation(evidence: str) -> list[str] | None:
+    """Returns the REFUSED teach-text (as a list of stderr lines), or None if `evidence` passes
+    (either not path-shaped at all, or path-shaped and a live regular file, or path-shaped and an
+    EXPLICITLY-cited directory via a trailing '/'). A path-shaped value that does not exist is
+    refused; one that exists but is a bare (no trailing slash) directory is ALSO refused --
+    `Path.exists()` is true for a directory too, but row 898's own remediation is explicitly
+    'ls/wc of a FILE', so a bare directory citation reads as satisfying that remediation without
+    actually doing so (the directory-vs-file distinction this item's own night-build-defect-
+    repair follow-on closed, and the rebase silently dropped along with the rest of the guard)."""
+    if not _is_path_shaped(evidence):
+        return None
+    p = Path(evidence)
+    if not p.exists():
+        return [
+            f"led: REFUSED -- --evidence {evidence!r} is path-shaped (starts with / or ./, or "
+            f"contains a path separator) but nothing exists at that path right now.",
+            "  This is the artifact-claim-without-dereference class (ledger rows 896-899): a "
+            "Write to a mistyped path can succeed silently, and 'the Write call returned "
+            "success' witnesses A path, not THE claimed path -- row 898's cheap universal "
+            "check (ls/wc of the exact claimed path) is the one the specimen skipped.",
+            "  If the artifact is real but genuinely not on this checkout yet, do not cite it "
+            "as a bare path that cannot dereference: cite an antecedent ledger row that "
+            "describes it instead, e.g. --refs row:<id> (led's own existing 'a bare "
+            "reference uses refs' citation form) -- or re-run once the path is real.",
+        ]
+    if p.is_dir():
+        if evidence.endswith("/"):
+            return None  # trailing slash = an explicit, deliberate directory citation -- accepted
+        return [
+            f"led: REFUSED -- --evidence {evidence!r} exists but is a DIRECTORY, not a file "
+            f"(night-build-defect-repair: filesystem existence is also true for a directory, "
+            f"but row 898's remediation is explicitly 'ls/wc of a FILE' -- a bare directory "
+            f"citation reads as satisfying that remediation without actually doing so).",
+            f"  If you deliberately mean to cite the directory itself as the artifact, repeat "
+            f"the flag with a trailing slash to say so explicitly:",
+            f"    --evidence '{evidence}/'",
+            "  Otherwise cite the specific file inside it that is the actual evidence.",
+        ]
+    if not p.is_file():
+        return [
+            f"led: REFUSED -- --evidence {evidence!r} exists but is not a regular file (a "
+            f"symlink to nowhere, a device, a socket, or similar) -- cite the concrete file "
+            f"the artifact claim actually points at.",
+        ]
+    return None
+
+
+# STATEMENT PATH-SHAPE SCAN (night-build-defect-repair's own register (a) closing the SAME item:
+# the dereference guard above only ever looked at --evidence, never at $statement, and the
+# ORIGINAL rows 896-897 specimen was a path embedded IN THE STATEMENT TEXT itself
+# ("artifact written at <path>"), not passed via --evidence at all -- so the guard above alone
+# would never have caught its own motivating case). Called at the generic <kind> <statement...>
+# write path (cmd_generic) and at `led review` (cmd_review) -- the two places this served CLI
+# assembles a statement from raw user free text; `led work *`'s statements are built by this
+# file itself from typed fields (slug/title/resolution), never raw user free text, so there is no
+# user-suppliable path-shaped token there to scan -- not a gap, just nothing to check.
+#
+# WARN-ONLY, deliberately asymmetric to --evidence's hard REFUSE above: --evidence is a
+# dedicated, single-purpose flag whose entire job is to assert "this artifact exists, right now,
+# dereference it" -- there is no legitimate reason for it to name a path that does not yet exist,
+# so refusing is exactly right. A STATEMENT is free-text narration of an event; a path token
+# inside it can legitimately describe something ABOUT TO be created ("writing the spec to
+# design/X.md next"), something that exists on a different host/checkout than this one, or a path
+# quoted verbatim from someone else's report -- treating every such mention as a hard claim-of-
+# existence-now would refuse honest prose. A miss here is exactly what row 898 itself calls a
+# cheap check that a HUMAN reader should not have to notice unaided -- so it surfaces as a
+# WARNING, never a blocked write. AUTOHARN_BACKFLOW finding 5's own fix (collapse per-token
+# warning spam to one preamble + a list) is preserved here: N flagged tokens print ONE preamble
+# and an N-item list, never the paragraph repeated N times.
+def _warn_path_shaped_in_statement(statement: str) -> None:
+    flagged: list[str] = []
+    for word in statement.split():
+        if _is_path_shaped(word) and not Path(word).exists():
+            flagged.append(word)
+    if not flagged:
+        return
+    print("led: WARNING -- the statement contains path-shaped token(s) with nothing at that path "
+          "right now (artifact-claim-dereference-guard / night-build-defect-repair: the original "
+          "ledger rows 896-897 specimen was exactly this shape -- a path embedded in STATEMENT "
+          "PROSE, not passed via --evidence).", file=sys.stderr)
+    print("  WARN-ONLY, not a refusal: a statement may legitimately narrate a path that is about "
+          "to be created, or one that lives on a different host/checkout. If this statement is "
+          "asserting the artifact exists NOW, re-check the token(s) below before trusting this "
+          "row later.", file=sys.stderr)
+    for word in flagged:
+        print(f"    - {word}", file=sys.stderr)
+
+
+# CONTENT-FREE-REVIEW-STATEMENT TRIPWIRE (guard-trio's third member; strengthened-tier review of
+# this arc's own row-1245/1600 commit caught the gap, MODERATE/SILENT: legacy-led.tmpl's `led
+# review` case called this SIBLING guard immediately alongside warn_path_shaped_in_statement (git
+# show 93affa0^:bootstrap/templates/legacy-led.tmpl, the `review` case, both calls back to back
+# right after `statement="$*"`), but only the path-shape scanner was ported into this served
+# CLI's cmd_review -- this one was silently left behind. Ported here, faithfully, as this file's
+# third sibling of the same shape.
+#
+# TRACKER ITEM `content-free-review-audit`; WITNESSED SPECIMEN: run12 ledger row 20,
+# statement="test" (4 chars) -- a review row whose ENTIRE statement was 4 characters mechanically
+# discharged another row's countersign obligation under `<schema>.review_gap`'s own semantics
+# (kernel/lineage/s13-schema.sql: ANY unsuperseded, distinct-actor `attest` review discharges --
+# content is NEVER examined by the view). None of run12's six reviewer passes ever caught it; it
+# stands attested in the append-only record.
+#
+# WARN-ONLY, mirrors _warn_path_shaped_in_statement's own posture (same function shape, same
+# tone) -- unlike a hard REFUSE, a legitimately terse review DOES exist ("Confirmed, matches row
+# 4's stated criteria exactly." clears easily), so a false positive here is a harmless notice,
+# never a blocked write -- the write PROCEEDS either way. The retroactive, content-EXAMINING half
+# of this check lives in engine/review_gap_audit.py (`./audit --review-gap`) -- this tripwire is
+# intake-time and length-only, exactly the honest limit that module's own docstring names.
+#
+# THE SHARED THRESHOLD LIVES ONE PLACE (ADR-0012 P1): engine/review_gap_thresholds.py, imported
+# directly at top-of-file as `rgt` (house Python idiom -- the bash original had to shell out to
+# `python3 engine/review_gap_thresholds.py "$text"` and parse a `FLAGGED <n>`/`CLEAN <n>` line
+# because bash cannot import Python; this file is already Python, so it calls
+# `rgt.is_content_free`/`rgt.normalize` directly -- same one-home threshold, no subprocess, no
+# hand-copied number). The bash original's own fail-open posture ("Fails OPEN on any subprocess
+# trouble ... a tripwire that cannot run must never block the write it is only ever supposed to
+# warn about") is preserved in spirit: an import-time failure of `review_gap_thresholds` already
+# takes the whole CLI down via the top-of-file ImportError guard above (fail-closed, before any
+# command ever runs) rather than this function ever needing its own runtime try/except -- there
+# is no in-flight subprocess step left to fail once the call is a direct, already-validated
+# import.
+def _warn_content_free_review_statement(statement: str) -> None:
+    if not rgt.is_content_free(statement):
+        return
+    n = len(rgt.normalize(statement))
+    print(f"led: WARNING -- this review's statement is very short ({n} whitespace-normalized "
+          f"chars). engine/review_gap_audit.py (./audit --review-gap, tracker item "
+          f"'content-free-review-audit') will FLAG this row if it discharges a countersign "
+          f"obligation -- state what you actually checked, not just the verdict.", file=sys.stderr)
+    print("  (warn-only tripwire, not a refusal -- a legitimate terse review exists; the write "
+          "proceeds either way)", file=sys.stderr)
 
 
 def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
@@ -1565,6 +1761,10 @@ def cmd_artifact_stat(cfg: bcc.ServedConfig, hash_: str) -> int:
 
 def cmd_review(cfg: bcc.ServedConfig, entry_id: int, verdict: str, independence: str,
                antecedent: int | None, statement: str) -> int:
+    # ORDER matches legacy-led.tmpl's `review` case exactly (git show 93affa0^, immediately after
+    # `statement="$*"`): content-free tripwire first, then the path-shape scanner.
+    _warn_content_free_review_statement(statement)
+    _warn_path_shaped_in_statement(statement)
     actor = _resolve_actor(cfg)
     # basis = statement, VERBATIM -- the legacy tool's own choice (bootstrap/templates/
     # legacy-led.tmpl's `led review` case: "basis \"$statement\"", no separate --basis flag on
@@ -1964,6 +2164,12 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                   file=sys.stderr)
             return 1
     if review_witness:
+        rw_violation = _review_witness_violation(cfg, review_witness)
+        if rw_violation is not None:
+            for line in rw_violation:
+                print(line, file=sys.stderr)
+            print("  NOTHING was written.", file=sys.stderr)
+            return 1
         disposition, review_ref = "witnessed", review_witness
     elif review_bookkeeping:
         disposition, review_ref = "bookkeeping", witness
@@ -2222,6 +2428,13 @@ def cmd_work_resolve_violation(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                       file=sys.stderr)
                 return 1
 
+    if review_witness:
+        rw_violation = _review_witness_violation(cfg, review_witness)
+        if rw_violation is not None:
+            for line in rw_violation:
+                print(line, file=sys.stderr)
+            print("  NOTHING was written.", file=sys.stderr)
+            return 1
     disposition, review_ref = ("witnessed", review_witness) if review_witness else ("deferred", None)
     actor = _resolve_actor(cfg)
     payload: dict = {"kind": "work_violation_disposition", "work_violation_class": class_,
@@ -2256,6 +2469,92 @@ def _current_row_by_id(cfg: bcc.ServedConfig, row_id: str) -> dict | None:
         if r.get("id") == rid:
             return r
     return None
+
+
+_REVIEW_WITNESS_ROW_RE = re.compile(r"row:(\d+)")
+
+
+def _review_witness_violation(cfg: bcc.ServedConfig, review_ref: str) -> list[str] | None:
+    """item review-witness-row-existence-check (ledger row 1600): a CLI-SIDE COURTESY PRE-FLIGHT
+    over `--review-witness`'s `row:<id>` sub-shape -- the SAME `row:(\\d+)` token pattern
+    kernel/lineage/s48-review-witness-existence.sql's own trigger matches (named there verbatim:
+    "Tokens matching row:<digits>"), so a citation this check accepts is a citation s48's own
+    BEFORE INSERT trigger will also accept, and vice versa. This is deliberately NOT a
+    replacement for s48 -- s48 remains the load-bearing, unrepresentable-at-the-database
+    invariant (a schema-owner bypassing this CLI entirely still hits s48); this is the CLI's own
+    fast, friendly teach-text BEFORE a round trip to the kernel, closing the exact incident this
+    item names (witnessed 2026-07-18: `led work close` accepted `--review-witness row:1594` when
+    no row 1594 existed -- the orchestrator guessed its own not-yet-assigned row id) one hop
+    earlier than the kernel's own refusal would.
+
+    TWO checks, in order, for EACH `row:<id>` token found (a `review_ref` with none -- prose,
+    `commit:<sha>`, `artifact:<hash>` -- is untouched here; commit/artifact witnesses have their
+    OWN existence checks elsewhere in this file/at s52, and free prose is s48's own named,
+    disclosed non-goal, WK1-c's sibling):
+      (1) EXISTENCE -- read via `GET /rows/{id}` (the RAW ledger table, matching s48's own
+          EXISTENCE-not-IN-FORCE denomination exactly -- a row later superseded still names a
+          real, once-written review event, so this check must NOT use `/rows/current`, which
+          `_current_row_by_id` above deliberately does use for --supersedes' different question).
+      (2) SANITY -- the close grammar's own words for this flag are 'a review already exists;
+          cite it' (this file's own usage text) -- so a row:<id> this check accepts should
+          plausibly BE that review, not an unrelated row an operator or agent cited by mistake
+          (a typo'd decision/finding id, say). Scoped to exactly what s15's own kind CHECK
+          licenses as the review-record shape: `kind = 'review'`. This is a NEW, CLI-side-only
+          heuristic layer -- s48 itself deliberately checks EXISTENCE only (its own header: "this
+          delta narrows WHICH OF THOSE ROWS are admitted, it does not widen which kinds may carry
+          the column" -- i.e. it never asked whether the cited row IS a review), so this sanity
+          leg closes a real, disclosed residual gap rather than duplicating s48 with less rigor.
+    Returns the REFUSED teach-text (a list of stderr lines), or None if every row:<id> token in
+    `review_ref` passes both checks (including the vacuous case of zero such tokens).
+
+    NETWORK-FAILURE POSTURE: this function catches `bcc.BoundaryRefusal` only (re-raising any
+    status other than 404, per the `if e.status != 404: raise` below). `bcc.BoundaryUnreachable`
+    is NOT caught here -- it propagates uncaught, out of this pre-flight and out of its callers,
+    to `__main__`'s own top-level handler (this file's bottom, `except (bcc.BoundaryRefusal,
+    bcc.BoundaryUnreachable, bcc.BoundaryClientError)`), which reports it fail-closed (exit 4,
+    restart teach-text) instead of letting the write this pre-flight guards ever attempt to
+    proceed. This is deliberate, not an oversight: the write this check exists to protect (`led
+    work close --review-witness ...` / the `--supersedes` correction path) would fail identically
+    against the SAME unreachable boundary one call later anyway, so there is no safe way to treat
+    an unreachable boundary as "the pre-flight silently passed" -- matching `_current_row_by_id`'s
+    own existing convention immediately above (it, too, lets a transport-level failure propagate
+    rather than swallowing it into a false negative)."""
+    lines: list[str] = []
+    for rid_str in _REVIEW_WITNESS_ROW_RE.findall(review_ref):
+        rid = int(rid_str)
+        try:
+            row = bcc.get_json(cfg.base, f"/rows/{rid}")
+        except bcc.BoundaryRefusal as e:
+            if e.status != 404:
+                raise
+            row = None
+        if row is None:
+            lines.append(
+                f"led: REFUSED -- --review-witness cites 'row:{rid}', but no ledger row {rid} "
+                f"exists (checked via GET /rows/{rid} -- the RAW table, existence not in-force "
+                f"status). This is the SAME defect kernel/lineage/s48-review-witness-existence.sql "
+                f"(ledger row 1600) refuses at INSERT time one hop later -- caught here first so "
+                f"you get the teach-text without a round trip. A witness citation naming a "
+                f"nonexistent row is a claim with a dangling evidence pointer, in the one place "
+                f"evidence pointers are load-bearing.")
+            lines.append(
+                f"  Cite an EXISTING row instead (e.g. --review-witness row:<id> naming an "
+                f"already-recorded review event), or use --review-deferred/--review-bookkeeping "
+                f"if no review exists yet. 'led --recent [N]'/'led show <id>' find real ids.")
+            continue
+        if row.get("kind") != "review":
+            lines.append(
+                f"led: REFUSED -- --review-witness cites 'row:{rid}', which exists but is a "
+                f"{row.get('kind')!r} row, not a 'review' row. This flag's own contract (this "
+                f"file's usage text) is 'a review already exists; cite it' -- citing an unrelated "
+                f"row's id (a typo'd decision/finding/etc.) reads as satisfying that contract "
+                f"without actually doing so, the SAME class of hazard "
+                f"artifact-claim-dereference-guard closes for --evidence, one field over.")
+            lines.append(
+                f"  Cite the id of the ACTUAL 'led review <id> <verdict> <indep> \"...\"' row "
+                f"that reviewed this work, or use --review-deferred/--review-bookkeeping if no "
+                f"review exists yet. 'led show {rid}' shows what row {rid} actually is.")
+    return lines or None
 
 
 def cmd_work_supersede_cascade(cfg: bcc.ServedConfig, argv: list[str]) -> int:
@@ -2416,6 +2715,14 @@ def cmd_generic(cfg: bcc.ServedConfig, kind: str, statement: str, shared: dict[s
                   f"text (e.g. reporting a real bug in that text), re-run with "
                   f"--statement-really-contains-cli-text to override.", file=sys.stderr)
             return 1
+    evidence_val = shared.get("--evidence")
+    if evidence_val:
+        violation_lines = _evidence_dereference_violation(evidence_val)
+        if violation_lines is not None:
+            for line in violation_lines:
+                print(line, file=sys.stderr)
+            return 1
+    _warn_path_shaped_in_statement(statement)
     payload: dict = {"kind": kind, "statement": statement}
     if shared.get("-f"):
         payload["rationale"] = f"files: {shared['-f']}"

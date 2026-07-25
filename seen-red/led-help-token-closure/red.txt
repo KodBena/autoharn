@@ -154,3 +154,28 @@ numeric entry-id, but catches a bare --help/-h/help/dash-leading-first-word befo
 ever fires. The SECOND (pre-existing) call on the statement words, after the three positionals
 are consumed, is untouched. GREEN-HELP-REVIEW-BARE now PASSes (exit 0) -- see the fixture's own
 green run above this addendum.
+
+---
+
+--- FIXUP ADDENDUM 3 (ledger row 1246, led-decision-help-garbage-gap, this session) ---
+
+RED-FIRST capture against the served CLI (bootstrap/templates/led.tmpl, CLI-rebase shape)
+BEFORE `_BARE_HELP_STATEMENT_TOKENS` was added to `_cli_usage_guard_violation`, scratch, same
+`led-help-token-closure` scaffold (HARNESS_PGHOST=192.168.122.1):
+
+REDISCOVERED-GAP-BARE-HELP: exit=0 row-count before=7 after=8 stored_statement='help' -- gap_reproduced=True (a bare 'help' word is committed verbatim; see module docstring's REDISCOVERED GAP paragraph -- this is EXPECTED CURRENT BEHAVIOR, not a fixture failure, and not silently accepted as fine either)
+
+Every other case in the fixture (GREEN-HELP-GENERIC, GREEN-HELP-REVIEW[-BARE], RED-DASH-FIRST-
+WORD-*, GREEN-MID-SENTENCE-DASH, GREEN-HELP-DECISION-DASHDASH, RED-DECISION-BOGUS-FLAG-STILL-
+REFUSED) PASSed unaffected -- exactly this ONE bare-word case reproduced the gap.
+
+FIXED (this session): `_cli_usage_guard_violation` (the SAME existing garbage-statement guard,
+ledger row 1159) extended with a fourth, closed-vocabulary fingerprint -- the whitespace-
+normalized, casefolded statement matching exactly one of {"help", "-h", "--help", "h", "?"} and
+nothing else is now REFUSED, same teach-text shape as the other three fingerprints, same
+`--statement-really-contains-cli-text` override (manually verified: `led decision help
+--statement-really-contains-cli-text` writes the row; `led decision "this will help fix the bug,
+please help review it"` -- prose merely CONTAINING the word -- writes unaffected, never flagged).
+After the fix, REDISCOVERED-GAP-BARE-HELP flips to gap_closed=True (refused, row count
+unchanged, teach-text names the fingerprint) -- see this session's own commit for the green
+capture of the whole fixture.
