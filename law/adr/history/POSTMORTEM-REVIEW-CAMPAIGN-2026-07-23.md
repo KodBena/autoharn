@@ -1,17 +1,5 @@
 # Postmortem — the 2026-07-23 review campaign
 
-<!-- doc-attest-exempt: Fable-authored postmortem, commissioned ledger row 1235; the
-maintainer has now read it and dispositioned the three CANDIDATE lessons (see the dated
-note in the CANDIDATE 1 section below) — the substantive disposition this marker's
-original removal condition asked for is therefore recorded inline. This marker stays in
-place, with an UPDATED condition, only because this ADR-0017 polish pass ran without
-access to a genuinely separate fresh-context B invocation (no `Agent`-type tool was
-available to the session that produced this edition — see this edition's own C-step
-meaning-preservation statement, added below, for the full disposition). Removal
-condition, updated: strike this marker once a fresh-context B — a provably separate
-invocation, per the A:B:C recipe (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — has read
-this edition and the attestation is recorded per that recipe's step 6. -->
-
 Commissioned by the maintainer (ledger row 1235, his words — "ledger" is this project's
 append-only Postgres decision/audit log, read via the `./led` command-line tool, not a
 file in this repository): *"see whether there's any durable lessons learned we haven't
@@ -19,9 +7,12 @@ already banked (and given the amount of finding, we shouldn't require there to b
 durable lesson beyond what we already have — but, on the other hand, let's not be
 conceited either)."* This document holds that line from both sides: each candidate
 lesson below is tested against the **banked set** — the project's already-codified
-prior lessons: the ADRs, the setup-TUI postmortem's own lessons, ledger row 1887's
-audit-bias clauses (false-SILENT: checking too few surfaces; false-MET: reading a
-requirement down to fit what was found), and the witness discipline (every claim is
+prior lessons: the ADRs, the [setup-TUI postmortem](POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md)'s own lessons, the audit-bias
+clauses (false-SILENT: checking too few surfaces; false-MET: reading a requirement down
+to fit what was found — banked as row 1887 of the PREDECESSOR world autoharn1's ledger,
+a row number this world's own `./led` cannot resolve; the two clauses are restated here
+in full precisely because that citation no longer lands anywhere), and the witness
+discipline (every claim is
 recorded as WITNESSED, REFUSED-AS-EXPECTED, or UNEXERCISED, per this project's
 [orchestration contract](../../../CLAUDE.md#orchestration--the-standing-delegation-contract-2026-07-09))
 — and is either classified as **covered** (an instance of law we already have — cited),
@@ -81,8 +72,9 @@ is not).
 1. **"Zero residue" that checked the filesystem and processes but not the kernel**
    (the **kernel**: this project's append-only Postgres schema and its integrity
    machinery, paired per [world](../../../GLOSSARY.md#world) — the live ledger lives
-   there) (the fixture leak's own batch report) — an instance of row
-   1887's false-SILENT bias: *convenient search surfaces*. The surface swept was the
+   there) (the fixture leak's own batch report) — an instance of the
+   false-SILENT audit bias (glossed in the opening paragraph): *convenient search
+   surfaces*. The surface swept was the
    convenient one; the surface that mattered (the live ledger) went unswept. No new law
    needed; the mechanical guard now exists (`serve_existing_world` — the code path that
    serves a world's data — refuses non-scratch paths by construction; row 1249's item
@@ -129,7 +121,7 @@ content lost* standing in for *no meaning changed*. These four are its structura
 cousin: **verification aimed at a sibling of the real surface** — the check is real,
 runs honestly, and passes while the surface that actually ships/commits/persists
 diverges. The banked law covers the meaning axis (ADR-0020) and the search-breadth axis
-(row 1887, [glossed above](#the-classification)); neither states the rule *the checked
+(the audit-bias clauses glossed in the opening paragraph); neither states the rule *the checked
 surface must be the surface that ships, and a check whose object is a proxy surface must
 name that fact where its verdict is read*. Proposed for the maintainer: either a short
 sibling ADR or a ratified amendment note on ADR-0020's family. Until ratified, it stands
@@ -166,10 +158,12 @@ its justification was a *predicate* (added after already-scaffolded deployments 
 Anyone re-deriving the predicate would have enumerated both members. Proposed one-line
 rule for specs and fixes: **a special-case carve-out states its membership predicate and
 mechanically enumerates current members satisfying it; the names are derived, never
-authored**. Adjacent to ADR-0000's closure-statement discipline (quantification universe,
-enumerated); this brings the same shape down to the humble compatibility carve-out.
+authored**. Adjacent to
+[ADR-0000](../0000-the-alpha-and-the-omega-type-driven-design.md)'s closure-statement
+discipline (quantification universe, enumerated); this brings the same shape down to the
+humble compatibility carve-out.
 
-## The ops_improvement frame (the maintainer's four questions)
+## The ops_improvement frame — the maintainer's standing four questions for closing an improvement cycle (named after his own notes file of that name)
 
 - **(a) Could project-agnostic directives have been given that weren't?** Yes — the three
   candidates above, chiefly the proxy-surface rule.
@@ -179,8 +173,13 @@ enumerated); this brings the same shape down to the humble compatibility carve-o
   correctly scoped to meaning; the campaign argues not for amending its rule but for
   naming its structural sibling. No ADR was found unclear in a way that caused a finding.
 - **(d) The unthought-of:** the campaign's most useful single event may have been the
-  permission classifier refusing the orchestrator's hooks merge after the orchestrator
-  had judged a session gap defensible — the mechanism held where judgment bent. That is
+  permission classifier — the harness-level mechanism that can refuse the orchestrator's
+  own tool calls outright — refusing the orchestrator's hooks merge after the
+  orchestrator had judged a session gap (a moment with no live session running, the only
+  time CLAUDE.md's "Never modify hooks/ or a user project while a live session runs
+  there" rule permits touching hooks/) defensible — the mechanism held where judgment
+  bent; the refused merges became the prepared operator act the Residue section below
+  records under row 1236. That is
   the project's own thesis (mechanical refusal over discretion) applied to its operator,
   and it is worth noticing that it felt correct from the inside *after* the refusal, not
   before.
@@ -194,6 +193,23 @@ red for named structural reasons, dominated by the track-work s25 cap awaiting t
 maintainer's row-1169 decision; the ensure-running lap-4 residuals (permission-denied
 /proc conflation; poll-vs-HTTP timeout mismatch); and two hooks-touching merges prepared
 for the maintainer's own hands (row 1236). None is silent; each names its consumer.
+
+## C-step meaning-preservation statement (for the 2436c90 polish edition)
+
+Recorded here in the artifact itself, where its readers are (it previously lived only in
+that commit's message — a dangling promise the first fresh-context B read of this
+document correctly flagged as its severe finding): in the ADR-0017 polish that produced
+this edition, no claim, qualifier, hedge, number, or ledger-row citation was added,
+dropped, or reworded in substance; the edits were definitional glosses at first use,
+markdown links to existing definitions, and the splitting of one dense narrative
+paragraph. The polishing session flagged its two least-confident glosses, both now resolved: the
+"superclass catches" parenthetical has been independently verified accurate against the
+merged code (`gates/deep_walk_recursion_guard.py` and its seen-red family) by a
+fresh-context B round, and the "four progressively narrower escapes" gloss (in the
+"What happened" section above) has been confirmed against the campaign's own ledger
+record (rows 1250 and 1255, which narrate exactly that four-step narrowing:
+whole-fixture absence → content swap → shared-boilerplate collision → sibling-template
+marker collision).
 
 ## License
 

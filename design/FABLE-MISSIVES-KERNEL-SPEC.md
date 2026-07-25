@@ -845,3 +845,58 @@ closely; none re-opens a Q1–Q7 ruling.
 orchestrator installs. The builder that executes this spec reports every §11 leg as
 WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED-with-blocker, and re-verifies §1's
 head-body table against the tree before authoring a line of SQL.*
+
+---
+
+## AMENDMENT 1 (2026-07-25) — `missive_regards` replaces the `regards` reuse; AWAITING MAINTAINER RATIFICATION (yes/no)
+
+**Witnessed defect in this spec's own text (builder stop-and-name, build 4881a8f on
+branch worktree-agent-a3366689a6462cdce).** §4/§5's `missive_disposed` items route the
+dispose event's subject through the pre-existing `regards` column. But `regards` is
+trigger-locked by base schema to review rows ONLY (s15's `validate_review`, unedited
+through all 57 deltas; its ELSE branch refuses ANY non-review row naming a non-NULL
+`regards` — witnessed live at both the SQL boundary function and the HTTP boundary:
+`Ledger policy: regards is reserved for kind=review.`). `validate_review` is not among
+the objects §1 licenses for re-issue, so a spec-literal build cannot write a single
+`missive_disposed` row: the dispose/acknowledgment half of the lifecycle is blocked;
+everything else in the family is witnessed working.
+
+**The amendment.** `missive_disposed`'s subject moves to a NEW dedicated column,
+`missive_regards` (nullable bigint), mirroring the review/`regards` design rather than
+squatting on it:
+
+- `missive_regards` is FORBIDDEN on every kind except `missive_disposed`, and MANDATORY
+  there (the same MANDATORY-ON-KIND / FORBIDDEN-ON-KIND idiom pair the build already
+  minted for the manifest gate);
+- a new trigger `validate_missive_regards` (s58's own object, in-scope) enforces the
+  two-way correlation: the named row must be an in-world `missive_received` row, with
+  the same nonexistent-target refusal the build already witnessed;
+- `validate_missive_disposition` and the `missive_disposed`-mandatory CHECK re-target
+  `missive_regards`; `validate_review` and the `regards` column are NOT touched — the
+  review machinery keeps its one home, missives get theirs (ADR-0012 P1 on both sides);
+- `compute_row_hash`/serialization re-issue mechanically for the added column (the
+  hash-coverage gate is the witness, as in the build);
+- the six views' `regards` references for missive rows re-point to `missive_regards`.
+
+**Why not the alternative.** Widening `validate_review` to admit `missive_disposed`
+would braid missive semantics into the review trigger's segregation-of-duties branch —
+two concerns, one mechanism, and every future edit to either would risk the other.
+Rejected on ADR-0012/ADR-0008 grounds; the builder's own analysis concurs.
+
+**Closure addendum (ADR-0000 form).** *Invariant:* every ledger reference column is
+correlated to its kind(s) by a two-way trigger-enforced rule with exactly one owning
+mechanism per column. *Quantification universe:* the reference columns of the ledger
+table as of s59 — `subject`, `supersedes`, `regards`, and (this amendment)
+`missive_regards`; enumerated by the kind-shape manifest gate's column census, which
+refuses an unmanifested column mechanically. *Denomination check:* no numeric bounds;
+vacuous, named as such.
+
+**History note:** `-- HISTORY: safe` — additive column + additive trigger + view/hash
+re-issue; zero stored rows change (no `missive_disposed` row exists anywhere, since the
+defect made writing one impossible).
+
+**On ratification:** the same builder continues in its worktree (the branch holds all
+context); the dispose/acknowledgment legs of §11 move from UNEXERCISED-with-blocker to
+witnessed; the family then takes its strengthened-tier review as one whole and merges
+together. Until then the branch does not merge — a kernel family ships whole or not at
+all.

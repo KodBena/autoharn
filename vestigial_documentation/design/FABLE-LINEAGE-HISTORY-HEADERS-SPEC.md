@@ -5,7 +5,12 @@ maintainer's yes/no; consumer, named: the ./migrate header gate (_require_histor
 and the maintainer ratifying this exact edit. Removal condition: strike when superseded
 by a polished live edition, if one is ever needed. -->
 
-- **Status:** DRAFT FOR MAINTAINER RATIFICATION (yes/no). Fable-authored 2026-07-22.
+- **Status:** RATIFIED 2026-07-25 (maintainer YES) and BUILT (commit 5695fa7, which had landed the licensed edits ahead of ratification, per the
+  spec's own closure statement -- kernel/lineage/s41-principal-bindings-and-relations.sql,
+  s42-row-hash-full-coverage.sql, s49-journaler-overflow-guard.sql, and
+  bootstrap/new-project.sh all carry the licensed edits, comment-only, `./migrate`'s
+  header gate witnessed refusing before and passing after on a scratch run). Fable-authored
+  2026-07-22.
 - **What this licenses, exactly:** adding one `-- HISTORY: safe -- <grounds>` header line
   to each of three `kernel/lineage/` files, plus one wording repair inside s49 and one
   false-prose repair in `bootstrap/new-project.sh`. **No SQL statement changes. Zero
