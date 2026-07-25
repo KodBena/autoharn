@@ -1,5 +1,11 @@
 # Postmortem — the 2026-07-23 review campaign
 
+<!-- doc-attest-exempt: MECHANICAL EDIT after attestation. This document passed its
+five-round A:B:C loop and carries a recorded CLEAN attestation for commit cfb315c's
+content; the sole change since is ONE link retarget (ADR-0021 moved to law/adr/backlog/
+when the maintainer shelved that initiative, 2026-07-25) — no word of prose changed.
+Removal condition: strike at the next substantive edit's own fresh-B re-attestation. -->
+
 Commissioned by the maintainer (ledger row 1235, his words — "ledger" is this project's
 append-only Postgres decision/audit log, read via the `./led` command-line tool, not a
 file in this repository): *"see whether there's any durable lessons learned we haven't
@@ -129,7 +135,7 @@ here as the campaign's principal harvest.
 
 > **Maintainer disposition, 2026-07-25:** the maintainer read this postmortem and
 > directed a new review-class ADR. It is now drafted as
-> [ADR-0021 — Review reads the real object](../0021-the-checked-surface-is-the-shipped-surface.md)
+> [ADR-0021 — Review reads the real object](../backlog/0021-the-checked-surface-is-the-shipped-surface.md)
 > (DRAFT, awaiting ratification). CANDIDATE 1 above became ADR-0021's Rule A (the
 > proxy-surface rule, essentially unchanged). CANDIDATE 2 below (fix-comments are
 > claims) became ADR-0021's Rule B — and, per the maintainer's own reading at

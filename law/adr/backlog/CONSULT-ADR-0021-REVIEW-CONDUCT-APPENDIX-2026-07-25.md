@@ -22,7 +22,7 @@ this file then stands as the dated consult record. -->
 ## What this document is
 
 This document proposes review-conduct points for an appendix to the draft ADR-0021
-(`law/adr/0021-the-checked-surface-is-the-shipped-surface.md`). The intended reader is a
+(`law/adr/backlog/0021-the-checked-surface-is-the-shipped-surface.md`). The intended reader is a
 working reviewer — a person or agent examining someone else's delivered change — and each
 point names something that is easy to miss or forget during a review. The points are drawn
 from two sources, named per point: the 2026-07-23 review campaign in this project (ledger
