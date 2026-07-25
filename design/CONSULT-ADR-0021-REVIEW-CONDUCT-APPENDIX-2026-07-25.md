@@ -1,4 +1,4 @@
-# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 4)
+# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 5)
 
 <!-- doc-attest-exempt: ADR-0018 consult deliverable, authored 2026-07-25 by a fresh-context
 Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md. REVISION 3,
@@ -9,7 +9,9 @@ citation-or-disclaimer contract enforced on every point; FMEA verified and cited
 detectability-axis analogue; audience-frame and gloss repairs); revision 4 answers the
 maintainer's rev-3 feedback ("every obligation... needs to highlight which principal is
 responsible for discharging it") by adding a uniform "Discharged by" line to all 21 points,
-against the closed principal vocabulary the intro defines. Awaiting the maintainer's
+against the closed principal vocabulary the intro defines; revision 5 repairs the B round's
+findings on that layer (point 21's ownerless core act, point 9's unanchored supplying duty,
+the intro taxonomy's missing third shape). Awaiting the maintainer's
 re-read and cherry-pick into ADR-0021 before that ADR is ratified. Editorial note for the
 ratification pass, kept out of the point bodies: point 17's rule (review debt survives
 merge) is candidate ADR-0021 PREAMBLE material per the maintainer's own feedback-round
@@ -41,8 +43,10 @@ principal responsible for the obligation, from a closed vocabulary of three role
 **THE REVIEWER** is the person or agent performing the review. **THE COMMISSIONER** is
 whoever orders the review and consumes its report — in this project, the orchestrator; the
 commissioner owns dispatch, triage, merge decisions, and the work tracker. **THE BUILDER**
-is the author of the change under review. Where one point genuinely binds two principals in
-different clauses, the line names both and says which clause is whose.
+is the author of the change under review. A "Discharged by" line takes one of three shapes:
+a single owner; two principals with each clause assigned to its owner; or one identical
+clause binding whichever principal it catches, quantified over all three roles (point 15 is
+the one instance of the third shape).
 
 Format, for cherry-picking: each point is numbered and self-contained — one imperative a
 reviewer can execute, a one-line reason, and its grounding. No point depends on another;
@@ -190,7 +194,10 @@ against what checklist, with what result) as a required output, not a courtesy (
 **9. Compare the delivery against the commission before comparing the diff against the
 delivery report.**
 The gap between what was asked for and what the report answers is where undelivered scope
-hides; a diff review can be flawless while the commission is half-done.
+hides; a diff review can be flawless while the commission is half-done. The comparison
+presupposes the reviewer holds the commission itself: the review dispatch carries the
+commission text verbatim, never a paraphrase (a paraphrase silently narrows the scope being
+checked against).
 *Reason:* the report frames the review around what was built, and nothing in that frame
 points at what was not built.
 *Grounding:* campaign — the umbrella delivery answered a five-part commission with named
@@ -198,8 +205,8 @@ partials; reviewing against the commission is what kept the unbuilt parts visibl
 (rows 1228, 1257). Literature — this is the traceability half of inspection entry practice:
 the work product is examined against its governing specification, not against its own
 description (Fagan 1976; Wiegers 2002). *(Rev. 1 point 9, first fact; split per ADR-0008.)*
-*Discharged by:* THE COMMISSIONER supplies the commission text (verbatim, per this project's
-standing rule) with the review dispatch; THE REVIEWER performs the comparison.
+*Discharged by:* THE COMMISSIONER supplies the commission text verbatim with the review
+dispatch (the presupposition the body names); THE REVIEWER performs the comparison.
 
 **10. Convert the builder's own list of admitted partials into tracked work items at review
 time; do not let an honest "not done" dissolve at merge.**
@@ -379,8 +386,10 @@ document until a pass finds no severe meaning change). Literature — Fagan's ex
 rework is not accepted
 on the author's word; non-trivial rework triggers re-inspection by the team, repeated until
 the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
-*Discharged by:* THE COMMISSIONER — dispatching each fresh lap, keeping it blind to prior
-findings, and deciding termination on a clean lap are all dispatch acts.
+*Discharged by:* THE COMMISSIONER dispatches each fresh lap, keeps it blind to prior
+findings, and decides termination on a clean lap; THE REVIEWER conducts each lap as a full
+fresh read, not a re-check of the prior lap's findings (the dispatch-vs-conduct split of
+point 5, applied per lap).
 
 ---
 
