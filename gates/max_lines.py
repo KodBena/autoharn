@@ -213,7 +213,11 @@ BASELINE: dict[str, int] = {
     # discharge-semantics widening, feeding the ASP program that ./judge's differential compares
     # against the (also-widened) SQL floor. Written plain, no golfing.
     "engine/ledger_edb.py":                             734,
-    "tools/workflow_compile.py":                        672,
+    # Reconciled +61 to 733 (2026-07-26, row 1307/1308 follow-up): resolve_repo_root() +
+    # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
+    # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
+    # hand-edit after the fact; new refusal surface, not padding. Written plain, no golfing.
+    "tools/workflow_compile.py":                        733,
     # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved
     # to tools/setup_tui/durable_decisions_data.py. The ratchet is the working: a file that
