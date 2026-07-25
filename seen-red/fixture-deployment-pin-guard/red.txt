@@ -1,0 +1,11 @@
+GREEN ok: GREEN-real-tree
+GREEN ok: RED_REPO_LED
+  /tmp/fixture-deployment-pin-guard-jbihm1si/red-repo-led.py:8: subprocess call invokes THIS CHECKOUT'S OWN `led` (a REPO-rooted path) instead of a scaffolded scratch copy — this repo's own root-level verb shims resolve their deployment from their own file location, never from a caller's env override (fixture-scratch-pinning-guard, ledger row 1249; the row-1237-1244/1248 leak class)
+GREEN ok: RED_REPO_LEGACY_PICKUP
+  /tmp/fixture-deployment-pin-guard-jbihm1si/red-repo-legacy-pickup.py:8: subprocess call invokes THIS CHECKOUT'S OWN `pickup` (a REPO-rooted path) instead of a scaffolded scratch copy — this repo's own root-level verb shims resolve their deployment from their own file location, never from a caller's env override (fixture-scratch-pinning-guard, ledger row 1249; the row-1237-1244/1248 leak class)
+GREEN ok: RED_ENVIRON_MUTATION
+  /tmp/fixture-deployment-pin-guard-jbihm1si/red-environ-mutation.py:4: `os.environ["PICKUP_DEPLOYMENT"] = ...` mutates the PROCESS-GLOBAL environment instead of pinning per-subprocess (build a local `env = {**os.environ, "PICKUP_DEPLOYMENT": ...}` dict and pass it via each subprocess call's own `env=` kwarg instead — fixture-scratch-pinning-guard, ledger row 1249: "env pinned per-subprocess, never inherited")
+GREEN ok: GREEN_SCRATCH_SCOPED
+GREEN ok: GREEN_LOCAL_ENV_DICT
+
+ALL CASES OK -- fixture-deployment-pin-guard both polarities, zero residue

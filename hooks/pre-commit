@@ -77,6 +77,21 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     exit 1
 }
 
+# fixture_deployment_pin_guard (fixture-scratch-pinning-guard, ledger row 1249): generalizes
+# serve_existing_world's own tempdir/repo-disjoint refusal into a mechanical sweep over every
+# led-exercising fixture — refuses a fixture that invokes THIS checkout's own operator verbs
+# directly (the row-1237-1244/1248 leak class), or that mutates os.environ["PICKUP_DEPLOYMENT"]
+# globally instead of pinning per-subprocess. Reads the working tree (same family as
+# fixture_census above), scoped to seen-red/, instruments/, kernel/fixtures/.
+"$PY" "$REPO_ROOT/gates/fixture_deployment_pin_guard.py" || {
+    echo "" >&2
+    echo "pre-commit: fixture deployment-pin guard FAILED — commit refused (a fixture reaches THIS" >&2
+    echo "checkout's own deployment.json instead of a scaffolded scratch copy, or mutates" >&2
+    echo "os.environ[\"PICKUP_DEPLOYMENT\"] globally; see gates/fixture_deployment_pin_guard.py's" >&2
+    echo "own docstring, fixture-scratch-pinning-guard, ledger row 1249)." >&2
+    exit 1
+}
+
 # deep_walk_recursion_guard — the single guarded-traversal invariant over
 # serving/boundary_service.py (boundary-recursion-net-single-invariant, ledger row 1628). Wired
 # 2026-07-23 (review finding against commit d5f809e: the gate existed, seen-red both polarities,

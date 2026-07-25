@@ -223,6 +223,12 @@ REGISTRY: dict[str, str] = {
     "setup-tui-seeded-value-visibility": "seen-red/setup-tui-seeded-value-visibility/run_fixtures.py",
     "setup-tui-adr-synopsis-drift":     "seen-red/setup-tui-adr-synopsis-drift/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
+    # fixture-scratch-pinning-guard (ledger row 1249): the mechanical sweep generalizing
+    # serve_existing_world's own tempdir/repo-disjoint refusal to every led-exercising fixture.
+    "fixture-deployment-pin-guard":     "seen-red/fixture-deployment-pin-guard/run_fixtures.py",
+    # s25-ledger-differential-floor-bug (ledger row 1247): engine/ledger_floor.py's
+    # work_review_floor_atoms column-gating fix for pre-s28/s29 chains.
+    "s25-ledger-differential-floor-bug": "seen-red/s25-ledger-differential-floor-bug/run_fixtures.py",
     # cycle-4 audit finding 1 fix round (ledger rows 1124/1133/1138): the mid-section
     # cancellation-token fix (rehearsal's own subprocess layer) and the control/help split
     # layout fix (ledger row 1138's reopened-loop major).

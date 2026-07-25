@@ -195,7 +195,13 @@ BASELINE: dict[str, int] = {
     # semantics, not padding (the s56 kernel-view widening's engine-side twin, needed for
     # ./judge's SQL/ASP differential to AGREE on a reservation-discharged item). Written plain,
     # no golfing.
-    "engine/ledger_floor.py":                           820,
+    # Reconciled +37 to 857 (s25-ledger-differential-floor-bug, ledger row 1247):
+    # work_review_floor_atoms' two ungated columns (work_parent s28, work_review_disposition
+    # s29) were the ONE pair in this file not has_col-gated like every sibling feature, so the
+    # SQL floor QUARANTINED (a judge-input silent-wrong-answer risk) on any s22..s28-range
+    # schema. Fixed by column-gating both, mirroring ledger_edb.py::export_work's own
+    # has_parent/has_review flags -- genuinely new degrade logic, not padding.
+    "engine/ledger_floor.py":                           857,
     "engine/preamble_floor.py":                         801,
     # tools/setup_tui/ui_textual.py -- REMOVED from BASELINE 2026-07-22
     # (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2, wholesale rebuild): `git rm`'d whole, along
