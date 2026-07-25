@@ -20,7 +20,7 @@ already banked (and given the amount of finding, we shouldn't require there to b
 durable lesson beyond what we already have — but, on the other hand, let's not be
 conceited either)."* This document holds that line from both sides: each candidate
 lesson below is tested against the **banked set** — the project's already-codified
-prior lessons: the ADRs, the setup-TUI postmortem's own lessons, the audit-bias
+prior lessons: the ADRs, the [setup-TUI postmortem](POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md)'s own lessons, the audit-bias
 clauses (false-SILENT: checking too few surfaces; false-MET: reading a requirement down
 to fit what was found — banked as row 1887 of the PREDECESSOR world autoharn1's ledger,
 a row number this world's own `./led` cannot resolve; the two clauses are restated here
@@ -186,8 +186,13 @@ humble compatibility carve-out.
   correctly scoped to meaning; the campaign argues not for amending its rule but for
   naming its structural sibling. No ADR was found unclear in a way that caused a finding.
 - **(d) The unthought-of:** the campaign's most useful single event may have been the
-  permission classifier refusing the orchestrator's hooks merge after the orchestrator
-  had judged a session gap defensible — the mechanism held where judgment bent. That is
+  permission classifier — the harness-level mechanism that can refuse the orchestrator's
+  own tool calls outright — refusing the orchestrator's hooks merge after the
+  orchestrator had judged a session gap (a moment with no live session running, the only
+  time CLAUDE.md's "Never modify hooks/ or a user project while a live session runs
+  there" rule permits touching hooks/) defensible — the mechanism held where judgment
+  bent; the refused merges became the prepared operator act the Residue section below
+  records under row 1236. That is
   the project's own thesis (mechanical refusal over discretion) applied to its operator,
   and it is worth noticing that it felt correct from the inside *after* the refusal, not
   before.
