@@ -414,10 +414,10 @@ def parse_kv(pairs: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
-    # legacy-led-retirement pass (row 1149): NOT flipped to "./led" (see hydrate.sh's comment) --
-    # this value also feeds `fetch_brief`'s `--led` into role_brief.py, whose parsers still
-    # silently misparse served output (disclosed, still-open gap) -- out of this pass's scope.
-    led = "./legacy/led"
+    # Flipped to served "./led" (row 1307/1308, 2026-07-26): "./legacy/led" is a pure exit-1
+    # stub, so this default made check_charter/fetch_brief fail unconditionally, UNCHARTED
+    # regardless of any real charter. Prior rationale (role_brief.py misparsing) is dead too: 417b200 made it refuse loudly.
+    led = "./led"
     instance: str | None = None
     role_map: dict[str, str] = {{}}
     allow_uncharted = False

@@ -1,0 +1,51 @@
+RED evidence for seen-red/workflow-drive-dead-legacy-led-default (ledger rows 1307/1308,
+2026-07-26). Captured live against a real scaffolded scratch world (bootstrap/new-project.sh
+--new-world wfdll1, real serving.boundary_service subprocess, real `./legacy/led` teaching stub)
+BEFORE this fix landed -- git HEAD at commit 153a078, tools/workflow_compile.py's DRIVE_TEMPLATE
+still carrying `led = "./legacy/led"` for check_charter/fetch_brief. Reproduced by importing a
+compiled tools/workflow_units/*/drive.py module and calling its own check_charter() function --
+the exact call this pass fixed -- against ./legacy/led, from inside the scaffolded world
+directory (the same run_fixtures.py this directory banks re-proves this live, as a standing
+regression, since the RED side needs the pre-fix hardcoded default which this worktree no longer
+carries).
+
+=== the defect: check_charter() against the pre-fix hardcoded default ===
+$ python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    'drive', 'tools/workflow_units/autoharn-builder-wave/drive.py')
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+rc, out = mod.check_charter('./legacy/led', 'author')
+print('rc:', rc)
+print(out)
+"
+rc: 1
+role_charter: REFUSED -- './legacy/led current 100000' failed:
+legacy/led: RETIRED 2026-07 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md) -- every surface
+  serves through ./led now; the boundary is mandatory at every birth, and led principal *
+  (grant-competence/relate and their 11 siblings) closed the one family the served path
+  was ever missing. Use ./led instead.
+
+-- The consequence this closes: check_charter's rc is 1 UNCONDITIONALLY (legacy/led is a pure
+exit-1 stub, never a working CLI, since commit 93affa0 2026-07-23) -- regardless of whether an
+actual, in-force charter registration exists for the principal. Every phase of every compiled
+workflow resolves UNCHARTED by default, and dispatch falls to BLOCKED-uncharted (or the raw-
+prose fallback under --allow-uncharted) -- the row-1663 charter+brief commission is dead in
+production dispatch unless an operator manually passes --led ./led to every compiled drive.py
+invocation. Confirmed independently: even with a REAL charter registered for 'author' (row 7,
+`role-charter registered: role=author path=roles/author-CHARTER.md sha256=...`, IN-FORCE per
+`tools/role_charter.py show author --led ./led` returning exit 0), the SAME check_charter() call
+through the hardcoded `./legacy/led` default still returns rc=1 with the identical stub text
+above -- the charter's existence is irrelevant to the pre-fix outcome, which is the SEVERE part
+of this finding.
+
+Fix (this pass): tools/workflow_compile.py's DRIVE_TEMPLATE now defaults `led = "./led"` (the
+served shim), the false "role_brief.py's parsers still silently misparse served output" rationale
+is deleted (it was already false as of commit 417b200 on the in-flight role branch --
+parse_current_line refuses loudly now, never silently misparses), and all 7 tools/workflow_units/
+*/drive.py copies were regenerated through tools/workflow_compile.py's own compiler entry point
+(compile_toml/main), never hand-edited. run_fixtures.py in this directory re-proves the fixed,
+GREEN side as a standing regression: the identical check_charter() call against the served
+./led, after registering the same charter via tools/role_charter.py's own register flow, now
+returns rc=0 with "IN-FORCE charter registration" in its output.
