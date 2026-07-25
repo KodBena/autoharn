@@ -45,3 +45,9 @@ ephemera/toy-run1-salvage/
 # boundary-multiplex.toml -- THIS world's own running boundary-service config (same reasoning
 # as deployment.json above: carries a real LAN host, per-deployment, operational not source).
 /boundary-multiplex.toml
+
+# .autoharn-service.pid + service.log -- this world's own running boundary-service runtime
+# artifacts (written by `autoharn service start` / serving/ensure_running.py at the repo
+# root, same operational-not-source reasoning as deployment.json above).
+/.autoharn-service.pid
+/service.log
