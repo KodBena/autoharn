@@ -1,4 +1,4 @@
-# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 3)
+# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 4)
 
 <!-- doc-attest-exempt: ADR-0018 consult deliverable, authored 2026-07-25 by a fresh-context
 Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md. REVISION 3,
@@ -6,7 +6,10 @@ same day: revision 2 applied the maintainer's feedback round (clarity per ADR-00
 two-facts-into-one splits per ADR-0008, verified literature grounding); revision 3 repairs
 the fresh-context B round's findings on revision 2 (split-count correction; the
 citation-or-disclaimer contract enforced on every point; FMEA verified and cited as the
-detectability-axis analogue; audience-frame and gloss repairs). Awaiting the maintainer's
+detectability-axis analogue; audience-frame and gloss repairs); revision 4 answers the
+maintainer's rev-3 feedback ("every obligation... needs to highlight which principal is
+responsible for discharging it") by adding a uniform "Discharged by" line to all 21 points,
+against the closed principal vocabulary the intro defines. Awaiting the maintainer's
 re-read and cherry-pick into ADR-0021 before that ADR is ratified. Editorial note for the
 ratification pass, kept out of the point bodies: point 17's rule (review debt survives
 merge) is candidate ADR-0021 PREAMBLE material per the maintainer's own feedback-round
@@ -33,6 +36,14 @@ observe the artifact that ships, not a sibling of it), Rule B (a comment asserti
 property is a claim reviewed against the code), or the subsidiary clause (carve-outs state
 predicates, not names). It proposes material around them.
 
+Who discharges what: every point below ends with a "Discharged by" line naming the
+principal responsible for the obligation, from a closed vocabulary of three roles.
+**THE REVIEWER** is the person or agent performing the review. **THE COMMISSIONER** is
+whoever orders the review and consumes its report — in this project, the orchestrator; the
+commissioner owns dispatch, triage, merge decisions, and the work tracker. **THE BUILDER**
+is the author of the change under review. Where one point genuinely binds two principals in
+different clauses, the line names both and says which clause is whose.
+
 Format, for cherry-picking: each point is numbered and self-contained — one imperative a
 reviewer can execute, a one-line reason, and its grounding. No point depends on another;
 order is presentational only. Revision 2 renumbered: three points from revision 1 were
@@ -55,6 +66,7 @@ witnessed at least once.
 fixture guarding dispatch stayed green (row 1230). Literature — this is mutation analysis
 applied by hand: judge a test by whether it detects seeded faults (DeMillo, Lipton & Sayward
 1978), the origin of the "test the tests" practice. *(Rev. 1 point 1.)*
+*Discharged by:* THE REVIEWER.
 
 **2. When a fix arrives with a before/after test as its evidence, confirm the "before"
 failure was actually produced: the test was run against the code as it stood before the fix,
@@ -69,6 +81,7 @@ detecting it, in which case its green after the fix is meaningless.
 to be a genuine pre-fix red (row 1230). Literature — test-driven development's first rule is
 to run the new test and watch it fail before writing the fix (Beck 2003); this point is that
 rule enforced from the reviewer's side. *(Rev. 1 point 2.)*
+*Discharged by:* THE REVIEWER.
 
 **3. For every acceptance condition in the change — a health probe, a validation, a test
 assertion — ask what else it would accept, and try one wrong-but-plausible input against
@@ -85,6 +98,7 @@ sibling templates with identical usage markers made an artifact swap invisible t
 (row 1255). Literature — Myers' definition of testing as executing with the intent of
 finding errors: an examiner who only confirms the accepting path subconsciously selects
 inputs unlikely to fail (Myers 1979). *(Rev. 1 point 3.)*
+*Discharged by:* THE REVIEWER.
 
 **4. When reviewing a rewrite, rebase, or port, first enumerate the predecessor's
 capabilities, then check each one is present in the replacement or deliberately retired.**
@@ -101,6 +115,7 @@ because an old fixture reported its specimen inert (row 1245). Literature — ch
 testing: before changing code, capture what it currently does, so the change can be checked
 against that record (Feathers 2004); this point is the same move performed by the reviewer
 when the author did not perform it. *(Rev. 1 point 4.)*
+*Discharged by:* THE REVIEWER.
 
 **5. Review every fix as new code under a full fresh pass, never as a check that the named
 defect is gone.**
@@ -114,6 +129,8 @@ process makes this a phase: rework is followed by a follow-up in which the moder
 verifies both that defects were fixed and that no new defects were introduced by the fixes,
 with full re-inspection for non-trivial rework (Fagan 1976). *(Rev. 1 point 5; substance
 unchanged per the feedback round.)*
+*Discharged by:* THE COMMISSIONER dispatches each fix for a full fresh review rather than a
+discharge check; THE REVIEWER conducts that review treating the fix diff as new code.
 
 **6. Weight a finding by how its defect fails, not by how big it looks: a defect that
 produces a wrong answer with no signal outranks a larger-looking defect that announces
@@ -136,6 +153,8 @@ modes in a designed process rather than findings in a code review, so it is cite
 analogue for the axis (detectability as a first-class component of priority), not for this
 point's specific triage rule. *(Rev. 1 point 6, internal severity vocabulary removed;
 FMEA analogue added at the B round's correction.)*
+*Discharged by:* THE REVIEWER classifies each finding as loud-failing or silent-failing;
+THE COMMISSIONER triages (what blocks, what is noted) by that classification.
 
 **7. Reproduce a reported defect before acting on the report.**
 In plain terms: a reviewer's finding is a claim, subject to the same evidence discipline as
@@ -150,6 +169,9 @@ commissioned against a misdiagnosis is new risk for no gain.
 steps are what developers rate the most useful element of a defect report, and an
 unreproducible problem is unlikely to be fixed (Bettenburg et al. 2008). *(Rev. 1 point 7,
 elucidation rewritten.)*
+*Discharged by:* THE REVIEWER reproduces each finding and labels it confirmed or suspected;
+THE COMMISSIONER lets only confirmed findings block or commission fixes without further
+evidence.
 
 **8. In the review report, record what you looked for and did not find, alongside what you
 found.**
@@ -163,6 +185,7 @@ row 1250); house law — the WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED repor
 (CLAUDE.md). Literature — inspection practice treats the review record (what was examined,
 against what checklist, with what result) as a required output, not a courtesy (Wiegers
 2002). *(Rev. 1 point 8, restated in the plain form the maintainer read it as.)*
+*Discharged by:* THE REVIEWER.
 
 **9. Compare the delivery against the commission before comparing the diff against the
 delivery report.**
@@ -175,6 +198,8 @@ partials; reviewing against the commission is what kept the unbuilt parts visibl
 (rows 1228, 1257). Literature — this is the traceability half of inspection entry practice:
 the work product is examined against its governing specification, not against its own
 description (Fagan 1976; Wiegers 2002). *(Rev. 1 point 9, first fact; split per ADR-0008.)*
+*Discharged by:* THE COMMISSIONER supplies the commission text (verbatim, per this project's
+standing rule) with the review dispatch; THE REVIEWER performs the comparison.
 
 **10. Convert the builder's own list of admitted partials into tracked work items at review
 time; do not let an honest "not done" dissolve at merge.**
@@ -184,6 +209,8 @@ indistinguishable six weeks later from scope nobody ever knew about.
 became a review axis or a follow-on work item rather than evaporating at merge (rows 1228,
 1257). Campaign-derived; no published analogue found for this specific conversion duty.
 *(Rev. 1 point 9, second fact; split per ADR-0008.)*
+*Discharged by:* THE COMMISSIONER files the tracked items (the tracker is the
+commissioner's surface); THE REVIEWER flags any admitted partial not yet filed.
 
 **11. When the change contains tests or fixtures, review each one as an actor with a blast
 radius: check that it cannot reach any real store — by construction, not by current
@@ -199,6 +226,7 @@ deployment resolution reached the real boundary; its own docstring showed it was
 (row 1253). Literature — the hermetic-test discipline: a test contains everything needed to
 set up and tear down its environment and touches no external dependency (Winters, Manshreck
 & Wright 2020). *(Rev. 1 point 10, wording disambiguated.)*
+*Discharged by:* THE REVIEWER.
 
 **12. Flag every hand-maintained copy of facts owned elsewhere — a roster, a count, a list
 of verbs or files — even when the copy is currently accurate.**
@@ -210,6 +238,7 @@ had already paid for once (row 1230). Law — ADR-0012 P1, read at review time. 
 the DRY principle: every piece of knowledge has a single, unambiguous, authoritative
 representation, applied by its authors to documentation as much as code (Hunt & Thomas
 1999). *(Rev. 1 point 11; substance unchanged per the feedback round.)*
+*Discharged by:* THE REVIEWER.
 
 **13. Chase every referent in the change's prose: each artifact, fixture, or mechanism a
 docstring or document names must exist on disk where named.**
@@ -222,6 +251,7 @@ than doc review. Campaign-derived beyond that; no published analogue verified �
 tooling exists as practice, but no published review-discipline source naming a reviewer's
 duty to dereference prose referents was found. *(Rev. 1 point 12, first fact; split per
 ADR-0008.)*
+*Discharged by:* THE REVIEWER.
 
 **14. For every universally-phrased sentence in the change's prose, ask "true for which
 targets, worlds, and times?" and check it against each member of that set, not just the
@@ -233,6 +263,7 @@ contradicted by its own sibling edit (row 1230). Law — ADR-0000's quantificati
 discipline, brought down to prose. Campaign-derived beyond that; no published analogue
 found for scope-quantifying a change's descriptive sentences as a review step. *(Rev. 1
 point 12, second fact; split per ADR-0008.)*
+*Discharged by:* THE REVIEWER.
 
 **15. When a mechanical guard refuses your own act mid-review or mid-merge, treat the
 refusal as the system working: route the act to its proper principal and record the refusal
@@ -246,6 +277,9 @@ worked around," and the merge became a prepared operator act (row 1236). Literat
 normalization of deviance: repeated accepted deviations from a safety rule, each locally
 reasonable, shift the baseline until the rule no longer protects anything (Vaughan 1996).
 *(Rev. 1 point 13; substance unchanged per the feedback round.)*
+*Discharged by:* whichever principal the guard refuses — the duty is the same single clause
+for THE REVIEWER, THE COMMISSIONER, and THE BUILDER alike (in the campaign specimen it was
+the commissioner).
 
 **16. Before delivering a review report, verify its own factual claims — commit hashes,
 attributions, quoted behavior — the way the report verified the code.**
@@ -264,6 +298,9 @@ in it misdirects the fix round it commissions.
 *Grounding:* campaign — a batch report claimed case retirements "not found in the commit
 range"; the fix round carried an attribution correction with the note "record must end
 accurate" (row 1251). *(Rev. 1 point 14, recursion objection addressed.)*
+*Discharged by:* THE REVIEWER verifies the report before delivery; THE COMMISSIONER may
+sample a reviewer's reports over time (the optional consumer-side assurance the body
+names), never as a standing extra review layer.
 
 **17. Hold merged work to the same review obligation as unmerged work: a change that
 reached the trunk unreviewed, or reviewed under a since-tightened bar, is still owed its
@@ -278,6 +315,8 @@ commit-then-review practice documented across large industrial and open-source p
 trusted developers may commit before review, and the change still receives its review after
 landing — commit and review-discharge are separate events (Rigby & Bird 2013). *(Rev. 1
 point 15, first fact; split per ADR-0008.)*
+*Discharged by:* THE COMMISSIONER (tracking the debt and dispatching the owed review is a
+dispatch act, not a reviewer's).
 
 **18. Record and disposition a post-merge finding on the same footing as a pre-merge one —
 a reviewed fix-forward on the record, never a quiet patch that protects a clean history.**
@@ -288,6 +327,9 @@ dispositioned as a reviewed fix-forward (rows 1230, 1233). Literature — the bl
 postmortem norm: surfacing a failure after the fact is rewarded, because punishing it
 teaches concealment (Beyer et al. 2016). *(Rev. 1 point 15, second fact; split per
 ADR-0008.)*
+*Discharged by:* THE COMMISSIONER records and dispositions the finding on the same footing
+as a pre-merge one; THE BUILDER of the fix ships it through the recorded fix-forward, never
+as a quiet patch.
 
 **19. Treat the first live run of merged work as the closing lap of its review: exercise
 the artifact in its real habitat promptly, watch the first real invocation, and feed what it
@@ -295,7 +337,8 @@ shows back into the review's verdict.**
 Why this is review conduct and not operations, in one sentence: the live habitat holds state
 no review environment reproduces — running services, old versions, real deployments — so a
 review verdict is provisional until the one environment review could not simulate has been
-observed, and observing it is the reviewer's loose end, not a separate discipline.
+observed, and closing that observation is the review arc's own loose end, not a separate
+discipline.
 *Reason:* a refusal, a version-skew catch, or a recovery path firing on first live contact
 is evidence about the reviewed change that no pre-merge lap can produce.
 *Grounding:* campaign — minutes after merge, the new CLI's version handshake refused the
@@ -304,6 +347,9 @@ was followed and witnessed, closing the review arc (row 1257). Literature — th
 smoke-test-your-deployment practice: every deployment is verified by running checks against
 the deployed system itself, as part of the delivery of the change (Humble & Farley 2010).
 *(Rev. 1 point 16, inclusion justified.)*
+*Discharged by:* THE COMMISSIONER performs (or arranges) the prompt live exercise and
+records what it shows, since merge and the live habitat are the commissioner's surfaces;
+THE REVIEWER marks the pre-merge verdict as provisional pending that run.
 
 **20. When a fix correctly makes one site diverge from similar-looking neighbors, require
 an adjacent marker naming the deliberate divergence and warning against harmonization.**
@@ -317,6 +363,8 @@ future editor reintroducing the silent false-success" (row 1236). Campaign-deriv
 direct published analogue found (the nearest neighborhood is general advice that comments
 should record non-obvious intent, which does not name this review-time duty). *(Rev. 1
 point 17.)*
+*Discharged by:* THE REVIEWER requires the marker (holds the fix open until it is present);
+THE BUILDER writes it.
 
 **21. End a review series on a clean lap, never on a lap count: a lap that finds defects
 proves the defect class is present in the process, not that the last instance was caught.**
@@ -331,6 +379,8 @@ document until a pass finds no severe meaning change). Literature — Fagan's ex
 rework is not accepted
 on the author's word; non-trivial rework triggers re-inspection by the team, repeated until
 the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
+*Discharged by:* THE COMMISSIONER — dispatching each fresh lap, keeping it blind to prior
+findings, and deciding termination on a clean lap are all dispatch acts.
 
 ---
 
