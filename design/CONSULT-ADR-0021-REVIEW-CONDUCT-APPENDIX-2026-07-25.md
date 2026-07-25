@@ -1,201 +1,352 @@
-# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition)
+# Proposed appendix to ADR-0021 — review-conduct points (ADR-0018 consult edition, revision 2)
 
 <!-- doc-attest-exempt: ADR-0018 consult deliverable, authored 2026-07-25 by a fresh-context
-Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md (the consult
-received the witnessed problem, the campaign evidence, and the governing law — deliberately
-not the commissioning orchestrator's postmortem or the parallel candidate appendix). It is a
-proposal menu awaiting the maintainer's cherry-pick into ADR-0021 before that ADR is
-ratified. Removal condition: strike this marker when the maintainer's cherry-pick disposition
-is recorded — points merged into ADR-0021 live there under its own attestation; this file
-then stands as the dated consult record. -->
+Fable instance commissioned under law/adr/0018-consults-are-not-front-loaded.md. REVISION 2,
+same day: reworked point-by-point against the maintainer's feedback round (clarity per
+ADR-0017, two-facts-into-one splits per ADR-0008, published-literature grounding added and
+verified). Awaiting the maintainer's re-read and cherry-pick into ADR-0021 before that ADR
+is ratified; ADR-0017 A:B:C legibility rounds to follow. Removal condition: strike this
+marker when the maintainer's cherry-pick disposition is recorded — points merged into
+ADR-0021 live there under its own attestation; this file then stands as the dated consult
+record. -->
 
-This document proposes review-conduct points for the appendix the maintainer commissioned
-against the ADR-0021 draft (`law/adr/0021-the-checked-surface-is-the-shipped-surface.md`):
-generic guidance for a working reviewer — things easy to miss or forget under load — drawn
-from the 2026-07-23 review campaign (ledger rows 1228–1260: five delivery batches, ~20
-fresh-context adversarial review laps, 8 fix rounds, repeated severe findings in work that
-arrived "done, witnessed, gates green") and from named review craft. Per the commission it
-deliberately does NOT restate ADR-0021's Rule A (checked surface = shipped surface), Rule B
-(comments asserting safety properties are claims), or the subsidiary carve-out-predicate
-clause; it generalizes around them.
+## What this document is
 
-Format, for cherry-picking: each point is numbered, self-contained, and independently
-mergeable — an imperative a reviewer can execute, a one-line reason, and its grounding
-(campaign evidence with the ledger row, or named craft, stated per point). No point depends
-on another; order is presentational only.
+This document proposes review-conduct points for an appendix to the draft ADR-0021
+(`law/adr/0021-the-checked-surface-is-the-shipped-surface.md`). The intended reader is a
+working reviewer — a person or agent examining someone else's delivered change — and each
+point names something that is easy to miss or forget during a review. The points are drawn
+from two sources, named per point: the 2026-07-23 review campaign in this project (ledger
+rows 1228–1260 — five delivery batches, about twenty fresh-context adversarial review laps,
+eight fix rounds, with severe defects repeatedly found in work that had arrived "done,
+witnessed, gates green"), and the published literature on software review and testing
+discipline (full citations in the References section at the end; every cited source was
+verified during this revision, and a point with no honest published analogue says so
+plainly).
+
+Per the commission, this document does not restate ADR-0021's Rule A (a verification must
+observe the artifact that ships, not a sibling of it), Rule B (a comment asserting a safety
+property is a claim reviewed against the code), or the subsidiary clause (carve-outs state
+predicates, not names). It proposes material around them.
+
+Format, for cherry-picking: each point is numbered and self-contained — one imperative a
+reviewer can execute, a one-line reason, and its grounding. No point depends on another;
+order is presentational only. Revision 2 renumbers: two points from revision 1 were split
+under ADR-0008 (each was two facts wearing one number), so the count is now 21. Each point
+notes its revision-1 ancestor so the feedback round can be traced.
 
 ---
 
-**1. Before crediting any check's green, break the thing it guards and watch it go red.**
-A check that cannot be made to fail is not evidence, whatever it prints.
-*Reason:* the only proof a check observes anything is a witnessed failure.
-*Grounding:* campaign — the umbrella dispatch-parity fixture stayed green after the reviewer
-deliberately broke the dispatcher's exec line (row 1230); craft — mutation testing ("kill the
-mutant"), the seen-red/ convention generalized to review time.
+**1. When the work under review includes or depends on an automated check — a test, gate,
+fixture, or probe — verify that the check can fail: introduce a deliberate, temporary fault
+of the kind the check claims to catch, and confirm the check reports it.**
+This point does not assume the delivered code is broken. The fault is one the reviewer
+plants for a moment and then removes; its only purpose is to exercise the check. A check
+that stays green while the thing it guards is visibly broken is itself the defect, whatever
+the delivered code's quality.
+*Reason:* a check's green run proves nothing about the check until a failure has been
+witnessed at least once.
+*Grounding:* campaign — a reviewer deliberately broke the dispatcher's exec line and the
+fixture guarding dispatch stayed green (row 1230). Literature — this is mutation analysis
+applied by hand: judge a test by whether it detects seeded faults (DeMillo, Lipton & Sayward
+1978), the origin of the "test the tests" practice. *(Rev. 1 point 1.)*
 
-**2. Accept a "red-first" witness only if the red was observed against the actual defective
-code.** A red produced by a contrived stand-in, or reconstructed after the fix, witnesses
-nothing about the defect.
-*Reason:* the value of a pre-fix red is that the defect itself, not a simulation of it,
-tripped the check.
-*Grounding:* campaign — the handshake red.txt was found to be "not a genuine pre-fix red"
-(row 1230).
+**2. When a fix arrives with a before/after test as its evidence, confirm the "before"
+failure was actually produced: the test was run against the code as it stood before the fix,
+and it failed there.**
+Concretely: a claim of the form "this test failed before the fix and passes after" has two
+halves, and the "failed before" half is the one that gets faked or skipped — a failure log
+written after the fact, or a failure produced against a contrived stand-in rather than the
+real defective code, is not evidence the test detects the defect.
+*Reason:* a test that was never seen failing against the real defect may be incapable of
+detecting it, in which case its green after the fix is meaningless.
+*Grounding:* campaign — a delivered "pre-fix failure" record (a red.txt file) was found not
+to be a genuine pre-fix red (row 1230). Literature — test-driven development's first rule is
+to run the new test and watch it fail before writing the fix (Beck 2003); this point is that
+rule enforced from the reviewer's side. *(Rev. 1 point 2.)*
 
-**3. Review a check's false-accept space: ask what else its acceptance predicate would
-pass.** Feed it an imposter — a plausible wrong artifact, a sibling, a wrong-but-shaped
-output — before trusting what it accepts.
-*Reason:* a predicate is defined as much by what it fails to reject as by what it accepts.
-*Grounding:* campaign, three independent instances — a health probe adopted ANY HTTP
-responder including a 404 (row 1230); a verb file carrying another verb's implementation
-passed every fixture case with plausible output and exit 0 (row 1250); sibling templates
-printed identical usage markers, so a served-for-legacy swap passed the suite (row 1255).
-Craft: discriminating power of assertions — an assertion that cannot tell the target from
-its nearest plausible neighbor asserts nothing.
+**3. For every acceptance condition in the change — a health probe, a validation, a test
+assertion — ask what else it would accept, and try one wrong-but-plausible input against
+it.**
+"It" here is the acceptance condition itself: the predicate that decides pass or fail.
+Worked example from the campaign: a service health probe accepted any HTTP response as
+"healthy," including a 404 — the predicate was "got a response," and everything wrong that
+also produces a response passed it.
+*Reason:* an acceptance condition is defined as much by what it fails to reject as by what
+it accepts, and authors test the accepting side only.
+*Grounding:* campaign — the 404-accepting probe (row 1230); a verb file carrying a different
+verb's implementation passed every fixture with plausible output and exit 0 (row 1250);
+sibling templates with identical usage markers made an artifact swap invisible to the suite
+(row 1255). Literature — Myers' definition of testing as executing with the intent of
+finding errors: an examiner who only confirms the accepting path subconsciously selects
+inputs unlikely to fail (Myers 1979). *(Rev. 1 point 3.)*
 
-**4. Review a rewrite, rebase, or port from the predecessor's capability inventory, not from
-the new code.** Enumerate what the old surface did; check each item present or deliberately
-retired — absence never appears in a review of what is present.
-*Reason:* diff-shaped review can only see what exists; feature loss is invisible in it.
-*Grounding:* campaign — the rebased led CLI silently lost two whole guards (evidence
-dereference, path-shaped-statement warning); the fixture reported "SPECIMEN INERT: the
-behaviors it exists to witness no longer exist to exercise" (row 1245). Composes with
-ADR-0020's meaning-preservation posture, applied to code capability rather than prose
-meaning.
+**4. When reviewing a rewrite, rebase, or port, first enumerate the predecessor's
+capabilities, then check each one is present in the replacement or deliberately retired.**
+Differentiation from ADR-0021, stated so this point is not mistaken for a restatement:
+Rule A governs a check that exists but watches the wrong surface, and Rule B governs a
+comment that exists but has drifted from the code. This point governs the case where nothing
+exists — a capability the old code had was silently dropped, so there is no check to aim and
+no comment to drift; the defect is an absence, and absence never appears in a reading of
+what is present.
+*Reason:* review that starts from the new code can only see what the new code contains;
+feature loss is invisible from that side.
+*Grounding:* campaign — a rebased CLI silently lost two whole guards, discovered only
+because an old fixture reported its specimen inert (row 1245). Literature — characterization
+testing: before changing code, capture what it currently does, so the change can be checked
+against that record (Feathers 2004); this point is the same move performed by the reviewer
+when the author did not perform it. *(Rev. 1 point 4.)*
 
-**5. Review every fix as new code under a full fresh pass, never as the discharge of the
-finding it answers.** Checking that the named defect is gone is the smallest part; the fix
-is the diff most likely to have been authored under pressure, in code just proven hazardous.
-*Reason:* the campaign's fix rounds repeatedly introduced new severe defects the prior lap's
-findings did not name.
+**5. Review every fix as new code under a full fresh pass, never as a check that the named
+defect is gone.**
+*Reason:* a fix is the diff most likely to have been authored under pressure, in code just
+proven hazardous, and the campaign's fix rounds repeatedly introduced new severe defects the
+prior findings did not name.
 *Grounding:* campaign — "the lap-2 finds are new defect instances, not round-1 residue"
-(row 1250); a round-1 fix itself unlinked the winner's live pidfile (row 1250). Law:
-ADR-0012's 2026-07-02 amendment, "a corrective diff IS new structure."
+(row 1250); a fix itself deleted a healthy service's pidfile (row 1250). Law — ADR-0012's
+2026-07-02 amendment, "a corrective diff is new structure." Literature — Fagan's inspection
+process makes this a phase: rework is followed by a follow-up in which the moderator
+verifies both that defects were fixed and that no new defects were introduced by the fixes,
+with full re-inspection for non-trivial rework (Fagan 1976). *(Rev. 1 point 5; substance
+unchanged per the feedback round.)*
 
-**6. Grade findings by silence, not by size.** A moderate whose failure mode is a silent
-wrong answer (silent misparse, wrong-target action, false success) outranks a severe-looking
-defect that fails loudly and honestly; calibrate iteration effort accordingly.
-*Reason:* a loud defect costs a diagnosis; a silent one costs whatever was built on the
-wrong answer before anyone noticed.
-*Grounding:* campaign — the ratified strengthened tier holds an axis open on
-silent-wrong-answer moderates and lets loud-and-honest moderates through (row 1231);
-composes with ADR-0002's hierarchy read from the reviewer's side.
+**6. Weight a finding by how its defect fails, not by how big it looks: a defect that
+produces a wrong answer with no signal outranks a larger-looking defect that announces
+itself.**
+In plain terms: some defects fail loudly (an error message, a crash, a refusal — the user
+knows something went wrong) and some fail silently (a plausible wrong answer, a false
+"success", an action on the wrong target). When deciding what blocks a merge and what merely
+gets noted, the silent kind wins regardless of apparent size.
+*Reason:* a loud defect costs a diagnosis; a silent one costs whatever gets built on the
+wrong answer before anyone notices.
+*Grounding:* campaign — the ratified strengthened review tier holds a review axis open on
+silent-wrong-answer findings while letting loud-and-honest findings of equal nominal
+severity through (row 1231); composes with ADR-0002's loudness hierarchy read from the
+reviewer's side. No direct published analogue found for detectability-weighted review
+severity; stated as campaign-derived. *(Rev. 1 point 6, internal severity vocabulary
+removed.)*
 
-**7. Treat a severe finding as a claim: execute it before it blocks a merge or ships a fix.**
-Reproduce the failure against the real habitat where permitted, or by simulation named as
-such; a finding that cannot be exercised is reported as suspected, not confirmed.
-*Reason:* reviews are subject to the same witness discipline as the work they judge, and a
-false severe spends fix-round capacity the true ones need.
-*Grounding:* campaign — the trio severe was "CONFIRMED AGAINST THE REAL ~/ent" and the
-gitignore false-idempotence "confirmed by simulation" before dispositions were made
-(row 1230).
+**7. Reproduce a reported defect before acting on the report.**
+In plain terms: a reviewer's finding is a claim, subject to the same evidence discipline as
+the author's "it works." Before a finding is allowed to block a merge or to commission a
+fix, someone runs the failing scenario and watches it fail — against the real system where
+permitted, or in a simulation labelled as such. A finding nobody could reproduce is
+delivered as "suspected", not "confirmed", and is said so in those words.
+*Reason:* a false finding spends fix-round effort the true findings need, and a fix
+commissioned against a misdiagnosis is new risk for no gain.
+*Grounding:* campaign — a severe finding was "CONFIRMED AGAINST THE REAL ~/ent" and another
+"confirmed by simulation" before either was acted on (row 1230). Literature — reproduction
+steps are what developers rate the most useful element of a defect report, and an
+unreproducible problem is unlikely to be fixed (Bettenburg et al. 2008). *(Rev. 1 point 7,
+elucidation rewritten.)*
 
-**8. Report the negative space with the findings: axes that cleared, refutations attempted
-that held, and surfaces left unexercised with the concrete blocker.** A review reporting
-only hits cannot be told apart from one that looked at nothing else.
-*Reason:* the consumer of a review needs its coverage, not just its catches, to know what
-the green means.
-*Grounding:* campaign — cleared axes and held refutations were recorded per lap
-("Sourcing/quoting/fixture-weakening refutations all held", row 1230; docs axis clears and
-drops out, row 1250); house law — the WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED
-reporting rule (CLAUDE.md, claims carry witnesses).
+**8. In the review report, record what you looked for and did not find, alongside what you
+found.**
+That plain sentence is the whole point. List the surfaces examined that came up clean, the
+refutations attempted that held, and the surfaces not examined with the concrete reason.
+*Reason:* a report listing only hits cannot be told apart from a report by someone who
+looked at nothing else, so the consumer cannot know what the absence of findings means.
+*Grounding:* campaign — cleared axes and held refutations were recorded per lap ("Sourcing/
+quoting/fixture-weakening refutations all held", row 1230; "docs axis CLEARS and drops out",
+row 1250); house law — the WITNESSED / REFUSED-AS-EXPECTED / UNEXERCISED reporting rule
+(CLAUDE.md). Literature — inspection practice treats the review record (what was examined,
+against what checklist, with what result) as a required output, not a courtesy (Wiegers
+2002). *(Rev. 1 point 8, restated in the plain form the maintainer read it as.)*
 
-**9. Review the delivery against the commission before reviewing the diff against the
-delivery — and convert the builder's own PARTIAL list into tracked items, not goodwill.**
-Undelivered scope hides in the gap between what was asked and what the report answers.
-*Reason:* a diff review can be flawless while the commission is half-done; an honest
-stop-and-name only helps if someone files it.
-*Grounding:* campaign — the umbrella delivery's self-declared partials (a)–(e) each became
-review axes or follow-on work items rather than dissolving at merge (rows 1228, 1257).
-Craft: requirements traceability.
+**9. Compare the delivery against the commission before comparing the diff against the
+delivery report.**
+The gap between what was asked for and what the report answers is where undelivered scope
+hides; a diff review can be flawless while the commission is half-done.
+*Reason:* the report frames the review around what was built, and nothing in that frame
+points at what was not built.
+*Grounding:* campaign — the umbrella delivery answered a five-part commission with named
+partials; reviewing against the commission is what kept the unbuilt parts visible
+(rows 1228, 1257). Literature — this is the traceability half of inspection entry practice:
+the work product is examined against its governing specification, not against its own
+description (Fagan 1976; Wiegers 2002). *(Rev. 1 point 9, first fact; split per ADR-0008.)*
 
-**10. Review tests and fixtures as actors with a blast radius: their isolation from
-production must hold by construction, not by circumstance.** Ask where a test CAN write —
-under a wrong cwd, an inherited environment, a stale resolution path — not where it is
-observed to write on the happy path.
-*Reason:* a fixture that reaches a real store only by accident today reaches it again on
+**10. Convert the builder's own list of admitted partials into tracked work items at review
+time; do not let an honest "not done" dissolve at merge.**
+*Reason:* a self-declared partial only helps if someone files it — unfiled, it is
+indistinguishable six weeks later from scope nobody ever knew about.
+*Grounding:* campaign — each of the umbrella delivery's self-declared partials (a)–(e)
+became a review axis or a follow-on work item rather than evaporating at merge (rows 1228,
+1257). Campaign-derived; no published analogue found for this specific conversion duty.
+*(Rev. 1 point 9, second fact; split per ADR-0008.)*
+
+**11. When the change contains tests or fixtures, review each one as an actor with a blast
+radius: check that it cannot reach any real store — by construction, not by current
+circumstance.**
+(The imperative, disambiguated: this is an instruction to review the tests, not a compound
+noun.) Ask where the test CAN write under a wrong working directory, an inherited
+environment variable, or a stale resolution path — not where it is observed to write on the
+happy path.
+*Reason:* a test that reaches a real store only by accident today will reach it again on
 every future accidental alignment.
-*Grounding:* campaign — a seen-red fixture wrote eight probe rows into the live kernel
-because its deployment resolution reached the real boundary; its own docstring showed it
-was designed to (rows 1237–1244, 1248, 1251); the repair was structural refusal (tempdir +
-repo-containment), not care (row 1253).
+*Grounding:* campaign — a fixture wrote eight probe rows into the live kernel because its
+deployment resolution reached the real boundary; its own docstring showed it was designed to
+(rows 1237–1244, 1248, 1251); the accepted repair was structural refusal, not care
+(row 1253). Literature — the hermetic-test discipline: a test contains everything needed to
+set up and tear down its environment and touches no external dependency (Winters, Manshreck
+& Wright 2020). *(Rev. 1 point 10, wording disambiguated.)*
 
-**11. Flag every hand-maintained enumeration of facts owned elsewhere — a roster, a count, a
-list of verbs or files — even when it is currently accurate.** Ask where the authoritative
-set lives and whether this copy is derived or re-typed.
+**12. Flag every hand-maintained copy of facts owned elsewhere — a roster, a count, a list
+of verbs or files — even when the copy is currently accurate.**
+Ask where the authoritative set lives and whether this occurrence is derived from it or
+re-typed by hand.
 *Reason:* a correct hand copy is a drift seam armed for the next change to the authority.
 *Grounding:* campaign — a hand-typed ten-verb roster reopened a count-drift seam the project
-had already paid for once (row 1230); law — ADR-0012 P1 (derive, don't duplicate), read at
-review time.
+had already paid for once (row 1230). Law — ADR-0012 P1, read at review time. Literature —
+the DRY principle: every piece of knowledge has a single, unambiguous, authoritative
+representation, applied by its authors to documentation as much as code (Hunt & Thomas
+1999). *(Rev. 1 point 11; substance unchanged per the feedback round.)*
 
-**12. Quantify every descriptive sentence shipped in the change: for which targets, worlds,
-and times is it true, and do its referents exist?** Docstrings, doc edits, and help text are
-part of the diff; check named artifacts on disk and check universally-phrased sentences
-against every member of their quantification universe, not the instance in front of the
-author.
-*Reason:* an unscoped true-here sentence is a false sentence everywhere else, and a
-reference to a nonexistent artifact fails the first reader who chases it.
-*Grounding:* campaign — a CLAUDE.md sentence unscoped and false for every newborn world; a
-docstring claiming fixtures that exist nowhere; another claiming a git-absent fallback that
-does not exist (rows 1230, 1236). Law: ADR-0000's quantification-universe discipline,
-brought to prose.
+**13. Chase every referent in the change's prose: each artifact, fixture, or mechanism a
+docstring or document names must exist on disk where named.**
+*Reason:* a reference to a nonexistent artifact fails the first reader who follows it, and
+the author — who knew what they meant — is the one reader who never follows it.
+*Grounding:* campaign — a docstring claimed fixtures that exist nowhere; another claimed a
+git-absent fallback that does not exist (rows 1230, 1236). Composes with ADR-0017 Rule 2 (a
+reference is a resolvable artifact, not a gesture), applied at code review rather than doc
+review. *(Rev. 1 point 12, first fact; split per ADR-0008.)*
 
-**13. When a mechanical guard refuses your own act mid-review or mid-merge, treat the
-refusal as the system working: route the act to its proper principal, never work around.**
-Record the refusal as evidence the guard is live.
-*Reason:* the reviewer who bypasses a guard "just this once" deletes the guard for everyone,
-and the moment of an inconvenient refusal is exactly the moment guards exist for.
+**14. For every universally-phrased sentence in the change's prose, ask "true for which
+targets, worlds, and times?" and check it against each member of that set, not just the
+instance in front of the author.**
+*Reason:* an unscoped sentence that is true here is a false sentence everywhere else it
+claims to cover.
+*Grounding:* campaign — a CLAUDE.md sentence was unscoped and false for every newborn world,
+contradicted by its own sibling edit (row 1230). Law — ADR-0000's quantification-universe
+discipline, brought down to prose. *(Rev. 1 point 12, second fact; split per ADR-0008.)*
+
+**15. When a mechanical guard refuses your own act mid-review or mid-merge, treat the
+refusal as the system working: route the act to its proper principal and record the refusal
+as evidence the guard is live. Never work around it.**
+*Reason:* each bypass "just this once" resets the norm, and the accumulated bypasses are how
+guarded systems fail — the moment of an inconvenient refusal is exactly what the guard
+exists for.
 *Grounding:* campaign — the harness refused a hooks-touching merge to the orchestrator; the
 refusal was "accepted as the correct mechanical enforcement of the standing hooks rule, not
-worked around," and the merge became a prepared operator act (row 1236).
+worked around," and the merge became a prepared operator act (row 1236). Literature — the
+normalization of deviance: repeated accepted deviations from a safety rule, each locally
+reasonable, shift the baseline until the rule no longer protects anything (Vaughan 1996).
+*(Rev. 1 point 13; substance unchanged per the feedback round.)*
 
-**14. Audit the review's own report before delivering it: every attribution, commit range,
-and claimed retirement in it is checked the way the report checked the code.** A wrong
-statement in a review is a defect of the review.
-*Reason:* the report is the artifact downstream decisions consume; an inaccurate record
-misdirects the fix round it commissions.
+**16. Before delivering a review report, verify its own factual claims — commit hashes,
+attributions, quoted behavior — the way the report verified the code.**
+This is self-verification by the report's author, not a second commissioned review, and that
+distinction is where the regress the objection raises stops: nobody reviews the review. The
+reviewer proofreads their own artifact against the record before handing it over — the same
+duty a code author has to their own diff — and the report is then consumed, not re-reviewed.
+Any deeper assurance (spot-checking a reviewer's reports over time) is sampling by the
+party who consumes them, not a standing extra layer. Prior art for the bounded form:
+Fagan's inspection process ends with a follow-up in which the moderator verifies the defect
+log's dispositions — one verification pass over the record, by a named role, and then the
+process terminates (Fagan 1976); inspection practice likewise treats the accuracy of the
+review record as the recorder's responsibility, not a fresh review's subject (Wiegers 2002).
+*Reason:* the report is the artifact downstream decisions consume, and a wrong attribution
+in it misdirects the fix round it commissions.
 *Grounding:* campaign — a batch report claimed case retirements "not found in the commit
-range"; the fix round included an attribution correction with the note "record must end
-accurate" (row 1251).
+range"; the fix round carried an attribution correction with the note "record must end
+accurate" (row 1251). *(Rev. 1 point 14, recursion objection addressed.)*
 
-**15. Do not let "merged" stand in for "reviewed": review debt survives merge, and a severe
-found post-merge becomes a fix-forward on the record, not a quiet patch.** When the bar
-tightens, apply it retroactively to recently merged work.
-*Reason:* the defect does not know it was merged; suppressing a post-merge finding to
-protect a clean history converts one defect into two.
-*Grounding:* campaign — post-merge blind review was dispatched for already-merged commits
-under the tightened bar and confirmed a real severe against a real deployment, dispositioned
-as a reviewed fix-forward (rows 1229, 1230, 1233).
+**17. Hold merged work to the same review obligation as unmerged work: a change that
+reached the trunk unreviewed, or reviewed under a since-tightened bar, is still owed its
+review.**
+This is an organizational rule about when review debt expires (it does not), separate from
+the conduct rule in point 18 about what to do with a post-merge finding. Candidate for
+hoisting into ADR-0021's preamble rather than the appendix, per the maintainer's own reading
+at the feedback round.
+*Reason:* the defect does not know it was merged; merge changes where the code sits, not
+whether it was examined.
+*Grounding:* campaign — when the bar tightened, post-merge blind review was dispatched for
+already-merged commits, and it found a real severe (rows 1229, 1230). *(Rev. 1 point 15,
+first fact; split per ADR-0008.)*
 
-**16. Exercise the merged artifact in its live habitat promptly, and treat the first live
-run as review evidence.** Watch the first real invocation; a refusal, a skew catch, or a
-recovery path firing there is data no pre-merge lap can produce.
-*Reason:* the live habitat holds state — running services, old versions, real
-deployments — that no worktree reproduces.
-*Grounding:* campaign — minutes after merge, the new CLI's version handshake correctly
-refused the still-running old service, and doctor's new consistency line named it; the
-taught recovery was followed and witnessed (row 1257). Craft: post-deployment verification
-as part of the change, not operations' problem.
+**18. Record and disposition a post-merge finding on the same footing as a pre-merge one —
+a reviewed fix-forward on the record, never a quiet patch that protects a clean history.**
+*Reason:* suppressing a post-merge finding to keep the record looking clean converts one
+defect into two — the code's and the record's.
+*Grounding:* campaign — the post-merge severe was confirmed against a real deployment and
+dispositioned as a reviewed fix-forward (rows 1230, 1233). Literature — the blameless
+postmortem norm: surfacing a failure after the fact is rewarded, because punishing it
+teaches concealment (Beyer et al. 2016). *(Rev. 1 point 15, second fact; split per
+ADR-0008.)*
 
-**17. When a fix makes code a correct outlier among similar-looking neighbors, require an
-adjacent marker naming the deliberate divergence and warning against harmonization.** Review
-the fix for what a future tidier will see: N-1 files doing X and one doing Y.
+**19. Treat the first live run of merged work as the closing lap of its review: exercise
+the artifact in its real habitat promptly, watch the first real invocation, and feed what it
+shows back into the review's verdict.**
+Why this is review conduct and not operations, in one sentence: the live habitat holds state
+no review environment reproduces — running services, old versions, real deployments — so a
+review verdict is provisional until the one environment review could not simulate has been
+observed, and observing it is the reviewer's loose end, not a separate discipline.
+*Reason:* a refusal, a version-skew catch, or a recovery path firing on first live contact
+is evidence about the reviewed change that no pre-merge lap can produce.
+*Grounding:* campaign — minutes after merge, the new CLI's version handshake refused the
+still-running old service and the doctor verb named the inconsistency; the taught recovery
+was followed and witnessed, closing the review arc (row 1257). Literature — the
+smoke-test-your-deployment practice: every deployment is verified by running checks against
+the deployed system itself, as part of the delivery of the change (Humble & Farley 2010).
+*(Rev. 1 point 16, inclusion justified.)*
+
+**20. When a fix correctly makes one site diverge from similar-looking neighbors, require
+an adjacent marker naming the deliberate divergence and warning against harmonization.**
+Review the fix for what a future tidier will see: N−1 files doing X and one doing Y, with
+nothing saying the Y is on purpose.
 *Reason:* an unmarked correct outlier is one well-meaning cleanup away from reverting to the
 defect it fixed.
 *Grounding:* campaign — the staged-read gate's deliberate divergence from its tree-reading
-neighbors got an explicit do-not-harmonize comment precisely to "guard against a future
-editor reintroducing the silent false-success" (row 1236).
+neighbors received an explicit do-not-harmonize comment, precisely to "guard against a
+future editor reintroducing the silent false-success" (row 1236). Campaign-derived; no
+direct published analogue found (the nearest neighborhood is general advice that comments
+should record non-obvious intent, which does not name this review-time duty). *(Rev. 1
+point 17.)*
 
-**18. Converge on a clean lap, never on a lap count: a lap that finds proves the class is
-present in the process, not that it caught the last instance.** After fixes, a fresh
-reviewer — blind to the prior lap's findings — reads again, until a lap finds none at the
-declared severity.
-*Reason:* finding-sets across laps were pairwise disjoint; stopping after N laps because N
-felt sufficient would have shipped whichever classes lap N+1 was going to catch.
-*Grounding:* campaign — the umbrella parity axis needed five laps, each finding strictly
-narrower (whole-fixture absence → content swap → shared boilerplate → sibling marker
-collision) (rows 1250, 1255); the same iterate-to-clean shape ADR-0020's second subsidiary
-clause ratified for meaning witnesses, applied to code review.
+**21. End a review series on a clean lap, never on a lap count: a lap that finds defects
+proves the defect class is present in the process, not that the last instance was caught.**
+After fixes, a fresh reviewer — blind to the prior lap's findings — reads again, and the
+series ends when a lap finds nothing at the declared severity.
+*Reason:* the campaign's finding-sets were disjoint across laps; stopping after any fixed N
+would have shipped whatever lap N+1 was going to catch.
+*Grounding:* campaign — one review axis needed five laps, each finding strictly narrower
+(rows 1250, 1255); the same iterate-to-clean shape ADR-0020's second subsidiary clause
+ratified for meaning witnesses. Literature — Fagan's exit criterion: rework is not accepted
+on the author's word; non-trivial rework triggers re-inspection by the team, repeated until
+the inspection passes (Fagan 1976). *(Rev. 1 point 18.)*
 
 ---
 
-*End of proposed points. Eighteen, independently mergeable; the maintainer cherry-picks.*
+## References (verified during this revision)
+
+- Beck, K. (2003). *Test-Driven Development: By Example.* Addison-Wesley. (The red-first
+  rule: run the new test and watch it fail before making it pass.)
+- Bettenburg, N., Just, S., Schröter, A., Weiss, C., Premraj, R., & Zimmermann, T. (2008).
+  "What Makes a Good Bug Report?" *Proc. FSE 2008.* (Steps to reproduce rated most useful by
+  developers; unreproducible problems unlikely to be fixed.)
+- Beyer, B., Jones, C., Petoff, J., & Murphy, N. R. (2016). *Site Reliability Engineering.*
+  O'Reilly. (Blameless postmortem culture.)
+- DeMillo, R. A., Lipton, R. J., & Sayward, F. G. (1978). "Hints on Test Data Selection:
+  Help for the Practicing Programmer." *IEEE Computer* 11(4), 34–41. (Mutation analysis:
+  judging tests by seeded faults.)
+- Fagan, M. E. (1976). "Design and Code Inspections to Reduce Errors in Program
+  Development." *IBM Systems Journal* 15(3), 182–211. (Inspection phases including rework,
+  follow-up — moderator verifies fixes and that fixes introduced no new defects — and
+  re-inspection criteria.)
+- Feathers, M. (2004). *Working Effectively with Legacy Code.* Prentice Hall.
+  (Characterization tests: record current behavior before changing it.)
+- Humble, J., & Farley, D. (2010). *Continuous Delivery.* Addison-Wesley. (Smoke-testing
+  deployments; verification against the deployed system as part of the change.)
+- Hunt, A., & Thomas, D. (1999). *The Pragmatic Programmer.* Addison-Wesley. (DRY: one
+  authoritative representation per piece of knowledge, applied to docs and schemas, not only
+  code.)
+- Myers, G. J. (1979). *The Art of Software Testing.* Wiley. (Testing as executing with the
+  intent of finding errors; the psychology of confirmation-biased input selection.)
+- Vaughan, D. (1996). *The Challenger Launch Decision.* University of Chicago Press.
+  (Normalization of deviance: accepted rule-deviations shift the baseline.)
+- Wiegers, K. E. (2002). *Peer Reviews in Software: A Practical Guide.* Addison-Wesley.
+  (Review records and defect logs as required outputs; what to record and measure.)
+- Winters, T., Manshreck, T., & Wright, H. (2020). *Software Engineering at Google.*
+  O'Reilly. (Hermetic tests: self-contained, no external dependencies, isolation by
+  construction.)
+
+*End of proposed points. Twenty-one, independently mergeable; the maintainer cherry-picks.*
