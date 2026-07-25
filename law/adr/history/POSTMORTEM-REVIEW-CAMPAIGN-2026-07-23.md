@@ -1,18 +1,5 @@
 # Postmortem — the 2026-07-23 review campaign
 
-<!-- doc-attest-exempt: Fable-authored postmortem, commissioned ledger row 1235; the
-maintainer has now read it and dispositioned the three CANDIDATE lessons (see the dated
-note in the CANDIDATE 1 section below) — the substantive disposition this marker's
-original removal condition asked for is therefore recorded inline. This marker stays in
-place, with an UPDATED condition, only because this ADR-0017 polish pass ran without
-access to a genuinely separate fresh-context B invocation (no `Agent`-type tool was
-available to the session that produced this edition; that edition's meaning-preservation
-statement is recorded in the "C-step meaning-preservation statement" section at the end
-of this document). Removal
-condition, updated: strike this marker once a fresh-context B — a provably separate
-invocation, per the A:B:C recipe (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — has read
-this edition and the attestation is recorded per that recipe's step 6. -->
-
 Commissioned by the maintainer (ledger row 1235, his words — "ledger" is this project's
 append-only Postgres decision/audit log, read via the `./led` command-line tool, not a
 file in this repository): *"see whether there's any durable lessons learned we haven't
