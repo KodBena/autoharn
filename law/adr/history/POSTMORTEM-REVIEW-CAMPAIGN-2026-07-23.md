@@ -206,10 +206,14 @@ document correctly flagged as its severe finding): in the ADR-0017 polish that p
 this edition, no claim, qualifier, hedge, number, or ledger-row citation was added,
 dropped, or reworded in substance; the edits were definitional glosses at first use,
 markdown links to existing definitions, and the splitting of one dense narrative
-paragraph. The polishing session flagged its two least-confident glosses; the
-"superclass catches" parenthetical has since been independently verified accurate
-against the merged code (`gates/deep_walk_recursion_guard.py` and its seen-red family)
-by that same fresh-context B round.
+paragraph. The polishing session flagged its two least-confident glosses, both now resolved: the
+"superclass catches" parenthetical has been independently verified accurate against the
+merged code (`gates/deep_walk_recursion_guard.py` and its seen-red family) by a
+fresh-context B round, and the "four progressively narrower escapes" gloss (in the
+"What happened" section above) has been confirmed against the campaign's own ledger
+record (rows 1250 and 1255, which narrate exactly that four-step narrowing:
+broken exec target → content swap → shared-boilerplate collision → sibling-template
+marker collision).
 
 ## License
 
