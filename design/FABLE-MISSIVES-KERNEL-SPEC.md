@@ -900,3 +900,43 @@ context); the dispose/acknowledgment legs of §11 move from UNEXERCISED-with-blo
 witnessed; the family then takes its strengthened-tier review as one whole and merges
 together. Until then the branch does not merge — a kernel family ships whole or not at
 all.
+
+---
+
+## AMENDMENT 2 (2026-07-25) — the outbound feed is transport, not truth; AWAITING MAINTAINER RATIFICATION (yes/no)
+
+**Witnessed defect (strengthened-tier review of the family, serving axis).** §3's claim
+that `missive_outbound` carries "`/rows/current`'s own guarantee class" bakes a
+current-truth view into a TRANSPORT feed. Consequence, witnessed live with two ordinary
+sequential writes (no race): a missive superseded before its first courier pull vanishes
+from the only feed a courier ever reads — the addressee receives the later `withdrawal`
+citing a provenance token for a message they never got and never will; `missive_stale`
+cannot correlate (the original never arrived); the content is unrecoverably lost, and
+"withdrawn before poll" is indistinguishable from "never sent". This contradicts the
+spec's own purpose (communication where nothing is silently lost) and §13 decision 3's
+"FULL cursor-paged outbound feed". Letter/spirit divergence surfaced per CLAUDE.md's
+reading posture: the guarantee-class sentence was a drafting error; the spirit governs.
+
+**The amendment.** `missive_outbound` becomes append-complete transport: it reads
+`missive_sent` rows from the RAW ledger (superseded rows included), cursor on `id`,
+delivery-monotonic — what was sent is what arrives, in order, always. Supersession
+remains a CONTENT-level fact carried in the rows themselves (the withdrawal's
+`supersedes`/`missive_responds_to` travel with it); the RECEIVING side's views
+(`missive_undisposed`, `missive_stale`, `missive_open_threads`) keep their
+current-truth semantics and now correlate correctly because the original actually
+arrives. No other view changes; no write-path change; the courier needs no change
+(its cursor is already id-monotonic).
+
+**Closure addendum (ADR-0000 form).** *Invariant:* every `missive_sent` row is visible
+to its addressee's courier exactly once, independent of any later row. *Quantification
+universe:* the outbound feed's row set — enumerated as all `missive_sent` rows of the
+serving world, the superseded included by this amendment's own text; named as not
+covered: rows a hostile or dead network never lets a courier pull (§7's honest limit,
+unchanged). *Denomination check:* no numeric bounds; vacuous, named as such.
+
+**History note:** `-- HISTORY: safe` — view re-issue only; zero stored rows change.
+
+**On ratification:** the same builder re-issues the view in its worktree, re-witnesses
+the reviewer's exact two-write reproduction now DELIVERING both rows (original then
+withdrawal, stale-correlation working), and the family's review continues; the family
+still merges only whole.
