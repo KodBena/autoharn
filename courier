@@ -123,7 +123,9 @@ def _require(r: dict, key: str, *, route: str, counterpart: str) -> object:
 def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: str,
                      counterpart_base: str) -> dict:
     """One pass for one counterpart (spec §5 steps 1-4). Returns a witness-grade report dict:
-    {pulled, new, recorded: [row_id...], dedup_raced: [count], errors: [...]}.
+    {pulled, new, recorded: [row_id...], dedup_raced: [count], errors: [...],
+    outcomes: [one line per row processed, in order -- the batch-witness-loss fix, see
+    _print_batch_report()'s own docstring]}.
 
     HANDSHAKE (strengthened-tier review, serving severe): the courier talks to TWO independent
     boundaries per run -- self (checked ONCE in main(), before this function is ever called)
@@ -172,19 +174,33 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
     recorded: list[int] = []
     dedup_raced = 0
     errors: list[str] = []
+    # BATCH-WITNESS LOSS, FOUND AND CLOSED (strengthened-tier review lap 2, witness-axis
+    # moderate-silent -- reviewer's own reproduction: row 1 kernel-refused, row 2 missing
+    # missive_act; row 1's own outcome was reported NOWHERE on stdout once row 2's _require()
+    # raised, because the per-counterpart summary line (main()'s own print) only ever runs
+    # AFTER run_counterpart() returns -- a mid-batch raise means it never returns, and every
+    # earlier row's outcome (accepted OR kernel-refused) vanishes with it, an unwitnessed claim
+    # by omission. FIX: `outcomes` accumulates one line per row AS PROCESSED (not merely at the
+    # end); on a mid-batch `_require()` raise, the accumulated outcomes are PRINTED here, before
+    # the exception propagates -- so row 1's outcome is on stdout regardless of what row 2 does.
+    outcomes: list[str] = []
     for r in candidates:
-        payload = {
-            "kind": "missive_received",
-            "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
-            "actor": actor_id,
-            "missive_protocol": _require(r, "missive_protocol", route=outbound_route, counterpart=counterpart),
-            "missive_author_world": _require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
-            "missive_addressee_world": _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart),
-            "missive_thread": _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
-            "missive_seq": _require(r, "missive_seq", route=outbound_route, counterpart=counterpart),
-            "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
-            "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
-        }
+        try:
+            payload = {
+                "kind": "missive_received",
+                "statement": _require(r, "statement", route=outbound_route, counterpart=counterpart),
+                "actor": actor_id,
+                "missive_protocol": _require(r, "missive_protocol", route=outbound_route, counterpart=counterpart),
+                "missive_author_world": _require(r, "missive_author_world", route=outbound_route, counterpart=counterpart),
+                "missive_addressee_world": _require(r, "missive_addressee_world", route=outbound_route, counterpart=counterpart),
+                "missive_thread": _require(r, "missive_thread", route=outbound_route, counterpart=counterpart),
+                "missive_seq": _require(r, "missive_seq", route=outbound_route, counterpart=counterpart),
+                "missive_act": _require(r, "missive_act", route=outbound_route, counterpart=counterpart),
+                "missive_provenance": _require(r, "missive_provenance", route=outbound_route, counterpart=counterpart),
+            }
+        except CourierConfigError:
+            _print_batch_report(counterpart, outcomes)
+            raise
         if r.get("missive_responds_to") is not None:
             payload["missive_responds_to"] = r["missive_responds_to"]
         if r.get("missive_cites") is not None:
@@ -192,19 +208,42 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
         exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
         if exit_code == 0:
             recorded.append(verdict["row_id"])
+            outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                            f"seq={r['missive_seq']}: accepted (recorded row_id={verdict['row_id']})")
         else:
             msg = verdict.get("message") or ""
             if "already exists" in msg and "exactly-once RECORDING" in msg:
                 dedup_raced += 1  # the race backstop, spec §5 step 3 -- logged, pass continues.
+                outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                f"seq={r['missive_seq']}: refused (dedup race, idempotent)")
             else:
                 errors.append(
                     f"missive (thread={r['missive_thread']!r} seq={r['missive_seq']}) refused "
                     f"NOT as a dedup race: {msg}")
+                outcomes.append(f"row id={r['id']} thread={r['missive_thread']!r} "
+                                f"seq={r['missive_seq']}: refused (NOT dedup): {msg}")
 
     return {
         "pulled": len(outbound), "new": len(candidates),
-        "recorded": recorded, "dedup_raced": dedup_raced, "errors": errors,
+        "recorded": recorded, "dedup_raced": dedup_raced, "errors": errors, "outcomes": outcomes,
     }
+
+
+def _print_batch_report(counterpart: str, outcomes: list[str]) -> None:
+    """The ONE place the accumulated per-row outcomes for a batch-in-progress are printed
+    (strengthened-tier review lap 2, witness-axis moderate-silent) -- called BOTH from the
+    mid-batch abort path above and, harmlessly, would be redundant with main()'s own per-row
+    lines on a clean finish (main() does not re-print these; this function is the abort-path's
+    own flush, not a second reporting mechanism -- ADR-0012 P1, still one home: main() reports
+    the SUMMARY, this reports the IN-PROGRESS BATCH the summary never got to compute)."""
+    if not outcomes:
+        print(f"courier: {counterpart}: BATCH ABORTED before any row in this pass completed "
+              f"(no accepted/refused outcomes to report).")
+        return
+    print(f"courier: {counterpart}: BATCH ABORTED mid-pass -- {len(outcomes)} row outcome(s) "
+          f"already decided THIS run, reported now so they are never silently lost:")
+    for line in outcomes:
+        print(f"  {line}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -244,37 +283,66 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"courier: {e}\n")
         return 4
 
-    overall_ok = True
+    # EXIT-CODE CLASS AGGREGATION (strengthened-tier review lap 2, serving moderate-loud):
+    # bcc's OWN docstring defends a four-code vocabulary (0/1/3/4, see serving/
+    # boundary_cli_client.py's module docstring) precisely so a caller inspecting an exit code
+    # alone can tell WHICH kind of thing went wrong -- boundary-unreachable/protocol-incompatible
+    # (4) is a fundamentally different situation from a boundary-level refusal (3), which is
+    # again different from a kernel write refusal or this client's own drifted-shape refusal (1).
+    # Collapsing every counterpart's failure to a bare 1 defeats that discipline. THE RULE
+    # (stated here, the one home for it): each counterpart failure is tagged with bcc's own exit
+    # code for its class (4: ProtocolVersionMismatch/BoundaryUnreachable -- "no usable response
+    # to classify"; 3: BoundaryRefusal -- a typed boundary-level refusal; 1: CourierConfigError
+    # -- this client's own drifted-shape refusal, and any kernel-refused row inside an otherwise-
+    # successful pass, per bcc's own "kernel refused" code). If EVERY failure this run belongs
+    # to ONE class, the run exits with THAT class's code -- the exit code stays a reliable,
+    # single-fact signal in the common case (one counterpart down, or all counterparts down the
+    # SAME way). Mixed classes exit 1 (the least-specific code, matching what an unclassified
+    # failure has always meant) WITH a final stderr line enumerating every class actually seen,
+    # so a caller inspecting only stderr never has to guess.
+    failure_codes: set[int] = set()
     for counterpart, counterpart_base in cfg["counterparts"].items():
         try:
             report = run_counterpart(self_base, self_name, actor_id, counterpart, counterpart_base)
         except bcc.ProtocolVersionMismatch as e:
             sys.stderr.write(f"courier: {counterpart}: ")
             bcc.report_protocol_mismatch("courier", e)
-            overall_ok = False
+            failure_codes.add(4)
             continue
         except bcc.BoundaryRefusal as e:
             sys.stderr.write(f"courier: {counterpart}: BOUNDARY REFUSED: {e}\n")
-            overall_ok = False
+            failure_codes.add(3)
             continue
         except bcc.BoundaryUnreachable as e:
             sys.stderr.write(f"courier: {counterpart}: BOUNDARY UNREACHABLE: {e}\n")
-            overall_ok = False
+            failure_codes.add(4)
             continue
         except CourierConfigError as e:
             # _require()'s own drifted-shape refusal (strengthened-tier review, serving severe)
-            # -- named field, named counterpart, never a bare traceback.
+            # -- named field, named counterpart, never a bare traceback. No dedicated bcc exit
+            # code exists for a client-side shape defect (only 0/1/3/4 are ratified, and this is
+            # none of 0/3/4) -- classed as 1, the least-specific "something else went wrong" code.
             sys.stderr.write(f"{e}\n")
-            overall_ok = False
+            failure_codes.add(1)
             continue
 
         print(f"courier: {counterpart}: pulled={report['pulled']} new={report['new']} "
               f"recorded={report['recorded']} dedup-raced={report['dedup_raced']}")
         for err in report["errors"]:
             sys.stderr.write(f"courier: {counterpart}: LOUD non-dedup refusal: {err}\n")
-            overall_ok = False
+            failure_codes.add(1)  # kernel-refused -- bcc's own code 1, unchanged meaning.
 
-    return 0 if overall_ok else 1
+    if not failure_codes:
+        return 0
+    if len(failure_codes) == 1:
+        return next(iter(failure_codes))
+    class_names = {3: "boundary-refused", 4: "boundary-unreachable/protocol-mismatch",
+                   1: "kernel-refused-or-config-error"}
+    seen = ", ".join(f"{c} ({class_names.get(c, '?')})" for c in sorted(failure_codes))
+    sys.stderr.write(f"courier: MIXED failure classes across this run's counterparts: {seen} "
+                     f"-- exiting 1 (mixed); see the per-counterpart lines above for which "
+                     f"counterpart hit which class.\n")
+    return 1
 
 
 if __name__ == "__main__":
