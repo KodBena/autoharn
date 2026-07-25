@@ -590,7 +590,7 @@ def work_review_floor_atoms(name: str) -> set[str]:
     q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
     q_slug = _wi_quote("slug")
     has_parent = t.has_col("work_parent")
-    has_review = t.has_col("work_review_disposition")
+    has_review = t.has_col("work_review_disposition") and t.has_relation(f"{t.schema}.review_detail")  # s25 finding 6: matches export_work's has_review gate literally
     composite_exempt = (
         f"""AND NOT (
           EXISTS (SELECT 1 FROM {rel_cur} oo WHERE oo.kind = 'work_opened'

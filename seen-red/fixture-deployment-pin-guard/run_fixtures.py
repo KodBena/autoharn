@@ -27,6 +27,36 @@ GREEN (local env dict stays clean): a synthetic fixture that builds
 `env = {**os.environ, "PICKUP_DEPLOYMENT": str(p)}` and passes it via a subprocess call's own
 `env=` kwarg -- the safe, existing convention -- must NOT be flagged.
 
+FRESH-CONTEXT STRENGTHENED-TIER REVIEW ROUND (BLOCKS MERGE on the prior version of this gate,
+this same commit's fix-round) demonstrated five LIVE evasions of the checks above -- each is now
+its own RED specimen, banked here so they can never silently regress:
+
+RED (os.system shell string): `os.system(f"{REPO/'led'} status")` -- refused outright regardless
+of content (finding 1).
+
+RED (subprocess shell=True string command): `subprocess.run(f"{REPO/'led'} status", shell=True)`
+-- refused outright, same reason (finding 1).
+
+RED (libexec/autoharn/<verb> path, the umbrella-CLI relocation target): `subprocess.run([str(REPO
+/ "libexec" / "autoharn" / "led"), "status"])` -- refused, same leak class as the pre-umbrella
+`REPO / "led"` shape (finding 2).
+
+RED (os.environ.update carrying PICKUP_DEPLOYMENT): `os.environ.update({"PICKUP_DEPLOYMENT":
+"/tmp/whatever"})` -- refused (finding 3).
+
+RED (os.environ alias mutation): `d = os.environ; d["PICKUP_DEPLOYMENT"] = "/tmp/whatever"` --
+refused (finding 3).
+
+RED (wrapper-indirected argv, the finding-4 dominant real shape): a module constant
+`LED = REPO / "led"` referenced only via `str(LED)` inside a pre-built `cmd = [...]` variable
+passed to a wrapper function (never subprocess.* directly, never an inline literal at the call
+site) -- refused (this fix-round's own CHECK 1 broadening: callee-agnostic, one hop of
+argv-list-variable AND verb-path-constant resolution).
+
+GREEN (waived invocation stays clean): the SAME `REPO / "led"` shape as the first RED case, but
+with a `# fixture-scratch-pinning-guard-waiver: <reason>` comment on the binding's own line --
+must NOT be flagged (the escape hatch this fix-round's POSTURE section commits to).
+
 Runs against throwaway tempfile copies; zero residue in the repo itself."""
 from __future__ import annotations
 
@@ -96,6 +126,95 @@ def run_it(p: Path):
     return subprocess.run(["some-verb"], capture_output=True, text=True, env=env)
 '''
 
+# --- the five reviewer-demonstrated evasions (fresh-context strengthened-tier review round,
+# this same commit's fix-round) -- each now its own RED specimen, see module docstring above.
+
+RED_OS_SYSTEM = '''\
+import os
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return os.system(f"{REPO / 'led'} status")
+'''
+
+RED_SHELL_TRUE = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run(f"{REPO / 'led'} status", shell=True, capture_output=True, text=True)
+'''
+
+RED_LIBEXEC_LED = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def run_it():
+    return subprocess.run([str(REPO / "libexec" / "autoharn" / "led"), "status"],
+                          capture_output=True, text=True)
+'''
+
+RED_ENVIRON_UPDATE = '''\
+import os
+import subprocess
+
+os.environ.update({"PICKUP_DEPLOYMENT": "/tmp/whatever/deployment.json"})
+
+
+def run_it():
+    return subprocess.run(["true"], capture_output=True, text=True)
+'''
+
+RED_ENVIRON_ALIAS = '''\
+import os
+import subprocess
+
+d = os.environ
+d["PICKUP_DEPLOYMENT"] = "/tmp/whatever/deployment.json"
+
+
+def run_it():
+    return subprocess.run(["true"], capture_output=True, text=True)
+'''
+
+RED_WRAPPER_INDIRECTED = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+LED = REPO / "led"
+
+
+def _sh(cmd, **kw):
+    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+
+def run_it():
+    cmd = [str(LED), "finding", "hello"]
+    return _sh(cmd)
+'''
+
+GREEN_WAIVED_LED = '''\
+import subprocess
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+LED = REPO / "led"  # fixture-scratch-pinning-guard-waiver: synthetic GREEN specimen, proven safe by construction (test-only)
+
+
+def run_it():
+    return subprocess.run([str(LED), "finding", "hello"], capture_output=True, text=True)
+'''
+
 
 def _run_gate(*paths: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(GATE), *[str(p) for p in paths]],
@@ -120,6 +239,14 @@ def main() -> int:
             "red-environ-mutation.py": (RED_ENVIRON_MUTATION, True, None),
             "green-scratch-scoped.py": (GREEN_SCRATCH_SCOPED, False, None),
             "green-local-env-dict.py": (GREEN_LOCAL_ENV_DICT, False, None),
+            # --- reviewer-demonstrated evasions, this fix-round -----------------------------
+            "red-os-system.py": (RED_OS_SYSTEM, True, None),
+            "red-shell-true.py": (RED_SHELL_TRUE, True, None),
+            "red-libexec-led.py": (RED_LIBEXEC_LED, True, "led"),
+            "red-environ-update.py": (RED_ENVIRON_UPDATE, True, None),
+            "red-environ-alias.py": (RED_ENVIRON_ALIAS, True, None),
+            "red-wrapper-indirected.py": (RED_WRAPPER_INDIRECTED, True, "led"),
+            "green-waived-led.py": (GREEN_WAIVED_LED, False, None),
         }
         for fname, (content, should_be_bad, verb) in specimens.items():
             spath = tmp_path / fname

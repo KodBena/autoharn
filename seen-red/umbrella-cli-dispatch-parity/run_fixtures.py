@@ -123,8 +123,21 @@ import subprocess
 import sys
 from pathlib import Path
 
+# fixture-scratch-pinning-guard-waiver: every real invocation of AUTOHARN in this fixture is
+# either --help/-h/"service"/an unrecognized-verb probe (statically safe, see
+# gates/fixture_deployment_pin_guard.py's own _dispatcher_invocation_is_safe -- the dispatcher's
+# own source returns/execs into an env-parameterized script before ever touching a deployment
+# path in every one of those cases) or, in case_f_real_invocation_reaches_libexec /
+# case_g_help_sweep_never_writes, `[str(AUTOHARN), verb, "--help"]` where `verb` is a LOOP
+# VARIABLE this gate's static census cannot read the value of. That loop is scoped, by this
+# fixture's own construction, to the PARSED dispatch table's verb names each always paired with a
+# literal trailing "--help" (never a real write) -- proven non-mutating for real by case
+# g-help-sweep-never-writes's own git-status-byte-identical witness taken before/after the full
+# sweep. This waiver is scoped to THAT invariant, not a blanket exemption for this binding --
+# a future edit pairing AUTOHARN with a variable verb WITHOUT a trailing --help would need its
+# own fresh review. gates/fixture_deployment_pin_guard.py review, 2026-07-26.
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-AUTOHARN = REPO_ROOT / "autoharn"
+AUTOHARN = REPO_ROOT / "autoharn"  # fixture-scratch-pinning-guard-waiver: see comment block above
 LIBEXEC = REPO_ROOT / "libexec" / "autoharn"
 
 # The ten relocated verbs -- named here, once, as this fixture's OWN expectation (not derived

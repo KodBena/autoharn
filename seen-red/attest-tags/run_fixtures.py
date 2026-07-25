@@ -43,7 +43,13 @@ REPO = HERE.parents[1]
 # fixture invokes directly via `sys.executable` -- pointing at the real relocated implementation
 # instead (the alias shim itself is exercised separately by
 # seen-red/umbrella-cli-dispatch-parity/run_fixtures.py's own case c).
-ATTEST_TAGS = REPO / "libexec" / "autoharn" / "attest-tags"
+# fixture-scratch-pinning-guard-waiver: attest-tags is a repo-specific verb (never scaffolded
+# into a world -- see its own module docstring) that takes --repo/--keys-dir as EXPLICIT CLI
+# flags (every call site below passes both) and never reads PICKUP_DEPLOYMENT or resolves any
+# deployment.json at all (confirmed by reading libexec/autoharn/attest-tags's own source) -- it
+# does not have the dirname($0)-hardcoded-and-env-blind hazard this gate guards against, unlike
+# the ten led/judge/pickup/... verb shims. gates/fixture_deployment_pin_guard.py review, 2026-07-26.
+ATTEST_TAGS = REPO / "libexec" / "autoharn" / "attest-tags"  # fixture-scratch-pinning-guard-waiver: see comment block above
 
 KEYGEN_BATCH_TEMPLATE = """%no-protection
 Key-Type: eddsa
