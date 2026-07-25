@@ -16,6 +16,15 @@ WITNESSES:
   R3  POST-FIX CODE, `clean` scenario (same registration row, not corrupted): `register` sees
       the existing row and correctly REFUSES via JC4 ("already carries an in-force charter
       registration"), exit 1 -- the fix does not disturb the legitimate refusal path.
+  R4  RED-FIRST, PRE-FIX CODE (git cc12b46's own tools/role_charter.py -- this branch's tip
+      BEFORE the re-lap review's parse_served_show finding): against `show_corrupt`, `show`'s
+      best-effort written_by lookup silently drops row 7's width-drifted 'actor' line and
+      renders "written by actor id '(unknown)'", exit 0 -- a real field silently
+      misrepresented as absent.
+  R5  POST-FIX CODE, `show_corrupt` scenario: `show` refuses loudly -- CharterError naming the
+      offending `led show 7` line and command, exit 1.
+  R6  POST-FIX CODE, `show_clean` scenario (same row 7, actor field at the correct width):
+      `show` renders the real actor id, exit 0 -- the fix does not disturb the legitimate path.
 
 Usage: python3 seen-red/role-charter-current-line-shape-drift/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned; stdlib only.
@@ -32,6 +41,7 @@ REPO = HERE.parents[1]
 MOCK_LED = HERE / "mock_led.py"
 POST_FIX_ROLE_CHARTER = REPO / "tools" / "role_charter.py"
 PRE_FIX_COMMIT = "417b200"
+PRE_SHOW_FIX_COMMIT = "cc12b46"
 
 FAILURES: list[str] = []
 
@@ -46,6 +56,15 @@ def check(label: str, cond: bool, detail: str) -> None:
 def run_register(role_charter_path: Path, scenario: str, charter_file: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(role_charter_path), "register", "editor", str(charter_file),
+         "--led", str(MOCK_LED), "--scan-limit", "100"],
+        capture_output=True, text=True,
+        env={"MOCK_LED_SCENARIO": scenario, "PATH": "/usr/bin:/bin"},
+    )
+
+
+def run_show(role_charter_path: Path, scenario: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(role_charter_path), "show", "editor",
          "--led", str(MOCK_LED), "--scan-limit", "100"],
         capture_output=True, text=True,
         env={"MOCK_LED_SCENARIO": scenario, "PATH": "/usr/bin:/bin"},
@@ -107,6 +126,52 @@ def main() -> int:
               r3.returncode == 1 and r3_jc4 and r3_no_register,
               f"exit={r3.returncode} names-existing-registration={r3_jc4} "
               f"no-registration-written={r3_no_register}")
+
+        # R4: PRE-FIX code, `cc12b46` (this branch's tip before the re-lap review's
+        # parse_served_show finding -- byte-identical to what that review actually examined),
+        # against `show_corrupt`.
+        pre_show_fix_src = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{PRE_SHOW_FIX_COMMIT}:tools/role_charter.py"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        with tempfile.NamedTemporaryFile("w", suffix="_role_charter_pre_show_fix.py",
+                                          delete=False) as f:
+            f.write(pre_show_fix_src)
+            pre_show_fix_path = Path(f.name)
+        try:
+            r4 = run_show(pre_show_fix_path, "show_corrupt")
+            r4_unknown = "written by actor id '(unknown)'" in r4.stdout
+            check("R4-pre-show-fix-corrupt-actor-silently-shows-unknown",
+                  r4.returncode == 0 and r4_unknown,
+                  f"exit={r4.returncode} written-by-silently-unknown={r4_unknown} (pre-fix "
+                  f"commit {PRE_SHOW_FIX_COMMIT}, this branch's own tip before this addendum) -- "
+                  f"a real 'actor' field silently vanishes because its width-drifted `led show` "
+                  f"line was silently skipped, exactly the silent-drop class this branch's "
+                  f"earlier fixes killed in parse_current_line, still alive in "
+                  f"parse_served_show")
+        finally:
+            pre_show_fix_path.unlink(missing_ok=True)
+
+        # R5: POST-FIX code, `show_corrupt` scenario -- must refuse loudly, naming the
+        # `led show 7` line and command, never silently render "(unknown)".
+        r5 = run_show(POST_FIX_ROLE_CHARTER, "show_corrupt")
+        r5_refused = ("REFUSED -- SHAPE DRIFT" in r5.stderr
+                      and "show output line" in r5.stderr
+                      and "show 7" in r5.stderr)
+        r5_no_show = "IN-FORCE charter registration" not in r5.stdout
+        check("R5-post-fix-show-corrupt-refuses-loudly",
+              r5.returncode == 1 and r5_refused and r5_no_show,
+              f"exit={r5.returncode} names-shape-drift={r5_refused} no-show-rendered={r5_no_show}\n"
+              f"  stderr={r5.stderr.strip()!r}")
+
+        # R6: POST-FIX code, `show_clean` scenario (same row 7, actor field at the correct
+        # width) -- `show` renders the real actor id, exit 0 -- the fix does not disturb the
+        # legitimate path.
+        r6 = run_show(POST_FIX_ROLE_CHARTER, "show_clean")
+        r6_actor_shown = "written by actor id '1'" in r6.stdout
+        check("R6-post-fix-show-clean-actor-renders",
+              r6.returncode == 0 and r6_actor_shown,
+              f"exit={r6.returncode} actor-id-rendered={r6_actor_shown}\n  stdout={r6.stdout.strip()!r}")
 
     if FAILURES:
         print(f"role-charter-current-line-shape-drift: {len(FAILURES)} case(s) FAILED: {FAILURES}")

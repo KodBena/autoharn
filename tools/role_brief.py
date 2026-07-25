@@ -79,6 +79,9 @@ import re
 import subprocess
 import sys
 
+from served_shapes import parse_current_line as _parse_current_line
+from served_shapes import parse_served_show as _parse_served_show
+
 DEFAULT_LED = "./led"
 DEFAULT_SCAN_LIMIT = 100000
 
@@ -86,10 +89,6 @@ SUSPENDED_RE = re.compile(r"^principal '([^']+)' suspended")
 LIFTED_RE = re.compile(r"^principal '([^']+)' suspension lifted")
 REVOKED_RE = re.compile(r"^principal '([^']+)' revoked")
 PRINCIPAL_REGISTERED_RE = re.compile(r"^principal '([^']+)' registered")
-
-# bootstrap/templates/led.tmpl's own `cmd_recent` print shape: `[id] kind: statement` -- no
-# actor field of any kind (see this file's own header transport note).
-_CURRENT_LINE_RE = re.compile(r"^\[(\d+)\] (\S+): (.*)$")
 
 
 class BriefError(Exception):
@@ -116,29 +115,18 @@ def require_led(led: str, args: list[str]) -> str:
 
 def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
     """`led current <N>`/`led --recent <N>`: `[id] kind: statement`. No actor field exists on
-    this line -- see JB5.
-
-    Fix round (fresh-context review, BLOCKS MERGE, SEVERE): used to return None on a non-match,
-    silently `continue`d past at every call site -- a corrupted line could hide a real SUSPENDED
-    row and render ACTIVE, exit 0 (F49). Now mirrors parse_json_lines: unrecognized shape is a
-    SHAPE DRIFT, refused loudly, never silently skipped."""
-    m = _CURRENT_LINE_RE.match(line)
-    if not m:
-        raise BriefError(f"SHAPE DRIFT -- `{led_cmd_label}` line does not match the expected "
-                          f"`[id] kind: statement` shape; got {line!r}. Refusing rather than "
-                          f"silently skipping a row that could hide a standing change.")
-    return int(m.group(1)), m.group(2), m.group(3)
+    this line -- see JB5. Thin wrapper over served_shapes.parse_current_line, binding this
+    tool's own BriefError as the raised type (role_charter.py binds CharterError instead --
+    same shared parser, see tools/served_shapes.py)."""
+    return _parse_current_line(BriefError, led_cmd_label, line)
 
 
-def parse_served_show(text: str) -> dict[str, str]:
-    """`led show <id>`: one `f"{k:28s}: {v}"` line per non-null field, split on POSITION (a
-    value may itself contain ': '). Byte-identical to role_charter.py's own parse_served_show."""
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        if len(line) < 30 or line[28:30] != ": ":
-            continue
-        out[line[:28].strip()] = line[30:]
-    return out
+def parse_served_show(led_cmd_label: str, text: str) -> dict[str, str]:
+    """`led show <id>`: one `f"{k:28s}: {v}"` line per non-null field. Thin wrapper over
+    served_shapes.parse_served_show (extracted this fix round -- see that module's own header
+    for the fix-round finding and the long-key-name edge case this parser now handles), binding
+    BriefError as the raised type."""
+    return _parse_served_show(BriefError, led_cmd_label, text)
 
 
 def parse_json_lines(led_cmd_label: str, text: str) -> list[dict]:
@@ -200,8 +188,9 @@ def resolve_role_actor_id(led: str, role: str, scan_limit: int) -> int:
             f"ledger_current rows -- a brief cannot be scoped to a principal the ledger has "
             f"never actually registered (JB5; older than --scan-limit rows ago?). Register it "
             f"first:\n  {led} register-principal {role} <human|model|subagent|tool> --purpose \"...\"")
+    show_cmd_label = f"{led} show {reg_row_id}"
     show_out = require_led(led, ["show", str(reg_row_id)])
-    detail = parse_served_show(show_out)
+    detail = parse_served_show(show_cmd_label, show_out)
     subj = detail.get("principal_subject")
     if subj is None or not subj.strip().lstrip("-").isdigit():
         raise BriefError(f"SHAPE DRIFT -- `{led} show {reg_row_id}` (principal_registered naming "
@@ -266,9 +255,10 @@ def build_decisions_section(led: str, role: str, role_actor_id: int, scan_limit:
     lines = []
     for line in out.splitlines():
         rid, kind, statement = parse_current_line(led_cmd_label, line)
+        show_cmd_label = f"{led} show {rid}"
         show_out = require_led(led, ["show", str(rid)])
-        detail = parse_served_show(show_out)
-        actor_id = _actor_id_from_show(detail, rid, f"{led} show {rid}")
+        detail = parse_served_show(show_cmd_label, show_out)
+        actor_id = _actor_id_from_show(detail, rid, show_cmd_label)
         if actor_id == role_actor_id:
             lines.append(f"row {rid} [{kind}]: {statement}")
     lines.sort(key=lambda ln: int(ln.split()[1]))
@@ -287,7 +277,7 @@ def build_obligation_section(led: str, role: str, role_actor_id: int, scan_limit
         rid = row.get("id")
         kind, statement = "?", "?"
         if rid is not None:
-            detail = parse_served_show(require_led(led, ["show", str(rid)]))
+            detail = parse_served_show(f"{led} show {rid}", require_led(led, ["show", str(rid)]))
             kind, statement = detail.get("kind", "?"), detail.get("statement", "?")
         lines.append(f"review_gap: row {rid} [{kind}] undischarged (scope={row.get('scope', '?')}, "
                      f"assigned_by actor={row.get('assigned_by', '?')}, statement: {statement})")
@@ -298,7 +288,9 @@ def build_obligation_section(led: str, role: str, role_actor_id: int, scan_limit
         close_id = row.get("close_id")
         statement = "?"
         if close_id is not None:
-            statement = parse_served_show(require_led(led, ["show", str(close_id)])).get("statement", "?")
+            statement = parse_served_show(
+                f"{led} show {close_id}", require_led(led, ["show", str(close_id)])
+            ).get("statement", "?")
         lines.append(f"work_review_gap: slug={row.get('slug', '?')} close row {close_id} deferred "
                      f"and undischarged (statement: {statement})")
     return section("OBLIGATION DEBT",
@@ -316,8 +308,9 @@ def build_questions_section(led: str, role: str, role_actor_id: int, scan_limit:
         qid = row.get("question_id")
         if qid is None:
             raise BriefError(f"SHAPE DRIFT -- `{led} question-status` row has no 'question_id': {row!r}")
-        detail = parse_served_show(require_led(led, ["show", str(qid)]))
-        if _actor_id_from_show(detail, qid, f"{led} show {qid}") != role_actor_id:
+        show_cmd_label = f"{led} show {qid}"
+        detail = parse_served_show(show_cmd_label, require_led(led, ["show", str(qid)]))
+        if _actor_id_from_show(detail, qid, show_cmd_label) != role_actor_id:
             continue
         lines.append(f"row {qid} [{row.get('question_kind', '?')}] OPEN, "
                      f"concern={detail.get('concern') or '(none)'}: {detail.get('statement', '?')}")

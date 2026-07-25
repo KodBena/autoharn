@@ -23,14 +23,29 @@ under test sees exactly what a real served `led` would print for this scenario; 
 layer itself is not exercised. Flagged, not hidden -- see this fixture's own README note in
 run_fixtures.py's docstring.
 
-Two scenarios, MOCK_LED_SCENARIO env var:
-  corrupt -- role 's45' is registered (row 1); row 7 is `principal_suspended` naming 's45', but
-             row 7's OWN `current` line is corrupted -- rewritten with no leading `[id] kind: `
-             shape at all (a truncated/garbled write). This is the reviewer's own named
-             consequence, reproduced directly.
-  clean   -- the same row 7, NOT corrupted -- the fixed parser's ordinary path, confirming the
-             fix didn't disturb the legitimate SUSPENDED render (and that it still renders at
-             the TOP of the brief, since build_standing_section runs first in cmd_brief).
+Four scenarios, MOCK_LED_SCENARIO env var:
+  corrupt      -- role 's45' is registered (row 1); row 7 is `principal_suspended` naming 's45',
+                  but row 7's OWN `current` line is corrupted -- rewritten with no leading
+                  `[id] kind: ` shape at all (a truncated/garbled write). This is the reviewer's
+                  own named consequence, reproduced directly.
+  clean        -- the same row 7, NOT corrupted -- the fixed parser's ordinary path, confirming
+                  the fix didn't disturb the legitimate SUSPENDED render (and that it still
+                  renders at the TOP of the brief, since build_standing_section runs first in
+                  cmd_brief).
+  show_corrupt -- re-lap review addendum (branch tip cc12b46, parse_served_show finding): row 1
+                  and row 7 are clean; a THIRD row, [2] decision (role 's45' handles onboarding
+                  queue triage), is added to `current`, and its OWN `led show 2` output carries
+                  an 'actor' field ONE COLUMN NARROWER than cmd_show's real `f"{k:28s}: {v}"`
+                  shape -- a wire-level width drift, not a hypothetical: cmd_show's format-spec
+                  width is a MINIMUM, so any transport-layer byte drop that clips one padding
+                  space produces exactly this. Pre-fix (cc12b46, before this addendum's own fix):
+                  parse_served_show silently drops the 'actor' line, _actor_id_from_show reads
+                  it as "no actor column at all" (None), the row fails the actor-id match, and
+                  IN-FORCE DECISIONS renders WITHOUT row 2 -- an emptier-but-exit-0 brief, exactly
+                  the silent-drop class this branch's earlier fixes killed in parse_current_line,
+                  now caught in parse_served_show too.
+  show_clean   -- the same row 2, actor field at the correct width -- confirms the fix does not
+                  disturb the legitimate path: row 2 renders in IN-FORCE DECISIONS.
 """
 import os
 import sys
@@ -40,6 +55,13 @@ SCENARIO = os.environ.get("MOCK_LED_SCENARIO", "clean")
 REG_LINE = "[1] principal_registered: principal 's45' registered (class subagent)"
 SUSPEND_LINE_CLEAN = "[7] principal_suspended: principal 's45' suspended (reason: scratch fixture)"
 SUSPEND_LINE_CORRUPT = "s45 suspended (reason: scratch fixture) -- TRUNCATED ROW, MISSING [id] kind: PREFIX"
+DECISION_LINE = "[2] decision: role 's45' handles onboarding queue triage"
+
+# cmd_show's own `f"{k:28s}: {v}"` shape for key 'actor': correctly padded to 28 columns is
+# "actor" + 23 spaces + ": " + value. The drifted line drops ONE of those padding spaces (27
+# columns, not 28) -- a plausible wire-level truncation, not a fabricated shape.
+_ACTOR_LINE_CORRECT = "actor" + " " * 23 + ": 42\n"
+_ACTOR_LINE_DRIFT = "actor" + " " * 22 + ": 42\n"
 
 SHOW_ROWS = {
     "1": "id                          : 1\n"
@@ -50,6 +72,10 @@ SHOW_ROWS = {
          "kind                        : principal_suspended\n"
          "statement                   : principal 's45' suspended (reason: scratch fixture)\n"
          "actor                       : 1\n",
+    "2": ("id                          : 2\n"
+          "kind                        : decision\n"
+          "statement                   : role 's45' handles onboarding queue triage\n"
+          + (_ACTOR_LINE_DRIFT if SCENARIO == "show_corrupt" else _ACTOR_LINE_CORRECT)),
 }
 
 
@@ -57,6 +83,8 @@ def main(argv):
     if argv[:1] == ["current"]:
         print(REG_LINE)
         print(SUSPEND_LINE_CORRUPT if SCENARIO == "corrupt" else SUSPEND_LINE_CLEAN)
+        if SCENARIO in ("show_corrupt", "show_clean"):
+            print(DECISION_LINE)
         return 0
     if argv[:1] == ["show"] and len(argv) == 2 and argv[1] in SHOW_ROWS:
         print(SHOW_ROWS[argv[1]], end="")

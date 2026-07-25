@@ -23,13 +23,25 @@ the BYTE-IDENTICAL served shapes tools/role_charter.py's own header documents (`
 `led: row <id> written.` on success, serving/boundary_cli_client.py's own write_and_report()
 convention) so the parser under test sees exactly what a real served `led` would print.
 
-Two scenarios, MOCK_LED_SCENARIO env var:
-  corrupt -- role 'editor' is registered as a principal (row 1); row 7 is the role's real
-             in-force charter-registration `decision`, but row 7's OWN `current` line is
-             corrupted -- rewritten with no leading `[id] kind: ` shape at all.
-  clean   -- the same row 7, NOT corrupted -- the fixed parser's ordinary path, confirming the
-             fix still lets `register` see the existing row and correctly REFUSE (JC4),
-             undisturbed by the fix.
+Four scenarios, MOCK_LED_SCENARIO env var:
+  corrupt      -- role 'editor' is registered as a principal (row 1); row 7 is the role's real
+                  in-force charter-registration `decision`, but row 7's OWN `current` line is
+                  corrupted -- rewritten with no leading `[id] kind: ` shape at all.
+  clean        -- the same row 7, NOT corrupted -- the fixed parser's ordinary path, confirming
+                  the fix still lets `register` see the existing row and correctly REFUSE (JC4),
+                  undisturbed by the fix.
+  show_corrupt -- re-lap review addendum (branch tip cc12b46, parse_served_show finding): row 7's
+                  `current` line is clean, but row 7's OWN `led show 7` output carries an
+                  'actor' field ONE COLUMN NARROWER than cmd_show's real `f"{k:28s}: {v}"` shape
+                  (a wire-level width drift -- cmd_show's format-spec width is a MINIMUM, so a
+                  transport-layer byte drop that clips one padding space produces exactly this).
+                  Pre-fix (cc12b46, before this addendum's own fix): `show editor`'s best-effort
+                  written_by lookup silently drops the 'actor' line and renders
+                  "written by actor id '(unknown)'", exit 0 -- a real field silently
+                  misrepresented as absent, the same silent-drop class already killed in
+                  parse_current_line, still alive in parse_served_show at cc12b46.
+  show_clean   -- the same row 7, actor field at the correct width -- confirms the fix does not
+                  disturb the legitimate path: `show editor` renders the real actor id.
 """
 import os
 import sys
@@ -42,15 +54,21 @@ CHARTER_LINE_CLEAN = ("[7] decision: role-charter registered: role=editor "
 CHARTER_LINE_CORRUPT = ("role-charter role=editor path=roles/editor/CHARTER.md sha256=" +
                          "a" * 64 + " -- TRUNCATED ROW, MISSING [id] kind: PREFIX")
 
+# cmd_show's own `f"{k:28s}: {v}"` shape for key 'actor': correctly padded to 28 columns is
+# "actor" + 23 spaces + ": " + value. The drifted line drops ONE of those padding spaces (27
+# columns, not 28) -- a plausible wire-level truncation, not a fabricated shape.
+_ACTOR_LINE_CORRECT = "actor" + " " * 23 + ": 1\n"
+_ACTOR_LINE_DRIFT = "actor" + " " * 22 + ": 1\n"
+
 SHOW_ROWS = {
     "1": "id                          : 1\n"
          "kind                        : principal_registered\n"
          "statement                   : principal 'editor' registered (class human)\n",
-    "7": "id                          : 7\n"
-         "kind                        : decision\n"
-         "statement                   : role-charter registered: role=editor "
-         "path=roles/editor/CHARTER.md sha256=" + "a" * 64 + "\n"
-         "actor                       : 1\n",
+    "7": ("id                          : 7\n"
+          "kind                        : decision\n"
+          "statement                   : role-charter registered: role=editor "
+          "path=roles/editor/CHARTER.md sha256=" + "a" * 64 + "\n"
+          + (_ACTOR_LINE_DRIFT if SCENARIO == "show_corrupt" else _ACTOR_LINE_CORRECT)),
 }
 
 

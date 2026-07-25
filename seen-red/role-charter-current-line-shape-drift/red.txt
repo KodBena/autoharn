@@ -11,3 +11,52 @@
   [ok] exit=1 names-existing-registration=True no-registration-written=True
 
 all role-charter-current-line-shape-drift cases WITNESSED clean.
+
+=== APPENDIX 2026-07-26 -- re-lap review finding: parse_served_show carried the same silent-drop
+class R1/R2/R3 above already killed in parse_current_line, untouched by that earlier fix round
+(byte-identical duplicate copy in tools/role_brief.py too, where it was LOAD-BEARING -- see that
+sibling family's own appendix; both files' fix and extraction into tools/served_shapes.py are
+covered by this same appendix). R4-R6 added below, same mock, same run_fixtures.py, full re-run:
+
+=== role-charter-current-line-shape-drift: seen-red witness ===
+
+=== R1-pre-fix-corrupt-silently-writes-duplicate-registration ===
+  [ok] exit=0 wrote-duplicate-registration=True (pre-fix commit 417b200, the exact code row 1295 named) -- this is the vacuous pass: an existing in-force registration is invisible because its corrupted `current` line was silently skipped, so JC4's double-registration refusal never fires and a second, conflicting registration is written, exit 0
+
+=== R2-post-fix-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-registration-written=True
+  stderr="role_charter: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-charter-current-line-shape-drift/mock_led.py current 100` line does not match the expected `[id] kind: statement` shape; got 'role-charter role=editor path=roles/editor/CHARTER.md sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a real change."
+
+=== R3-post-fix-clean-existing-registration-correctly-refused ===
+  [ok] exit=1 names-existing-registration=True no-registration-written=True
+
+=== R4-pre-show-fix-corrupt-actor-silently-shows-unknown ===
+  [ok] exit=0 written-by-silently-unknown=True (pre-fix commit cc12b46, this branch's own tip before this addendum) -- a real 'actor' field silently vanishes because its width-drifted `led show` line was silently skipped, exactly the silent-drop class this branch's earlier fixes killed in parse_current_line, still alive in parse_served_show
+
+=== R5-post-fix-show-corrupt-refuses-loudly ===
+  [ok] exit=1 names-shape-drift=True no-show-rendered=True
+  stderr="role_charter: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-charter-current-line-shape-drift/mock_led.py show 7` show output line 4 does not match the expected `key: value` shape (a key, padded to at least 28 columns, then ': '); got 'actor                      : 1'. Refusing rather than silently dropping a field that could hide a real value."
+
+=== R6-post-fix-show-clean-actor-renders ===
+  [ok] exit=0 actor-id-rendered=True
+  stdout="role 'editor': IN-FORCE charter registration, row 7 (written by actor id '1' -- served `led` carries no name join; see `led show 7` below for the full row)\n  path:   roles/editor/CHARTER.md\n  sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-- full ledger row --\nid                          : 7\nkind                        : decision\nstatement                   : role-charter registered: role=editor path=roles/editor/CHARTER.md sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nactor                       : 1\nrole_charter: DRIFT -- the registered path 'roles/editor/CHARTER.md' does not exist on disk right now (relative to CWD /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645) -- cannot verify the hash. This is a loud warning, not a refusal (per the governing spec: 'a mismatch is a loud DRIFT warning, not an error')."
+
+all role-charter-current-line-shape-drift cases WITNESSED clean.
+
+=== APPENDIX 2026-07-26, ALSO WITNESSED: the sibling -real family (seen-red/role-charter-current-
+line-shape-drift-real/run_fixtures.py) re-run end to end against real infra (HARNESS_PGHOST=
+192.168.122.1, scratch schema, dropped after) to confirm no regression from this fix round:
+
+ADOPT: new-project.sh --new-world exit=0 deployment.json=True -- PASS
+=== REAL-CLEAN-existing-registration-correctly-refused-real-infra ===
+  [ok] exit=1 names-existing-registration=True no-registration-written=True (real scratch world, real served led, no proxy)
+
+=== REAL-CORRUPTED-refuses-loudly-real-infra ===
+  [ok] exit=1 names-shape-drift=True no-registration-written=True (real scratch world, real served led underneath, one current-line corrupted by the proxy on top of the real row)
+  stderr="role_charter: REFUSED -- SHAPE DRIFT -- `/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a58877a8925a19645/seen-red/role-charter-current-line-shape-drift-real/corrupt_led_proxy.py current 200` line does not match the expected `[id] kind: statement` shape; got 'role-charter registered: role=editor path=/tmp/role-charter-current-line-shape-drift-real-59jl63je/CHARTER.md sha256=b4ce1f5244fc354ddbf5b4bc3c0bd424fc35433a658b36fca2d47b387faa2651 -- TRUNCATED ROW, MISSING [id] kind: PREFIX'. Refusing rather than silently skipping a row that could hide a real change."
+
+all role-charter-current-line-shape-drift-real cases WITNESSED clean.
+
+(No new -real leg was added for the show-drift case itself -- the coordinator brief permits
+"mock and/or -real"; the mock leg above (R4-R6) is the primary witness, and this real re-run
+covers the "no regression on the existing -real family" requirement separately.)

@@ -12,6 +12,15 @@ WITNESSES:
       and the producing command (`<led> current <N>`), exit 1. Nothing renders as a clean brief.
   R3  POST-FIX CODE, `clean` scenario (same suspension row, not corrupted): STANDING renders
       SUSPENDED at the TOP of the brief, exit 0 -- the fix does not disturb the legitimate path.
+  R4  RED-FIRST, PRE-FIX CODE (git cc12b46's own tools/role_brief.py -- this branch's tip BEFORE
+      the re-lap review's parse_served_show finding): against `show_corrupt`, a real in-force
+      decision row (row 2) whose `led show` actor line carries a one-column width drift silently
+      drops out of IN-FORCE DECISIONS -- an emptier-but-exit-0 brief, the same silent-drop class
+      already killed in parse_current_line, still alive in parse_served_show at cc12b46.
+  R5  POST-FIX CODE, `show_corrupt` scenario: refuses loudly -- BriefError naming the offending
+      `led show 2` line and command, exit 1. Nothing renders.
+  R6  POST-FIX CODE, `show_clean` scenario (same row 2, actor field at the correct width): row 2
+      renders in IN-FORCE DECISIONS, exit 0 -- the fix does not disturb the legitimate path.
 
 Usage: python3 seen-red/role-brief-current-line-shape-drift/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned; stdlib only.
@@ -28,6 +37,7 @@ REPO = HERE.parents[1]
 MOCK_LED = HERE / "mock_led.py"
 POST_FIX_ROLE_BRIEF = REPO / "tools" / "role_brief.py"
 PRE_FIX_COMMIT = "a2750f6"
+PRE_SHOW_FIX_COMMIT = "cc12b46"
 
 FAILURES: list[str] = []
 
@@ -94,6 +104,52 @@ def main() -> int:
     check("R3-post-fix-clean-suspension-renders-at-top", r3.returncode == 0 and r3_suspended and r3_at_top,
           f"exit={r3.returncode} SUSPENDED-line-present={r3_suspended} "
           f"STANDING-before-IN-FORCE-DECISIONS={r3_at_top}")
+
+    # R4: PRE-FIX code, `cc12b46` (this branch's tip before the re-lap review's parse_served_show
+    # finding -- byte-identical to what that review actually examined), against `show_corrupt`.
+    pre_show_fix_src = subprocess.run(
+        ["git", "-C", str(REPO), "show", f"{PRE_SHOW_FIX_COMMIT}:tools/role_brief.py"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    with tempfile.NamedTemporaryFile("w", suffix="_role_brief_pre_show_fix.py", delete=False) as f:
+        f.write(pre_show_fix_src)
+        pre_show_fix_path = Path(f.name)
+    try:
+        r4 = run_brief(pre_show_fix_path, "show_corrupt")
+        r4_row2_missing = "row 2 [decision]" not in r4.stdout
+        r4_decisions_empty = "## IN-FORCE DECISIONS" in r4.stdout and (
+            "(none)" in r4.stdout.split("## IN-FORCE DECISIONS", 1)[1].split("##", 1)[0])
+        check("R4-pre-show-fix-corrupt-actor-silently-drops-row",
+              r4.returncode == 0 and r4_row2_missing and r4_decisions_empty,
+              f"exit={r4.returncode} row-2-absent={r4_row2_missing} "
+              f"decisions-section-empty={r4_decisions_empty} (pre-fix commit "
+              f"{PRE_SHOW_FIX_COMMIT}, this branch's own tip before this addendum) -- a real "
+              f"in-force decision row silently vanishes from IN-FORCE DECISIONS because its "
+              f"`led show`'s width-drifted actor line was silently skipped, exactly the "
+              f"silent-drop class this branch's earlier fixes killed in parse_current_line, "
+              f"still alive in parse_served_show")
+    finally:
+        pre_show_fix_path.unlink(missing_ok=True)
+
+    # R5: POST-FIX code, `show_corrupt` scenario -- must refuse loudly, naming the `led show 2`
+    # line and command, never silently render an emptier brief.
+    r5 = run_brief(POST_FIX_ROLE_BRIEF, "show_corrupt")
+    r5_refused = ("REFUSED -- SHAPE DRIFT" in r5.stderr
+                  and "show output line" in r5.stderr
+                  and "show 2" in r5.stderr)
+    r5_no_brief = "# BRIEF" not in r5.stdout or "STANDING" not in r5.stdout
+    check("R5-post-fix-show-corrupt-refuses-loudly",
+          r5.returncode == 1 and r5_refused and r5_no_brief,
+          f"exit={r5.returncode} names-shape-drift={r5_refused} no-brief-rendered={r5_no_brief}\n"
+          f"  stderr={r5.stderr.strip()!r}")
+
+    # R6: POST-FIX code, `show_clean` scenario (same row 2, actor field at the correct width) --
+    # row 2 renders in IN-FORCE DECISIONS, exit 0 -- the fix does not disturb the legitimate path.
+    r6 = run_brief(POST_FIX_ROLE_BRIEF, "show_clean")
+    r6_row2_present = "row 2 [decision]: role 's45' handles onboarding queue triage" in r6.stdout
+    check("R6-post-fix-show-clean-row-renders",
+          r6.returncode == 0 and r6_row2_present,
+          f"exit={r6.returncode} row-2-in-decisions={r6_row2_present}")
 
     if FAILURES:
         print(f"role-brief-current-line-shape-drift: {len(FAILURES)} case(s) FAILED: {FAILURES}")
