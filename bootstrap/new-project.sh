@@ -419,9 +419,11 @@ if [ -n "$NEW_WORLD" ]; then
         echo "                the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --new-world" >&2
         echo "                also derives --schema/--kern/--role from (same intersection this" >&2
         echo "                script's own --profile tracker --name check and tools/setup_tui/" >&2
-        echo "                idtypes.py's WorldName enforce). Pick a compliant world name, or" >&2
-        echo "                supply --schema/--kern/--role explicitly if the world label itself" >&2
-        echo "                must stay outside [a-z0-9]{1,64}. Nothing was touched." >&2
+        echo "                idtypes.py's WorldName enforce). Pick a compliant world name --" >&2
+        echo "                there is deliberately no override: the name reaches WORLD_LABEL" >&2
+        echo "                and .autoharn-world.json regardless of --schema/--kern/--role," >&2
+        echo "                so no flag combination makes a non-compliant name safe." >&2
+        echo "                Nothing was touched." >&2
         exit 1
     fi
     unset _new_world_bad
