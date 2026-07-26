@@ -103,6 +103,22 @@ doorway docs transform in the same build (the card's forward note discharges;
 QUICKSTART/USER-GUIDE/README spellings update; the roster becomes "see
 `autoharn --help`").
 
+### §6 AMENDMENT (2026-07-26, rows 1357/1365) — the scaffold clause executes; no shims for worlds
+
+The maintainer's rulings: the alias-shim removal schedule above is INVERTED (pruning
+precedes 2.0.0 as a precondition, row 1357), and the scaffold sentence above — which this
+section always contained — stops being the build's descoped follow-on and becomes
+commissioned work (row 1365). The precondition's purpose, his framing: ONE operator
+surface, `./autoharn`, everywhere — including what `bootstrap/new-project.sh` emits.
+Concretely: future scaffolds (`--new-world` and `--profile tracker` both) emit one
+world-local dispatcher and NO per-verb shims — worlds get no deprecation window because
+worlds are born, not upgraded (runs-are-linear); existing worlds are untouched. The
+world dispatcher needs no `libexec/` — its verbs already resolve to
+`bootstrap/templates/<verb>.tmpl` under the exec root, so it is one file routing verbs
+to templates with the world's own `PICKUP_DEPLOYMENT`, refusing unknown verbs with
+teaching. The fixture corpus's `world_dir/"led"`-style driving (~60 files, enumerated by
+the row-1357 sweep) migrates in the same arc, witnessed by each family's own run.
+
 ## 7. Witness plan
 
 Both polarities throughout: dispatch parity (every verb's existing fixture green under
