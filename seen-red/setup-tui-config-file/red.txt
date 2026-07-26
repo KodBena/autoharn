@@ -133,3 +133,91 @@ Textual's `Pilot`/`app.run_test()`, the post-rebuild convention `--scripted` no 
 Recommend: a follow-on work item to either rewrite case v onto the `Pilot` convention or retire
 it as redundant with setup-tui-seeded-value-visibility, and re-bank this file's own red.txt once
 that lands. Left as-is here to keep this round's diff scoped to the plan-key bug.
+
+---
+
+RE-BANKED 2026-07-26, work item setup-tui-config-file-retired-flags (ledger rows 1327/1336):
+the flag above is now fixed. RED WITNESSED, live, exactly the flagged reproduction:
+
+$ python3 -m tools.setup_tui.app --scripted /dev/null --initial-config /dev/null --dry-run \
+    --start-at substrate /tmp/nonexistent
+usage: setup_tui [-h] [--dry-run] [--accept-unverified-genesis]
+                 [--from-config CONFIG_FILE] [--world NAME]
+                 [--initial-config CONFIG_FILE]
+                 [DEST_DIR]
+setup_tui: error: unrecognized arguments: --scripted --start-at substrate /tmp/nonexistent
+
+COVERAGE CHECK (verifying the row's own "reportedly has a correct current home" claim before
+acting on it, not assuming it): seen-red/setup-tui-seeded-value-visibility/run_fixtures.py was
+read in full. Its subject is config-load FIELD VISIBILITY once a section is blocked/unblocked
+(the maintainer's own bench report, ledger row 1130) -- it drives the in-UI "Load a
+configuration" action and checks that seeded values show up as real widget state (case 3: a
+ConfirmField and two MultiChoiceFields all render their seeded selections once unblocked). It
+does NOT ever touch `--initial-config` (grepped: zero mentions) and NEVER exercises an operator
+OVERRIDING a seeded value -- only that the seeded value itself is visible. The original case v
+asserted TWO things: (a) a config default threads through as the prompt's own default (kept via
+"-"), and (b) an individual operator answer still overrides that default. Table:
+
+  assertion                                          | covered by seeded-value-visibility?
+  ----------------------------------------------------|-------------------------------------
+  (a) seeded value threads as the field's own live    | YES in substance -- case 3 proves a
+      default, visible without operator action        | seeded value renders as real widget
+                                                        | state; --initial-config shares the
+                                                        | SAME build_live_field_overrides
+                                                        | seeding function (app.py's own
+                                                        | comment), so the mechanism, not just
+                                                        | the shape, is identical
+  (b) an operator's own answer overrides the seeded   | NO -- not exercised anywhere in that
+      default; the seeded value does not leak through | family, or anywhere else in this tree
+
+Verdict: coverage is NOT genuinely equivalent (assertion (b) is uncovered) -- retiring case v
+outright would silently drop it. REWRITTEN instead, in place, against the CURRENT driving
+surface (`--initial-config` launches the real interactive Textual app and needs a TTY, so a
+subprocess-and-parse-stdout shape is not available post-rebuild; Textual's own `Pilot`/
+`app.run_test()` -- the same mechanism seeded-value-visibility itself uses -- is the correct
+current surface). The rewrite builds `state`/`_live_fields` the identical way `app.py`'s own
+`_run_textual` does for `--initial-config`, launches the real app, and checks the SAME
+`db_existing` field seeded-value-visibility's OWN mechanism seeds, at three points: the widget's
+own `.value`, the persisted live-field slot (`fields.get_field_value`, the ONE place any
+`submit()` reads a field's value from), and the real `steps_substrate.submit()` result -- keep
+leg (unedited, shows the seeded default) and override leg (operator types a new value; all three
+checkpoints agree on the operator's answer, none show the seeded default leaking through).
+
+GREEN, re-banked, live, HARNESS_PGHOST set (venv with `textual` installed --
+/home/bork/w/vdc/venvs/generic/bin/python3; the system python3 has no `textual`, same
+requirement seen-red/setup-tui-seeded-value-visibility's own docstring states):
+
+$ HARNESS_PGHOST=192.168.122.1 /home/bork/w/vdc/venvs/generic/bin/python3 \
+    seen-red/setup-tui-config-file/run_fixtures.py
+case ii ok: missing-key refusal names every missing key (per-key red controls, an
+  all-missing-at-once control naming every gate+header field in ONE refusal), green control
+  passes
+case iii ok: unknown-key refusal (including the two named-excluded CLI parameters,
+  'world'/'dest', which are never legal config content), green control passes
+case vii ok: capture_resolved_config reads the wizard's real '_plan' state key -- a registered
+  principal's register/competences/relations rows survive into the rendered world-config.toml
+  (plan-key silent-loss regression guard, ledger row 1330)
+case iv ok (schema leg): world name REFUSED when its schema already exists on the target
+  Postgres, named in the refusal; a genuinely-fresh name is not refused (green control)
+case iv ok (sentinel leg): world name REFUSED when the destination's own sentinel names a
+  DIFFERENT world, that world named in the refusal
+case v ok: a config-seeded value threads through --initial-config's SAME
+  build_live_field_overrides seeding as the in-UI 'Load a configuration' action
+  (seen-red/setup-tui-seeded-value-visibility's own case 3 covers that half); an operator's own
+  typed answer overrides it end to end -- widget, persisted live-field slot, and the real
+  substrate.submit() result all agree, the seeded default never leaking through (the half no
+  other fixture covers, carried over from the retired --scripted case v rather than dropped)
+case i ok: --from-config drives a full eleven-screen dry-run birth from the shipped exemplar to
+  a clean exit 0, zero prompts left to a human, every queued act visible
+case vi ok: a live birth's own saved world-config.toml, re-applied via --from-config to a SECOND
+  world, saves the SAME resolved decision set again (a fixed point, checked mechanically)
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+
+exit 0. Case vi's own two live births each spawn a boundary_service process
+(`_kill_boundary`'s pgrep-on-world-name -- ledger row 1334/1337, see that work item's own
+banked evidence for why that match never fires) -- this re-bank run independently reproduced
+that SAME leak (ports 8426/8427, tempdir /tmp/setup-tui-config-file-<random>), killed by hand
+immediately after, since fixing _kill_boundary itself is that OTHER work item's scope, not
+this one's. Not otherwise a residue regression: schemas/roles dropped via teardown-world.sh,
+tempdir removed by the fixture's own `finally`.
