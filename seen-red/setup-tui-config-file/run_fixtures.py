@@ -19,18 +19,27 @@ design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §6 names, ledger row 1944:
 
 Cases (i)/(v)/(vi) need a live, reachable Postgres host (HARNESS_PGHOST/EPISTEMIC_PGHOST) --
 UNEXERCISED, not FAILED, when neither is set (same convention seen-red/setup-tui-principals-
-authority already uses). Every scratch destination lives under a fixture-owned tempdir, and
-every scratch world this fixture BIRTHS is torn down in a `finally`, real teardown-world.sh
-(`--force-non-scratch` -- fixture-generated world names do not match the scratch-safe pattern),
-zero residue regardless of outcome.
+authority already uses). Case (v) ALSO needs `textual` importable (it drives the real Tree+Form
+app via Pilot/`run_test()`, the current post-2026-07-22-rebuild surface for what `--initial-
+config` does -- there is no textual-free way to exercise it any more, `--scripted`'s own
+subprocess-and-parse-stdout shape having been deleted with that rebuild); UNEXERCISED, not
+FAILED, on an interpreter without it -- guarded by a top-level `try`/`except ImportError` mirroring
+`tools/setup_tui/app.py`'s own `tui_app` import guard (CLAUDE.md's lazy-import ban is about
+function-BODY imports; a guarded top-of-file import is the project's own established idiom for an
+optional heavy dependency, not a lazy import). Every scratch destination lives under a
+fixture-owned tempdir, and every scratch world this fixture BIRTHS is torn down in a `finally`,
+real teardown-world.sh (`--force-non-scratch` -- fixture-generated world names do not match the
+scratch-safe pattern), zero residue regardless of outcome.
 
 Real subprocess invocations of the actual CLI entry point (no mocks), matching every sibling
 setup_tui fixture's own Rule 1 bar. Lazy imports banned."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -40,8 +49,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO)
 
+try:
+    from textual.widgets import Input, Tree
+except ImportError:
+    Input = Tree = None  # type: ignore[assignment,misc]
+
+from tools.configtree import NodeId  # noqa: E402
+from tools.configtree.fields import get_field_value  # noqa: E402
 from tools.setup_tui import config_file, config_seam, destination, steps  # noqa: E402
-from tools.setup_tui import steps_principals_authority  # noqa: E402
+from tools.setup_tui import steps_principals_authority, steps_substrate  # noqa: E402
+
+try:
+    from tools.setup_tui import tui_app
+except ImportError:
+    tui_app = None  # type: ignore[assignment]
 
 PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
 PGDB = "toy"
@@ -182,41 +203,138 @@ def case_world_exists_sentinel_leg(scratch: str) -> None:
           "names a DIFFERENT world, that world named in the refusal")
 
 
-def case_initial_config_override(scratch: str) -> None:
+def _find_node(tree: "Tree", kind: str, slug: "str | None" = None):
+    """Mirrors seen-red/setup-tui-seeded-value-visibility/run_fixtures.py's own helper of the
+    same name -- walks the sidebar Tree for the first node matching (kind, slug)."""
+    def _walk(node):
+        for child in node.children:
+            data = child.data or {}
+            if data.get("kind") == kind and (slug is None or data.get("slug") == slug):
+                return child
+            found = _walk(child)
+            if found is not None:
+                return found
+        return None
+    return _walk(tree.root)
+
+
+async def _case_initial_config_override_async(scratch: str) -> None:
+    """REWRITE (work item setup-tui-config-file-retired-flags, row 1327/1336 arc): the ORIGINAL
+    case v drove `--scripted`/`--start-at` -- both retired dead since the 2026-07-22 Tree+Form
+    rebuild (design/FABLE-SETUP-TUI-REBUILD-SPEC.md; `--scripted`'s own `ScriptedUi` machinery is
+    deleted, `config_seam.py`'s own module docstring names this explicitly) -- so this case has
+    errored ('unrecognized arguments: --scripted --start-at ...') on every actual run since that
+    rebuild, never caught because seen-red's own re-execution had not been exercised against it.
+
+    COVERAGE CHECK (the claim this rewrite verifies, not assumes): seen-red/setup-tui-seeded-
+    value-visibility/run_fixtures.py's case 3 already proves HALF of what the original case v
+    asserted -- that a config-seeded value threads through as a field's own live value (there,
+    via the in-UI "Load a configuration" action; `app.py`'s own comment confirms `--initial-
+    config` calls the SAME `build_live_field_overrides` seeding function that action calls, so
+    the mechanism is genuinely shared, not merely similarly-shaped). It does NOT cover the
+    other half -- that an operator's own explicit answer OVERRIDES the seeded default, and the
+    seeded value does not leak through once overridden -- no other fixture in this tree checks
+    that. Retiring case v outright would silently drop that assertion; this rewrite carries it
+    over, driven against the CURRENT surface (`tools.setup_tui.tui_app`'s real Tree+Form app via
+    Textual's `Pilot`, `run_test()` -- the same mechanism seeded-value-visibility itself uses,
+    since `--initial-config` launches the real interactive Textual app and needs a TTY, not a
+    subprocess-and-parse-stdout shape `--scripted` used to provide).
+
+    KEEP LEG: builds `state`/`_live_fields` exactly the way `app.py`'s own `_run_textual` does
+    for `--initial-config` (`config_seam.build_live_field_overrides` +
+    `build_initial_state_overrides`, the P1 SSOT both `--initial-config` and "Load a
+    configuration" call) from a config seeding `substrate.db = "cfgfixtureinitdb"`, launches the
+    real app, navigates to the substrate section, and reads the `db_existing` Input widget's OWN
+    `.value` straight off the live app -- it must show the seeded value, unedited (the field's
+    own live default, not a scripted-answers artifact).
+
+    OVERRIDE LEG: the SAME app, the operator types a different value into that SAME Input widget
+    (a real Textual `Input.Changed` message, `panes.py`'s own `on_input_changed` write-through --
+    the identical path a real keystroke drives). Verified at BOTH ends of the write-through
+    chain: (1) the widget's own `.value` shows the typed value, not the seeded one; (2) the
+    persisted live-field slot (`fields.get_field_value`, the ONE place every `submit()` reads a
+    field's current value from) agrees; (3) calling `steps_substrate.submit` with that SAME
+    live-field-derived answers dict (the real function a commit sweep calls, not a mock) reports
+    `state_updates["db"]` as the operator's typed value, never the seeded one -- the override
+    reaches the exact function the original case v's stdout assertion was a proxy for."""
     values = {**_minimal_valid_values(), "substrate.run": True, "substrate.path": "existing",
               "substrate.host": "192.168.122.1", "substrate.db": "cfgfixtureinitdb"}
     cfg_path = os.path.join(scratch, "v-initial.toml")
     with open(cfg_path, "w") as f:
         f.write(config_file.render_toml(values, produced_by="fixture", source="fixture"))
-    # keep-the-default leg: "-" accepts substrate.db's config default. `--start-at substrate`
-    # (a fresh --scripted answers file starts at the substrate screen's own first prompt, its
-    # own confirm -- no preflight leg to answer first).
-    ans_keep = os.path.join(scratch, "v-answers-keep.txt")
-    with open(ans_keep, "w") as f:
-        f.write("y\nexisting\n192.168.122.1\n-\n" + "n\n" * 8)
-    cp_keep = run_app(["--scripted", ans_keep, "--initial-config", cfg_path, "--dry-run",
-                        "--start-at", "substrate"], scratch)
-    out_keep = cp_keep.stdout + cp_keep.stderr
-    assert cp_keep.returncode == 0, f"case v (keep leg): exit {cp_keep.returncode}: {out_keep[-1500:]}"
-    assert "Existing database name: cfgfixtureinitdb" in out_keep, (
-        f"case v (keep leg): the config default was not offered/kept at the prompt: "
-        f"{out_keep[-1500:]}")
-    # override leg: a literal answer overrides the SAME config default.
-    ans_override = os.path.join(scratch, "v-answers-override.txt")
-    with open(ans_override, "w") as f:
-        f.write("y\nexisting\n192.168.122.1\noperatorchosendb\n" + "n\n" * 8)
-    cp_over = run_app(["--scripted", ans_override, "--initial-config", cfg_path, "--dry-run",
-                        "--start-at", "substrate"], scratch)
-    out_over = cp_over.stdout + cp_over.stderr
-    assert cp_over.returncode == 0, f"case v (override leg): exit {cp_over.returncode}: {out_over[-1500:]}"
-    assert "Existing database name: operatorchosendb" in out_over, (
-        f"case v (override leg): the operator's own answer did not override the config "
-        f"default: {out_over[-1500:]}")
-    assert "cfgfixtureinitdb" not in out_over.split("Existing database name:")[-1][:40], (
-        "case v (override leg): the config default leaked through despite the override")
-    print("case v ok: --initial-config threads a config value as the prompt's own default "
-          "(kept via '-', the SAME navigation prior-answers seam a real revisit uses) and an "
-          "individual answer still overrides it")
+    doc = config_file.load_config_file(cfg_path)
+    config_file.validate(doc, require_complete=False)
+
+    # Same construction app.py's own --initial-config handling performs (tools/setup_tui/app.py,
+    # `_run_textual`): build_live_field_overrides seeds state["_live_fields"],
+    # build_initial_state_overrides seeds the bare shared-state keys (pghost/db/...).
+    state = steps.initial_state(dry_run=True)
+    overrides, seeded, _unseedable = config_seam.build_live_field_overrides(doc)
+    assert "substrate.db -> substrate.db_existing" in seeded, (
+        f"case v setup: substrate.db was not seeded to db_existing as expected: {seeded!r}")
+    state.setdefault("_live_fields", {}).update(overrides)
+    state.update(config_seam.build_initial_state_overrides(doc))
+
+    app = tui_app.build_app(state, dry_run=True)
+    async with app.run_test(size=(150, 55)) as pilot:
+        await pilot.pause()
+        tree = app.query_one("#ct-tree", Tree)
+        sub_node = _find_node(tree, "section", "substrate")
+        tree.select_node(sub_node)
+        tree.action_select_cursor()
+        await pilot.pause()
+
+        db_input = app.query_one("#pane-substrate #ct-field-db_existing", Input)
+
+        # KEEP LEG: unedited, the field shows the seeded config default.
+        assert db_input.value == "cfgfixtureinitdb", (
+            f"case v (keep leg): expected the seeded config default 'cfgfixtureinitdb' as the "
+            f"field's own live value, got {db_input.value!r}")
+        seeded_value = get_field_value(
+            state, NodeId("substrate"),
+            next(fld for fld in steps_substrate.fields(state) if str(fld.name) == "db_existing"))
+        assert seeded_value == "cfgfixtureinitdb", (
+            f"case v (keep leg): the persisted live-field slot disagrees with the widget: "
+            f"{seeded_value!r}")
+
+        # OVERRIDE LEG: a real operator keystroke path -- Input.value assignment posts the same
+        # Input.Changed message a live keystroke does, driving panes.py's own on_input_changed
+        # write-through (verified below at both the widget and the persisted-slot end).
+        db_input.value = "operatorchosendb"
+        await pilot.pause()
+        assert db_input.value == "operatorchosendb", (
+            f"case v (override leg): the widget did not accept the operator's own answer: "
+            f"{db_input.value!r}")
+        overridden_value = get_field_value(
+            state, NodeId("substrate"),
+            next(fld for fld in steps_substrate.fields(state) if str(fld.name) == "db_existing"))
+        assert overridden_value == "operatorchosendb", (
+            f"case v (override leg): the seeded config default leaked through the write-through "
+            f"choke point -- persisted live-field slot is {overridden_value!r}, expected the "
+            f"operator's own answer")
+
+        # The override reaches the REAL submit() a commit sweep would call, not just the widget.
+        fields_by_name = {str(fld.name): fld for fld in steps_substrate.fields(state)}
+        answers = {name: get_field_value(state, NodeId("substrate"), fld)
+                   for name, fld in fields_by_name.items()}
+        result = steps_substrate.submit(dict(state), answers)
+        assert result.ok, f"case v (override leg): substrate.submit refused: {result.errors}"
+        assert result.state_updates.get("db") == "operatorchosendb", (
+            f"case v (override leg): substrate.submit's own resolved 'db' is "
+            f"{result.state_updates.get('db')!r}, expected the operator's typed answer, not the "
+            f"seeded config default")
+
+    print("case v ok: a config-seeded value threads through --initial-config's SAME "
+          "build_live_field_overrides seeding as the in-UI 'Load a configuration' action "
+          "(seen-red/setup-tui-seeded-value-visibility's own case 3 covers that half); an "
+          "operator's own typed answer overrides it end to end -- widget, persisted live-field "
+          "slot, and the real substrate.submit() result all agree, the seeded default never "
+          "leaking through (the half no other fixture covers, carried over from the retired "
+          "--scripted case v rather than dropped)")
+
+
+def case_initial_config_override(scratch: str) -> None:
+    asyncio.run(_case_initial_config_override_async(scratch))
 
 
 def case_full_dry_run_and_roundtrip(scratch: str) -> None:
@@ -244,10 +362,12 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
 
     world2 = f"cfgfxb{int(time.time())}"
     dest2 = os.path.join(scratch, "vi-world2")
+    boundary_pid1 = boundary_pid2 = None
     try:
         cp1 = run_app(["--from-config", EXEMPLAR, "--world", world1, dest1], scratch, timeout=180)
         out1 = cp1.stdout + cp1.stderr
         assert cp1.returncode == 0, f"case vi: live birth 1 exit {cp1.returncode}: {out1[-2000:]}"
+        boundary_pid1 = _discover_boundary_pid(dest1)
         cfg_a = os.path.join(dest1, "world-config.toml")
         assert os.path.isfile(cfg_a), f"case vi: {cfg_a} was not saved: {out1[-2000:]}"
         doc_a = config_file.load_config_file(cfg_a)
@@ -256,6 +376,7 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
         cp2 = run_app(["--from-config", cfg_a, "--world", world2, dest2], scratch, timeout=180)
         out2 = cp2.stdout + cp2.stderr
         assert cp2.returncode == 0, f"case vi: live birth 2 (re-applied) exit {cp2.returncode}: {out2[-2000:]}"
+        boundary_pid2 = _discover_boundary_pid(dest2)
         cfg_b = os.path.join(dest2, "world-config.toml")
         assert os.path.isfile(cfg_b), f"case vi: {cfg_b} was not saved: {out2[-2000:]}"
         doc_b = config_file.load_config_file(cfg_b)
@@ -268,17 +389,66 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
               "--from-config to a SECOND world, saves the SAME resolved decision set again "
               "(a fixed point, checked mechanically)")
     finally:
-        _kill_boundary(world1)
-        _kill_boundary(world2)
+        _kill_boundary(boundary_pid1)
+        _kill_boundary(boundary_pid2)
         teardown(world1, dest1)
         teardown(world2, dest2)
 
 
-def _kill_boundary(world: str) -> None:
-    cp = subprocess.run(["pgrep", "-f", f"boundary_service.*{world}"], capture_output=True,
-                         text=True, timeout=10)
-    for pid in cp.stdout.split():
-        subprocess.run(["kill", pid], capture_output=True, timeout=5)
+def _discover_boundary_pid(dest: str) -> "int | None":
+    """PID-TRACKING, THE HONEST SHAPE (work item setup-tui-fixture-kill-boundary-never-matches,
+    ledger row 1334/1337): the fixture spawns this process (transitively, through `run_app`'s own
+    `python -m tools.setup_tui.app --from-config ...` subprocess, which `steps_boundary.py`'s
+    `BackgroundAct` Popen()s as ITS OWN child before that subprocess exits and the boundary
+    service is reparented) -- it should never need pgrep GUESSING to find it again later. The OLD
+    code guessed `boundary_service.*{world}` at KILL time, long after spawn -- but
+    `steps_boundary.py` launches the service with `--config <dest>/boundary-multiplex.toml
+    --port <port>`, an argv that NEVER contains the bare world name at all (verified: `grep -n
+    boundary_service tools/setup_tui/steps_boundary.py` shows only `--config`/`--port`), so that
+    pattern never matched, ANY --new-world/--profile-tracker run of it, ever -- every live case-vi
+    run leaked a boundary_service process, silently, on the shared scratch host (five found
+    already-orphaned from earlier sessions before this fix, ports 8420-8425).
+
+    THIS discovery call runs EXACTLY ONCE, immediately after the birth subprocess (`cp1`/`cp2`)
+    reports success -- at that point the service has ALREADY answered its own health probe
+    (`steps_boundary.py`'s own commit-time health gate, `probes.wait_for_health`, blocks the
+    birth subprocess's own exit until it does), so the process is provably up and its argv is
+    provably stable. The match target is `--config <dest>/boundary-multiplex.toml` -- a path
+    unique to THIS fixture's own scratch tempdir (`tempfile.mkdtemp`), not a name that could ever
+    collide with an unrelated process the way a bare world-name substring guess could. Returns the
+    discovered pid (an `int`, captured ONCE, held for the rest of this case's lifetime) or `None`
+    if boundary never started (e.g. no venv interpreter found -- steps_boundary.py's own
+    documented decline path) -- teardown becomes a no-op in that case, never a guess."""
+    target = os.path.join(dest, "boundary-multiplex.toml")
+    cp = subprocess.run(["pgrep", "-f", f"boundary_service.*--config {target}"],
+                         capture_output=True, text=True, timeout=10)
+    pids = [int(p) for p in cp.stdout.split()]
+    if not pids:
+        return None
+    assert len(pids) == 1, f"case vi: expected exactly one boundary_service for {target}, found {pids}"
+    return pids[0]
+
+
+def _kill_boundary(pid: "int | None") -> None:
+    """Terminate-with-wait, mirroring row 1332's own wait-confirm-escalate posture in miniature
+    (a graceful SIGTERM first, confirmed via `/proc/<pid>` liveness polling rather than assumed,
+    escalating to SIGKILL only if the process is still alive after the grace window) -- no
+    pgrep guessing at kill time, just the pid `_discover_boundary_pid` already captured."""
+    if pid is None:
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return  # already gone
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if not os.path.exists(f"/proc/{pid}"):
+            return  # confirmed gone -- SIGTERM was enough
+        time.sleep(0.2)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def case_plan_key_capture(scratch: str) -> None:
@@ -362,10 +532,13 @@ def main() -> int:
         else:
             print("case iv (schema leg) UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST")
         case_world_exists_sentinel_leg(scratch)  # read-only, no live Postgres needed
-        if PGHOST:
-            case_initial_config_override(scratch)
-        else:
+        if not PGHOST:
             print("case v UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST")
+        elif tui_app is None:
+            print("case v UNEXERCISED: 'textual' is not importable on this interpreter -- "
+                  "case v drives the real Tree+Form app via Pilot/run_test()")
+        else:
+            case_initial_config_override(scratch)
         case_full_dry_run_and_roundtrip(scratch)
         print("ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature "
               "(design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue")

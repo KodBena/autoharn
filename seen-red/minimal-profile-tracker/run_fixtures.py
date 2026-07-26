@@ -10,10 +10,27 @@ after unless a case fails (left standing as evidence).
 CASES (both polarities, all live subprocess runs of the real scaffold — never a mock):
 
   RED-USAGE           -- `--profile tracker` with no `--name` exits 2 (usage), no DB touched.
-  RED-BAD-NAME        -- `--profile tracker --name Has_Bad_Chars` (fails the `[a-z0-9]+`
+  RED-BAD-NAME        -- `--profile tracker --name Has_Bad_Chars` (fails the `[a-z0-9]{1,64}`
                         intersection this profile's own --name must satisfy — see
                         bootstrap/new-project.sh's own comment on the boundary-deployment /
                         SQL-identifier allowlist conflict) exits 1, no DB touched.
+  RED-NEWWORLD-BAD-NAME -- `--new-world ScratchUP` (uppercase, work item
+                        new-world-name-unchecked, row 1324/1335 arc: this same `[a-z0-9]{1,64}`
+                        intersection is now ALSO enforced on `--new-world`'s own world name, not
+                        just `--profile tracker --name` above) exits 1 citing the intersection,
+                        no DB touched. Housed HERE, not in seen-red/setup-tui-worldname-boundary-
+                        allowlist/ (that family is TUI/idtypes.py/steps_boundary.py-scoped,
+                        Python-only, pinning a git commit for its RED leg -- a different
+                        mechanism entirely from a live `bootstrap/new-project.sh` subprocess
+                        invocation), because this family already owns the live-subprocess harness
+                        (`_run_scaffold`-shaped calls, real toy@192.168.122.1) `new-project.sh`'s
+                        OWN character-allowlist refusals are proven against, and the new
+                        `--new-world` check lives in the exact same source file, right next to
+                        the `--profile tracker` check this family already exercises.
+  RED-NEWWORLD-TOO-LONG -- `--new-world` with a 65-character all-lowercase name (same work item;
+                        the length half of the intersection, untested by RED-NEWWORLD-BAD-NAME's
+                        charclass-only specimen) exits 1 citing the same intersection, no DB
+                        touched.
   GREEN-ADOPT         -- a fresh `new-project.sh <dir> --profile tracker --name <name> --db toy
                         --host <host>` on an empty dir exits 0; writes deployment.json (carrying
                         boundary_url/boundary_deployment), boundary-multiplex.toml, keys/,
@@ -132,13 +149,38 @@ def main() -> int:
 
     # ---------------------------------------------------------------- RED-BAD-NAME (no DB touched)
     r = _run_scaffold(dest, "--name", "Has_Bad_Chars")
-    bad_name_refused = r.returncode == 1 and "[a-z0-9]+" in r.stderr
+    bad_name_refused = r.returncode == 1 and "[a-z0-9]{1,64}" in r.stderr
     if not bad_name_refused:
-        failures.append(f"RED-BAD-NAME: expected exit 1 citing [a-z0-9]+, got {r.returncode}\n{r.stderr}")
+        failures.append(f"RED-BAD-NAME: expected exit 1 citing [a-z0-9]{{1,64}}, got {r.returncode}\n{r.stderr}")
     if _ledger_row_count() is not None:
         failures.append("RED-BAD-NAME: a schema was created despite the name-allowlist refusal (DB touched)")
-    print(f"RED-BAD-NAME: exit={r.returncode} (expect 1, '[a-z0-9]+') no DB touch -- "
+    print(f"RED-BAD-NAME: exit={r.returncode} (expect 1, '[a-z0-9]{{1,64}}') no DB touch -- "
           f"{'PASS' if bad_name_refused else 'FAIL'}")
+
+    # ---------------------------------------------------------- RED-NEWWORLD-BAD-NAME (no DB touch)
+    r = subprocess.run(["bash", str(NEW_PROJECT), str(dest), "--new-world", "ScratchUP",
+                        "--db", DB, "--host", PGHOST], capture_output=True, text=True, cwd=str(REPO))
+    newworld_bad_name_refused = r.returncode == 1 and "[a-z0-9]{1,64}" in r.stderr
+    if not newworld_bad_name_refused:
+        failures.append(f"RED-NEWWORLD-BAD-NAME: expected exit 1 citing [a-z0-9]{{1,64}}, "
+                        f"got {r.returncode}\n{r.stderr}")
+    if _ledger_row_count() is not None:
+        failures.append("RED-NEWWORLD-BAD-NAME: a schema was created despite the refusal (DB touched)")
+    print(f"RED-NEWWORLD-BAD-NAME: exit={r.returncode} (expect 1, '[a-z0-9]{{1,64}}') no DB touch -- "
+          f"{'PASS' if newworld_bad_name_refused else 'FAIL'}")
+
+    # ---------------------------------------------------------- RED-NEWWORLD-TOO-LONG (no DB touch)
+    long_name = "a" * 65
+    r = subprocess.run(["bash", str(NEW_PROJECT), str(dest), "--new-world", long_name,
+                        "--db", DB, "--host", PGHOST], capture_output=True, text=True, cwd=str(REPO))
+    newworld_too_long_refused = r.returncode == 1 and "[a-z0-9]{1,64}" in r.stderr
+    if not newworld_too_long_refused:
+        failures.append(f"RED-NEWWORLD-TOO-LONG: expected exit 1 citing [a-z0-9]{{1,64}}, "
+                        f"got {r.returncode}\n{r.stderr}")
+    if _ledger_row_count() is not None:
+        failures.append("RED-NEWWORLD-TOO-LONG: a schema was created despite the refusal (DB touched)")
+    print(f"RED-NEWWORLD-TOO-LONG: exit={r.returncode} (expect 1, '[a-z0-9]{{1,64}}') no DB touch -- "
+          f"{'PASS' if newworld_too_long_refused else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-ADOPT
     r = _run_scaffold(dest, "--name", SCRATCH_NAME, "--schema", SCHEMA, "--kern", KERN, "--role", ROLE)

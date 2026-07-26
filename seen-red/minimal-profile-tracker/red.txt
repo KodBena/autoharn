@@ -16,22 +16,64 @@ any DB is touched):
   exit code: 2
   no schema was created (verified live: `SELECT to_regclass('mptfixture.ledger')` returns NULL)
 
-CASE RED-BAD-NAME (--name containing characters outside the [a-z0-9]+ intersection this
+CASE RED-BAD-NAME (--name containing characters outside the [a-z0-9]{1,64} intersection this
 profile requires — its own boundary_deployment/SQL-identifier allowlist conflict — refuses
-before any DB is touched):
+before any DB is touched). NOTE: this fixture's own assertion string was stale (checked for
+the pre-length-cap `[a-z0-9]+` substring, which is NOT a substring of the current
+`[a-z0-9]{1,64}` refusal text merge 94325e7 introduced — a hazard found in reach while banking
+row 1324/1335's evidence below, fixed in the same commit, RED-BAD-NAME now PASSes for real
+instead of silently never having been run):
 
   new-project.sh: REFUSED -- --profile tracker's --name ('Has_Bad_Chars') must match
-                  [a-z0-9]+ (lowercase letters and digits only) -- the intersection
-                  of the boundary service's own deployment-name contract
-                  ([a-z0-9-]{1,64}, no underscores/uppercase -- serving/
-                  boundary_multiplex_config.py spec §2) and the SQL-identifier
-                  allowlist ([A-Za-z0-9_]+, no hyphens) --name also derives
-                  --schema/--kern/--role from. Pick a compliant --name, or supply
-                  --boundary-url/--boundary-deployment explicitly with a compliant
-                  label (and --schema/--kern/--role explicitly too, if --name itself
-                  must stay outside [a-z0-9]+). Nothing was touched.
+                  [a-z0-9]{1,64} (lowercase letters and digits only, at most 64
+                  characters) -- the intersection of the boundary service's own
+                  deployment-name contract ([a-z0-9-]{1,64}, no underscores/
+                  uppercase -- serving/boundary_multiplex_config.py spec §2) and
+                  the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --name
+                  also derives --schema/--kern/--role from. Pick a compliant
+                  --name, or supply --boundary-url/--boundary-deployment
+                  explicitly with a compliant label (and --schema/--kern/--role
+                  explicitly too, if --name itself must stay outside
+                  [a-z0-9]{1,64}). Nothing was touched.
   exit code: 1
   no schema was created (verified live)
+
+CASE RED-NEWWORLD-BAD-NAME (work item new-world-name-unchecked, row 1324/1335 arc: --new-world
+had NO charclass/length check at all before this fix — the SAME [a-z0-9]{1,64} intersection is
+now enforced on --new-world's own world name too, mirroring the --profile tracker --name check
+directly above, same file, same shape). --new-world ScratchUP (uppercase) refuses before any DB
+is touched:
+
+  new-project.sh: REFUSED -- --new-world's world name ('ScratchUP') must match
+                  [a-z0-9]{1,64} (lowercase letters and digits only, at most 64
+                  characters) -- the intersection of the boundary service's own
+                  deployment-name contract ([a-z0-9-]{1,64}, no underscores/
+                  uppercase -- serving/boundary_multiplex_config.py spec §2) and
+                  the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --new-world
+                  also derives --schema/--kern/--role from (same intersection this
+                  script's own --profile tracker --name check and tools/setup_tui/
+                  idtypes.py's WorldName enforce). Pick a compliant world name, or
+                  supply --schema/--kern/--role explicitly if the world label itself
+                  must stay outside [a-z0-9]{1,64}. Nothing was touched.
+  exit code: 1
+  no schema was created (verified live)
+
+CASE RED-NEWWORLD-TOO-LONG (same work item, the length half of the intersection — a
+65-character all-lowercase --new-world name — untested by RED-NEWWORLD-BAD-NAME's
+charclass-only specimen):
+
+  new-project.sh: REFUSED -- --new-world's world name ('aaaa...a' [65 chars]) must match
+                  [a-z0-9]{1,64} ... Nothing was touched.
+  exit code: 1
+  no schema was created (verified live)
+
+  This same pair (uppercase name + 65-char name, both refusing with nothing written; a valid
+  scratch name proceeding through a FULL live --new-world birth against toy@192.168.122.1,
+  including complete kernel lineage apply and s40/s43 principal registration, then torn down
+  via teardown-world.sh --force-non-scratch) was ALSO witnessed directly, once, outside this
+  fixture harness, during this same build (row 1324/1335) — see that build's own report for the
+  full transcript; this fixture is the durable, re-runnable, both-polarity proof that gets
+  re-exercised on every future census sweep.
 
 CASE RED-EXISTING (a second invocation against a directory that already carries a
 deployment.json — refused before any DDL runs, ledger rows provably untouched):
@@ -40,7 +82,9 @@ deployment.json — refused before any DDL runs, ledger rows provably untouched)
   exit code: 1
   ledger row count before and after the refused re-run: 9 -> 9 (unchanged; verified live)
 
-GREEN polarity (WITNESSED live, this build, 2026-07-25): GREEN-ADOPT (fresh scaffold — exit 0,
+GREEN polarity (WITNESSED live, this build, 2026-07-26 — re-run adds RED-NEWWORLD-BAD-NAME/
+RED-NEWWORLD-TOO-LONG above and fixes RED-BAD-NAME's stale assertion string, both cases now
+PASS for real): GREEN-ADOPT (fresh scaffold — exit 0,
 deployment.json + boundary-multiplex.toml + the ten SHIM_VERBS_ALL verbs + keys/ + attestations/
 + roles/ written, NO .claude/settings.json and NO root CLAUDE.md — "a standing project is not a
 governed world", checked directly, not merely asserted); GREEN-BOUNDARY-AUTOSPAWN (no daemon

@@ -133,3 +133,173 @@ Textual's `Pilot`/`app.run_test()`, the post-rebuild convention `--scripted` no 
 Recommend: a follow-on work item to either rewrite case v onto the `Pilot` convention or retire
 it as redundant with setup-tui-seeded-value-visibility, and re-bank this file's own red.txt once
 that lands. Left as-is here to keep this round's diff scoped to the plan-key bug.
+
+---
+
+RE-BANKED 2026-07-26, work item setup-tui-config-file-retired-flags (ledger rows 1327/1336):
+the flag above is now fixed. RED WITNESSED, live, exactly the flagged reproduction:
+
+$ python3 -m tools.setup_tui.app --scripted /dev/null --initial-config /dev/null --dry-run \
+    --start-at substrate /tmp/nonexistent
+usage: setup_tui [-h] [--dry-run] [--accept-unverified-genesis]
+                 [--from-config CONFIG_FILE] [--world NAME]
+                 [--initial-config CONFIG_FILE]
+                 [DEST_DIR]
+setup_tui: error: unrecognized arguments: --scripted --start-at substrate /tmp/nonexistent
+
+COVERAGE CHECK (verifying the row's own "reportedly has a correct current home" claim before
+acting on it, not assuming it): seen-red/setup-tui-seeded-value-visibility/run_fixtures.py was
+read in full. Its subject is config-load FIELD VISIBILITY once a section is blocked/unblocked
+(the maintainer's own bench report, ledger row 1130) -- it drives the in-UI "Load a
+configuration" action and checks that seeded values show up as real widget state (case 3: a
+ConfirmField and two MultiChoiceFields all render their seeded selections once unblocked). It
+does NOT ever touch `--initial-config` (grepped: zero mentions) and NEVER exercises an operator
+OVERRIDING a seeded value -- only that the seeded value itself is visible. The original case v
+asserted TWO things: (a) a config default threads through as the prompt's own default (kept via
+"-"), and (b) an individual operator answer still overrides that default. Table:
+
+  assertion                                          | covered by seeded-value-visibility?
+  ----------------------------------------------------|-------------------------------------
+  (a) seeded value threads as the field's own live    | YES in substance -- case 3 proves a
+      default, visible without operator action        | seeded value renders as real widget
+                                                        | state; --initial-config shares the
+                                                        | SAME build_live_field_overrides
+                                                        | seeding function (app.py's own
+                                                        | comment), so the mechanism, not just
+                                                        | the shape, is identical
+  (b) an operator's own answer overrides the seeded   | NO -- not exercised anywhere in that
+      default; the seeded value does not leak through | family, or anywhere else in this tree
+
+Verdict: coverage is NOT genuinely equivalent (assertion (b) is uncovered) -- retiring case v
+outright would silently drop it. REWRITTEN instead, in place, against the CURRENT driving
+surface (`--initial-config` launches the real interactive Textual app and needs a TTY, so a
+subprocess-and-parse-stdout shape is not available post-rebuild; Textual's own `Pilot`/
+`app.run_test()` -- the same mechanism seeded-value-visibility itself uses -- is the correct
+current surface). The rewrite builds `state`/`_live_fields` the identical way `app.py`'s own
+`_run_textual` does for `--initial-config`, launches the real app, and checks the SAME
+`db_existing` field seeded-value-visibility's OWN mechanism seeds, at three points: the widget's
+own `.value`, the persisted live-field slot (`fields.get_field_value`, the ONE place any
+`submit()` reads a field's value from), and the real `steps_substrate.submit()` result -- keep
+leg (unedited, shows the seeded default) and override leg (operator types a new value; all three
+checkpoints agree on the operator's answer, none show the seeded default leaking through).
+
+GREEN, re-banked, live, HARNESS_PGHOST set (venv with `textual` installed --
+/home/bork/w/vdc/venvs/generic/bin/python3; the system python3 has no `textual`, same
+requirement seen-red/setup-tui-seeded-value-visibility's own docstring states):
+
+$ HARNESS_PGHOST=192.168.122.1 /home/bork/w/vdc/venvs/generic/bin/python3 \
+    seen-red/setup-tui-config-file/run_fixtures.py
+case ii ok: missing-key refusal names every missing key (per-key red controls, an
+  all-missing-at-once control naming every gate+header field in ONE refusal), green control
+  passes
+case iii ok: unknown-key refusal (including the two named-excluded CLI parameters,
+  'world'/'dest', which are never legal config content), green control passes
+case vii ok: capture_resolved_config reads the wizard's real '_plan' state key -- a registered
+  principal's register/competences/relations rows survive into the rendered world-config.toml
+  (plan-key silent-loss regression guard, ledger row 1330)
+case iv ok (schema leg): world name REFUSED when its schema already exists on the target
+  Postgres, named in the refusal; a genuinely-fresh name is not refused (green control)
+case iv ok (sentinel leg): world name REFUSED when the destination's own sentinel names a
+  DIFFERENT world, that world named in the refusal
+case v ok: a config-seeded value threads through --initial-config's SAME
+  build_live_field_overrides seeding as the in-UI 'Load a configuration' action
+  (seen-red/setup-tui-seeded-value-visibility's own case 3 covers that half); an operator's own
+  typed answer overrides it end to end -- widget, persisted live-field slot, and the real
+  substrate.submit() result all agree, the seeded default never leaking through (the half no
+  other fixture covers, carried over from the retired --scripted case v rather than dropped)
+case i ok: --from-config drives a full eleven-screen dry-run birth from the shipped exemplar to
+  a clean exit 0, zero prompts left to a human, every queued act visible
+case vi ok: a live birth's own saved world-config.toml, re-applied via --from-config to a SECOND
+  world, saves the SAME resolved decision set again (a fixed point, checked mechanically)
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+
+exit 0. Case vi's own two live births each spawn a boundary_service process
+(`_kill_boundary`'s pgrep-on-world-name -- ledger row 1334/1337, see that work item's own
+banked evidence for why that match never fires) -- this re-bank run independently reproduced
+that SAME leak (ports 8426/8427, tempdir /tmp/setup-tui-config-file-<random>), killed by hand
+immediately after, since fixing _kill_boundary itself is that OTHER work item's scope, not
+this one's. Not otherwise a residue regression: schemas/roles dropped via teardown-world.sh,
+tempdir removed by the fixture's own `finally`.
+
+---
+
+RE-BANKED 2026-07-26, work item setup-tui-fixture-kill-boundary-never-matches (ledger rows
+1334/1337): `_kill_boundary`'s own pgrep pattern (`boundary_service.*{world}`) never matches --
+`steps_boundary.py` launches the service with `--config <dest>/boundary-multiplex.toml --port
+<port>`, an argv that never contains the bare world name at all (grepped: confirmed, only
+`--config`/`--port`) -- so every live case-vi run leaked its boundary_service process, silently,
+on the shared scratch host.
+
+RED, WITNESSED directly (not synthesized): the row-1327/1336 re-bank run immediately above this
+section spawned two live boundary_service processes via the OLD `_kill_boundary(world)` code
+(case vi, this same file) and both SURVIVED the fixture's own `finally` teardown:
+
+$ pgrep -fa boundary_service   # captured right after that run's own "exit 0"
+861554 /home/bork/w/vdc/venvs/generic/bin/python -m serving.boundary_service --config
+  /tmp/setup-tui-config-file-4b9lxw3f/vi-world1/boundary-multiplex.toml --port 8426
+862326 /home/bork/w/vdc/venvs/generic/bin/python -m serving.boundary_service --config
+  /tmp/setup-tui-config-file-4b9lxw3f/vi-world2/boundary-multiplex.toml --port 8427
+
+Both cmdlines confirm the diagnosis directly: neither contains the world name
+(`cfgfxa<timestamp>`/`cfgfxb<timestamp>`) anywhere, only the tempdir-scoped `--config` path --
+`boundary_service.*{world}` was never going to match. Killed by hand (`kill 861554 862326`)
+immediately after capture, confirmed gone.
+
+FIX, the honest shape (no pgrep guessing at kill time): `_discover_boundary_pid(dest)` pgreps
+EXACTLY ONCE, immediately after the birth subprocess (`cp1`/`cp2`) reports success -- at that
+point the service has already answered its own commit-time health gate
+(`steps_boundary.py`'s `probes.wait_for_health`), so the process is provably up and its argv
+provably stable -- matching `--config <dest>/boundary-multiplex.toml`, a path unique to this
+fixture's own scratch tempdir (never a name collision risk the way a bare world-name substring
+guess was). The discovered pid is held for the rest of the case's lifetime; `_kill_boundary(pid)`
+is now pure pid-tracked termination -- SIGTERM, then `/proc/<pid>` liveness polling up to 5s
+(confirm, don't assume), escalating to SIGKILL only if still alive -- mirroring row 1332's own
+wait-confirm-escalate posture in miniature. No `pgrep` call happens at teardown time at all.
+
+GREEN, WITNESSED, live, both interpreters (HARNESS_PGHOST set for the venv run):
+
+$ HARNESS_PGHOST=192.168.122.1 /home/bork/w/vdc/venvs/generic/bin/python3 \
+    seen-red/setup-tui-config-file/run_fixtures.py
+[... all nine cases OK, including case v and case vi ...]
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+
+$ pgrep -fa boundary_service    # immediately after the run above
+673369 /usr/bin/python3 -m serving.boundary_service --config
+  /home/bork/w/vdc/1/autoharn/boundary-multiplex.toml --port 8433 --pidfile
+  /home/bork/w/vdc/1/autoharn/.autoharn-service.pid    # the REAL deployment -- untouched
+(zero fixture-spawned processes remain)
+
+Case vi's own two live boundary_service processes were pid-tracked and cleanly SIGTERM'd within
+the wait window both times (no SIGKILL escalation needed) -- zero residue, confirmed by
+`pgrep -fa boundary_service` immediately after the run showing only the real deployment (port
+8433, non-tmp config path, `--pidfile` present -- unambiguously not fixture residue).
+
+ORPHAN CLEANUP (the five pre-existing orphans row 1334 itself named, ports 8420-8425,
+/tmp/setup-tui-config-file-manual*/manual2*/final* -- from EARLIER sessions, predating this
+fix, left running because the OLD `_kill_boundary` could never have reached them either).
+`ss -ltnp` cross-checked against each pid's own `ps -o pid,cmd` BEFORE touching anything --
+confirmed each is bound to its OWN claimed port (no confusion about which pid owns which
+port), confirmed the REAL deployment (port 8433, pid 673369, `/home/bork/w/vdc/1/autoharn/
+boundary-multiplex.toml`, no `/tmp` in its path) is a DIFFERENT pid entirely and was left alone
+throughout. Disposition, one line per pid:
+
+  pid     port  cmdline (config path)                                          disposition
+  ------  ----  --------------------------------------------------------------  -----------
+  851217  8420  /tmp/setup-tui-config-file-manual-vbsvnah8/vi-world1/...toml    fixture residue -- SIGTERM'd, confirmed gone
+  851971  8421  /tmp/setup-tui-config-file-manual-vbsvnah8/vi-world2/...toml    fixture residue -- SIGTERM'd, confirmed gone
+  852910  8422  /tmp/setup-tui-config-file-manual2-n9ubk5z9/vi-world1/...toml   fixture residue -- SIGTERM'd, confirmed gone
+  853661  8423  /tmp/setup-tui-config-file-manual2-n9ubk5z9/vi-world2/...toml   fixture residue -- SIGTERM'd, confirmed gone
+  854733  8424  /tmp/setup-tui-config-file-final-5ffie2k4/vi-world1/...toml     fixture residue -- SIGTERM'd, confirmed gone
+  855507  8425  /tmp/setup-tui-config-file-final-5ffie2k4/vi-world2/...toml     fixture residue -- SIGTERM'd, confirmed gone
+
+NOTE on port 8422: coincides with the house rule's own caution list ("never touch anything whose
+cmdline references the real deployment or ports 8433/8422") -- verified via `ss -ltnp` that pid
+852910 (not any other pid) genuinely owns that socket, and its own cmdline is unambiguously
+`/tmp/setup-tui-config-file-manual2-n9ubk5z9/...`, never the real deployment's `/home/bork/w/
+vdc/1/autoharn/boundary-multiplex.toml` -- verified fixture residue, not a coincidental hit on
+the protected port's REAL owner (which remained pid 673369/8433 throughout, confirmed unchanged
+before and after this cleanup). All six kills confirmed via `ps -o pid,cmd -p <pids>` returning
+empty (exit 1) ~2s after SIGTERM -- no SIGKILL needed. `pgrep -fa boundary_service` post-cleanup
+shows exactly one process: the real deployment, untouched.

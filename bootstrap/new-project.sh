@@ -384,6 +384,50 @@ if [ "$PROFILE" = "tracker" ] && [ -z "$BOUNDARY_URL" ] && [ -z "$BOUNDARY_DEPLO
     fi
     unset _tracker_name_bad
 fi
+# HAZARD FOUND IN REACH, FIXED HERE (CLAUDE.md's hazard-flagging duty; work item
+# new-world-name-unchecked, row 1324): --new-world's own NEW_WORLD had NO charclass/length check
+# at all before this fix -- the identical unchecked-name-reaches-boundary_deployment hazard class
+# the --profile tracker --name check above (this same file) and tools/setup_tui/idtypes.py's
+# WorldName now both refuse (merge 94325e7, row 1317 arc). NEW_WORLD feeds SCHEMA (below, when
+# --schema is not given explicitly) into the SQL-identifier allowlist checked further down
+# ([A-Za-z0-9_]+, no hyphens -- looser than lowercase-only, so an uppercase or hyphenated world
+# name would otherwise sail through THAT gate) and is the human-readable world label a caller may
+# later feed straight back into steps_boundary.py's own WorldName-gated boundary_deployment
+# splice (serving/boundary_multiplex_config.py spec §2, `[a-z0-9-]{1,64}`) -- the same silent-
+# downstream-break class this whole check exists to close, refused here, loudly, before any
+# schema/kernel DDL runs, rather than silently lowercasing/truncating (a silent transform risks a
+# collision the operator never asked for). CROSS-REFERENCE, same three tethered homes as the
+# --profile tracker check above: this script's own --name check (immediately above), tools/
+# setup_tui/idtypes.py's WorldName.__post_init__, and serving/boundary_multiplex_config.py's spec
+# §2 -- all three enforce this SAME `[a-z0-9]{1,64}$` intersection independently, in their own
+# homes, because no shared importable code crosses the shell/Python boundary; each cites the
+# others so the allowlists stay in agreement if any one of them ever changes.
+if [ -n "$NEW_WORLD" ]; then
+    case "$NEW_WORLD" in
+        *[!a-z0-9]*|"") _new_world_bad=1 ;;
+        *) _new_world_bad=0 ;;
+    esac
+    if [ "$_new_world_bad" -eq 0 ] && [ "${#NEW_WORLD}" -gt 64 ]; then
+        _new_world_bad=1
+    fi
+    if [ "$_new_world_bad" -eq 1 ]; then
+        echo "new-project.sh: REFUSED -- --new-world's world name ('$NEW_WORLD') must match" >&2
+        echo "                [a-z0-9]{1,64} (lowercase letters and digits only, at most 64" >&2
+        echo "                characters) -- the intersection of the boundary service's own" >&2
+        echo "                deployment-name contract ([a-z0-9-]{1,64}, no underscores/" >&2
+        echo "                uppercase -- serving/boundary_multiplex_config.py spec §2) and" >&2
+        echo "                the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --new-world" >&2
+        echo "                also derives --schema/--kern/--role from (same intersection this" >&2
+        echo "                script's own --profile tracker --name check and tools/setup_tui/" >&2
+        echo "                idtypes.py's WorldName enforce). Pick a compliant world name --" >&2
+        echo "                there is deliberately no override: the name reaches WORLD_LABEL" >&2
+        echo "                and .autoharn-world.json regardless of --schema/--kern/--role," >&2
+        echo "                so no flag combination makes a non-compliant name safe." >&2
+        echo "                Nothing was touched." >&2
+        exit 1
+    fi
+    unset _new_world_bad
+fi
 if [ -n "$NEW_WORLD" ]; then
     # Derive, never require, the three names that must agree (P1: one source -- the world name --
     # not three hand-typed strings the caller must keep in sync). An explicit --schema/--kern/--role
