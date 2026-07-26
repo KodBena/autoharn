@@ -18,3 +18,51 @@
   [ok] tag_exit=0 attest_exit=1
 
 ALL CASES OK -- attest-tags both-polarity proof (GOOD / UNVERIFIABLE / unsigned-BAD / forged-BAD / uncovered-claim), zero residue (tmp dir removed).
+
+=== 2026-07-26 RED WITNESS -- attest-tags-fixture-sandbox-breakage (rows 1360/1361), pre-fix ===
+
+Bug 1 (sandbox waiver missing on _attest's own subprocess.run call): verbatim pre-fix run of
+`python3 seen-red/attest-tags/run_fixtures.py`, base commit d764782, no code touched yet:
+
+  == generating throwaway test key (Ed25519, test-only, never a real maintainer key) ==
+    test key: 9A25251C163654006FD2488DD8DC586F068BE0F3
+    forger key (never committed to law/keys/): 3E2B09A454C0DFB02CF44099F233ABD57C4909C2
+
+  === a-no-tags-uncovered-claim ===
+    [FAIL] exit=21 commit=46a0bf127c06 in_output=False
+
+  === b0-unverifiable-tag-exists-no-committed-key ===
+    [FAIL] tag_exit=0 attest_exit=21
+
+  === b-good-signed-tag-verifies ===
+    [FAIL] tag_exit=0 attest_exit=21
+
+  === c-unsigned-tag-refused ===
+    [FAIL] exit=21
+
+  === d-forged-tag-refused ===
+    [FAIL] tag_exit=0 attest_exit=21
+
+  FAILURES: ['a-no-tags-uncovered-claim', 'b0-unverifiable-tag-exists-no-committed-key', 'b-good-signed-tag-verifies', 'c-unsigned-tag-refused', 'd-forged-tag-refused']
+  echo_dollar_question=1
+
+Each attest-tags invocation hits libexec/autoharn/attest-tags's own filing/fixture_sandbox.py
+check() (AUTOHARN_FIXTURE_SANDBOX=1 is set on this fixture's own process, inherited by every
+subprocess it spawns) and is REFUSED exit 21 for lack of a waiver on _attest's call -- same class
+as rows 1332/1354's umbrella-cli-ensure-running fix.
+
+Bug 2 (the masking bug, as posed by the work item): the item states the harness "prints
+FAILURES:[...] but its own process exit code is 0". Witnessed directly, three independent ways,
+against this exact pre-fix file (git show HEAD:seen-red/attest-tags/run_fixtures.py, no local
+diff) -- plain `python3 run_fixtures.py; echo $?`, the same piped through no intermediary, and a
+`subprocess.run(...).returncode` capture from a fresh Python process -- all three read
+returncode/echo-$?=1, NOT 0, both above and on a second independent run. Source inspection
+confirms why: main()'s tail is `if failures: print("FAILURES:", failures); return 1` followed by
+`return 0` only on the true-green path, and `sys.exit(main())` propagates that return value as
+the process exit code -- there is no other `return`/`sys.exit` in the file. So AS WRITEABLE
+TODAY, at base d764782, this harness does NOT self-mask: it already exits nonzero whenever
+FAILURES is non-empty, matching every sibling family's convention. This is a genuine discrepancy
+between the work item's bug-2 description and the code's actual current behavior -- flagged
+here rather than silently "fixed" against a defect that isn't present (see the build report for
+the full reasoning). No exit-code-propagation change was made to this file; bug 1 (the waiver)
+is the only functional change below.
