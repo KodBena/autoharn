@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""fixture-sweep — the umbrella-CLI entry point for `autoharn fixture-sweep` (work item
+fixture-live-sweep, ledger rows 1388/1389). An autoharn-repo-specific operator verb, not a
+per-world one (same footing as `migrate` and `attest-tags`: it reads THIS repo's OWN
+gates/fixture_census.py registry, so it lives at the repo root and is not scaffolded into a
+new world — a fresh world has its own, likely much smaller, fixture corpus; generalizing this
+verb to any scaffolded registry is a named follow-on, not attempted here).
+
+ALL THE ACTUAL LOGIC (classification, the env pre-probe, the structural-blocker catalogue, the
+recursion guard) lives in gates/fixture_sweep.py — see that module's own docstring. This file's
+only jobs, mirroring libexec/autoharn/attest-tags's own shape (the established precedent for a
+Python-native, non-.tmpl-delegating repo-root verb): the fixture-sandbox check, then pass argv
+through unmodified.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Two levels up from libexec/autoharn/ to the repo root — same climb every relocated verb uses.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "filing"))
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, the Python-side fixture-sandbox check)
+sys.path.insert(0, str(_REPO_ROOT / "gates"))
+import fixture_sweep  # noqa: E402  (gates/fixture_sweep.py — the actual sweep logic)
+
+
+def main(argv: list[str]) -> int:
+    # EXEMPTION, narrow and precedented (see ./autoharn's own _fixture_sandbox_gate comment and
+    # libexec/autoharn/attest-tags's identical exemption): a bare --help/-h never touches a
+    # ledger, a deployment, or any family's own env — it prints argparse's own usage and returns,
+    # so it is exempt from the marker check exactly like every other repo-root verb's --help.
+    if argv not in (["--help"], ["-h"]):
+        fixture_sandbox.check("libexec/autoharn/fixture-sweep " + " ".join(argv))
+    return fixture_sweep.main(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

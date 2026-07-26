@@ -440,7 +440,13 @@ BASELINE: dict[str, int] = {
     # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
     # comments kept verbatim above; the union is the measured merged file. Same
     # merge-union ratchet-crossing class as the reconciliations above.
-    "gates/fixture_census.py":                     430,
+    # bumped 419 -> 420 (one new REGISTRY row: fixture-sweep, work item fixture-live-sweep,
+    # ledger rows 1388/1389).
+    # Reconciled at the fixture-live-sweep merge (2026-07-26): main's own chain above (arriving
+    # at 430) and this branch's fixture-sweep row both grew the census independently; the union
+    # is the measured merged file. Same merge-union ratchet-crossing class as every
+    # reconciliation above.
+    "gates/fixture_census.py":                     431,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -506,7 +512,12 @@ BASELINE: dict[str, int] = {
     # Reconciled at the scaffold-umbrella-migration merge (2026-07-26): both parents' bump
     # comments kept verbatim above; value re-measured on the merged file. Same merge-union
     # ratchet-crossing class as every reconciliation above.
-    "gates/max_lines.py":                          595,
+    # bumped 528 -> 531 (fixture-live-sweep, ledger rows 1388/1389, this branch, pre-merge).
+    # Reconciled at the fixture-live-sweep merge (2026-07-26): main's own chain above (arriving
+    # at 595) and this branch's own three-line bump both grew the file independently; the union
+    # is the measured merged file, including the two-line fixture_census.py reconciliation added
+    # directly above. Same merge-union ratchet-crossing class as every reconciliation above.
+    "gates/max_lines.py":                          606,
 }
 
 

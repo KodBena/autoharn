@@ -173,6 +173,12 @@ _EXPECTED_VERBS = {
     # NO `./<verb>` alias (the deprecation-shim pattern is retired, row 1357) -- it was never
     # covered by the now-removed case c and needs no exemption there.
     "courier",
+    # fixture-sweep (work item fixture-live-sweep, ledger rows 1388/1389): a twelfth
+    # autoharn-repo-specific verb, same footing as migrate/attest-tags/courier -- added here
+    # alongside its own libexec/autoharn/fixture-sweep + dispatch-table row so this fixture's
+    # independent on-disk census does not silently drift the moment a new verb lands (the whole
+    # reason this census is hand-typed separately from the dispatch table it checks).
+    "fixture-sweep",
 }
 
 # Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
@@ -211,6 +217,7 @@ _USAGE_MARKERS = {
     # courier -- verified by hand (2026-07-26) against its real --help output; argparse's own
     # generated usage line, distinctive (no other verb is named "courier").
     "courier": "usage: courier [-h] [--courier-toml COURIER_TOML]",
+    "fixture-sweep": "usage: fixture-sweep [-h] [--only FAMILY] [--list] [--timeout SECONDS]",
 }
 
 # Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates

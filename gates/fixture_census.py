@@ -315,6 +315,7 @@ REGISTRY: dict[str, str] = {
     # branch worktree-agent-a9b3bd5031b11cd5a, not yet on main -- this fixture cherry-picks its
     # SQL text at fixture start, working-tree only, and removes it again at fixture end).
     "setup-tui-ceremony-chain-authorship": "seen-red/setup-tui-ceremony-chain-authorship/run_fixtures.py",
+    "fixture-sweep":                  "seen-red/fixture-sweep/run_fixtures.py",  # rows 1388/1389, run in-process (no nested sweep -- see run_fixtures.py's RECURSION GUARD)
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

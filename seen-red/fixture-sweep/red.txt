@@ -1,0 +1,62 @@
+fixture-sweep seen red — 2026-07-26, live run of run_fixtures.py's own red_leg case against
+gates/fixture_sweep.py's `run_family()` function, the classifier at the heart of `autoharn
+fixture-sweep`.
+
+CLAIM under proof: `autoharn fixture-sweep` classifies a family whose registered fixture exits
+nonzero as RED, and shows the tail of its combined output — never a silent pass, never lumped in
+with GREEN.
+
+SPECIMEN: a synthetic, deliberately-broken throwaway family, never registered in the real
+gates/fixture_census.py REGISTRY (a tempfile written by run_fixtures.py's own case_red_leg,
+removed at the end of the `with tempfile.TemporaryDirectory` block) —
+
+    import sys
+    print('deliberately-broken throwaway family -- proves the sweep can RED')
+    sys.exit(1)
+
+driven directly through `fixture_sweep.run_family("deliberately-broken-throwaway", <path>,
+timeout=30)`.
+
+ACTUAL RED OUTPUT (verbatim, captured from a real run of
+`python3 seen-red/fixture-sweep/run_fixtures.py`, HARNESS_PGHOST=192.168.122.1
+EPISTEMIC_PGHOST=192.168.122.1):
+
+    case: red_leg -- a deliberately-broken throwaway family classifies RED
+      [PASS] status is RED
+      [PASS] tail contains the throwaway's own marker text
+      [PASS] exit code recorded in detail
+
+The FamilyResult this case asserts against carries:
+
+    status  = "RED"
+    detail  = "exit 1 (0.0s). Tail of output:\ndeliberately-broken throwaway family -- proves "
+              "the sweep can RED"
+
+i.e. `run_family` read the subprocess's real nonzero exit code, classified it RED (not GREEN, not
+UNEXERCISED), and captured the throwaway script's own stdout into the tail shown — the exact
+shape `gates/fixture_sweep.py`'s own `main()` prints under a `[RED        ]` line for any real
+family that goes red during a live sweep.
+
+The GREEN half (the sweep classifying a passing family as GREEN, and an env-missing family as
+UNEXERCISED without spawning a subprocess at all) is exercised by this same run_fixtures.py's
+case_unexercised_env_leg and case_real_roster_leg — see that file's own docstring; both passed
+GREEN in the same run this red.txt's RED evidence was captured from:
+
+    case: unexercised_env_leg -- missing declared Postgres-host env classifies UNEXERCISED, never spawns the subprocess
+      [PASS] status is UNEXERCISED
+      [PASS] detail names the missing Postgres-host dependency
+      [PASS] subprocess was never spawned (no marker file written)
+    case: real_roster_leg -- the real CLI path against two genuine, fast, no-declared-env registry entries
+    [GREEN      ] 09-relevant-act-classification  (0.1s)
+    [GREEN      ] 12-contemporaneity-degrade  (0.1s)
+
+    fixture-sweep summary: 2 families -- 2 GREEN, 0 RED, 0 UNEXERCISED
+
+      [PASS] exit code 0 or 1 (a real, meaningful classification, not a crash)
+      [PASS] both families appear in the output
+      [PASS] summary line present
+      [PASS] never targets the fixture-sweep family itself (the recursion guard's own precondition)
+
+    all cases GREEN
+
+Full run exit=0.
