@@ -4,8 +4,12 @@
 the A:B:C loop runs when this spec is ratified and its build begins, not on the proposal
 text. Removal condition: superseded by the build's completion record. -->
 
-- **Status:** AUTHORED, awaiting maintainer ratification. Nothing here is built; §7 lists
-  the choices deliberately left open for the maintainer.
+- **Status:** RATIFIED by the maintainer 2026-07-26, over the amended text including
+  §4.1 (harness facts, Claude Code 2.1.220) and the §5 depth witness; ratification
+  stated contingent on the nested-agent forward-compatibility check, which passed
+  (ledger row 1441) before the word was given. Nothing is built yet; §7's choices remain
+  open at the maintainer's leisure, and the agent-definition surface map (ledger row
+  1443) may refine §3 item 3's carrier before the build spec is cut.
 - **Basis (ledger rows, read together):** 1386/1387 (the maintainer's monotone sub-agent
   authority requirement and the harness tag-propagation assumption it rests on); 1414/1415
   (the wholesale-delegation specimen and its three defect classes, enumeration OPEN);
