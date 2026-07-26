@@ -1,0 +1,48 @@
+row-resolve-hook seen red — 2026-07-26, live run of run_fixtures.py against a deliberately
+mutated hooks/userpromptsubmit_row_resolve.py (a-, then the full suite; the case that actually
+catches the regression, g-mixed-request-not-matched, was ADDED as part of chasing this red down
+— the original 6-case suite did not cover the anchor-matters shape at all and stayed green
+against the broken hook, which is itself the finding: MUTATION: `_ROW_PROMPT_RE` had its
+trailing `\s*$` end-anchor removed, i.e.
+
+    re.compile(r"^/row\s+\d+(\s+\d+)*")   # BROKEN: no end anchor
+
+instead of the shipped
+
+    re.compile(r"^/row\s+\d+(\s+\d+)*\s*$")
+
+CONSEQUENCE: a prompt that STARTS with a valid `/row <id> [...]` shape but carries real
+additional request text after it now matches too, and the hook silently swallows the entire
+prompt — including the part that was never a `/row` command at all.
+
+Direct demonstration (real hook, mock CLI, MOCK_ROW_SCENARIO=found), stdin:
+
+    {"hook_event_name":"UserPromptSubmit","session_id":"fixture","cwd":"/tmp",
+     "prompt":"/row 1325 and also please refactor this whole file while you are at it"}
+
+stdout (verbatim, the actual red output):
+
+    {"decision": "block", "reason": "/row resolved locally via `.../mock_row_cli.py led show
+    <id>` -- no model turn spent.\n\nrow 1325:\nid                          : 1325\nkind
+    : decision\nstatement                   : mock row 1325 statement text"}
+
+The whole "...and also please refactor this whole file while you are at it" request is gone —
+blocked and replaced with a row dump the user never asked for, on a prompt that was never a
+bare `/row` command. This is exactly the "a hook that mangles an ordinary prompt is worse than
+no hook" hazard design constraint 2 names, made concrete.
+
+run_fixtures.py's own suite against this mutation:
+
+    === g-mixed-request-not-matched ===
+    exit=0 (expect 0)
+      [FAIL] -decision
+      [FAIL] -block
+    run_fixtures: 1 FAILURE(S): g-mixed-request-not-matched
+
+(the other 6 cases stayed green throughout — this mutation is invisible to a suite that never
+exercises a /row-prefixed-but-not-/row-only prompt, which is why case g was added rather than
+relying on the original 6 to notice).
+
+Reverting `_ROW_PROMPT_RE` to its shipped, fully-anchored form (`^/row\s+\d+(\s+\d+)*\s*$`) and
+re-running: `run_fixtures: all 7 case(s) passed.` — the fix, and the suite that now actually
+proves it, both witnessed live in the same session.
