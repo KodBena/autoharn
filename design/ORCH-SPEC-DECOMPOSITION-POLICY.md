@@ -10,7 +10,7 @@ and check the declared criteria instead of a commissioner restating them per com
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §8).
 Status: Fable-authored 2026-07-12, from the maintainer's departure ask of the same day
 (on the record in this repository's tracker ledger, work item `decomposition-policy-spec`
-— run `./led show <id>` or `./led --recent` at the repository root to read it): encode
+— run `./autoharn led show <id>` or `./autoharn led --recent` at the repository root to read it): encode
 task-management obligations — task-splitting criteria in particular — so the commissioner
 does not micromanage decomposition per commission; do it flexibly, and in support of
 regulatory commitments. This spec shares two structures with its siblings and says so
@@ -42,9 +42,9 @@ nothing could block on, because the point existed only as prose in one row (trac
 A deployment declares its task-management policy the way it declares resources: rows on
 its own ledger, written once at adoption (seeded from a template file the maintainer
 edits, exactly the blessed-table pattern), pulled by every session at the same choke
-point as everything else (`./pickup`), and cited by the preamble instead of restated by
+point as everything else (`./autoharn pickup`), and cited by the preamble instead of restated by
 each commission. Version 1 is a statement-prefix convention on `decision` rows (`decision` is a ledger
-row kind — the row an ordinary `./led decision "..."` write lands as;
+row kind — the row an ordinary `./autoharn led decision "..."` write lands as;
 [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl)) — no
 kernel change, mirroring the registry's stage 1:
 
@@ -66,7 +66,7 @@ task-policy: <CRITERION-NAME> | <MODALITY> | <STATEMENT> | <EVIDENCE-SHAPE>
 Intake validation reuses the machinery the `resource:` grammar got on 2026-07-12
 (whitespace-normalized field-count refusal in
 [`bootstrap/templates/led.tmpl`](../bootstrap/templates/led.tmpl), teach-text
-naming the grammar, nothing written on refusal); `./pickup` gains a TASK-POLICY section
+naming the grammar, nothing written on refusal); `./autoharn pickup` gains a TASK-POLICY section
 with the same one-row-one-line parsing discipline. Superseding a criterion is the
 ordinary supersedes edge — policy rows are ledger rows and enjoy the same append-only
 history, which is itself the regulatory feature: an auditor can read WHEN a criterion

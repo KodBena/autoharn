@@ -33,7 +33,7 @@ conventions (header block with BEHAVIOR/HISTORY/LIMITS, `:"schema"`/`:"kern"` ps
   use — a close retracted by s31 supersession does not count), the claim is refused.
 - The refusal teaches, in the established voice: name the closing row's id and resolution,
   state that a closed item is not claimable, and give both legal next acts — open a NEW
-  item (`./led work open <new-slug> ...`) for follow-on work, or, if the close itself is
+  item (`./autoharn led work open <new-slug> ...`) for follow-on work, or, if the close itself is
   wrong, the supersession recipe (the FAQ's "Correcting the record" section) to retract it
   first. Match the s39 refusal's diction and citation style.
 - Everything else in the leaf byte-identical to s39's issue of it; every other object
@@ -47,7 +47,7 @@ On a scratch world at the full current chain head plus s47:
 - **Green (three legs):** claim an open item → admitted, unchanged; open → close →
   supersede the close (s31 recipe) → claim → admitted (the retracted close does not
   block); blocks-start refusal (s39's own red leg) still fires unchanged.
-- `./judge` differential on the scratch world in AGREE on both polarities.
+- `./autoharn judge` differential on the scratch world in AGREE on both polarities.
 - Fixtures banked under `seen-red/s47-claim-on-closed-refusal/` per house convention,
   census-registered.
 

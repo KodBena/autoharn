@@ -57,7 +57,7 @@ witness); [kernel/lineage/s26-row-hash-chain.sql](../kernel/lineage/s26-row-hash
 [s40](../kernel/lineage/s40-principal-identity-events.sql), and
 [s41](../kernel/lineage/s41-principal-bindings-and-relations.sql) in full, s28–s39 for the column
 census; [bootstrap/templates/led.tmpl](../bootstrap/templates/led.tmpl) for the live write-path
-census; ledger rows 1449 and 1452 read via `./led show`, verbatim.
+census; ledger rows 1449 and 1452 read via `./autoharn led show`, verbatim.
 
 **The maintainer's ratified rulings this spec executes, verbatim:**
 
@@ -111,7 +111,7 @@ family, not per-column signatures (§4.2); refusals are classified by SQLSTATE c
 {22, 23, P0} and re-raising infrastructure classes (§4.4); the refusal row's actor is the
 `write-boundary` tool principal, with the attempted identity in typed columns (§4.5); actor
 resolution moves from `current_user` to `session_user` and the scaffold declares standing for the
-login role (§4.7); the completeness oracle is a sequence, reconciled by `./verify-chain` (§4.6).
+login role (§4.7); the completeness oracle is a sequence, reconciled by `./autoharn verify-chain` (§4.6).
 
 **Ratified 2026-07-18, all six at the recommended dispositions (ledger row 1460; §9 has each
 decision's full text, kept with its honest alternative as the record of what was chosen
@@ -230,7 +230,7 @@ shift and nothing else does).
 ### 3.1 The serialization, v2 (per §9 R1/R2, RATIFIED 2026-07-18, row 1460)
 
 `compute_row_hash(r ledger, predecessor_hash text)` is re-issued — same name, same signature, same
-one-home discipline (called by the `zz_set_row_hash` trigger and by `./verify-chain`'s walk, and
+one-home discipline (called by the `zz_set_row_hash` trigger and by `./autoharn verify-chain`'s walk, and
 by nothing else; the builder verifies by grep that
 [verify-chain.tmpl](../bootstrap/templates/verify-chain.tmpl) still contains no second
 serialization). The new body serializes, in the ledger's catalog ordinal order (which equals the
@@ -247,7 +247,7 @@ rules, fixed so the builder cannot fork:
 - **Every `timestamptz` column → `extract(epoch FROM …)::text`.** This now includes `stamp_ts`,
   which **s26 serialized as `r.stamp_ts::text` — a latent timezone hazard found in passing while
   authoring this spec and flagged here per the engineering-responsibility corollary, not silently
-  absorbed**: a session-timezone-dependent rendering means `./verify-chain` run from a connection
+  absorbed**: a session-timezone-dependent rendering means `./autoharn verify-chain` run from a connection
   in a different timezone than the inserting session would report a spurious chain break on any
   row with a non-NULL stamp. No committed world is known to be affected (main-world rows are
   unstamped; the panel world is dust), and existing worlds are read-only evidence — the exposure
@@ -472,7 +472,7 @@ Flaw 1's standing demand: *"the journal is the sole witness to refusals … 'eve
 was journaled' has no oracle."* Discharged with the consultation's candidate F, built in s43: a
 dedicated sequence, bumped by the handler immediately before each journal INSERT (§4.4 step 2).
 `nextval` is non-transactional by design — no rollback erases it. Reconciliation leg added to
-`./verify-chain` (the house home for chain-adjacent witnesses, beside s27's high-water report):
+`./autoharn verify-chain` (the house home for chain-adjacent witnesses, beside s27's high-water report):
 compares `count(*) WHERE kind='write_refused'` against the sequence's `last_value`. Semantics,
 fixed: **count > sequence → FAIL** (rows exist the handler never counted: forged or replayed
 refusal rows — the oracle doubles as the §4.2(ii) forgery-channel tripwire); **sequence > count →
@@ -591,7 +591,7 @@ of the refusal record is a checkable claim, not an article of trust.
   delta (§4.8). **Triggers:** no BEFORE INSERT member added or reordered on `ledger`
   (`set_actor` re-issued in place; `zz_set_row_hash` untouched by s43, body-re-issued by s42's
   function only). **Engine:** `entry/6` is kind-generic (verified at s40, unchanged);
-  `write_refused` flows through; `./judge` witnessed in AGREE on a fixture carrying it, never
+  `write_refused` flows through; `./autoharn judge` witnessed in AGREE on a fixture carrying it, never
   asserted; no new `.lp` predicate. **Gates:** hash-coverage (new), kind-shape manifest,
   reader allowlist, fixture census — all bumped in the family's own commits. **CLI:** every
   led.tmpl write site enumerated and migrated; the shared verdict helper is the single home.
@@ -620,17 +620,17 @@ seed provisioned per s26, the s40 birth acts performed as that delta's VALIDATE 
 Red first, always (a gate never seen red is a claim).
 
 **s42:** (i) **the hazard, red:** on an s41-head scratch (pre-s42), owner-tamper `work_parent` on
-a committed row → `./verify-chain` reports INTACT — the row-1449 hazard witnessed as such;
+a committed row → `./autoharn verify-chain` reports INTACT — the row-1449 hazard witnessed as such;
 (ii) **the fix, quantified over the class:** on the s42 scratch, a scripted loop over EVERY
 serialized column (all 52) tampers that column on a committed fixture row (owner-side, triggers
-disabled for the tamper, restored after) and asserts `./verify-chain` breaks AT that row —
+disabled for the tamper, restored after) and asserts `./autoharn verify-chain` breaks AT that row —
 per-column, not sampled; (iii) untampered chain verifies INTACT; (iv) NULL↔empty-string tamper
 on a text column breaks the chain (the s26 injectivity property, re-witnessed under v2);
 (v) same-instant different-timezone verification session verifies INTACT on a row with a non-NULL
 `stamp_ts` (the §3.1 TZ fix, both polarities via the pre-s42 scratch showing the old rendering's
 sensitivity if cheap, else the fix witnessed green and the red leg argued from s26's source);
 (vi) **the gate:** clean head → green; synthetic `ADD COLUMN` → red naming the column (the
-mutation self-check); the seen-red banked; (vii) `./judge` differential AGREE on the s42 fixture.
+mutation self-check); the seen-red banked; (vii) `./autoharn judge` differential AGREE on the s42 fixture.
 
 **s43:** (i) a policy refusal through `ledger_write` (e.g. a revoked-principal write) → verdict
 `refused`, a committed `write_refused` row carrying sqlstate/message/surface/digest/attempted
@@ -660,7 +660,7 @@ login's declaration (the §4.7 semantics, witnessed as specified); (xii) **scaff
 `--new-world` run on a scratch target — birth sequence lands write-boundary registered, login-role
 standing declared, and the world's first ordinary `./led` write succeeds with no `LED_ACTOR`
 (strict-on zero-friction preserved end-to-end); a refusal through the CLI exits nonzero with the
-taught text (output-equality with today's ergonomics); (xiii) `./judge` AGREE on a fixture
+taught text (output-equality with today's ergonomics); (xiii) `./autoharn judge` AGREE on a fixture
 carrying `write_refused`; (xiv) detect siblings **t** on own scratch, **f** on predecessor head
 (both, both polarities); (xv) the s43 `compute_row_hash` re-issue (58 columns) turns the s42 gate
 green on the s43 head — and the gate red on an s43-columns-without-re-issue development scratch

@@ -125,7 +125,7 @@ invariant I3, with I7's validity bounds built in (element 3).
   [migration header convention](MAINT-MIGRATION-ACCOMMODATIONS-SPEC.md): additive
   kind + validator, two view re-issues, no existing rows touched. The delta ships
   with a `.detect.sql` sibling file — the per-delta verification convention
-  documented in `bootstrap/migrate_core.py`'s module docstring, by which `./migrate`
+  documented in `bootstrap/migrate_core.py`'s module docstring, by which `./autoharn migrate`
   detects whether a world already carries a delta — and that detect must fingerprint
   BEHAVIOR or CATALOG SHAPE across the whole schema, never which named object
   carries a marker string (a ledgered rule from the 2026-07-16 detect-drift
@@ -140,7 +140,7 @@ invariant I3, with I7's validity bounds built in (element 3).
 twins them; narrowing the SQL members without the matching `.lp` and floor changes
 breaks the SQL/ASP differential — this project's standing drift detector, and the
 deductive layer is the project's point. s37 ships its engine companion in the same
-change, exactly as s31 did, and `./judge` (the repo-root verb that runs the SQL/ASP differential and reports AGREE
+change, exactly as s31 did, and `./autoharn judge` (the repo-root verb that runs the SQL/ASP differential and reports AGREE
 when both layers derive identical facts) must read AGREE on a scratch world
 exercising: an answered orphan (drops from both), an unanswered one (present in
 both), and an informs cycle (absent from both post-narrowing).

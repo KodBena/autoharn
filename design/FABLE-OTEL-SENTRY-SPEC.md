@@ -39,7 +39,7 @@ gap — the standing rebuttals of §7 — is the design, not a defect in it.
 [ADR-0014](../law/adr/0014-executor-second-opinion.md),
 [ADR-0017](../law/adr/0017-the-zero-context-reader.md),
 [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md); ledger rows 1434, 1441, 1442,
-1443, 1444, 1445, 1450, and the revision adjudication row 1464 (read via `./led show <id>`);
+1443, 1444, 1445, 1450, and the revision adjudication row 1464 (read via `./autoharn led show <id>`);
 the installed collector's local record (`local/OTEL-COLLECTOR.md`, gitignored local evidence
 — quoted where load-bearing, since a fresh clone cannot chase that path); the operator's live
 notification hook (`~/.claude/settings.json`, read-only verification quoted in §3);
@@ -340,7 +340,7 @@ sequencing correction the orchestrator's analysis did not carry.
 [s40](../kernel/lineage/s40-principal-identity-events.sql)/[s41](../kernel/lineage/s41-principal-bindings-and-relations.sql)
 in its birth chain), the sentry registers through the governed ceremony:
 
-- `./led register-principal otel-sentry tool --purpose "<the purpose text below>"` —
+- `./autoharn led register-principal otel-sentry tool --purpose "<the purpose text below>"` —
   `agent_class = 'tool'` is legal vocabulary today (the s13/s15 anchor CHECK:
   `human|model|subagent|tool`), and `tool` is the honest class: the sentry is deterministic
   tooling, not a model and not a human.
@@ -348,7 +348,7 @@ in its birth chain), the sentry registers through the governed ceremony:
   sentry: reads the local OTel collector's export and writes row-level model-identity
   attestations (design/FABLE-OTEL-SENTRY-SPEC.md). Recordable, not gating; every attestation
   is defeasible and carries its standing rebuttals."*
-- A competence grant (`./led principal grant-competence`), activity
+- A competence grant (`./autoharn led principal grant-competence`), activity
   `model-identity-attestation`, band and basis free text per the ratified §9(g) placeholder
   — suggested basis: *"deterministic correlation per FABLE-OTEL-SENTRY-SPEC §6; witnessed
   fixtures per §14"*. Recordable-not-gating, exactly s41 D-5.
@@ -437,7 +437,7 @@ target lineage (hence the scratch witness duty, not an assertion).
 ## 6. The correlation algorithm and its confidence grades (v1/v2 shared)
 
 **The chain (row 1444's, independently re-derived from the witnessed events):** a ledger row
-is written by a `./led` invocation inside a Bash tool call, inside an assistant turn, inside
+is written by a `./autoharn led` invocation inside a Bash tool call, inside an assistant turn, inside
 a session. On the OTel side, that session emits `api_request` events (model, `session.id`,
 timestamps, token counts, `prompt.id`), and — when `OTEL_LOG_TOOL_DETAILS` is enabled,
 local-collector-only for privacy — tool-detail events carrying the command text. The row's
@@ -620,7 +620,7 @@ head's exact list + seven); `compute_row_hash` re-issued (§8.1); kind CHECK re-
 `gates/ledger_reader_allowlist.py` CHAIN += s44 (the new view expected to classify clean —
 witnessed, not asserted); a `s44-*.detect.sql` sibling behavior-fingerprinted per the
 migrate-detect-drift ruling; the engine leg re-verified (entry/6 is kind-generic — verified
-at s40 and s41; the new kind flows through with no new `.lp` predicate, `./judge` witnessed
+at s40 and s41; the new kind flows through with no new `.lp` predicate, `./autoharn judge` witnessed
 in AGREE on a fixture carrying it).
 
 ### 8.3 What stays CLI-side, named (the s41 precedent, not a gap silently left)
@@ -644,7 +644,7 @@ correction superseding an attestation and `model_attestations` showing exactly t
 successor; (4) `gates/hash_coverage_gate.py` green at s44 (and its synthetic-column
 negative control still red); (5) a write through the s43 ledger boundary function accepted,
 and a malformed one refused *with the refusal recorded* as `write_refused` — the composed
-behavior witnessed, not inferred; (6) `./judge` AGREE on a fixture carrying the new kind;
+behavior witnessed, not inferred; (6) `./autoharn judge` AGREE on a fixture carrying the new kind;
 (7) the detect sibling t on s44, f on the s43 head. Claims reported WITNESSED /
 REFUSED-AS-EXPECTED / UNEXERCISED, per the standing contract.
 
@@ -857,7 +857,7 @@ inputs to §6, not validations of it):
 - **P1 — subagent emission probe:** a headless session that spawns a subagent, collector up;
   inspect whether subagent `api_request` events appear, and under which `session.id`.
   Discharges R5 or hardens the grade cap.
-- **P2 — session-id equality probe:** one session writing one `./led` row with telemetry on;
+- **P2 — session-id equality probe:** one session writing one `./autoharn led` row with telemetry on;
   compare the row's `stamp_session` against the export's `session.id`. Discharges R6 or
   forces a re-keyed join (surfaced to the maintainer if so — it would reshape §6).
 - **P3 — tool-detail probe:** the same run with `OTEL_LOG_TOOL_DETAILS` enabled; witness the
@@ -969,7 +969,7 @@ service-managed operation of watchdog or sentry on the Gentoo host.
 7. **v2 (only after ratification and at the maintainer's sequencing word, RD-2):** build
    `kernel/lineage/s44-model-identity-attestation.sql` + detect sibling exactly per §8 —
    §8.2's columns and CHECKs, §8.1's same-commit set, §8.4's witness plan, scratch-schema
-   ceremony on the toy db, both polarities, `./judge` in AGREE. Any divergence you believe
+   ceremony on the toy db, both polarities, `./autoharn judge` in AGREE. Any divergence you believe
    necessary between §8's text and buildable reality goes through §8.6's valve
    (maintainer + dated amendment), never your local judgment.
 8. **Fixtures:** every §14 leg banked under `seen-red/otel-watch/` and

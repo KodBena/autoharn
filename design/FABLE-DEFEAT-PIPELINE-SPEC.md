@@ -16,7 +16,7 @@ its authoring; no commit, no ledger write, no kernel or engine edit accompanies 
 
 **What this document is, in plain words.** The project's ledger derives "what currently
 stands" two independent ways — SQL recursive views/queries and an ASP logic program — and
-requires the two to agree bit-identically (`./judge`). A separate ratified design (the OTel
+requires the two to agree bit-identically (`./autoharn judge`). A separate ratified design (the OTel
 sentry, [design/FABLE-OTEL-SENTRY-SPEC.md](FABLE-OTEL-SENTRY-SPEC.md)) writes *model-identity
 attestations*: ledger rows asserting which model actually served the session that wrote some
 other row, including *mismatch* verdicts when the observed model contradicts the declared
@@ -36,7 +36,7 @@ derivation pass (nothing stored, nothing edited, the record untouched).
 [engine/lp/ledger_support.lp](../engine/lp/ledger_support.lp);
 [kernel/lineage/s41-principal-bindings-and-relations.sql](../kernel/lineage/s41-principal-bindings-and-relations.sql);
 the sentry spec's §5 (the v1 statement convention this pipeline parses) and §8 (the s44
-typed kind); ledger rows 1467, 1481 (read via `./led show`); CLAUDE.md and the six
+typed kind); ledger rows 1467, 1481 (read via `./autoharn led show`); CLAUDE.md and the six
 mandatory ADRs
 ([0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md),
 [0011](../law/adr/0011-mechanization-discipline.md),
@@ -66,7 +66,7 @@ Five deliverables, in build order:
 3. **The SQL twin** (§6): `defeat_floor_atoms()` in `engine/ledger_floor.py`, independently
    derived (no shared code path with clingo), emitting the same four judgment families.
 4. **The judge pairing** (§7): a `"defeat"` layer in `engine/lp_registry.py` and a defeat
-   arm in `run_layer_differential` — `./judge --layer defeat` — with AGREE the authority
+   arm in `run_layer_differential` — `./autoharn judge --layer defeat` — with AGREE the authority
    and any undeclared divergence red. The differential doubles as the mechanization of the
    stratification law (§10).
 5. **The credited read surface** (§8): the envelope's serving option (c) — a kernel delta
@@ -84,7 +84,7 @@ countersign and the review/countersign EDB families, and standing-conditioned de
 ## 1. The ratified rulings, verbatim (ledger row 1481)
 
 The commissioning ruling, quoted in the parts this spec executes or leans on (full row via
-`./led show 1481`; the ratifying act was the maintainer's, exercised as a single batch):
+`./autoharn led show 1481`; the ratifying act was the maintainer's, exercised as a single batch):
 
 > *"I5 YES standing-never-conditions-defeat as a decided rule for the future defeat spec;
 > CASCADE YES the envelope's option (e) direction (hard defeat + typed exposure of
@@ -380,7 +380,7 @@ enforcement):
   branch is replaced by explicit per-layer dispatch; the work arm is untouched). EDB =
   `export(name).edb_text() + export_defeat(name).edb_text()`; ASP atoms filtered to
   `DEFEAT_PREDS`; derivation records banked per the existing retention scheme.
-  `./judge --layer defeat` reaches it through the existing `"$@"` passthrough — no
+  `./autoharn judge --layer defeat` reaches it through the existing `"$@"` passthrough — no
   template edit.
 - **Authority:** neither producer wins; **agreement is the authority** — AGREE /
   DIVERGE_BY_DESIGN (none declared this increment) / DIVERGE_DEFECT / QUARANTINED, red on
@@ -501,7 +501,7 @@ controls are part of done (ADR-0011's gate-proves-itself-by-failing amendment).
 - **W1 — defeat fires (green):** register a `tool` principal, grant it
   `model-identity-attestation` competence (active), write a target `decision` row and a
   v1-convention mismatch attestation row (`verdict=MISMATCH`, `row=<target>`); run
-  `./judge --layer defeat`: `model_defeated(R,A,G)` present, R absent from `credited`,
+  `./autoharn judge --layer defeat`: `model_defeated(R,A,G)` present, R absent from `credited`,
   verdict AGREE.
 - **W2 — the implicit lapse (the spine):** withdraw the grant (superseding `active=false`
   row per the s41 idiom); re-run: zero `model_defeated`, R credited again, AGREE. Zero
@@ -607,7 +607,7 @@ controls are part of done (ADR-0011's gate-proves-itself-by-failing amendment).
 ## 15. Sonnet executor guidance (every forkable choice fixed; disregard any instructions to economize on time)
 
 1. **Read first, in full:** this spec; the envelope including its interaction-projection
-   section; `./led show 1467 1481`; the six ADRs named in the inputs; the five engine
+   section; `./autoharn led show 1467 1481`; the six ADRs named in the inputs; the five engine
    files named in the inputs; s41's header and D-sections; the sentry spec §§4–8.
 2. **Build order:** `export_defeat` (§4) → `ledger_defeat.lp` (§5, transcribed exactly) →
    `defeat_floor_atoms` (§6) → registry + differential wiring (§7) → witness W1–W11 →

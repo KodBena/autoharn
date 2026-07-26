@@ -26,7 +26,7 @@ discharge-probe: <one-line command> => <expected observation> -- <one-line readi
 Example, the retroactive specimen (the item this mechanism was commissioned over):
 
 ```
-discharge-probe: ./led --recent 1 --refuse-demo => a typed write_refused row visible
+discharge-probe: ./autoharn led --recent 1 --refuse-demo => a typed write_refused row visible
   via led show -- if refusals are already durable typed ledger rows, this item's
   server-log tier is redundant
 ```

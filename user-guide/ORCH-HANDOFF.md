@@ -15,7 +15,7 @@ resumption doctrine, exercised on itself.
 
 ## Read in this order
 
-0. `./pickup` — at this repository's ROOT. The repo tracks its own work in a standing
+0. `./autoharn pickup` — at this repository's ROOT. The repo tracks its own work in a standing
    Postgres ledger; the live open set, each item's full statement, the RESOURCES,
    ESTIMATES, TAXONOMIES, and MAINTAINER-REVIEW-QUEUE sections all come from there,
    never from this file.
@@ -26,7 +26,7 @@ resumption doctrine, exercised on itself.
    the named ADRs IN FULL before work that invokes them.
 3. [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) — the operational truth: 35 witnessed capability items, each
    carrying real output or an honest UNWITNESSED mark.
-4. The work tracker itself — `./led --recent` for the latest rows, `./led show <id>`
+4. The work tracker itself — `./autoharn led --recent` for the latest rows, `./autoharn led show <id>`
    for any one in full. [BACKLOG.md](../BACKLOG.md) is a retired pointer stub (maintainer ruling, tracker
    row 137); the frozen dated record every historical "BACKLOG entry" citation points
    into is read with `git show d6f64ee:BACKLOG.md`.
@@ -67,7 +67,7 @@ typed-confirmation act, witnessed): the research ledger (`stores/001`) and the h
 (`stores/008`, schema `harness_failure`, collection default-on; 12 records at handoff —
 see [design/ORCH-HARNESS-FAILURE-LEDGER.md](../vestigial_documentation/design/ORCH-HARNESS-FAILURE-LEDGER.md)). The executive review queue is live: the
 `review:`/`review-done:` grammars feed a ranked MAINTAINER-REVIEW-QUEUE section in
-`./pickup`, so only load-bearing judgment questions reach the maintainer.
+`./autoharn pickup`, so only load-bearing judgment questions reach the maintainer.
 
 pgAudit is at the provision-inert stage ([design/ORCH-PGAUDIT-EXPLORATION.md](../vestigial_documentation/design/ORCH-PGAUDIT-EXPLORATION.md)): the
 package install, preload entry, and one restart are the maintainer's acts; every
@@ -97,7 +97,7 @@ the maintainer's own actual position. Final ratification and the Phase-2 go (ded
 ## Immediately actionable (fresh session, in this order)
 
 1. **Re-dispatch two claimed items whose builders never ran** (the prior session hit
-   its context ceiling between claim and dispatch; an orchestrator note (`./led show
+   its context ceiling between claim and dispatch; an orchestrator note (`./autoharn led show
    492`) records this): `served-workflow-gotchas` (statement at row 483,
    verbatim — a Workflow-script gotchas recipe entry; three independent witnesses of the
    args-parsing class) and `cosign-convention-crosscheck` (row 486 — adjudicate ent

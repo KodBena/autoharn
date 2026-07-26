@@ -17,7 +17,7 @@ reaches reality in the NEXT world's birth chain, and entry into
 
 s46's credited views test defeat-input membership (the exclusion that keeps the
 defeat calculus from defeating its own input rows) over `ledger_current`, while both
-engine producers of `./judge --layer defeat` test it over full raw history. The two
+engine producers of `./autoharn judge --layer defeat` test it over full raw history. The two
 domains diverge on exactly one shape: a row that served as machinery input and was
 later superseded by a row of a different kind drops out of `ledger_current`, so the
 view stops excluding a row the authoritative engine layer still protects — the view
@@ -54,7 +54,7 @@ re-issued; if only one does, one is. `.detect.sql` sibling per house convention.
   the exact shape s46's header names — a defeat-machinery input row superseded by a
   different-kind row, plus a defeated-candidate row. BEFORE the delta: witness the
   view/engine disagreement (the pre-fix polarity reproduced). AFTER: view and both
-  engine producers agree; `./judge --layer defeat` differential AGREE.
+  engine producers agree; `./autoharn judge --layer defeat` differential AGREE.
 - **WS46-b (no regression):** a plain world with attestation mismatches and no
   kind-changing supersession chain — defeated set identical before and after the
   delta, byte-for-byte on the view output.

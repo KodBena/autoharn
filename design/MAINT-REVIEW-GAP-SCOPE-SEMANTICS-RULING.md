@@ -1,5 +1,7 @@
 # review_gap scope semantics — answered by the maintainer's reframe
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found two pre-existing legibility findings (a forward-referencing opening before its "A/B binary"/"one join" terms are introduced; unglossed "Fable-authored"/"succession-ceremony spec"/"scratch witness"); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 Audience: maintainer
 
 STATUS: ANSWERED — NOT AS ASKED (2026-07-12). The maintainer's written answer (his
@@ -61,8 +63,8 @@ need's first data point, banked here for the next reader.
 ## The question in plain words (the original entry point, superseded above)
 
 The kernel lets you place a principal under a countersign obligation
-(`./led obligate <scope> <principal>`): from then on, every ledger row that principal
-writes counts as unreviewed debt — listed by `./led review-gap` — until a DIFFERENT
+(`./autoharn led obligate <scope> <principal>`): from then on, every ledger row that principal
+writes counts as unreviewed debt — listed by `./autoharn led review-gap` — until a DIFFERENT
 actor attests it. When you create the obligation you type a scope word (e.g.
 "decomposition"). Twice now an agent assumed that word FILTERS — that only rows about
 the decomposition would need countersign. It does not, and cannot: ledger rows carry no

@@ -9,7 +9,7 @@ scaffolded autoharn deployment (an "adopter" — a project that consumes autohar
 someone merges a change into autoharn's own working branch?** It is a design note, not a
 built change: nothing in `bootstrap/`, `hooks/`, or any scaffolded deployment is edited by
 this document. It answers the tracker item `deployment-live-exec-coupling`
-(work-item slug in this project's ledger, read via `./led`), approved for design work by the
+(work-item slug in this project's ledger, read via `./autoharn led`), approved for design work by the
 maintainer on 2026-07-14 (ledger row 684, "go-ahead: ALL SIX Part-B items approved … deployment-live-exec-coupling
 (build, composes with recovery-mode concern)"; the design-scoped ask is in the same day's row 686:
 "schedule design note + migration path (submodule default, copy-at-scaffold fallback); build/merge
@@ -79,7 +79,7 @@ that `exec` a sibling checkout's live files by path. Concretely, relative to tod
 - **Upgrading** an adopter to a newer autoharn becomes the explicit, recorded act the maintainer
   asked for: `cd <deployment>/.autoharn && git fetch && git checkout <new-sha>`, followed by
   `git add .autoharn && git commit` in the deployment's own tree to record the new pin, and a
-  `./led decision "upgrade: autoharn .autoharn submodule <old-sha> -> <new-sha>"` row so the
+  `./autoharn led decision "upgrade: autoharn .autoharn submodule <old-sha> -> <new-sha>"` row so the
   ledger carries the fact. A deployment's operator verbs never change behavior except at this
   moment, and never as a side effect of someone else's unrelated merge.
 
@@ -103,7 +103,7 @@ was correctly scoped to them and this design does not revisit it).
 A copy-at-scaffold deployment upgrades by re-running (a to-be-written) `bootstrap/upgrade-project.sh`
 against the deployment directory: it re-renders the current `bootstrap/templates/*.tmpl` set and
 overwrites the deployment's copies, the same way `new-project.sh` writes them the first time,
-recording the act with the same `./led decision "upgrade: …"` convention named above. This
+recording the act with the same `./autoharn led decision "upgrade: …"` convention named above. This
 gives the adopter the same "upgrade is an explicit act" property as the submodule path, at the
 cost of losing git's own pin-integrity verification (a copy's provenance is only as good as the
 ledger row recording when and from what commit it was copied — worth naming honestly rather than
@@ -135,9 +135,9 @@ it is not improvised under pressure the day it is finally run.
    deliberate smoke invocation) that `led`/`judge`/`pickup` now `exec` the pinned copy. This step
    is what actually retires the coupling for that deployment — steps 1–2 without this verification
    would leave the shim pointed at the old live path by accident.
-4. **Record the migration** with a `./led decision` row in **this** project's own ledger (the
+4. **Record the migration** with a `./autoharn led decision` row in **this** project's own ledger (the
    ledger a migration act should be visible in, per this project's standing self-application rule
-   — CLAUDE.md, "Self-application"): `./led decision "migrate: <deployment-name> pinned to
+   — CLAUDE.md, "Self-application"): `./autoharn led decision "migrate: <deployment-name> pinned to
    autoharn@<sha> (deployment-live-exec-coupling migration)"`. If the deployment carries its own
    ledger (every scaffolded deployment does, per its own `deployment.json` and Postgres schema —
    see the [`world` glossary entry](../GLOSSARY.md#world)), the migration is also worth a row
@@ -192,7 +192,7 @@ This retirement is scoped honestly, not oversold:
 ## Buildable now vs. constitutional
 
 Everything this design proposes — the scaffold's `--pin` flag, the submodule wiring, the
-copy-at-scaffold fallback script, the migration steps, the `./led decision` recording convention
+copy-at-scaffold fallback script, the migration steps, the `./autoharn led decision` recording convention
 — is ordinary `bootstrap/`-surface engineering: no `kernel/lineage`, `law/`, or `engine/lp/`
 semantics are touched, so none of it needs a Fable-authored, maintainer-ratified spec under this
 project's standing constitutional-route rule (CLAUDE.md, "ORCHESTRATION"). It is Sonnet-

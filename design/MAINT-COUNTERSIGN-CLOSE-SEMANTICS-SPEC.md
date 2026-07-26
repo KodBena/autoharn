@@ -73,7 +73,7 @@ Consequences, each closing a witnessed failure:
 
 ## 4. Element B — close is a typed act with two constructors
 
-`./led work close` gains a mandatory review disposition. Exactly two constructors exist;
+`./autoharn led work close` gains a mandatory review disposition. Exactly two constructors exist;
 a close that is silent about review is unrepresentable (refused at the boundary,
 teach-text naming both constructors, ADR-0002 refuse-before-write):
 
@@ -148,7 +148,7 @@ incentive honest).
 ## 6. Dual derivation and the differential
 
 The resolution view is implemented twice, per the house pattern: once as SQL (kernel
-view) and once as ASP rules (`engine/lp/`), with `./judge` running the differential.
+view) and once as ASP rules (`engine/lp/`), with `./autoharn judge` running the differential.
 The ASP side is not decoration — defaults-with-exceptions over obligation trees is the
 deductive engine's core competence, and this view is a natural first citizen of the
 fact-family integration the maintainer prioritized in the same executive response

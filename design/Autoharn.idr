@@ -98,7 +98,7 @@
 |||   get a rendering, named at PWriteRefused's own doc: the boundary functions' totality
 |||   invariant (refusal-implies-journal) and the refusal_seq oracle are operational
 |||   control-flow/reconciliation facts whose mechanical witnesses are the SQL, the gate,
-|||   and ./verify-chain -- this model's append already IS the typed-verdict idea
+|||   and ./autoharn verify-chain -- this model's append already IS the typed-verdict idea
 |||   (proof-carrying acceptance), which is why s43 lands as one premise and one
 |||   constructor, not a parallel machinery. Below this line the s42 note, then the s41
 |||   parity note, stand verbatim. Prior head: s42 -- s42, 2026-07-18, same-commit bump: s42-row-hash-full-
@@ -695,7 +695,7 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   ||| minting exactly this constructor -- superseding this doc's earlier
   ||| out-of-model claim (recorded in the header note). What STAYS out,
   ||| named: the refusal_seq oracle and the journal-INSERT-failure leg (the
-  ||| SQL's residual loud-abort + counted-gap path, ./verify-chain's
+  ||| SQL's residual loud-abort + counted-gap path, ./autoharn verify-chain's
   ||| reconciliation), and the digest's SHA-256 (an opaque literal here --
   ||| the s42 crypto boundary). s49's overflow guard is also subsumed at
   ||| this constructor's altitude: attemptedActor's resolution is total in
@@ -2119,7 +2119,7 @@ record DualProducers (n : Nat) where
   aspSide  : Ledger n -> List (Fin n)   -- opaque: clingo over ledger_tnow.lp
 
 ||| The AGREE verdict: bit-identical output (empty symmetric difference).
-||| A runtime observation per world (./judge), rendered as a decidable
+||| A runtime observation per world (./autoharn judge), rendered as a decidable
 ||| proposition -- the model can STATE it and a run can WITNESS it; the model
 ||| cannot prove it once the producers are honest black boxes.
 Agree : {n : Nat} -> DualProducers n -> Ledger n -> Type

@@ -70,7 +70,7 @@ interior node is auditable. The work verbs' home is
 [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md). Per-node estimate-vs-actual rollups
 are a designed follow-up, not yet built — the design lives on the deployment's own tracker
 as work item `work-tree-rollup` (a ledger row, not a committed page: read it with
-`./led show work-tree-rollup` at the repository root, the same live-lookup convention the sibling
+`./autoharn led show work-tree-rollup` at the repository root, the same live-lookup convention the sibling
 specs use for tracker items).
 
 ## Workflow patterns
@@ -488,7 +488,7 @@ Yes — one `resource:` row per resource, whose TIER field carries the deontic f
 blanket answer — the two owning specs, [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md)
 and [ORCH-SPEC-RESOURCE-ACCOUNTING.md](../design/ORCH-SPEC-RESOURCE-ACCOUNTING.md), drifted on exactly this
 in mid-2026-07-12 and were
-reconciled 2026-07-13, tracker row 223 — a ledger row, not a committed page: `./led show 223` at
+reconciled 2026-07-13, tracker row 223 — a ledger row, not a committed page: `./autoharn led show 223` at
 the repository root reads it in full): `mandated`'s close-review convention already shipped and
 surfaces an undischarged close as [`review_gap`](../GLOSSARY.md#review_gap) debt — never a
 refusal of the close itself;
@@ -1095,7 +1095,7 @@ signed heads is provable by comparing them. Known honest limits: the chain-hash 
 tampering with rows *between* two signed heads, but a deleted row at the very tail of the chain
 (the newest end, appended after the last signature) is invisible to the chain alone — nothing
 has signed over it yet (tracker item `s26-tail-deletion-witness` holds the designed fix — a
-ledger row, not a committed page: `./led show s26-tail-deletion-witness` at the repository root
+ledger row, not a committed page: `./autoharn led show s26-tail-deletion-witness` at the repository root
 reads it), and the
 apparatus comparison is manual, not auto-flagged.
 Walkthrough: [USER-GPG-TRUST-LAYER-FAQ.md](USER-GPG-TRUST-LAYER-FAQ.md) §6.
@@ -1471,7 +1471,7 @@ is each one's owning page):
 
 - seen-red/setup-tui-scripted-smoke (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) —
   the setup surface's own backstop, commissioned under the maintainer's 2026-07-19 standing
-  rule ("the setup surface itself ... will drift unless maintained", ledger row 1700: `./led
+  rule ("the setup surface itself ... will drift unless maintained", ledger row 1700: `./autoharn led
   show 1700` at the repository root): a scripted TUI smoke fixture, census-registered, driving
   `python3 -m tools.setup_tui.app --scripted ... --start-at <screen>` against real hostile/
   malformed inputs and asserting the same REFUSED-no-traceback outcome the mechanism itself is
@@ -2495,7 +2495,7 @@ classification `attest-doc check` reads, folded into one debt total alongside re
 question-status, and work-item debt). This work traces to the maintainer's 2026-07-18 overnight
 batch, item 11 ("attest-tags (zero mentions) ... A:B:C with live transcripts"), tracked as
 ledger item `overnight-batch-doc-backfill` (claimed row 1606, parent
-`post-freeze-documentation-debt` — a ledger row, not a committed page: `./led show 1606` at the
+`post-freeze-documentation-debt` — a ledger row, not a committed page: `./autoharn led show 1606` at the
 repository root reads it in full).
 
 **Can I check whether this repository's own `ratified/*` git tags are honestly signed?**
@@ -2512,14 +2512,14 @@ all — this repository's own honest state today under the standing crypto-gener
 named so it is never mistaken for a pass). Exit 0 only if every enumerated tag verified GOOD and
 every RATIFIED-marked commit is covered by one.
 
-Run bare against this checkout (`./attest-tags`, no flags), the tool reports its own honest
+Run bare against this checkout (`./autoharn attest-tags`, no flags), the tool reports its own honest
 starting state — every tag UNVERIFIABLE because `law/keys/` carries no committed key yet, plus a
 list of RATIFIED-marked commits with no covering tag (this checkout's own commit history is long
 and largely off-topic for this FAQ entry, so only the header is quoted here; the finding-by-
 finding detail below exercises every verdict shape instead). This WITNESSED run's header lines
-show `./attest-tags` against this checkout:
+show `./autoharn attest-tags` against this checkout:
 ```sh
-$ ./attest-tags
+$ ./autoharn attest-tags
 ```
 ```
 attest-tags: /home/bork/w/vdc/1/autoharn
@@ -2538,7 +2538,7 @@ commit claiming ratification with no tag at all, one whose tag is genuinely sign
 and one whose tag was tampered after signing. That scratch repo, with the throwaway key
 committed, WITNESSED all three non-clean verdicts in one run:
 ```sh
-$ ./attest-tags --repo /tmp/.../repo --keys-dir /tmp/.../keys-real
+$ ./autoharn attest-tags --repo /tmp/.../repo --keys-dir /tmp/.../keys-real
 ```
 ```
 attest-tags: /tmp/.../repo
@@ -2557,7 +2557,7 @@ attest-tags: FINDINGS ABOVE — see marks (exit 1)
 A second scratch repo, with a single RATIFIED-marked commit whose tag is real and covering,
 WITNESSED the clean, exit-0 case:
 ```sh
-$ ./attest-tags --repo /tmp/.../repo-clean --keys-dir /tmp/.../keys-real
+$ ./autoharn attest-tags --repo /tmp/.../repo-clean --keys-dir /tmp/.../keys-real
 ```
 ```
 attest-tags: /tmp/.../repo-clean
@@ -2780,11 +2780,11 @@ independent, evidence-only investigation rather than adjudicate its own work. It
 practice (a discipline to follow by hand), not a mechanism that refuses anything; nothing here
 gates a write. Provenance: harvested from the autoharn-panel deployment's own orchestrator
 behavior, reconstructed and generalized in this project's own ledger, `recusal-rca-recipe` (row
-1358, still open at the time of this writing — a ledger row, not a committed page: `./led show
+1358, still open at the time of this writing — a ledger row, not a committed page: `./autoharn led show
 1358` at the repository root reads it in full).
 
 **What actually happened, the specimen this method generalizes.** WITNESSED — read directly from
-this repository's own live ledger this session (`./led show 1364`, kind `finding`, dated
+this repository's own live ledger this session (`./autoharn led show 1364`, kind `finding`, dated
 2026-07-17), quoting the maintainer's own framing of why it mattered: *"This is literally the
 first time I have ever seen a formal RCA taken up on their own. I feel like a child again."* The
 downstream (panel) orchestrator, unprompted, recognized that a security warning it was about to
@@ -2801,7 +2801,7 @@ ledger** — the autoharn-side row (1364) that reports them, by contrast, was re
 session, and is WITNESSED.
 
 **The five steps**, reconstructed from the specimen above and from the same "two-spy synthesis"
-practice's own harvest of this method (WITNESSED, `./led show 1357`, kind `decision`, 2026-07-17
+practice's own harvest of this method (WITNESSED, `./autoharn led show 1357`, kind `decision`, 2026-07-17
 evening, read this session):
 
 1. **Recognize the conflict of interest.** The question on the table is, in whole or in part,
@@ -2861,7 +2861,7 @@ conflicted orchestrator actually recused, that a dispatched RCA was actually bri
 evidence-only, or that a systemic finding actually got filed separately rather than folded in —
 all four are review-only, exactly as [ADR-0014](../law/adr/0014-executor-second-opinion.md) and
 [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md) themselves disclose for their own
-enforcement surface. A maintainer ratification (WITNESSED, `./led show 1366`, read this session)
+enforcement surface. A maintainer ratification (WITNESSED, `./autoharn led show 1366`, read this session)
 fixed a v1 DESIGN for shipping one seeded standing decision row — the recusal-on-conflict-of-
 interest rule itself — at every new world's birth, default ON, declinable by an explicit scaffold
 flag: *"The shipping-at-birth is a cool idea of course, but needs to be configurable ... given the

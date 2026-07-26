@@ -1,7 +1,9 @@
 # FABLE-GRADED-DECISIONS-SPEC — standing decisions that survive context loss
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (unglossed "Sonnet builder", "kernel"/"lineage", "the ledger", a slash-joined compound, elliptical bullets); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 This spec proposes a durability grade for ledger decision rows, plus the machinery
-(a hook, a `./pickup` section, a reader verb) that re-asserts high-grade decisions
+(a hook, a `./autoharn pickup` section, a reader verb) that re-asserts high-grade decisions
 into every rebuilt context — so that a decision the maintainer marked as standing
 can no longer be lost to context compaction. It is written for the maintainer (to
 ratify) and for the Sonnet builder (to implement).
@@ -71,13 +73,13 @@ dropped).
 ### 3. Hook `hooks/sessionstart_durable_decisions.py`
 
 - Wired on `SessionStart` with matchers `compact` and `resume` (a `startup`
-  session is expected to run `./pickup` per the resumption doctrine; `compact`
+  session is expected to run `./autoharn pickup` per the resumption doctrine; `compact`
   is the witnessed failure surface; `resume` shares its shape).
 - Reads `standing_decisions` filtered to the configured grade set; prints each
   row (`id  grade  statement`) to stdout for context injection.
 - BYTE-CAPPED (default 4000 bytes, configurable): compaction happens because
   context is tight; an unbounded re-injection is self-defeating. Truncation is
-  LOUD: "N more standing decisions not shown — run `./led standing`" — never
+  LOUD: "N more standing decisions not shown — run `./autoharn led standing`" — never
   silent (no-silent-caps rule).
 - Fails open with a one-line stderr note if the ledger is unreachable — a
   context-hydration aid must never block session start.
@@ -88,7 +90,7 @@ dropped).
 `{ "grades": ["durable"], "byte_cap": 4000 }`. The hook and pickup both read
 this; the kernel knows nothing of it.
 
-### 5. `./pickup`: STANDING-DECISIONS section
+### 5. `./autoharn pickup`: STANDING-DECISIONS section
 
 This new section prints all rows of `standing_decisions` in the configured
 grade set, BEFORE the recency-windowed IN-FORCE-DECISIONS section, with no
@@ -96,9 +98,9 @@ recency limit and no `-n` interaction. It applies the same
 byte-cap-with-loud-truncation as the hook. This closes the witnessed pickup
 gap independently of whether a session's hooks are wired.
 
-### 6. `./led standing` (read verb)
+### 6. `./autoharn led standing` (read verb)
 
-`./led standing` is a trivial reader over `standing_decisions`; it is the escape
+`./autoharn led standing` is a trivial reader over `standing_decisions`; it is the escape
 hatch both truncation messages point at.
 
 ## What this spec does NOT claim

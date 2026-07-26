@@ -335,7 +335,7 @@ witnessed honesty, not a defect.
   differential AGREE before any verdict is called trustworthy; zero unwitnessed rules and
   zero unexplained differential rows at delivery.
 - **Observer-grade, categorically.** The deliverable is a report someone RUNS — a
-  `--preamble` mode of the existing `./audit` verb (or a sibling subcommand reading the same
+  `--preamble` mode of the existing `./autoharn audit` verb (or a sibling subcommand reading the same
   EDB export), exit 0/1 by family verdict, typed refusal on capability absence, the
   [contemp_audit.py](../engine/contemp_audit.py) harness idiom. It gates nothing: not the
   Stop hook, not pre-commit, not the change gate. Wiring any verdict into a blocking path is
@@ -383,7 +383,7 @@ E1–E5/E7 in `engine/contemp_edb.py`, E6 (the journal line) in
 `bootstrap/templates/verify-commission.tmpl`, the SQL floor (`engine/preamble_floor.py`) beside
 `engine/ledger_floor.py`, the differential runner (`engine/preamble_differential.py`, imports
 `engine/ledger_differential.py`'s conventions exactly, never re-derives them), fixtures under
-`seen-red/preamble-ordering/`, and the audit-verb mode (`./audit --preamble`, via
+`seen-red/preamble-ordering/`, and the audit-verb mode (`./autoharn audit --preamble`, via
 `engine/preamble_audit.py` wired into `engine/contemp_audit.py`'s own `--preamble` flag). All
 additive; no kernel delta; nothing here touches a live session's hooks (delivered template-side,
 unwired, per §8's own routing rule).
@@ -468,7 +468,7 @@ GREEN as of this landing):**
 
 **EXIT-CODE COMPOSITION (§8's own "typed refusal on capability absence" ask, stated as this
 build's own explicit rule — `engine/preamble_audit.py`'s docstring carries the full account):**
-`--preamble` NEVER overrides a non-zero base `./audit` exit (1 BACKFILL_SUSPECT, 2 tool error, 3
+`--preamble` NEVER overrides a non-zero base `./autoharn audit` exit (1 BACKFILL_SUSPECT, 2 tool error, 3
 N/A capability refusal) — mirrors `--differential`'s own already-shipped "first problem found
 stays the reported one" rule. When the base exit is 0, `--preamble` may raise it to a NEW code,
 5, reachable only through this flag, iff ≥1 family verdict is VIOLATED. UNDECIDABLE/VACUOUS

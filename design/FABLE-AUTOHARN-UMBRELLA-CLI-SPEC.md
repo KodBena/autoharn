@@ -39,7 +39,7 @@ ONE line saying so (transparent is never silent — ADR-0002), then proceed. The
 race under concurrent sessions: the port bind IS the lock; a loser detects the lost
 bind, re-probes, and ADOPTS the winner — someone-else-started-it is a success case
 (row 1165). A service that cannot start (port genuinely held by a non-autoharn
-process, config invalid) refuses loudly with the diagnosis; ./doctor's boundary line
+process, config invalid) refuses loudly with the diagnosis; ./autoharn doctor's boundary line
 is the standing check. `autoharn service status|start|stop` exist as explicit verbs
 for operators who want manual control; ensure-running never fights an explicit stop
 within the same invocation's scope.
@@ -129,4 +129,4 @@ service survives); explicit-stop respected; version handshake red-first against 
 skewed version constant; descriptor written at a scratch birth and picked up by the
 hub without config edits; hub consolidation witnessed (both worlds served by one
 service, old service retired); --dry-run prints-without-writing red/green; help-never-
-writes swept at every depth. ./doctor all-PASS on a newborn under the new surface.
+writes swept at every depth. ./autoharn doctor all-PASS on a newborn under the new surface.

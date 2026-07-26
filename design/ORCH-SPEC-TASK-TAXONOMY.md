@@ -1,8 +1,10 @@
 # ORCH-SPEC-TASK-TAXONOMY — declared taxonomies and taxon-scoped task policy
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (unglossed "omega project"/"REACH"/"marriage-grade"/"blessed-table convention"/"seen-red"/"s27", an ungrounded code-block field, sentence fragments, a jargon-first opening); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §7).
 Status: Fable-authored 2026-07-12, from the maintainer's same-afternoon ask (tracker
-work item `task-taxonomy-spec` — run `./led show <id>` at the repository root to read
+work item `task-taxonomy-spec` — run `./autoharn led show <id>` at the repository root to read
 it). The ask is structural support for a decomposition discipline settled at the
 outset: boundary identification required, work split along boundaries, and no agent
 codes across a boundary. This spec generalizes that discipline so the framework is
@@ -62,7 +64,7 @@ interface: <TAXONOMY> | <ARTIFACT-PATTERN> | <GLOSS>
   specimen, the documented API module but never `vendor/**`.
 
 Intake validation clones the `resource:` validator's structure (field count,
-whitespace normalization, refusal that teaches); `./pickup` gains a TAXONOMIES
+whitespace normalization, refusal that teaches); `./autoharn pickup` gains a TAXONOMIES
 section; superseding a row is the ordinary edge. The omega specimen, transcribed:
 `taxon: license | mit-derivative | backend/qeubo/** | upstream qEUBO derivative` plus
 `interface: license | backend/qeubo/__init__.py | the documented public surface`.
@@ -98,7 +100,7 @@ facts; the SQL floor re-derives independently; the differential must AGREE
   journal (observe, default) a Write outside the claimed item's taxon, teach-text
   naming the taxonomy row and the declared interfaces. Additive refusal, fail-safe
   class, apparatus-switched per world.
-- **Audit (post-hoc)**: all three predicates as an `./audit` family over the journal —
+- **Audit (post-hoc)**: all three predicates as an `./autoharn audit` family over the journal —
   catches what the gate's attachment points cannot see (bash-mediated writes are
   visible via the mutation observer with its own disclosed residues).
 - **Reviewer judgment, irreducibly**: whether the taxonomy itself is *well-drawn* — no
@@ -132,7 +134,7 @@ never by decree.
   a USER- template page with the omega licensing specimen as the worked example
   (marked as one maintainer's example, per the blessed-table convention). Seen-red
   both polarities; census.
-- **Stage B** — the audit family: ASP + SQL floor + differential + `./audit` flag
+- **Stage B** — the audit family: ASP + SQL floor + differential + `./autoharn audit` flag
   (next free exit code; note the exit-6/7 collision precedent — one exit, one owner,
   checked at authoring). Includes the unassigned-artifact report.
 - **Stage C** — the write-time gate extension (change gate, taxon-scoped permits),
