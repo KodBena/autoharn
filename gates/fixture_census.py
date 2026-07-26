@@ -304,6 +304,15 @@ REGISTRY: dict[str, str] = {
     # amendment2_transport_fixture.py, its own sibling modules in this same directory, as
     # subprocesses, so this one entry exercises the whole family.
     "missives-kernel-family":          "seen-red/missives-kernel-family/run_fixtures.py",
+    # work item tui-ceremony-chain-authorship (ledger rows 1390/1391): tools/setup_tui/
+    # principals_authority.py's register_principal_act/grant_competence_act/relate_act stop
+    # forcing LED_ACTOR=commissioner (a principal with no acts-for chain to genesis) on the
+    # founding "Principals & authority" ceremony -- fixing BOTH the pre-existing s60-only
+    # register_principal_act hazard (kernel/lineage/s60-entitlement-enforcement.sql, merged) and
+    # the s62-surfaced relate_act hazard (kernel/lineage/s62-delegation-lifecycle-gating.sql,
+    # branch worktree-agent-a9b3bd5031b11cd5a, not yet on main -- this fixture cherry-picks its
+    # SQL text at fixture start, working-tree only, and removes it again at fixture end).
+    "setup-tui-ceremony-chain-authorship": "seen-red/setup-tui-ceremony-chain-authorship/run_fixtures.py",
     # panel-disposition / panel-cosign DEREGISTERED (2026-07-15, TASK C, commission item 3):
     # both suites ported to the standalone SPA repo's own tests/ (test_disposition.py,
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its

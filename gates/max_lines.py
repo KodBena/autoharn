@@ -373,7 +373,15 @@ BASELINE: dict[str, int] = {
     # provenance the merge honestly keeps side by side, not padding; no logic duplicated, just
     # two histories' worth of "why" on one file. Written plain, no golfing; witnessed growth of
     # a previously-under-ceiling (359-line) file, crossing the ceiling only as a merge artifact.
-    "tools/setup_tui/principals_authority.py":          406,
+    # bumped 406 -> 450 (2026-07-26, work item tui-ceremony-chain-authorship, ledger rows
+    # 1390/1391): register_principal_act/grant_competence_act/relate_act stop forcing
+    # LED_ACTOR=commissioner (a principal with no acts-for chain to genesis, refused under
+    # kernel/lineage/s60-entitlement-enforcement.sql already merged, and under s62's own
+    # delegation_lifecycle gating once that lands) -- the new "AUTHORSHIP" module-docstring
+    # section explaining WHY (the full reasoning, not just the diff) plus each function's own
+    # updated docstring account for the growth. Written plain, no golfing; a real class-sweep
+    # fix, not padding.
+    "tools/setup_tui/principals_authority.py":          450,
     # NEW to BASELINE 2026-07-23 (integration merge, same pass): 405 lines -- runner.py's own
     # `legacy_led_path`/`served_led_path`/`resolve_led` docstrings were each rewritten in place by
     # the retirement line to explain the legacy-led.tmpl retirement (ledger row 1149/1150), net
@@ -394,7 +402,11 @@ BASELINE: dict[str, int] = {
     # the marker check + its own registry row); the union is 418. Third witnessed merge-union
     # ratchet crossing today -- the commit-phase contention class, again.
     # bumped 418 -> 419 (one new REGISTRY row: s60-entitlement-enforcement).
-    "gates/fixture_census.py":                          419,
+    # bumped 419 -> 428 (2026-07-26, work item tui-ceremony-chain-authorship, ledger rows
+    # 1390/1391): one new REGISTRY row (setup-tui-ceremony-chain-authorship) plus its own
+    # multi-line provenance comment naming the pre-existing s60 hazard and the s62-surfaced
+    # hazard this fixture proves fixed.
+    "gates/fixture_census.py":                          428,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -439,7 +451,11 @@ BASELINE: dict[str, int] = {
     # Genuinely new reconciliation content, not padding.
     # bumped 518 -> 528 (s60-entitlement-enforcement.sql: four ratchet bumps in this same
     # file, each row's own comment naming its reason).
-    "gates/max_lines.py":                                528,
+    # bumped 528 -> 544 (2026-07-26, work item tui-ceremony-chain-authorship, ledger rows
+    # 1390/1391): two ratchet bumps in this same file (principals_authority.py, fixture_census.py)
+    # plus this self-measuring row's own comment -- the same recurring, honest cost this table's
+    # history already names.
+    "gates/max_lines.py":                                544,
 }
 
 

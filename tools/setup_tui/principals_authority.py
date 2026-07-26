@@ -300,13 +300,46 @@ def lineage_chain_note(dest: str) -> str:
 # PHASE-2 (design/FABLE-SETUP-TUI-PURE-CORE-SPEC.md): plan-entry BUILDERS -- every one of these
 # used to call `runner.run_command` directly (executing at decision time); each now returns a
 # `(CommandAct, produces_key)` pair instead, appended into THE PLAN by screens.py and executed
-# only at the one commit boundary. `LED_ACTOR=commissioner` is now `extra_env` on the act (plan.py
-# Phase-2 addition), resolved fresh against the ambient environment at COMMIT time, never
-# captured at decision time. `produces_key` names the binding a later Hole can reference (the row
-# id these `led` verbs print on success, parsed via `runner.parse_row_id` at commit time --
-# `_extract_row_id` below is that extractor, the ONE home for it, mirroring `runner.parse_row_id`
-# itself); a caller that never needs the row id downstream simply never builds a `Hole` against it
-# -- an unused `produces` binding costs nothing (commit_executor.py records it regardless).
+# only at the one commit boundary. `produces_key` names the binding a later Hole can reference
+# (the row id these `led` verbs print on success, parsed via `runner.parse_row_id` at commit time
+# -- `_extract_row_id` below is that extractor, the ONE home for it, mirroring `runner.
+# parse_row_id` itself); a caller that never needs the row id downstream simply never builds a
+# `Hole` against it -- an unused `produces` binding costs nothing (commit_executor.py records it
+# regardless).
+#
+# AUTHORSHIP (work item tui-ceremony-chain-authorship, ledger rows 1390/1391, s62 build f099ed0's
+# own header note): every act below used to carry `extra_env=(("LED_ACTOR", "commissioner"),)`.
+# That choice is WRONG for what these acts actually mean and is REMOVED here -- none of them set
+# LED_ACTOR any longer, exactly matching `charter_register_act`'s own (already-correct) shape.
+# The founding "Principals & authority" ceremony registers/relates OTHER principals into
+# existence -- that is the scaffold connection principal's own job (`bootstrap/new-project.sh`'s
+# s40/s43 birth sequence: EVERY birth-sequence registration, including 'commissioner' itself, is
+# authored `actor=author`, never self-authored) -- so the honest actor is the SAME one the birth
+# sequence already used: the declared-default principal the served connection resolves to when
+# `LED_ACTOR` is left unset (`bootstrap/templates/led.tmpl`'s own `_resolve_actor`: unset means
+# the payload omits `actor` entirely and the kernel's `set_actor` trigger resolves it from
+# `session_user`'s own declared standing -- bound to 'author' at birth, s40 birth sequence step 2,
+# BEFORE this screen ever runs post re-sequencing). 'commissioner' is registered BY author for a
+# narrow, DIFFERENT, already-correctly-scoped purpose (`bootstrap/new-project.sh`'s own registration
+# purpose text: "the maintainer's own registered identity for FULL-mode commission signing") --
+# signing the ask itself (`signed_genesis.write_commission_act`'s own `LED_ACTOR=commissioner`,
+# UNCHANGED by this fix, genuinely commissioner's own act) -- and never asserts any acts-for edge
+# of its own, so it does not chain-reach genesis. Under kernel/lineage/s60-entitlement-
+# enforcement.sql (merged), `principal_registered` was ALREADY authority-bearing (conjunct a: the
+# default act-class map requires role 'authority', which only 'author' holds at birth; conjunct
+# b: chain-to-genesis) -- so `register_principal_act` driven as commissioner was ALREADY refused
+# on any s60+ world, independent of s62; this fix closes that too, not only the s62-surfaced
+# `relate_act` hole (CLAUDE.md's hazard-in-reach corollary: found while sweeping this file for the
+# SAME defect class, fixed in the same pass rather than routed around). `grant_competence_act`
+# swept the same way for CONSISTENCY, even though the write it drives is not currently classified
+# authority-bearing by any merged/pending kernel delta -- there is no principled reason a
+# competence grant inside the SAME ceremony should be attributed to a different, non-chained
+# principal than its sibling acts; a future kernel delta that DOES gate competence grants (G13)
+# meets an already-correct actor here, not a second defect to re-discover. PROVISIONAL, per the
+# house pattern: this is the orchestrator's own reading of "who legitimately authors the founding
+# edges" (the maintainer/genesis principal, since the ceremony's real meaning is the maintainer's
+# own scaffold delegating identity into the world) -- marked for the maintainer's own review, not
+# silently assumed final.
 # ---------------------------------------------------------------------------------------------
 
 def _served_led(dest: str) -> str:
@@ -330,31 +363,37 @@ def _extract_row_id(output: str) -> str:
     return str(row_id) if row_id is not None else output.strip()
 
 
-_COMMISSIONER_ENV: tuple[tuple[str, str], ...] = (("LED_ACTOR", "commissioner"),)
-
-
 def register_principal_act(dest: str, name: str, agent_class: str, purpose: str,
                             led: str | None = None) -> tuple[CommandAct, str]:
-    """`LED_ACTOR=commissioner <led> register-principal <name> <class> --purpose "<purpose>"` --
-    the s40 registration ceremony (kernel/lineage/s40-principal-identity-events.sql §3.7), as a
-    plan act. `LED_ACTOR=commissioner` mirrors signed_genesis.py's own choice: at this point in
-    the flow the connection principal has no standing declaration of its own yet, and
-    `commissioner` is one of the three principals the scaffold's own birth sequence already
-    registers and declares standing for. `led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
-    completion, ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served,
-    always, since this run's own boundary is configured before this screen ever runs (legacy-led-
+    """`<led> register-principal <name> <class> --purpose "<purpose>"` -- the s40 registration
+    ceremony (kernel/lineage/s40-principal-identity-events.sql §3.7), as a plan act. NO
+    `LED_ACTOR` override (work item tui-ceremony-chain-authorship, ledger rows 1390/1391 -- see
+    this module's own "AUTHORSHIP" section header above for the full reasoning): this act used to
+    force `LED_ACTOR=commissioner`, a principal with no acts-for chain to genesis, which
+    kernel/lineage/s60-entitlement-enforcement.sql (merged) already classifies
+    `principal_registered` as authority-bearing and REFUSES for exactly that reason. Leaving
+    `LED_ACTOR` unset lets the served connection's own declared-default actor resolve (the
+    scaffold's genesis-chained 'author' principal, bound at birth) -- the SAME actor
+    `bootstrap/new-project.sh`'s own s40/s43 birth sequence uses to register every principal,
+    'commissioner' included. `led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion,
+    ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served, always,
+    since this run's own boundary is configured before this screen ever runs (legacy-led-
     retirement inventory pass, ledger row 1149/1150: boundary configuration has no decline
     option anymore) -- `None` (unwired callers, e.g. this module's own tests) falls back to
     `_served_led(dest)`, the ordinary default; there is no other lawful `led` to fall back to."""
     led = led if led is not None else _served_led(dest)
     argv = (led, "register-principal", name, agent_class, "--purpose", purpose)
-    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"principal-row:{name}"
+    return CommandAct(argv=argv), f"principal-row:{name}"
 
 
 def grant_competence_act(dest: str, name: str, activity: str, band: str,
                           basis: str, led: str | None = None) -> tuple[CommandAct, str]:
     """`led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>"`
-    (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan act.
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan act. NO
+    `LED_ACTOR` override, matching `register_principal_act`'s own fix above and this module's
+    "AUTHORSHIP" note -- swept for consistency (not currently kernel-gated, but there is no
+    honest reason a competence grant inside this SAME ceremony would be attributed to a
+    different, non-chained principal than its sibling acts).
 
     legacy-led-retirement inventory pass (ledger row 1149): the gap this docstring used to name
     (`led principal grant-competence` NOT among served led.tmpl's rebased verbs at all) is
@@ -366,7 +405,7 @@ def grant_competence_act(dest: str, name: str, activity: str, band: str,
     led = led if led is not None else _served_led(dest)
     argv = (led, "principal", "grant-competence", name,
             "--activity", activity, "--band", band, "--basis", basis)
-    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"competence-row:{name}:{activity}"
+    return CommandAct(argv=argv), f"competence-row:{name}:{activity}"
 
 
 def relate_act(dest: str, subject: str, relation: str, obj: str,
@@ -374,10 +413,15 @@ def relate_act(dest: str, subject: str, relation: str, obj: str,
     """`led principal relate <subject> <relation> <object>`
     (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act -- see
     `grant_competence_act`'s own docstring, same reasoning, same verb family (`principal
-    relate`, now among served led.tmpl's rebased verbs, legacy-led-retirement inventory pass)."""
+    relate`, now among served led.tmpl's rebased verbs, legacy-led-retirement inventory pass).
+    NO `LED_ACTOR` override (this module's own "AUTHORSHIP" note): this is the act
+    kernel/lineage/s62-delegation-lifecycle-gating.sql's own header names as the real-world
+    hazard -- the founding "orchestrator acts-for maintainer" edge, previously authored as
+    commissioner (no chain), refused under s62's delegation_lifecycle gating; fixed the same way
+    as its siblings."""
     led = led if led is not None else _served_led(dest)
     argv = (led, "principal", "relate", subject, relation, obj)
-    return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"relation-row:{subject}:{relation}:{obj}"
+    return CommandAct(argv=argv), f"relation-row:{subject}:{relation}:{obj}"
 
 
 def charter_register_act(dest: str, role: str, path: str,
