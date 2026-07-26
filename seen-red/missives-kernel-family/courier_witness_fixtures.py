@@ -63,8 +63,22 @@ PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST") 
 PGDB = os.environ.get("HARNESS_PGDB", "toy")
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LINEAGE = os.path.join(REPO, "kernel", "lineage")
-COURIER = os.path.join(REPO, "courier")
+COURIER = os.path.join(REPO, "libexec", "autoharn", "courier")  # relocated 2026-07-26 by work
+# item courier-umbrella-rebase (ledger rows 1369/1370): courier now lives under
+# libexec/autoharn/, not the repo root -- this constant repointed, everything downstream reads
+# from it unchanged.
 SERVING = os.path.join(REPO, "serving")
+# FILING -- added 2026-07-26 by work item courier-umbrella-rebase (ledger rows 1369/1370):
+# the relocated courier now also imports filing/fixture_sandbox.py (the established
+# libexec/autoharn/* convention). The throwaway copies of courier's CURRENT body this fixture
+# writes to /tmp (_reverted_courier_no_batch_report, _completed_flag_broken_courier) no longer
+# sit next to serving/ OR filing/ on disk, so their own REPO_ROOT-relative sys.path.insert calls
+# resolve to nothing at runtime -- exactly the same reason SERVING is already injected via
+# PYTHONPATH below for those two throwaway invocations; FILING needs the identical treatment or
+# `import fixture_sandbox` raises ModuleNotFoundError in a copy this fixture itself constructed.
+# The historical 8a2d25e copy (_at_8a2d25e_courier) predates fixture_sandbox entirely and does
+# not need this.
+FILING = os.path.join(REPO, "filing")
 
 CHAIN = [
     "high_watermark_1.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -409,6 +423,18 @@ def _wait_up(port: int, path: str) -> None:
 
 def _run_courier(courier_path: str, toml_path: str) -> subprocess.CompletedProcess:
     env = dict(os.environ)
+    # FIXTURE-SANDBOX WAIVER (added 2026-07-26, work item courier-umbrella-rebase, ledger rows
+    # 1369/1370): the relocated courier now imports filing/fixture_sandbox.py (the established
+    # libexec/autoharn/* convention) and this WHOLE family's own run_fixtures.py sets
+    # AUTOHARN_FIXTURE_SANDBOX=1 unconditionally (inherited by every subprocess this file spawns,
+    # including this one) -- so every real courier invocation below would otherwise be refused.
+    # REVIEWED reason: courier here is always pointed at self_base/counterpart_base URLs this
+    # SAME fixture spins up itself (127.0.0.1 mock HTTP servers, see `_serve()`), never this
+    # repo's own live deployment.json -- exactly the "use-site reason to touch a repo-root verb
+    # directly" the waiver mechanism's own teach-text names as sanctioned.
+    env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = (
+        "courier_witness_fixtures.py: courier-toml points only at scratch 127.0.0.1 mock "
+        "boundaries this same fixture spawns and tears down, never the real deployment.json")
     return sh(["python3", courier_path, "--courier-toml", toml_path], env=env, cwd=REPO)
 
 
@@ -620,7 +646,14 @@ def all_accepted_batch_case() -> None:
         broken_path = "/tmp/mkf_courier_flagbroken.py"
         _completed_flag_broken_courier(broken_path)
         broken_env = dict(os.environ)
-        broken_env["PYTHONPATH"] = SERVING + os.pathsep + broken_env.get("PYTHONPATH", "")
+        broken_env["PYTHONPATH"] = (SERVING + os.pathsep + FILING
+                                     + os.pathsep + broken_env.get("PYTHONPATH", ""))
+        # Same fixture-sandbox waiver as `_run_courier` above -- this throwaway copy of
+        # courier's CURRENT body also imports fixture_sandbox and inherits the family's own
+        # AUTOHARN_FIXTURE_SANDBOX=1 marker; same reviewed reason (scratch mock boundaries only).
+        broken_env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = (
+            "courier_witness_fixtures.py: courier-toml points only at scratch 127.0.0.1 mock "
+            "boundaries this same fixture spawns and tears down, never the real deployment.json")
         cp = sh(["python3", broken_path, "--courier-toml", toml_loss], cwd=REPO, env=broken_env)
         red_out = cp.stdout + cp.stderr
         print("  RED (completed-flag broken) stdout+stderr:\n" +
@@ -727,7 +760,14 @@ def batch_witness_loss_case(schema: str, kern: str, role: str) -> None:
         red_path = "/tmp/mkf_courier_batch_reverted.py"
         _reverted_courier_no_batch_report(red_path)
         red_env = dict(os.environ)
-        red_env["PYTHONPATH"] = SERVING + os.pathsep + red_env.get("PYTHONPATH", "")
+        red_env["PYTHONPATH"] = (SERVING + os.pathsep + FILING
+                                  + os.pathsep + red_env.get("PYTHONPATH", ""))
+        # Same fixture-sandbox waiver as `_run_courier` above -- this throwaway copy of
+        # courier's CURRENT body also imports fixture_sandbox and inherits the family's own
+        # AUTOHARN_FIXTURE_SANDBOX=1 marker; same reviewed reason (scratch mock boundaries only).
+        red_env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = (
+            "courier_witness_fixtures.py: courier-toml points only at scratch 127.0.0.1 mock "
+            "boundaries this same fixture spawns and tears down, never the real deployment.json")
         cp = sh(["python3", red_path, "--courier-toml", toml_path], cwd=REPO, env=red_env)
         red_out = cp.stdout + cp.stderr
         print("  RED stdout+stderr:\n" + "\n".join(f"    {l}" for l in red_out.splitlines()))

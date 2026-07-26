@@ -8,7 +8,20 @@ seen-red/umbrella-cli-dispatch-parity fixture is out of this build's own declare
 named here rather than silently decided; a future pass may rebase this file into
 libexec/autoharn/courier the same way led/pickup/judge were, under its own commission).
 
-CONFIGURATION: courier.toml beside boundary-multiplex.toml (spec §5):
+(Dated note, 2026-07-26, work item courier-umbrella-rebase, autoharn ledger rows 1369/1370 --
+ADR-0005 Rule 8, appended, the paragraph above kept verbatim as history rather than rewritten:
+that future pass has now happened. This file has been rebased into libexec/autoharn/courier and
+IS now routed through the `./autoharn <verb>` umbrella dispatcher, wired into its dispatch table
+and the seen-red/umbrella-cli-dispatch-parity fixture, the same way led/pickup/judge were.
+Semantics, refusal texts, and exit codes are unchanged -- re-plumbing, not rewrite (umbrella spec
+§1 discipline). No root alias survives this move: the deprecation-window alias pattern was itself
+retired ahead of this rebase, row 1357 -- reach this verb via `./autoharn courier` or
+`libexec/autoharn/courier`, never a bare `./courier`.)
+
+CONFIGURATION: courier.toml beside boundary-multiplex.toml (spec §5), i.e. at the repo root --
+unchanged by the libexec/autoharn/ relocation above (this file's own directory is no longer the
+config directory; REPO_ROOT below, not HERE, anchors the default --courier-toml path and the
+courier.toml example's own location):
 
     [courier]
     authn = "single-operator"          # the NAMED EMPTY SLOT (row 1162) -- any other value
@@ -49,10 +62,22 @@ import sys
 import tomllib
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE / "serving"))
+# Relocated under libexec/autoharn/ by work item courier-umbrella-rebase (design/
+# FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §1/§6 discipline, ledger rows 1369/1370): this file's own
+# directory is now libexec/autoharn/, two levels below the repo root -- REPO_ROOT climbs three
+# parents (courier -> libexec/autoharn -> libexec -> repo root), matching the same arithmetic
+# already used by libexec/autoharn/attest-tags's own _REPO_ROOT. Both the boundary_cli_client
+# import (serving/) and the default courier.toml location (repo root, beside
+# boundary-multiplex.toml) anchor off REPO_ROOT now, not this file's own directory.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT / "serving"))
+sys.path.insert(0, str(REPO_ROOT / "filing"))
 
 import boundary_cli_client as bcc  # noqa: E402
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, design/FABLE-FIXTURE-SANDBOX-
+# RUNTIME-FORECLOSURE-SPEC.md §2 -- the established libexec/autoharn/* convention for a Python
+# repo-root verb entry point, same call shape as libexec/autoharn/attest-tags and
+# libexec/autoharn-service.)
 
 
 class CourierConfigError(Exception):
@@ -276,13 +301,26 @@ def _print_batch_report(counterpart: str, outcomes: list[str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = sys.argv[1:] if argv is None else argv
+    # FIXTURE SANDBOX FORECLOSURE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §2):
+    # called at the top of main(), before anything else, matching the established
+    # libexec/autoharn/* convention (attest-tags, autoharn-service). Strict two-token exemption:
+    # the WHOLE invocation must be exactly one argument, --help or -h -- not a loose
+    # argv[0]-based test (autoharn-service's own review history: a loose test both ignored
+    # trailing tokens and returned before check() ever ran) -- a bare `--courier-toml PATH` run,
+    # or any other real invocation, is never exempt.
+    strict_help = len(raw_argv) == 1 and raw_argv[0] in ("--help", "-h")
+    if not strict_help:
+        fixture_sandbox.check("libexec/autoharn/courier " + " ".join(raw_argv))
+
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--courier-toml", default=None,
-                    help="path to courier.toml (default: beside this script)")
-    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+                    help="path to courier.toml (default: beside boundary-multiplex.toml at the "
+                         "repo root)")
+    args = ap.parse_args(raw_argv)
 
-    toml_path = Path(args.courier_toml) if args.courier_toml else HERE / "courier.toml"
+    toml_path = Path(args.courier_toml) if args.courier_toml else REPO_ROOT / "courier.toml"
     try:
         cfg = load_courier_config(toml_path)
     except CourierConfigError as e:

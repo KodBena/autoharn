@@ -118,6 +118,14 @@ never part of this transition — each is a standalone verb with its own documen
 living outside the `./autoharn` dispatcher (see each file's own header), not a one-line alias
 shim, and this pruning leaves them untouched.)*
 
+*(Further dated note, 2026-07-26, work item courier-umbrella-rebase, ledger rows 1369/1370 —
+ADR-0005 Rule 8, appended, the paragraph above kept as the point-in-time record of this exact
+root-shim-pruning event: `courier` no longer stands in the "untouched" list above. It has since
+been rebased into `libexec/autoharn/courier` and wired into this dispatcher's own dispatch
+table — the same relocation this build already gave led/pickup/judge, under its own commission
+as this section's §1 discussion always anticipated. `extract-context`, `orchlog`, `otel-attest`,
+and `otel-watch` remain untouched, unaffected by this note.)*
+
 ### §6 AMENDMENT (2026-07-26, rows 1357/1365) — the scaffold clause executes; no shims for worlds
 
 The maintainer's rulings: the alias-shim removal schedule above is INVERTED (pruning

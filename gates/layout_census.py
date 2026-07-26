@@ -80,6 +80,15 @@ ROOT_FILES = {
     # attest-tags — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered
     # here rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
     # `autoharn attest-tags` / libexec/autoharn/attest-tags.
+    # courier — RELOCATED 2026-07-26 by work item courier-umbrella-rebase (ledger rows
+    # 1369/1370) from an UNREGISTERED root file (one of this gate's own three disclosed
+    # pre-existing breaches at the time) into libexec/autoharn/courier; reached now via
+    # `autoharn courier` / libexec/autoharn/courier. No ROOT_FILES entry is needed going
+    # forward — the file no longer lives at the repo root at all, so there is nothing left
+    # for this registry to track (unlike the DELETED verbs above, which are one-line
+    # comment-only history because their functionality survives under libexec/autoharn/; same
+    # shape here, the difference being courier was never a registered breach-free entry to
+    # begin with).
     # extract-context — the mechanized world-context extraction verb (FABLE-WORLD-CONTEXT-
     # MIGRATION-CONSULT-2026-07-19.md; autoharn ledger row 1942 step 1). Repo-root style shim
     # like led/judge/pickup/audit/distance-to-clean/attest-tags above, but not scaffolded into
