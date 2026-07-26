@@ -45,17 +45,30 @@ against toy@192.168.122.1, 2026-07-26, exit 0):
      commissioner/write-boundary), a bad agent_class, and a discrete flag AND --features-file
      both setting the same decision (ambiguity, never silently resolved one way).
 
-Two real defects this fixture's own build caught and fixed before banking (named per this
-project's own "claims carry witnesses" discipline, not silently smoothed over):
+THREE real defects this fixture's own build caught and fixed before banking (named per this
+project's own "claims carry witnesses" discipline, not silently smoothed over -- the third is
+the more instructive one: a fix that LOOKED like it worked, on this fixture's own first honest
+green run, until a separate manual process-residue audit caught it):
   - `git clone --local` (no `--no-hardlinks`) fails outright ("Invalid cross-device link")
     whenever <dest-dir> is on a different filesystem/mount than the autoharn checkout --
     witnessed live against a /tmp scratch dest. Fixed: `--no-hardlinks` added (still zero-
     network; forces a real copy instead of a hardlink attempt).
   - `led register-principal` (case 5) auto-spawns the boundary service (ensure-running) -- a
-    live process outliving the fixture's own scope unless explicitly stopped. Fixed: the
-    fixture's own teardown calls `autoharn service stop` (cwd=dest) BEFORE dropping the schema/
-    role, so nothing is torn out from under a still-running child, and no boundary process is
-    left behind (checked live: process gone after teardown).
+    live process outliving the fixture's own scope unless explicitly stopped.
+  - FIRST FIX ATTEMPT WAS WRONG, AND THE FIXTURE DID NOT CATCH IT: `autoharn service stop`
+    called with `cwd=dest` (reasoning: "it must resolve the target from its own directory,
+    like the scaffolded shims do") APPEARED to work -- exit 0, no assertion on it, fixture
+    reported "zero residue". A separate manual `pgrep -af boundary_service` audit, run AFTER
+    this fixture's own "all cases PASS" line, found FOUR orphaned boundary_service processes
+    still running (two from this fixture's own earlier case-5 runs, two from a sibling
+    fixture's own live-birth case) -- `libexec/autoharn-service`'s own `DEPLOYMENT_PATH`
+    resolves from the `PICKUP_DEPLOYMENT` ENV VAR (defaulting to THIS AUTOHARN CHECKOUT'S OWN
+    deployment.json), never from cwd -- so the "stop" call was silently stopping nothing
+    (refusing against the wrong, autoharn-root deployment) while a real orphan kept running
+    at the scratch world's own port. FIXED: `PICKUP_DEPLOYMENT=<dest>/deployment.json` passed
+    as an explicit env var, AND the fixture now asserts the stop call's own exit code and
+    output (case5's own new "boundary service stopped" row) instead of trusting silence --
+    re-run live: the specific pid is confirmed gone via `pgrep` immediately after.
 
 Full fixture transcript (seen-red/deploy-feature-manifest/run_fixtures.py, live run against
 toy@192.168.122.1, 2026-07-26, exit 0):
@@ -83,10 +96,11 @@ case4 refusal names the real reason (no kernel lineage): PASS -- new-project.sh:
                 tracker) -- there is no principal table yet to register into. Nothing
                 touched.
 case4 nothing written (dest never created): PASS
-case5 scaffold exit: PASS -- exit 0 (kernel lineage NOTICE-level skips, harmless; boundary auto-spawn line: "led: boundary at http://127.0.0.1:8423 was unreachable -- spawned it (pid 837563, ...); proceeding.")
+case5 scaffold exit: PASS -- exit 0 (kernel lineage NOTICE-level skips, harmless; boundary auto-spawn line: "led: boundary at http://127.0.0.1:8420 was unreachable -- spawned it (pid 839778, ...); proceeding.")
 case5 register-principal-set.sh written: PASS
 case5 stdout reports live WITNESSED application: PASS
 case5 real ledger row exists for the declared principal: PASS -- principal 'orchestrator-fixture' registered (class model)
+case5 boundary service stopped (autoharn service stop): PASS -- exit 0: autoharn service: sent SIGTERM to pid 839778 (was serving http://127.0.0.1:8420); pidfile removed.
 case6 (unknown key) REFUSED: PASS -- exit 1
 case6 (unknown key) names the problem: PASS -- new-project.sh: --features-file '<tmp>/case6-unknown-key.json' REFUSED -- unknown key(s) (closed schema): not_a_real_key
 case6 (unknown key) nothing written: PASS

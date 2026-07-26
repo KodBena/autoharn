@@ -207,13 +207,20 @@ def case_principal_set_live(scratch: str) -> None:
     finally:
         # This case's own `led register-principal` call auto-spawns the boundary service
         # (ensure-running) -- a live process outliving this function's own scope unless
-        # explicitly stopped first. `autoharn service stop` (serving/ensure_running.py's own
-        # pidfile-tracked, /proc-reconciled stop path) is the real verb for this, run from
-        # INSIDE `dest` (it resolves the pidfile relative to deployment.json there) -- run
-        # BEFORE the schema/role teardown and the directory removal, so nothing is torn out
-        # from under a still-running child.
-        subprocess.run([os.path.join(REPO, "autoharn"), "service", "stop"], cwd=dest,
-                        capture_output=True, text=True, timeout=30)
+        # explicitly stopped first. `autoharn service stop` (libexec/autoharn-service's own
+        # pidfile-tracked, /proc-reconciled stop path) is the real verb for this -- it resolves
+        # ITS TARGET DEPLOYMENT FROM `PICKUP_DEPLOYMENT`, NEVER from cwd (libexec/autoharn-
+        # service's own `DEPLOYMENT_PATH` -- verified live: passing `cwd=dest` alone, the first
+        # draft of this fix, silently targeted THIS AUTOHARN CHECKOUT'S OWN deployment.json
+        # instead and left the scratch world's boundary service running, an orphaned process
+        # this fixture's own residue check did not catch until a later manual audit). Run BEFORE
+        # the schema/role teardown and the directory removal, so nothing is torn out from under
+        # a still-running child.
+        stop_cp = subprocess.run([os.path.join(REPO, "autoharn"), "service", "stop"],
+                                  env={**os.environ, "PICKUP_DEPLOYMENT": os.path.join(dest, "deployment.json")},
+                                  capture_output=True, text=True, timeout=30)
+        check("case5 boundary service stopped (autoharn service stop)", stop_cp.returncode == 0,
+              f"exit {stop_cp.returncode}: {stop_cp.stdout}{stop_cp.stderr}")
         teardown(world)
         shutil.rmtree(dest, ignore_errors=True)
 
