@@ -96,6 +96,7 @@ Lazy imports banned.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -117,6 +118,20 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 VERIFY_CHAIN_TMPL = REPO / "bootstrap" / "templates" / "verify-chain.tmpl"
+
+# cluster-1 fixture-repairs (ledger row 1459): the served `led` shim now unconditionally refuses
+# a deployment.json missing boundary_url/boundary_deployment -- scaffold()'s own `led decision`
+# writes below drive the real dispatcher, so each --new-world scaffold needs a real
+# boundary_service standing over it (the --new-world scaffold already applies the FULL current
+# lineage, s43 included, so this is a pure wiring gap). REUSE (ADR-0012 P1) serve_existing_world
+# -- same pattern seen-red/s26-row-hash-chain/run_fixtures.py (this family's own sibling) already
+# established.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST, PGDB = fixture_pghost(), "toy"
 WORLD_INTERIOR = "s26delfxint"
@@ -150,7 +165,16 @@ def run_verify_chain(world_dir: Path, *extra: str) -> subprocess.CompletedProces
     return sh(["python3", str(VERIFY_CHAIN_TMPL), *extra], env=env)
 
 
-def scaffold(world_dir: Path, world: str, n_rows: int) -> None:
+def scaffold(world_dir: Path, world: str, n_rows: int, tmpdir: Path) -> tuple[object, int]:
+    """Returns (boundary_service proc, birth_row_count) -- birth_row_count is BASELINED, not
+    assumed zero (cluster-1 fixture-repairs, ledger row 1459 aftermath): now that this fixture's
+    `led decision` writes actually reach the kernel (the served boundary requires the s43 write
+    boundary, which --new-world applies automatically), the s40/s43 birth sequence's own rows
+    (author registration + standing declarations + reviewer/write-boundary registrations) land
+    BEFORE this function's n_rows writes -- the exact reason seen-red/s26-row-hash-chain/
+    run_fixtures.py's own case b already baselines against the world's ACTUAL pre-existing row
+    count rather than a hardcoded n_rows (see that file's own comment). This function's callers
+    do the same, for the same reason."""
     r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
             "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
@@ -162,11 +186,15 @@ def scaffold(world_dir: Path, world: str, n_rows: int) -> None:
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmpdir)
+    birth_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
+                          f"SELECT count(*) FROM {world}.ledger;"]).stdout.strip())
     for i in range(1, n_rows + 1):
         rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision",
                  f"row {i} of {n_rows}, via led"], cwd=str(world_dir))
         if rl.returncode != 0:
             raise RuntimeError(f"led write FAILED ({world}, row {i}): {rl.stdout} {rl.stderr}")
+    return proc, birth_count
 
 
 def delete_row(schema: str, row_id: str) -> None:
@@ -202,17 +230,20 @@ def main() -> int:
     teardown_all()
     tmp = Path(tempfile.mkdtemp(prefix="s26del-seenred-"))
     failures: list[str] = []
+    procs: list = []
 
     try:
         # --- world 1: interior deletion --------------------------------------------------------
         world_dir_i = tmp / WORLD_INTERIOR
         print(f"== scaffolding throwaway --new-world {WORLD_INTERIOR} (4 rows) ==")
-        scaffold(world_dir_i, WORLD_INTERIOR, 4)
+        proc_i, birth_i = scaffold(world_dir_i, WORLD_INTERIOR, 4, tmp)
+        procs.append(proc_i)
 
         # --- a: intact baseline, BEFORE any deletion --------------------------------------------
         ra = run_verify_chain(world_dir_i)
-        ok_a = ra.returncode == 0 and ra.stdout.startswith("verify-chain: INTACT -- 4 row(s)")
-        check("a-intact-baseline", ok_a, ra.stdout.strip(), failures)
+        ok_a = (ra.returncode == 0
+                and ra.stdout.startswith(f"verify-chain: INTACT -- {birth_i + 4} row(s)"))
+        check("a-intact-baseline", ok_a, f"birth_count={birth_i} {ra.stdout.strip()}", failures)
 
         # --- b: delete row 2 of 4 (interior -- rows 1, 3, 4 survive) -----------------------------
         second_id = nth_id(WORLD_INTERIOR, 2)
@@ -232,20 +263,23 @@ def main() -> int:
         # --- world 2: tail deletion --------------------------------------------------------------
         world_dir_t = tmp / WORLD_TAIL
         print(f"== scaffolding throwaway --new-world {WORLD_TAIL} (3 rows) ==")
-        scaffold(world_dir_t, WORLD_TAIL, 3)
+        proc_t, birth_t = scaffold(world_dir_t, WORLD_TAIL, 3, tmp)
+        procs.append(proc_t)
         _, last_id = first_and_last_ids(WORLD_TAIL)
         delete_row(WORLD_TAIL, last_id)
         rc = run_verify_chain(world_dir_t)
         # EXPECTED (empirically, not assumed; updated 2026-07-13 for the s27 era -- see module
-        # docstring case c): the row_hash chain itself still reports INTACT over the now-2-row
-        # chain -- no later row's predecessor lookup depended on the deleted tail row's hash, so
-        # the chain mechanism alone still cannot see the gap, unchanged. But `--new-world` now
-        # applies s27 automatically, and s27's own high-water witness DOES see it: `./verify-chain`
-        # exits 3 (TAIL-DELETION-SUSPECT), never plain exit-0 INTACT. Both halves are asserted:
-        # the chain-alone limit (still real, still named) AND the tool-level closure (s27 caught
-        # it) -- PASS here means "the current, honest truth holds", not "no gap exists anywhere".
+        # docstring case c): the row_hash chain itself still reports INTACT over the now-(birth_t
+        # + 3 - 1)-row chain (birth_t baselined per scaffold()'s own docstring, cluster-1
+        # fixture-repairs aftermath -- the s40/s43 birth sequence's rows now land for real) -- no
+        # later row's predecessor lookup depended on the deleted tail row's hash, so the chain
+        # mechanism alone still cannot see the gap, unchanged. But `--new-world` now applies s27
+        # automatically, and s27's own high-water witness DOES see it: `./verify-chain` exits 3
+        # (TAIL-DELETION-SUSPECT), never plain exit-0 INTACT. Both halves are asserted: the
+        # chain-alone limit (still real, still named) AND the tool-level closure (s27 caught it)
+        # -- PASS here means "the current, honest truth holds", not "no gap exists anywhere".
         ok_c = (rc.returncode == 3
-                and "verify-chain: INTACT -- 2 row(s)" in rc.stdout
+                and f"verify-chain: INTACT -- {birth_t + 3 - 1} row(s)" in rc.stdout
                 and "TAIL-DELETION-SUSPECT" in rc.stdout)
         check("c-tail-deletion-not-detected", ok_c,
               f"deleted the tail row id={last_id}; verify-chain over the now-shorter chain: "
@@ -257,6 +291,8 @@ def main() -> int:
               f"a defect this fixture papers over", failures)
 
     finally:
+        for p_ in procs:
+            bs_fixtures.stop_server(p_)
         teardown_all()
         shutil.rmtree(tmp, ignore_errors=True)
 

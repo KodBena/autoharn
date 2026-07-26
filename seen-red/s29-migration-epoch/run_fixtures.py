@@ -35,6 +35,7 @@ Usage: python3 seen-red/s29-migration-epoch/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -51,6 +52,20 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+
+# cluster-1 fixture-repairs (ledger row 1459): the served `led` shim now unconditionally refuses
+# a deployment.json missing boundary_url/boundary_deployment -- the epoch-zero-fresh-world case
+# below drives real `led work open/claim/close` through the real dispatcher, so it needs a real
+# boundary_service standing over its own --new-world scaffold (which already applies the FULL
+# current lineage, s43 included, so this is a pure wiring gap, not a lineage gap). REUSE
+# (ADR-0012 P1) serve_existing_world -- same pattern seen-red/s26-row-hash-chain/run_fixtures.py
+# already established.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 S29 = REPO / "kernel" / "lineage" / "s29-obligation-item-key-and-typed-close.sql"
 S15_TO_S28 = [
     "s15-schema.sql", "s17-stamp-mechanism.sql", "s17-independence-vocabulary.sql",
@@ -97,6 +112,7 @@ def main() -> int:
     teardown_all()
     failures: list[str] = []
     tmps: list[Path] = []
+    procs: list = []
     try:
         # --- s15..s28 onto a scratch pair, mirroring this file's own VALIDATE recipe ------------
         schema, kern, role = WORLD, f"{WORLD}_kernel", f"{WORLD}_rw"
@@ -212,6 +228,7 @@ def main() -> int:
             p = world_dir / verb
             if p.exists():
                 p.chmod(0o755)
+        procs.append(bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp))
         dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
         fschema, fkern = dep["schema"], dep["kern"]
         fresh_epoch = psql(["-tA", "-c", f"SELECT epoch FROM {fkern}.migration_epoch;"]).stdout.strip()
@@ -229,6 +246,8 @@ def main() -> int:
               f"excerpt={out_j.strip()[-250:]!r}", failures)
 
     finally:
+        for p in procs:
+            bs_fixtures.stop_server(p)
         teardown_all()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
