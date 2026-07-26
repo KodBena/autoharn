@@ -51,7 +51,7 @@ import targets
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
 from pghost_resolve import resolve_pghost  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
 
-PGHOST = resolve_pghost("EPISTEMIC_PGHOST")  # unchanged precedence -- this module never checked HARNESS_PGHOST
+PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")  # row 1383: was EPISTEMIC_PGHOST-only, now matches every other caller's precedence
 FS, RS = "\x1f", "\x1e"
 
 # The fact families a logic engine may consume, and the capability each requires. This

@@ -116,6 +116,7 @@ uses for its own `principal_registered` scan.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -208,10 +209,24 @@ def validate_name_charset(name: str) -> None:
 
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
+    """row 1384 (dispatch-principal-run-led-shlex): mirrors the shape tools/role_charter.py's
+    and tools/role_brief.py's own run_led already carry (this fix round's confirming review,
+    finding 2, three prior homes) -- `led` is shlex-split as a multi-token argv prefix (a
+    caller-supplied `--led "python3 wrapper.py"` used to fail as one literal filename before
+    this fix), an empty/whitespace `led` is refused before any subprocess is attempted rather
+    than silently exec'ing args[0] as the program, and a shlex.split ValueError (malformed
+    shell quoting) is a named, teaching refusal rather than an uncaught traceback. Same class,
+    fourth home."""
+    if not led.strip():
+        return 127, "", "--led value is empty/whitespace -- refusing rather than executing args[0] as the program."
     try:
-        proc = subprocess.run([led] + args, capture_output=True, text=True)
-    except OSError as exc:
-        return 127, "", f"could not execute '{led}': {exc}"
+        led_argv = shlex.split(led)
+    except ValueError as exc:
+        return 127, "", f"--led value {led!r} is malformed shell quoting: {exc}"
+    try:
+        proc = subprocess.run(led_argv + args, capture_output=True, text=True)
+    except OSError as exc:  # a wrong --led path -- expected-shape failure, never an uncaught traceback
+        return 127, "", f"could not execute --led {led!r} (cwd={os.getcwd()}): {exc}"
     return proc.returncode, proc.stdout, proc.stderr
 
 

@@ -127,6 +127,14 @@ def _merge_diff_paths() -> set[str] | None:
         an incidentally-touched path (a real gap this guard would otherwise miss: a path legitimately
         touched on one side since divergence, with its staged content silently swapped for something
         else during the merge window — content-blind path-set confinement alone cannot see this).
+        DELETION CAVEAT (staging-guard-merge-deletion-blindspot, row 1375): when the touched side
+        DELETED the path, that side has no blob at all — `_blob_hash` returns None for a path
+        absent at a rev, which is the honest "the file doesn't exist there" answer, not a smuggle.
+        git's own merge machinery applies a one-sided deletion directly (nothing to conflict on),
+        so the staged index for that path is likewise absent. The permitted check below treats
+        "deleted on the touched side, absent in the staged index" as the matching, legitimate case
+        — the same equality check as content, just at the "no blob" value — and only a deletion
+        whose path is STILL staged (content resurrected/swapped in) is left out as the real smuggle.
     Returns None if MERGE_HEAD or the merge base cannot be resolved (caller must then refuse to
     exempt anything — fail-safe, never a silent full-sweep pass)."""
     head = subprocess.run(["git", "rev-parse", "-q", "--verify", "HEAD"],
@@ -155,11 +163,22 @@ def _merge_diff_paths() -> set[str] | None:
         rev = "MERGE_HEAD" if path in incoming else "HEAD"
         expected = _blob_hash(rev, path)
         staged = _blob_hash(None, path)
-        if expected is not None and staged == expected:
-            permitted.add(path)
-        # else: staged content deviates from the untouched side's own version -- NOT part of git's
-        # own merge machinery, left OUT of `permitted` deliberately (caught by the caller's smuggle
-        # check below, unless separately declared via CLAUDE_COMMIT_PATHS)
+        if expected is not None:
+            if staged == expected:
+                permitted.add(path)
+            # else: staged content deviates from the untouched side's own version -- NOT part of
+            # git's own merge machinery, left OUT of `permitted` deliberately (caught by the
+            # caller's smuggle check below, unless separately declared via CLAUDE_COMMIT_PATHS)
+        else:
+            # the touched side DELETED this path (no blob exists there at all) -- a one-sided
+            # deletion never conflicts, git's own merge machinery applies it directly, so the
+            # staged index for this path is likewise absent (staged is None too). That is the
+            # legitimate, matching case (row 1375's deletion caveat). If the path is somehow
+            # STILL staged despite the touched side deleting it, that is content resurrected/
+            # swapped in during the merge window -- not git's own machinery -- left OUT of
+            # `permitted` on purpose, same as the content-swap case above.
+            if staged is None:
+                permitted.add(path)
     return permitted
 
 
@@ -192,9 +211,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  SMUGGLED — staged, not in the merge diff, not declared via "
                   f"CLAUDE_COMMIT_PATHS: {smuggled}", file=sys.stderr)
             print("  A genuine conflict-resolution edit is always inside the merge diff (it can only "
-                  "conflict on a path touched by both sides). If this path is legitimately part of "
-                  "this merge, declare it explicitly via CLAUDE_COMMIT_PATHS; if it is unrelated, "
-                  "unstage it and commit it separately.", file=sys.stderr)
+                  "conflict on a path touched by both sides); a path one side plainly DELETED is "
+                  "likewise inside the merge diff (row 1375: absence-on-that-side, absence-in-the-"
+                  "staged-index is the legitimate match, not a smuggle). If this path is legitimately "
+                  "part of this merge, declare it explicitly via CLAUDE_COMMIT_PATHS; if it is "
+                  "unrelated, unstage it and commit it separately.", file=sys.stderr)
             return 1
         print("STAGING GUARD: OK — merge commit in progress (MERGE_HEAD present); staged set is "
               "confined to the merge's own changed-file set (escape hatch 2, "
