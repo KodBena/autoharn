@@ -1,16 +1,19 @@
 -- s63 SUPERSESSION-BODY RESTORATION (design/FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC.md,
 -- Fable-authored, ledger rows 1429/1430 -- the sweep that surfaced the finding and the
 -- witnessed finding itself). FAIL-SAFE-ADDITIVE ON THE MERITS (CLAUDE.md 2026-07-09 class rule)
--- BUT ROUTED FOR A MAINTAINER YES/NO ANYWAY (spec §5): this delta restores four refusal
+-- -- ROUTING RESOLVED (spec §5, 2026-07-26, ledger row 1434): this delta restores four refusal
 -- branches that were live at s58 head and silently deleted by s61 Element 7's stale-base
 -- `CREATE OR REPLACE`; read literally against CURRENT head it only ADDS refusals (nothing
 -- currently permitted becomes newly refused), but because the branches it adds were DROPPED by
 -- an unratified accident rather than never having existed, the class-ratified fail-safe-additive
--- family's own "doubt about which side a delta falls on IS the routing" clause applies, and this
--- spec asks the maintainer explicitly rather than self-certifying the fail-safe class. This file
--- may be built and scratch-witnessed immediately (spec Status); MERGE into any birth chain
--- (bootstrap/new-project.sh's LINEAGE_CHAIN narrative) waits on that answer and is NOT done by
--- this commit.
+-- family's own "doubt about which side a delta falls on IS the routing" clause applied, and the
+-- spec asked the maintainer explicitly rather than self-certifying the fail-safe class -- the
+-- maintainer DELEGATED the call (row 1434), and the resolution is: s63 RIDES THE CLASS (it
+-- permits nothing new, returning the kernel to what s53/s58 already ratified; restoration rides
+-- the class only when the drop itself is on the record as an accident, here row 1430 -- spec §5's
+-- own cabining). This file was built and scratch-witnessed under the prior (open-question)
+-- status; the routing question is now closed, and this header reflects the closed status, not
+-- the state at authoring time.
 --
 -- THE DEFECT BEING REPAIRED (spec §1, zero-context): `validate_supersession_target`'s re-issue
 -- chain for the function this file re-issues is s43 (first definer) -> s45 (Element 4, standing-
@@ -50,9 +53,12 @@
 -- missive_regards) is s58's own Element 5 widening, required verbatim to feed the restored
 -- missive/belief branches -- s61's narrower three-column SELECT is superseded by this wider one
 -- exactly as s58 itself already established it should be. gates/lineage_reissue_lineage.py
--- (this same commit) mechanizes the class this delta closes: a re-issue's own header must name
--- its TRUE immediately-prior re-issue, so the "base = s45" class of stale citation fails loudly
--- at review time going forward, never silently at CREATE OR REPLACE time.
+-- (this same commit) DETECTS the class this delta closes when it is run: a re-issue's own header
+-- must name its TRUE immediately-prior re-issue and hash-bind that prior's body, or the gate
+-- reports the violation loudly. Stated honestly, not as an umbrella claim: this gate is not, as
+-- of this commit, wired into any enforcement path (not hooks/pre-commit, no other invocation
+-- site) -- it must be run explicitly to catch anything; wiring it into a standing enforcement
+-- surface is a separate maintainer-batch hooks/ change, tracked apart from this delta.
 --
 -- PREREQUISITE: this delta REQUIRES s62 (kernel/lineage/s62-delegation-lifecycle-gating.sql)
 -- applied first -- it re-issues `validate_supersession_target` in the exact shape s61 left it
@@ -66,8 +72,10 @@
 --
 -- REAL: NEVER applied to any existing world by this authoring act (runs-are-strictly-linear,
 -- 2026-07-11). Enters a FUTURE world's birth chain via bootstrap/new-project.sh's LINEAGE_CHAIN
--- at the maintainer's own future integration act, gated on the spec §5 routing answer -- this
--- file sits in kernel/lineage/ as a tracked, scratch-witnessed delta from its first commit
+-- at the maintainer's own future integration act -- the ROUTING question (spec §5) is resolved
+-- (row 1434, fail-safe-additive class), but wiring a delta into a REAL deployment's birth chain
+-- is a separate, later maintainer act on that deployment's own scaffold, per runs-are-linear;
+-- this file sits in kernel/lineage/ as a tracked, scratch-witnessed delta from its first commit
 -- onward (bootstrap/new-project.sh's --new-world apply LOOP is glob-driven and N-thresholded,
 -- not ratification-gated, so it picks this file up automatically on any --new-world run against
 -- a tree that carries it -- exactly the mechanism this build's own scratch witness relies on;
@@ -223,8 +231,9 @@ COMMENT ON FUNCTION :"schema".validate_supersession_target() IS
 --   -- see this build's own report for the exact diff invocation and its empty (byte-identical)
 --   output; the two block extractions above are pinned to fixed line ranges precisely so the
 --   diff is mechanical, not eyeballed.
--- REAL: NEVER applied to any existing world by this authoring act. Enters a future world's
--- birth chain only after the spec §5 routing answer and the maintainer's own LINEAGE_CHAIN
--- integration act.
+-- REAL: NEVER applied to any existing world by this authoring act. The spec §5 routing question
+-- is RESOLVED (row 1434, fail-safe-additive class); this delta still enters any REAL
+-- deployment's birth chain only via that deployment's own future maintainer LINEAGE_CHAIN
+-- integration act (runs-are-linear).
 -- Run as the schema owner (bork). Idempotent (CREATE OR REPLACE FUNCTION; DROP/CREATE TRIGGER).
 -- ============================================================================================

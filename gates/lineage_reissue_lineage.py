@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-r"""lineage_reissue_lineage -- mechanizes the class behind the s61 defect (ledger row 1430,
-s63's own commission, design/FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC.md §3): a
+r"""lineage_reissue_lineage -- a mechanical DETECTOR for the class behind the s61 defect (ledger
+row 1430, s63's own commission, design/FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC.md §3; see
+ENFORCEMENT STATUS below for what "mechanical" does and does not mean here): a
 `kernel/lineage/sNN-*.sql` delta that RE-ISSUES (`CREATE OR REPLACE FUNCTION`) a function some
 EARLIER delta already defined, but names the WRONG prior re-issue as its base -- silently
 dropping every branch the true immediately-prior re-issue had added since. s61 Element 7
@@ -41,20 +42,16 @@ s43-typed-verdict-write-boundary.sql's own PREREQUISITE paragraph, "matching eve
 PREREQUISITE precedent") and formalized as THE HEAD-BODY RULE at s45 ("spec §2, the builder's own
 most important standing instruction... For EVERY object this delta re-issues, the base body is
 the LINEAGE HEAD's declaration at build time") -- s43 is this gate's own asserted law for where
-enforcement begins, matching lineage_chain_coverage.py's own MIN_N precedent for the identical
-reason (a threshold below which a hand-authored convention this gate wants to police did not yet
-exist to violate). A retroactive citation-repair sweep of the pre-s43 files is explicitly NOT
+detection begins, matching lineage_chain_coverage.py's own MIN_N precedent (a threshold below
+which a hand-authored convention this gate wants to check did not yet exist to violate). A
+retroactive citation-repair sweep of the pre-s43 files is explicitly NOT
 this gate's job (ADR-0000: "no retroactive sweep... not a license to roam the tree re-typing
 existing code" / ADR-0005 Rule 8: frozen records are not retro-edited) -- filed here as a named,
 disclosed gap, not silently patched over.
 
-HEADER-BLOCK EXTRACTION (the mechanism, anchored, never a bare whole-file substring scan): a
-re-issue's citation is searched in the UNION of two bounded windows, never the whole file (the
-whole-file scan considered first and rejected: the write_refused/standing-lifecycle blocks s45
-through s61 all carry FORWARD, byte-identical, verbatim RAISE EXCEPTION text that cites s43/s45
-by name regardless of which delta is actually re-issuing them -- a bare substring scan for "s58"
-would have returned a false pass on s61 for a wholly unrelated reason, since s58's own number
-never appears anywhere else in s61's file at all).
+HEADER-BLOCK EXTRACTION (the mechanism, anchored, never a bare whole-file substring scan -- see
+THE INVARIANT above for why a whole-file scan was rejected): a re-issue's citation is searched in
+the UNION of two bounded windows, never the whole file.
   (1) THE LOCAL ELEMENT WINDOW: walking BACKWARD from the `CREATE (OR REPLACE) FUNCTION` line,
       collect contiguous `--`-prefixed comment lines, stopping (inclusive) at the first line
       matching `^--\s*ELEMENT\s+\d+\b` (this project's own established per-object header marker
@@ -95,17 +92,15 @@ extractor cannot parse (no dollar-quote pair found, or the closing tag never rec
 FAILURE, never a silent skip** -- reported as its own violation category, per spec §3 item 2's
 explicit instruction.
 
-MIN_N_HASH = 63 -- check 2's OWN threshold, separate from check 1's MIN_N=43 and NAMED for the
-same reason (ADR-0000 Rule 2a: a deliberately-uncovered axis is disclosed, not silently gapped).
-The `-- prior-body-sha256:` line is a brand-new convention this very spec amendment invents
-(design/FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC.md §3 item 2, maintainer-approved
-2026-07-26) -- verified empirically (this gate's own first run against real history with check 2
-unconditional): every tracked re-issue at N in [43, 62] fails check 2 purely because the
-convention did not exist when it was authored, not because any of them names a stale base (their
-citations, check 1, are already clean). The spec's own words settle where enforcement starts:
-"s63 itself is the first conforming instance." Retroactively demanding the line from s43-s62's
-own re-issues would be exactly the retroactive-sweep ADR-0000 and ADR-0005 Rule 8 both reject,
-applied to check 2 the identical way MIN_N=43 already applies it to check 1.
+MIN_N_HASH = 63 -- check 2's OWN threshold, separate from check 1's MIN_N=43, NAMED for the same
+reason (ADR-0000 Rule 2a: a deliberately-uncovered axis is disclosed, not silently gapped). The
+`-- prior-body-sha256:` line is a brand-new convention this very spec amendment invents (spec §3
+item 2, maintainer-approved 2026-07-26) -- verified empirically: every tracked re-issue at N in
+[43, 62] fails check 2 purely because the convention did not exist when authored (their check-1
+citations are already clean). The spec's own words settle where checking starts: "s63 itself is
+the first conforming instance." Retroactively demanding the line from s43-s62 would be the same
+retroactive sweep ADR-0000/ADR-0005 Rule 8 reject, applied to check 2 as MIN_N=43 applies it to
+check 1.
 
 GRANDFATHER WAIVER (spec §3, explicit and dated, BOTH checks): s61 Element 7's own header is
 EXEMPTED here by name -- the defect is already on the permanent record (ledger row 1430, this
@@ -122,6 +117,12 @@ same gates-staged-vs-tree-blindness discipline every other content-checking gate
 follows, ledger row 1234); `--tree` forces the working-tree read. The tracked file SET comes from
 `git ls-files kernel/lineage/` (the same primitive gates/lineage_chain_coverage.py uses), never an
 `os.listdir` sweep, so an untracked scratch file can never manufacture a false violation.
+
+ENFORCEMENT STATUS (stated honestly, no umbrella claim): this gate DETECTS the class when it is
+RUN -- it is not, as of this commit, wired into hooks/pre-commit or any other invocation site, so
+nothing runs it automatically today. Wiring it into a standing enforcement surface is a
+maintainer-batch hooks/ change, tracked separately from this delta (the standing rule against
+touching hooks/ during a live session applies here the same as everywhere else in this repo).
 
 Exit 0 clean; exit 1 listing every mis-cited re-issue, teaching the exact file and function.
 Lazy imports are banned.
