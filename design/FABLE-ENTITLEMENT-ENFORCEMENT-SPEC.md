@@ -49,6 +49,19 @@ chain without a per-delta maintainer question.
 4. **The WHO half of supersession** extends `validate_supersession_target`'s single
    home (s45's own precedent), never a parallel path.
 
+### §1 AMENDMENT (2026-07-26, row 1385) — delegation acts join the authority-bearing set (s62)
+
+§1.1b's enumeration omitted delegation acts, and s60 implemented the omission faithfully —
+leaving `acts-for` assertion and supersession ungated and conjunct (b) SELF-SERVABLE (a
+refused principal could mint their own chain edge and retry; the refusal text taught the
+bypass). Found by the maintainer's own question; authoring defect owned on the row. s62
+closes it, fail-safe additive: `principal_relation_asserted` with relation `acts-for`
+(fresh and superseding) classifies as act class `delegation_lifecycle`, requiring the
+WRITER's chain-to-genesis — the consult's own "each grant itself authorized" property;
+genesis bootstraps the first edges at birth exactly as s60's configuration rows do. The
+s60 refusal remedy text is corrected in the same delta: the edge is written by the
+DELEGATOR, never self-asserted.
+
 ## 2. Delta v1.1 — signature symmetry and the key binding (serving/verbs, small)
 
 From the consult's §B.2 table, the three rows not yet true:
