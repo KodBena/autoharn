@@ -20,7 +20,9 @@ maintainer's actual ask is narrower and more demanding than "ship four worked ex
 encoding below uses *only* generic, adopter-reachable harness primitives (typed ledger rows,
 free-text role/act-class configuration — the [`s36`](../kernel/lineage/s36-decision-grade.sql)
 graded-token idiom (a free-text, no-enum column where the kernel stores a word and deployment
-policy decides which words matter), roles and `acts-for` chains,
+policy decides which words matter), roles and
+[`acts-for`](../kernel/lineage/s41-principal-bindings-and-relations.sql) chains (the transitive
+delegation relation §1 explains),
 the s61 signature verbs, and the ordinary Postgres GRANT/role/row-security substrate). Nothing
 here is a taint-specific or license-specific feature this repository ships — every mechanism an
 adopter could not write themselves, against their own world, from documentation alone, is instead
@@ -33,12 +35,18 @@ page double as a small expressiveness audit of the substrate it documents.
 [`kernel/lineage/s60-entitlement-enforcement.sql`](../kernel/lineage/s60-entitlement-enforcement.sql),
 [`s61-signature-symmetry-and-key-binding.sql`](../kernel/lineage/s61-signature-symmetry-and-key-binding.sql),
 [`s62-delegation-lifecycle-gating.sql`](../kernel/lineage/s62-delegation-lifecycle-gating.sql).
-**These three
-are authored and scratch-witnessed but NOT YET wired into `bootstrap/new-project.sh`'s
-`LINEAGE_CHAIN`** — a fresh `--new-world` scaffold today ends at s57. Everything below that
-exercises s60–s62 was run by hand-applying those three files on top of a scaffolded world
-(`psql -f kernel/lineage/sNN-*.sql`, the same pattern `seen-red/s60-entitlement-enforcement/`'s
-own fixture uses), never on a live/production world. Items 2 and 3 are convention plus an
+These three are now WIRED into `bootstrap/new-project.sh`'s `LINEAGE_CHAIN` (chain entries
+2026-07-26, work item lineage-chain-lags-directory, ledger rows 1392/1393; s61/s62 wired at
+their merges, rows 1402/1409) — a fresh `--new-world` scaffold today births through
+[`s63-supersession-body-restoration.sql`](../kernel/lineage/s63-supersession-body-restoration.sql).
+(Stale-claim correction 2026-07-26: this paragraph previously said the chain ends at s57;
+that was true when written and false at head, caught when the panel surface survey
+([`design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md`](../design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md))
+cited it.) The
+witness transcripts below predate the wiring: they were produced by hand-applying those
+three files on top of a scaffolded world (`psql -f kernel/lineage/sNN-*.sql`, the same
+pattern `seen-red/s60-entitlement-enforcement/`'s own fixture uses), never on a
+live/production world. Items 2 and 3 are convention plus an
 adopter-authored mechanical checker today, with their kernel conjuncts (taint, domain/zone) named
 as reserved seats that would harden them later (§4 below). Item 4 rests on the existing s18/s20
 grant substrate, generalized with a native Postgres feature (row-level security) that composes
@@ -50,7 +58,8 @@ with it.
 
 ### The general shape
 
-Before `s60`, `s41` could *record* that a principal held a role or that one principal acted for
+Before `s60`, [`s41`](../kernel/lineage/s41-principal-bindings-and-relations.sql) could
+*record* that a principal held a role or that one principal acted for
 another, but nothing *checked* either fact at write time — any active principal could register a
 new principal, bind a role, or supersede a milestone's closure. `s60` closes that with a
 **factored acceptance predicate**, evaluated inside the same write boundary every kernel refusal
@@ -221,7 +230,8 @@ Everything below is standard Postgres plus the s61 signature kind already shippe
 
 1. **Row-level security (RLS)**, a native Postgres feature, on the ledger table. A `USING`
    predicate per connecting role decides which *rows* that role's `SELECT` can see, at the
-   database layer — the same layer `s18`'s reviewer roles already use for column-level carving
+   database layer — the same layer [`s18`](../kernel/lineage/s18-criterion-principals.sql)'s reviewer roles
+   (dedicated Postgres LOGIN roles, the house idiom §4 details) already use for column-level carving
    (this is the row-level generalization of that idiom, not a different mechanism).
 2. A **free-text labeling convention** on `statement` (`COMPARTMENT: ...`) — no schema change.
    **This label must be correct on the row's first write.** RLS narrows on raw `statement` text,
@@ -753,9 +763,11 @@ an adopter a structural label to key on instead.
 
 ---
 
-## 5. Expressiveness gaps found while building this page (v2-relevant)
+## 5. Expressiveness gaps found while building this page (input to the v2 enforcement round)
 
-Per the maintainer's correction (row 1412): every point below is a generic-substrate gap, stated
+"v2" here is the maintainer's second-round enforcement ruling (ledger rows 1411/1412):
+MECHANICAL enforcement gates built from GENERIC primitives an end user can wield, never
+pattern-specific features. Per the maintainer's correction (row 1412): every point below is a generic-substrate gap, stated
 generically, never as "add a taint/license feature." Each was hit while trying to encode the four
 recipes above from primitives a zero-context adopter already has.
 
