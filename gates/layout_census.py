@@ -51,13 +51,13 @@ ROOT_FILES = {
     # their new home. ORCH-CAPABILITIES.md stays root (maintainer's call, row 1625).
     "ORCH-DIRCLASS.md", "ORCH-CAPABILITIES.md",
     # bootstrap/track-work.sh's own STANDING deployment on autoharn itself (design/
-    # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json + the five verb
-    # shims (led/judge/pickup/audit/distance-to-clean), landing at the repo root because that
-    # IS this deployment's project-dir. No hooks are wired for it (a standing project is not a
-    # governed world — track-work.sh's own header comment) so these are inert outside a
-    # deliberate `./led`/`./pickup`/etc invocation; registered here so an unregistered-top-level
-    # breach does not fire on the offering's own first, self-hosted consumer.
-    "deployment.json", "led", "judge", "pickup", "audit", "distance-to-clean",
+    # USER-WORK-STATUS-OFFERING.md, deliverable 2, 2026-07-11): deployment.json landing at the
+    # repo root because that IS this deployment's project-dir. The five verb shims this comment
+    # used to also register here (led/judge/pickup/audit/distance-to-clean) were DELETED
+    # 2026-07-26 by root-shim-pruning (ledger row 1357) -- deregistered below, not left as a
+    # stale entry pointing at nothing (CLAUDE.md hazard-flagging duty, found in reach of that
+    # same deletion's own touch).
+    "deployment.json",
     # deployment.json.example — the committed template deployment.json is generated from
     # (deployment.json itself is real/local and typically gitignored per-deployment; the
     # .example sibling is the tracked root standing-document). Pre-existing gap, never
@@ -77,12 +77,9 @@ ROOT_FILES = {
     # (CLAUDE.md hazard-flagging duty, same shape as the migrate/attestations/LICENSE entries
     # above -- a hazard within reach of the touch gets fixed, not routed around).
     ".gitmodules",
-    # attest-tags — pre-existing gap (landed by an earlier commission, never registered here),
-    # hit while panel-cheap-fixes was editing USER-GUIDE.md (root, at the time) itself; fixed
-    # in passing rather than left an unregistered breach for the next gate run (CLAUDE.md
-    # hazard-flagging duty, 2026-07-12). USER-GUIDE.md itself moved off root into user-guide/
-    # 2026-07-18 (see above).
-    "attest-tags",
+    # attest-tags — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered
+    # here rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
+    # `autoharn attest-tags` / libexec/autoharn/attest-tags.
     # extract-context — the mechanized world-context extraction verb (FABLE-WORLD-CONTEXT-
     # MIGRATION-CONSULT-2026-07-19.md; autoharn ledger row 1942 step 1). Repo-root style shim
     # like led/judge/pickup/audit/distance-to-clean/attest-tags above, but not scaffolded into
@@ -90,14 +87,11 @@ ROOT_FILES = {
     # explicit --deployment path, so it lives once, here, and is pointed at whichever source/
     # target world the operator names.
     "extract-context",
-    # verify-chain — the seventh repo-root operator verb shim, wired 2026-07-22 during the
-    # autoharn1 succession (ledger row 1942): extract-context's provenance block quotes
-    # ./verify-chain output verbatim (consult §2.3) and reported it UNAVAILABLE because this
-    # legacy deployment had every sibling shim (led/judge/pickup/audit/distance-to-clean/
-    # migrate) but never this one. Same PICKUP_DEPLOYMENT wrapper pattern; the template
-    # itself (bootstrap/templates/verify-chain.tmpl) is the direct-psql original, so no
-    # legacy- variant exists to point at.
-    "verify-chain",
+    # verify-chain — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered
+    # here rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
+    # `autoharn verify-chain` / libexec/autoharn/verify-chain. (Historical note preserved: it
+    # was wired 2026-07-22 during the autoharn1 succession, ledger row 1942, the seventh
+    # repo-root operator verb shim at the time.)
     # LICENSE (the Unlicense, added fca1100, maintainer's choice 2026-07-12) -- a root
     # standing-document like the others above, never registered when it landed; caught by
     # this gate's own next run (tracker item layout-census-license-unregistered, CLAUDE.md
@@ -107,28 +101,21 @@ ROOT_FILES = {
     # one paragraph per moved doc) -- landed with the sweep, never registered here; caught
     # at the same 2026-07-13 seam as the vestigial_documentation/ dir registration above.
     "VESTIGIAL-INDEX.md",
-    # migrate — the sixth repo-root operator verb shim (bootstrap/migrate.sh), landed alongside
-    # led/judge/pickup/audit/distance-to-clean but never registered here; caught by this gate's
-    # own next run (CLAUDE.md hazard-flagging duty, root-shims-and-layout-census work item).
-    "migrate",
+    # migrate — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered here
+    # rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
+    # `autoharn migrate` / libexec/autoharn/migrate.
     # orchlog — the changelog-for-a-restarting-orchestrator verb (ledger item
     # orchlog-changelog-verb, 2026-07-15), a standalone Python executable like attest-tags
     # (no DB deployment needed). Its data directory is registered below as "orchlog.d" -- see
     # orchlog.d/README.md for why the directory could not be named "orchlog" too (a plain
     # filesystem cannot hold a file and a directory of the same name in one parent).
     "orchlog",
-    # asof-export — the ledger-wide as-of read + §11.10(b) inspection-copy export verb (ledger
-    # item asof-export-inspection-copy, 2026-07-18), the seventh member of the standing
-    # track-work.sh shim set (bootstrap/track-work.sh's own shim loop, extended by this same
-    # commission) -- registered on landing, not left an unregistered breach for the next run.
-    "asof-export",
-    # doctor — "is this world set up right?" in one witnessed call (ledger rows 1147/1148,
-    # virgin-experience round; bootstrap/templates/doctor.tmpl), landed on the TUI-rebuild
-    # branch line alongside the guard/CLAUDE.md work never registered here -- caught live
-    # during the 2026-07-23 integration merge's full-verification pass (CLAUDE.md hazard-
-    # flagging duty: found in reach of task A's own doctor.tmpl edit, fixed rather than routed
-    # around).
-    "doctor",
+    # asof-export — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered
+    # here rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
+    # `autoharn asof-export` / libexec/autoharn/asof-export.
+    # doctor — DELETED 2026-07-26 by root-shim-pruning (ledger row 1357), deregistered here
+    # rather than left stale (CLAUDE.md hazard-flagging duty); reached now via
+    # `autoharn doctor` / libexec/autoharn/doctor.
     # otel-attest — the OTel model-attestation verb (ledger item otel-model-attestation),
     # landed without registration here; one of three pre-existing breaches flagged loudly by
     # the asof-export builder (2026-07-18) and fixed at the merge seam rather than left for
@@ -145,10 +132,13 @@ ROOT_FILES = {
     #
     # autoharn — the umbrella entry point (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger
     # rows 1151-1183): the ONE root executable now, dispatching to libexec/autoharn/<verb>. The
-    # ten pre-umbrella root verb shims above (led, judge, pickup, ...) stay registered here too --
-    # they survive as one-line deprecation-warning alias shims for one deprecation window (spec
-    # §6), not yet removed. Registered on landing, not left an unregistered breach for the next
-    # run (CLAUDE.md hazard-flagging duty).
+    # ten pre-umbrella root verb shims (led, judge, pickup, audit, distance-to-clean,
+    # attest-tags, verify-chain, migrate, asof-export, doctor) that used to also be registered
+    # here were DELETED 2026-07-26 as a precondition of the 2.0.0 tag (root-shim-pruning,
+    # ledger row 1357, inverting the spec §6 schedule this comment used to cite) -- see each
+    # verb's own now-deregistered entry above for its individual removal note. Registered on
+    # landing, not left an unregistered breach for the next run (CLAUDE.md hazard-flagging
+    # duty).
     "autoharn",
 }
 ROOT_DIRS = {
