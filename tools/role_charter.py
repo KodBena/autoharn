@@ -111,16 +111,22 @@ def sha256_file(path: Path) -> str:
 def statement_for(role: str, path: str, digest: str) -> str:
     return f"role-charter registered: role={role} path={path} sha256={digest}"
 
+# Finding 2 (2026-07-26): tags every --led-is-broken conversion below (also role_brief.py's own
+# run_led) -- lets a caller tell that apart from an ordinary refusal; never conflated.
+LED_UNUSABLE_MARKER = "LED-UNUSABLE:"
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
-    """`led` is shlex-split into an argv PREFIX before exec (§6 amendment, module docstring)."""
+    """shlex-split argv prefix (§6 amendment); finding 2: empty/malformed `led` now a tagged refusal, never a silent args[0]-exec or uncaught ValueError."""
+    if not led.strip():
+        return 127, "", f"{LED_UNUSABLE_MARKER} --led value is empty/whitespace -- refusing rather than executing args[0]."
     try:
-        proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True)
-    except OSError as exc:
-        # '{led}' does not exist / is not executable -- an ordinary, expected-shape failure
-        # (a wrong --led path), not a crash: converted to the same (rc, out, err) shape every
-        # caller here already handles, never an uncaught traceback.
-        return 127, "", f"could not execute '{led}': {exc}"
+        led_argv = shlex.split(led)
+    except ValueError as exc:
+        return 127, "", f"{LED_UNUSABLE_MARKER} --led value {led!r} is malformed shell quoting: {exc}"
+    try:
+        proc = subprocess.run(led_argv + args, capture_output=True, text=True)
+    except OSError as exc:  # a wrong --led path -- expected-shape failure, never an uncaught traceback
+        return 127, "", f"{LED_UNUSABLE_MARKER} could not execute '{led}': {exc}"
     return proc.returncode, proc.stdout, proc.stderr
 
 

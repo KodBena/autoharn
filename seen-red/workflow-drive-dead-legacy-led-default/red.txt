@@ -118,3 +118,131 @@ exec, and all 7 `tools/workflow_units/*/{drive.py,hydrate.sh}` pairs are regener
 hand-edited) through the compiler's own `--repo-root` machinery, restoring the previously
 hand-patched autoharn-builder-wave copy to a genuinely generated, template-consistent state
 along with the other six.
+
+================================================================================================
+ROUND 3 RED (2026-07-26, confirming-review fix round, 3 findings). Captured live against branch
+tip 4ac3ba6 (the round-2 fix, still in this state: DRIVE_TEMPLATE/HYDRATE_TEMPLATE default to
+`"libexec/autoharn/led"`, `run_led` shlex-splits) BEFORE this round's own edits landed -- reached
+by `git stash push -- tools/workflow_compile.py tools/role_charter.py tools/role_brief.py
+tools/workflow_units` (reverting exactly this round's own in-progress edits back to 4ac3ba6,
+nothing else touched), running the transcripts below, then `git stash pop` to restore the fix.
+Every call below is against a REAL compiled `tools/workflow_units/autoharn-builder-wave/drive.py`
+/`hydrate.sh` and THIS worktree's own `tools/role_charter.py`/`tools/role_brief.py`, never a
+reimplementation. No DB/ledger writes in any of the six transcripts (each `--led` is chosen to
+fail, or to substitute `echo`, before any real ledger call happens).
+
+--- Finding 1, symptom A: check_charter() against a nonexistent --led returns an ordinary tuple,
+    no exception -- structurally identical to a genuine "no registered charter" refusal ---
+$ python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    'drive', 'tools/workflow_units/autoharn-builder-wave/drive.py')
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+rc, out = mod.check_charter('no/such/led/binary', 'author')
+print('rc:', rc); print('out:', out)
+"
+rc: 1
+out: role_charter: REFUSED -- 'no/such/led/binary current 100000' failed:
+could not execute 'no/such/led/binary': [Errno 2] No such file or directory: 'no/such/led/binary'
+-- no exception raised; a wrong-deployment invocation (wrong CWD, so the default `led` value
+does not resolve) reads exactly like an honest "uncharted" answer, silently, exit 0 downstream.
+
+--- Finding 1, symptom B: run_led() against the SAME nonexistent --led (the --allow-uncharted
+    call shape, since check_charter never stopped it) dies as a RAW, UNCAUGHT exception ---
+$ python3 -c "
+... (same import) ...
+mod.run_led('no/such/led/binary', ['work', 'claim', 'some-slug'], 'author')
+"
+UNCAUGHT FileNotFoundError: FileNotFoundError(2, 'No such file or directory')
+-- the traceback half of finding 1: with --allow-uncharted, the identical wrong-deployment
+invocation crashes instead of refusing.
+
+--- Finding 2, shlex edge A: run_led() with an EMPTY --led silently executes args[0] AS THE
+    PROGRAM (shlex.split('') is []) -- demonstrated with a harmless 'echo' args[0] so the silent
+    wrong-execution is directly observable, not merely a coincidental "command not found" ---
+$ python3 -c "
+... (same import) ...
+rc, out = mod.run_led('', ['echo', 'SILENTLY-RAN-AS-LED'], 'author')
+print('rc:', rc); print('out:', out)
+"
+rc: 0
+out: SILENTLY-RAN-AS-LED
+-- echo ran AS IF it were led itself, rc 0, no error of any kind; a real `--led ""` typo would
+silently execute whatever the first ledger-verb token (e.g. "work") happens to resolve to on the
+caller's PATH, or fail confusingly if it does not.
+
+--- Finding 2, shlex edge B: run_led() with malformed shell quoting raises an UNCAUGHT
+    ValueError ---
+$ python3 -c "
+... (same import) ...
+mod.run_led('bad \"unterminated quote', ['--help'], 'author')
+"
+UNCAUGHT ValueError: ValueError('No closing quotation')
+
+--- Finding 2, class-wide: tools/role_charter.py's and tools/role_brief.py's OWN run_led() carry
+    the identical two edges (same shlex.split(led) + args shape, no empty/malformed guard) ---
+$ python3 -c "
+import sys; sys.path.insert(0, 'tools')
+import role_charter, role_brief
+for label, mod in (('role_charter.py', role_charter), ('role_brief.py', role_brief)):
+    rc, out, err = mod.run_led('', ['echo', 'SILENTLY-RAN'])
+    print(label, 'empty --led -> rc:', rc, 'out:', repr(out))
+    try:
+        mod.run_led('bad \"unterminated quote', ['--help'])
+    except Exception as exc:
+        print(label, 'malformed --led ->', f'UNCAUGHT {type(exc).__name__}: {exc!r}')
+"
+role_charter.py empty --led -> rc: 0 out: 'SILENTLY-RAN\n'
+role_charter.py malformed --led -> UNCAUGHT ValueError: ValueError('No closing quotation')
+role_brief.py empty --led -> rc: 0 out: 'SILENTLY-RAN\n'
+role_brief.py malformed --led -> UNCAUGHT ValueError: ValueError('No closing quotation')
+
+--- Finding 3: hydrate.sh's own $LED calls are ALL quoted ("$LED" work open ...) -- a
+    MULTI-TOKEN --led override is passed as one nonexistent literal filename. This directly
+    contradicts 4ac3ba6's OWN commit message, which claimed hydrate.sh "never needed the shlex
+    fix (sh's unquoted $LED already word-splits)" -- confirmed FALSE below: every use is quoted. ---
+$ grep -n LED tools/workflow_units/autoharn-builder-wave/hydrate.sh
+26:LED="libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
+44:    --led) LED="$2"; shift 2 ;;
+74:echo "-- led: $LED --"
+80:  out=$("$LED" work open "$slug" "$title" 2>&1)
+115:  out=$("$LED" work depends "$SLUG_BUILD_AND_WITNESS" "$SLUG_CLAIM" --type blocks-start 2>&1); rc=$?
+122:  out=$("$LED" work depends "$SLUG_CLOSE_DEFERRED" "$SLUG_BUILD_AND_WITNESS" --type blocks-start 2>&1); rc=$?
+129:  out=$("$LED" work depends "$SLUG_ORCHESTRATOR_MERGE" "$SLUG_CLOSE_DEFERRED" --type blocks-start 2>&1); rc=$?
+160:    out=$("$LED" obligate "autoharn-builder-wave-${INSTANCE}-review" "$OBLIGATE_ASSIGNED_BY" "$OBLIGATE_OBLIGED_ACTOR" 2>&1)
+
+$ bash tools/workflow_units/autoharn-builder-wave/hydrate.sh --instance redprobe3 --led "/usr/bin/env echo" --no-obligate
+-- workflow-unit hydration: autoharn-builder-wave instance 'redprobe3' (source design/workflows/autoharn-builder-wave.toml) --
+-- led: /usr/bin/env echo --
+tools/workflow_units/autoharn-builder-wave/hydrate.sh: line 80: /usr/bin/env echo: No such file or directory
+tools/workflow_units/autoharn-builder-wave/hydrate.sh: REFUSED for an UNEXPECTED reason (not duplicate-open) -- stopping rather than guessing.
+exit=1
+
+READING THIS RED: all six transcripts above reproduce the confirming review's three findings
+exactly as reported, against the real committed 4ac3ba6 artifacts (never a reimplementation).
+
+FIX THIS ROUND: (1) DRIVE_TEMPLATE's run_led/check_charter/fetch_brief now raise a new
+`LedUnusable` exception for an empty/whitespace `--led`, malformed shell quoting, or an exec
+failure (OSError) -- caught exactly once around main()'s whole drive loop, printing a loud,
+teaching refusal (naming the led value, the CWD, and the repo-root assumption) and exiting 1,
+never read as an ordinary per-phase uncharted refusal and never a raw traceback. check_charter/
+fetch_brief detect the identical class of failure inside role_charter.py's/role_brief.py's own
+output (a new `LED_UNUSABLE_MARKER` tag) and raise the same LedUnusable, rather than letting a
+wrong-deployment invocation masquerade as a genuine "no registered charter" answer.
+(2) tools/role_charter.py's and tools/role_brief.py's own run_led() gain the same two guards:
+an empty/whitespace `--led` is refused before any subprocess is attempted (never silently
+executes args[0]), and a shlex.split ValueError (malformed quoting) is converted to the same
+(rc, out, err) shape rather than raised uncaught -- both tagged with LED_UNUSABLE_MARKER.
+(3) HYDRATE_TEMPLATE gains a `led_run()` shell function (`set -f; set -- $LED "$@"; set +f;
+"$@"` -- POSIX-sh clean, no eval, no bash arrays) that splits a multi-token `--led` into a
+positional-parameter argv prefix before invoking it; every prior direct `"$LED" ...` call site
+is now `led_run ...`. This round's own commit message corrects 4ac3ba6's false claim that
+hydrate.sh needed no such fix.
+
+All 7 `tools/workflow_units/*/{drive.py,hydrate.sh}` pairs regenerated (never hand-edited)
+through the compiler's own `--repo-root` machinery. run_fixtures.py in this directory gained
+W8-W18 re-proving the GREEN side of all three findings as a standing regression (W8/W10/W12/W14/
+W17 RED-against-PRIOR_SHA=4ac3ba6 via `git show`, W9/W11/W13/W15/W16/W18 GREEN against the
+current, fixed code) -- see this round's addition to this file's own module docstring for the
+full disposition.

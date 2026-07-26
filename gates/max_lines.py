@@ -253,7 +253,12 @@ BASELINE: dict[str, int] = {
     # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
     # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
     # hand-edit after the fact; new refusal surface, not padding. Written plain, no golfing.
-    "tools/workflow_compile.py":                        733,
+    # Reconciled +112 to 845 (2026-07-26, confirming-review micro-fix round, 3 findings): new
+    # LedUnusable class + _split_led() helper + marker-based led-not-found detection in
+    # check_charter/fetch_brief, wrapped once around main()'s drive loop (finding 1); HYDRATE_
+    # TEMPLATE gains a led_run() shell function for real multi-token --led support (finding 3).
+    # Genuinely new refusal surface, not padding -- written plain, no golfing.
+    "tools/workflow_compile.py":                        845,
     # tools/setup_tui/durable_decisions.py -- REMOVED from BASELINE 2026-07-22 (P10 content
     # split, law/adr/0012's 2026-07-22 Amendment): 619 -> 249 lines, the CATALOG literal moved
     # to tools/setup_tui/durable_decisions_data.py. The ratchet is the working: a file that
@@ -428,8 +433,11 @@ BASELINE: dict[str, int] = {
     # comment, which itself is measured content of THIS file -- the fifth payment of the
     # self-measuring cost this table's own history already names as a recurring, honest cost of
     # ratcheting the gate that ratchets itself, including this entry's own line count of itself.
+    # Reconciled +8 to 526 (2026-07-26, confirming-review micro-fix round): the
+    # tools/workflow_compile.py entry above grew by +112 lines and its own dated comment,
+    # itself measured content of THIS file -- the sixth payment of the same recurring cost.
     # Genuinely new reconciliation content, not padding.
-    "gates/max_lines.py":                                518,
+    "gates/max_lines.py":                                526,
 }
 
 

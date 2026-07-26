@@ -97,20 +97,24 @@ PRINCIPAL_REGISTERED_RE = re.compile(r"^principal '([^']+)' registered")
 
 
 class BriefError(Exception):
-    """Explains exactly why a required `led` read failed, or why a served shape did not match
-    what this tool expected -- a loud, named refusal, never a silent misparse."""
+    """Explains exactly why a required `led` read failed, or a served shape did not match -- a loud, named refusal, never a silent misparse."""
 
+# same marker/reasoning as tools/role_charter.py's own LED_UNUSABLE_MARKER (finding 2, 2026-07-26).
+LED_UNUSABLE_MARKER = "LED-UNUSABLE:"
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
-    """`led` is shlex-split into an argv PREFIX before exec (§6 amendment)."""
+    """shlex-split argv prefix (§6 amendment); finding 2: empty/malformed `led` now a tagged refusal, never a silent args[0]-exec or uncaught ValueError (same fix as role_charter.py's own run_led)."""
+    if not led.strip():
+        return 127, "", f"{LED_UNUSABLE_MARKER} --led value is empty/whitespace -- refusing rather than executing args[0]."
     try:
-        proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True)
-    except OSError as exc:
-        # same conversion role_charter.py's own run_led performs -- a wrong --led path is an
-        # ordinary, expected-shape failure, never an uncaught traceback.
-        return 127, "", f"could not execute '{led}': {exc}"
+        led_argv = shlex.split(led)
+    except ValueError as exc:
+        return 127, "", f"{LED_UNUSABLE_MARKER} --led value {led!r} is malformed shell quoting: {exc}"
+    try:
+        proc = subprocess.run(led_argv + args, capture_output=True, text=True)
+    except OSError as exc:  # a wrong --led path -- expected-shape failure, never an uncaught traceback
+        return 127, "", f"{LED_UNUSABLE_MARKER} could not execute '{led}': {exc}"
     return proc.returncode, proc.stdout, proc.stderr
-
 
 def require_led(led: str, args: list[str]) -> str:
     rc, out, err = run_led(led, args)
@@ -120,18 +124,15 @@ def require_led(led: str, args: list[str]) -> str:
 
 
 def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
-    """`led current <N>`/`led --recent <N>`: `[id] kind: statement`. No actor field exists on
-    this line -- see JB5. Thin wrapper over served_shapes.parse_current_line, binding this
-    tool's own BriefError as the raised type (role_charter.py binds CharterError instead --
-    same shared parser, see tools/served_shapes.py)."""
+    """`led current <N>`/`led --recent <N>`: `[id] kind: statement`. No actor field on this
+    line -- see JB5. Thin wrapper over served_shapes.parse_current_line, binding this tool's own
+    BriefError as the raised type (role_charter.py binds CharterError instead -- shared parser)."""
     return _parse_current_line(BriefError, led_cmd_label, line)
 
 
 def parse_served_show(led_cmd_label: str, text: str) -> dict[str, str]:
     """`led show <id>`: one `f"{k:28s}: {v}"` line per non-null field. Thin wrapper over
-    served_shapes.parse_served_show (extracted this fix round -- see that module's own header
-    for the fix-round finding and the long-key-name edge case this parser now handles), binding
-    BriefError as the raised type."""
+    served_shapes.parse_served_show, binding BriefError as the raised type."""
     return _parse_served_show(BriefError, led_cmd_label, text)
 
 

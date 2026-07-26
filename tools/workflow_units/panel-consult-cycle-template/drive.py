@@ -20,7 +20,12 @@ UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway
 falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
 J1 behavior, preserved only as an explicit opt-in degraded path).
 
-Usage (invoked from THIS repo's own root, `led`'s AUTOHARN_ROOT convention -- --led's default is relative to THAT cwd; elsewhere pass an explicit --led <path>):
+CWD ASSUMPTION: invoked from THIS repo's own root, `led`'s AUTOHARN_ROOT convention -- --led's
+default ("libexec/autoharn/led") is relative to THAT cwd; elsewhere pass an explicit --led
+<path>, or the driver refuses loudly (see LedUnusable below) rather than silently misreporting
+every phase as an ordinary uncharted/kernel refusal.
+
+Usage:
     python3 panel-consult-cycle-template/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
                               [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
                               [--dry-run] [--rounds N]
@@ -32,7 +37,9 @@ DIFFERENT (or not-yet-hydrated) instance of this same TOML shape.
 Exit 0 when the round budget completes (whether or not every phase closed -- BLOCKED units,
 uncharted or kernel-refused alike, are an ordinary, reportable outcome, not a driver failure);
 exit 1 on an unexpected kernel refusal at CLOSE time (a close, unlike a claim, should not refuse
-once claimed, so that IS treated as unexpected here) or a local usage error (exit 2).
+once claimed, so that IS treated as unexpected here), on a LedUnusable condition (--led itself
+cannot be used at all -- empty, malformed quoting, or exec failure, e.g. a wrong CWD relative to
+the default; see LedUnusable below), or a local usage error (exit 2).
 """
 from __future__ import annotations
 
@@ -53,23 +60,101 @@ BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
 INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
+# CONFIRMING-REVIEW FIX ROUND, findings 1+2 (2026-07-26). LED_UNUSABLE_MARKER is emitted (as a
+# prefix on the returned error text) by every conversion of a --led-itself-is-broken condition to
+# an ordinary (rc, out) tuple below AND by tools/role_charter.py's/tools/role_brief.py's own
+# run_led (same marker, same reasoning) -- it lets check_charter/fetch_brief tell "role_charter.py
+# could not use --led at all" (a wrong-deployment/config problem: led binary not found relative to
+# this CWD, an empty --led value, or malformed shell quoting) apart from an ORDINARY refusal `led`
+# or role_charter.py itself might emit (e.g. "no registered charter") -- the two must never be
+# conflated, per finding 1: a wrong CWD used to read as an honest "REFUSED (uncharted)" per phase,
+# exit 0, indistinguishable from a real uncharted principal.
+LED_UNUSABLE_MARKER = "LED-UNUSABLE:"
+
+
+class LedUnusable(Exception):
+    """Raised when the resolved --led value cannot be used AT ALL: empty/whitespace (would
+    execute this call's own next argv token as the program), malformed shell quoting (shlex.split
+    raises), or exec failure (led binary not found -- frequently a wrong CWD, since --led's
+    default is relative to the repo root drive.py is documented to run from). This is a
+    wrong-deployment/config problem, never an ordinary kernel or charter refusal -- caught exactly
+    once in main(), which stops the WHOLE drive immediately with a loud, teaching, nonzero-exit
+    refusal naming the --led value tried, the CWD, and the CWD assumption, rather than looping
+    over every remaining phase reporting a misleading per-phase BLOCKED-uncharted/refused
+    outcome (finding 1's exact failure shape) or dying as a raw traceback (the --allow-uncharted
+    path's prior failure shape, finding 1's other half)."""
+
+
+def _split_led(led: str) -> list[str]:
+    """Shared by run_led/check_charter/fetch_brief: refuse an empty/whitespace --led loudly
+    (shlex.split('') is [], which would silently execute this call's OWN next argv token as the
+    program -- a config error, not a kernel fact) and convert a shlex.split ValueError (malformed
+    shell quoting, e.g. an unterminated quote) to the same LedUnusable class rather than an
+    uncaught traceback (finding 2)."""
+    if not led.strip():
+        raise LedUnusable(
+            f"drive.py: REFUSED -- --led value is empty/whitespace -- refusing rather than "
+            f"executing this call's own next argv token as the program (shlex.split('') is [])."
+        )
+    try:
+        return shlex.split(led)
+    except ValueError as exc:
+        raise LedUnusable(
+            f"drive.py: REFUSED -- --led value {led!r} is malformed shell quoting: {exc}"
+        ) from exc
+
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
-    proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True,  # multi-token --led
-                           env={**os.environ, "LED_ACTOR": actor})
+    led_argv = _split_led(led)  # multi-token --led; raises LedUnusable on empty/malformed (finding 2)
+    try:
+        proc = subprocess.run(led_argv + args, capture_output=True, text=True,
+                               env={**os.environ, "LED_ACTOR": actor})
+    except OSError as exc:
+        raise LedUnusable(
+            f"drive.py: REFUSED -- could not execute led {led!r} (cwd={os.getcwd()}): {exc}. "
+            f"This driver assumes it is invoked from the repo root (led's AUTOHARN_ROOT "
+            f"convention -- see this module's own docstring 'CWD ASSUMPTION' note); run it from "
+            f"there, or pass an explicit --led <path> that resolves from wherever you are."
+        ) from exc
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
 def check_charter(led: str, principal: str) -> tuple[int, str]:
     proc = subprocess.run([sys.executable, ROLE_CHARTER_PY, "show", principal, "--led", led],
                            capture_output=True, text=True)
-    return proc.returncode, (proc.stdout + proc.stderr).strip()
+    out = (proc.stdout + proc.stderr).strip()
+    if proc.returncode != 0 and LED_UNUSABLE_MARKER in out:
+        # role_charter.py's OWN run_led hit the identical --led-is-broken condition (empty,
+        # malformed quoting, or exec failure) while checking this principal -- NOT a "no
+        # registered charter" answer. Propagate loudly rather than letting the caller read this
+        # nonzero rc as an ordinary uncharted refusal (finding 1's exact failure shape).
+        raise LedUnusable(
+            f"drive.py: REFUSED -- role_charter.py could not use --led {led!r} while checking "
+            f"principal '{principal}' (cwd={os.getcwd()}) -- a wrong-deployment/config problem, "
+            f"never an ordinary 'uncharted' outcome; run from the repo root (led's AUTOHARN_ROOT "
+            f"convention -- see this module's own docstring 'CWD ASSUMPTION' note), or pass an "
+            f"explicit --led <path> that resolves from wherever you are. role_charter's own "
+            f"text, verbatim:\n{out}"
+        )
+    return proc.returncode, out
 
 
 def fetch_brief(led: str, principal: str) -> tuple[int, str]:
     proc = subprocess.run([sys.executable, ROLE_BRIEF_PY, "brief", principal, "--led", led],
                            capture_output=True, text=True)
-    return proc.returncode, (proc.stdout + proc.stderr).strip()
+    out = (proc.stdout + proc.stderr).strip()
+    if proc.returncode != 0 and LED_UNUSABLE_MARKER in out:
+        # same class as check_charter's own check above -- reached only when check_charter (using
+        # the SAME --led value) already succeeded, so this would be a surprising, independent
+        # led-unusable condition; propagated the same way rather than silently downgraded to a
+        # generic "role_brief FAILED" line (this hazard is in reach of the identical fix).
+        raise LedUnusable(
+            f"drive.py: REFUSED -- role_brief.py could not use --led {led!r} while fetching "
+            f"principal '{principal}''s brief (cwd={os.getcwd()}) -- a wrong-deployment/config "
+            f"problem, never an ordinary brief-fetch failure. role_brief's own text, "
+            f"verbatim:\n{out}"
+        )
+    return proc.returncode, out
 
 
 def parse_kv(pairs: list[str]) -> dict[str, str]:
@@ -139,68 +224,76 @@ def main(argv: list[str]) -> int:
     print(f"-- driving workflow '{STEM}' instance '{instance}' (source {TOML_REL}) via {led} --")
 
     closed: set[str] = set()
-    for round_no in range(1, rounds + 1):
-        made_progress = False
-        for phase in PHASES:
-            slug = f"{STEM}-{instance}-{phase}"
-            if slug in closed:
-                continue
-            actor = role_map.get(phase, DEFAULT_ACTOR)
-            print(f"round {round_no}: phase '{phase}' -> principal '{actor}' (--role-map)")
-
-            charter_rc, charter_out = check_charter(led, actor)
-            if charter_rc != 0:
-                if not allow_uncharted:
-                    print(
-                        f"  REFUSED (uncharted) -- '{actor}' has no in-force registered "
-                        f"charter; phase '{phase}' is BLOCKED-uncharted this round. Register "
-                        f"one (python3 tools/role_charter.py register {actor} <path>) or pass "
-                        f"--allow-uncharted to proceed anyway (loud escape hatch, not silent). "
-                        f"role_charter's own teaching, verbatim:\n{charter_out}"
-                    )
+    try:
+        for round_no in range(1, rounds + 1):
+            made_progress = False
+            for phase in PHASES:
+                slug = f"{STEM}-{instance}-{phase}"
+                if slug in closed:
                     continue
-                print(
-                    f"  -- --allow-uncharted: proceeding with UNCHARTED principal '{actor}' "
-                    f"for phase '{phase}' -- falling back to the TOML's own raw prose brief "
-                    f"(the pre-row-1663 J1 default). role_charter said:\n{charter_out}"
-                )
-                dispatch_text = BRIEFS.get(phase, "")
-            else:
-                brief_rc, brief_out = fetch_brief(led, actor)
-                if brief_rc == 0:
-                    dispatch_text = charter_out + "\n\n" + brief_out
-                else:
-                    dispatch_text = (
-                        charter_out + f"\n\n(role_brief FAILED, rc={brief_rc}, relayed "
-                        f"verbatim rather than silently omitted:\n{brief_out})"
-                    )
+                actor = role_map.get(phase, DEFAULT_ACTOR)
+                print(f"round {round_no}: phase '{phase}' -> principal '{actor}' (--role-map)")
 
-            print(f"round {round_no}: attempting claim of '{slug}' as '{actor}' ...")
-            if dry_run:
-                print(f"  (dry-run) would run: LED_ACTOR={actor} {led} work claim {slug}")
-                continue
-            claim_rc, claim_out = run_led(led, ["work", "claim", slug], actor)
-            if claim_rc != 0:
-                print(f"  BLOCKED -- kernel refusal (verbatim):\n{claim_out}")
-                continue
-            print(f"  claimed: {claim_out}")
-            print(f"  DISPATCH -- charter+brief for '{phase}' (principal '{actor}'):\n{dispatch_text}")
-            if phase in BOOKKEEPING_PHASES:
-                close_args = ["work", "close", slug, "shipped", "--review-bookkeeping",
-                              "--witness", f"commit:{commit_witness[phase]}"]
-            else:
-                close_args = ["work", "close", slug, "shipped", "--review-deferred",
-                              "--witness", f"unit:{slug}"]
-            close_rc, close_out = run_led(led, close_args, actor)
-            if close_rc != 0:
-                print(f"  CLOSE REFUSED -- kernel refusal (verbatim):\n{close_out}",
-                      file=sys.stderr)
-                return 1
-            print(f"  closed: {close_out}")
-            closed.add(slug)
-            made_progress = True
-        if len(closed) == len(PHASES) or (not made_progress and not dry_run):
-            break
+                charter_rc, charter_out = check_charter(led, actor)
+                if charter_rc != 0:
+                    if not allow_uncharted:
+                        print(
+                            f"  REFUSED (uncharted) -- '{actor}' has no in-force registered "
+                            f"charter; phase '{phase}' is BLOCKED-uncharted this round. Register "
+                            f"one (python3 tools/role_charter.py register {actor} <path>) or pass "
+                            f"--allow-uncharted to proceed anyway (loud escape hatch, not silent). "
+                            f"role_charter's own teaching, verbatim:\n{charter_out}"
+                        )
+                        continue
+                    print(
+                        f"  -- --allow-uncharted: proceeding with UNCHARTED principal '{actor}' "
+                        f"for phase '{phase}' -- falling back to the TOML's own raw prose brief "
+                        f"(the pre-row-1663 J1 default). role_charter said:\n{charter_out}"
+                    )
+                    dispatch_text = BRIEFS.get(phase, "")
+                else:
+                    brief_rc, brief_out = fetch_brief(led, actor)
+                    if brief_rc == 0:
+                        dispatch_text = charter_out + "\n\n" + brief_out
+                    else:
+                        dispatch_text = (
+                            charter_out + f"\n\n(role_brief FAILED, rc={brief_rc}, relayed "
+                            f"verbatim rather than silently omitted:\n{brief_out})"
+                        )
+
+                print(f"round {round_no}: attempting claim of '{slug}' as '{actor}' ...")
+                if dry_run:
+                    print(f"  (dry-run) would run: LED_ACTOR={actor} {led} work claim {slug}")
+                    continue
+                claim_rc, claim_out = run_led(led, ["work", "claim", slug], actor)
+                if claim_rc != 0:
+                    print(f"  BLOCKED -- kernel refusal (verbatim):\n{claim_out}")
+                    continue
+                print(f"  claimed: {claim_out}")
+                print(f"  DISPATCH -- charter+brief for '{phase}' (principal '{actor}'):\n{dispatch_text}")
+                if phase in BOOKKEEPING_PHASES:
+                    close_args = ["work", "close", slug, "shipped", "--review-bookkeeping",
+                                  "--witness", f"commit:{commit_witness[phase]}"]
+                else:
+                    close_args = ["work", "close", slug, "shipped", "--review-deferred",
+                                  "--witness", f"unit:{slug}"]
+                close_rc, close_out = run_led(led, close_args, actor)
+                if close_rc != 0:
+                    print(f"  CLOSE REFUSED -- kernel refusal (verbatim):\n{close_out}",
+                          file=sys.stderr)
+                    return 1
+                print(f"  closed: {close_out}")
+                closed.add(slug)
+                made_progress = True
+            if len(closed) == len(PHASES) or (not made_progress and not dry_run):
+                break
+    except LedUnusable as exc:
+        # findings 1+2: --led itself is unusable (wrong CWD, empty value, or malformed quoting)
+        # -- a wrong-deployment/config problem, never conflated with an ordinary per-phase
+        # uncharted/kernel refusal. Stop the WHOLE drive here, loudly, nonzero exit -- never
+        # silently reported as "REFUSED (uncharted)" (exit 0) and never a raw traceback.
+        print(str(exc), file=sys.stderr)
+        return 1
 
     print(f"-- drive complete: {len(closed)}/{len(PHASES)} phase(s) closed --")
     return 0
