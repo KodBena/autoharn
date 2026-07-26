@@ -87,3 +87,58 @@ reaches_genesis(X) :-
     reaches_genesis(Y).
 
 #show reaches_genesis/1.
+
+% ===========================================================================
+% s64 EXTENSION (kernel/lineage/s64-principal-stamps-delegation-conditions.sql, design/
+% FABLE-PRINCIPAL-STAMPS-SPEC.md §3 item 4: "the ASP twin gains the SAME conjunction in its
+% stratified closure, beside in_force/1, never into it"). reaches_genesis_scoped/2 is a SECOND,
+% ADDITIONAL predicate -- BESIDE reaches_genesis/1 above, never folded into it, matching this
+% file's own s62-extension precedent one layer up: reaches_genesis/1's own rules are UNTOUCHED
+% (byte-identical), so ./judge's existing AGREE leg on reaches_genesis/1 is unaffected by this
+% addition. Independently re-derives kernel/lineage/s64-...sql's SQL 2-arg
+% principal_authority_chain_reaches_genesis(pid, act_class) -- "refuses any act outside the
+% intersection of every edge's grant and conditions along the path" (spec §2.2): conjunction
+% along a recursive walk IS an intersection, by construction.
+%
+% NO ASP TWIN for the depth-budget (no-redelegate) or must-countersign conjuncts -- named,
+% deferred LIMITS (s64's own header, and this build's report): both are single-hop-or-aggregate
+% checks over already-in-force facts, the SAME shape s61 itself precedent-deferred ("an ASP twin
+% for a single-hop existence check would mirror the SQL query nearly verbatim"). Proven only by
+% the RED/GREEN fixture legs, never by this differential.
+%
+% EDB (engine/ledger_edb.py's export_entitlement(), s64 addition -- purely additive, the four
+% families above are UNCHANGED):
+%   act_class(C).            The kernel-computed act-class vocabulary (eight tokens as of s64) --
+%                             a fixed, named domain (this project's own STANDARDS-REGISTRY
+%                             posture: named, never corpus-discovered).
+%   delegation_edge(X,Y).    THE SCOPED CLOSURE'S OWN EDGE RELATION -- a SUPERSET of
+%                             acts_for_edge/2 (which stays 'acts-for'-only, byte-identical, so the
+%                             s60/s62 reaches_genesis/1 differential above is UNTOUCHED): X's
+%                             in-force principal_relation_asserted row naming Y as object,
+%                             relation acts-for OR dispatched-by (the hazard-in-reach fix, kernel/
+%                             lineage/s64-...sql's own header), UNEXPIRED (the exporter's own
+%                             pre-filter -- expiry is CONSUMED here, never re-derived in ASP,
+%                             mirroring how principal_active/1 is already a pre-filtered fact,
+%                             this file's own header law, applied to expiry identically).
+%   edge_scope_class(X,Y,C). Edge (X,Y) (a delegation_edge/2 member) is scoped to permit act
+%                             class C -- one fact per (edge, permitted class).
+%   edge_unscoped(X,Y).      Edge (X,Y) carries NO scope restriction (backs every act class) --
+%                             mutually exclusive with edge_scope_class for the SAME (X,Y).
+% ---------------------------------------------------------------------------
+#defined act_class/1.
+#defined delegation_edge/2.
+#defined edge_scope_class/3.
+#defined edge_unscoped/2.
+
+edge_permits(X,Y,C) :- delegation_edge(X,Y), act_class(C), edge_unscoped(X,Y).
+edge_permits(X,Y,C) :- edge_scope_class(X,Y,C).
+
+reaches_genesis_scoped(X,C) :- principal(X), act_class(C), not genesis(_).
+reaches_genesis_scoped(X,C) :- genesis(X), act_class(C).
+reaches_genesis_scoped(X,C) :-
+    delegation_edge(X,Y),
+    principal_active(Y),
+    edge_permits(X,Y,C),
+    reaches_genesis_scoped(Y,C).
+
+#show reaches_genesis_scoped/2.

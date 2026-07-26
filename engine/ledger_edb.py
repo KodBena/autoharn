@@ -789,6 +789,73 @@ def export_entitlement(name: str) -> EdbExport:
             n_a += 1
     exp.counts["principal_active"] = n_a
 
+    # s64 (kernel/lineage/s64-principal-stamps-delegation-conditions.sql, design/
+    # FABLE-PRINCIPAL-STAMPS-SPEC.md §3 item 4): THREE new, PURELY ADDITIVE fact families for the
+    # scope/expiry conjunction's own ASP twin (reaches_genesis_scoped/2, engine/lp/
+    # ledger_entitlement.lp) -- the four families above (principal, acts_for_edge, genesis,
+    # principal_active) are UNCHANGED, byte-identical emission rules, so ./judge's existing AGREE
+    # leg on reaches_genesis/1 (the s60/s62 differential) is untouched by this addition. Capable
+    # only when the s64 columns exist (delegation_expiry/delegation_scope_classes) -- a pre-s64
+    # schema simply never emits these three families (declared, not silently absent: the
+    # capability loop below covers them the same way the four s60 families are covered above).
+    has_s64 = t.has_col("delegation_expiry") and t.has_col("delegation_scope_classes")
+    for fam in ("act_class", "edge_scope_class", "edge_unscoped", "delegation_edge"):
+        exp.capabilities.append(Capability(
+            fam, produced=has_s64, capable=has_s64,
+            reason="delegation_expiry + delegation_scope_classes (s64) present -- emitted"
+            if has_s64 else
+            "no s64 delegation_expiry/delegation_scope_classes columns -- capability absent "
+            "(this family is s64-specific, not merely s60/s62-capable)"))
+    if has_s64:
+        # The act-class DOMAIN: the kernel-computed vocabulary entitlement_act_class_of/
+        # entitlement_act_class_of_target emit (eight tokens as of s64) -- a fixed, named literal
+        # list (never corpus-discovered), matching this project's own STANDARDS-REGISTRY posture
+        # ("the authoritative set is a maintainer-approved registry... a standard no document
+        # operationalizes is exactly the one every corpus-rooted audit will miss").
+        act_classes = (
+            "principal_registered", "principal_role_bound", "standing_lifecycle",
+            "milestone_closure", "gate_edge_supersession", "entitlement_class_configured",
+            "delegation_lifecycle", "independent_verification_delegation")
+        for c in act_classes:
+            exp.facts.append(f'act_class("{c}").')
+        exp.counts["act_class"] = len(act_classes)
+
+        n_sc = 0
+        n_un = 0
+        n_de = 0
+        for subj, obj, scope_raw in t.rows(
+                f"SELECT lc.principal_subject, lc.principal_object, lc.delegation_scope_classes "
+                f"FROM {t.schema}.ledger_current lc "
+                f"WHERE lc.kind = 'principal_relation_asserted' "
+                f"AND lc.principal_relation IN ('acts-for', 'dispatched-by') "
+                f"AND lc.principal_binding_active "
+                f"AND (lc.delegation_expiry IS NULL OR lc.delegation_expiry > now()) "
+                f"ORDER BY lc.id;"):
+            # delegation_edge(X,Y): the s64 scoped closure's OWN edge relation -- a superset of
+            # acts_for_edge/2 (which stays 'acts-for'-only, byte-identical, so the s60/s62
+            # reaches_genesis/1 differential is untouched) that ALSO includes 'dispatched-by'
+            # (the hazard-in-reach fix, kernel/lineage/s64-...sql's own header) and excludes any
+            # expired edge (the SQL query's own WHERE clause above), matching the SQL 2-arg
+            # principal_authority_chain_reaches_genesis(pid, act_class)'s own hop test exactly.
+            exp.facts.append(f"delegation_edge({int(subj)},{int(obj)}).")
+            n_de += 1
+            if scope_raw:
+                # Postgres text[] literal, e.g. "{work_closed,milestone_closure}" -- parsed here
+                # (Python-side), never spliced as program text (ADR-0000's 2026-07-18 value/
+                # program-distinction amendment): each element becomes its OWN edge_scope_class
+                # fact, quoted as an ASP string constant, never concatenated into rule text.
+                members = scope_raw.strip("{}").split(",")
+                for m in members:
+                    if m:
+                        exp.facts.append(f'edge_scope_class({int(subj)},{int(obj)},"{m}").')
+                        n_sc += 1
+            else:
+                exp.facts.append(f"edge_unscoped({int(subj)},{int(obj)}).")
+                n_un += 1
+        exp.counts["edge_scope_class"] = n_sc
+        exp.counts["edge_unscoped"] = n_un
+        exp.counts["delegation_edge"] = n_de
+
     return exp
 
 
