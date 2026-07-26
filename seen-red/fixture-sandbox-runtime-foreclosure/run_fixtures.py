@@ -20,15 +20,25 @@ Cases:
                                  exits named: scratch worlds, the waiver).
   2-evasion-specimens       -- THE CENTERPIECE. The same underlying call (`./autoharn led
                                  --recent 1`, or the direct libexec/./led-alias equivalent),
-                                 spelled five different ways a static census either never saw or
+                                 spelled four different ways a static census either never saw or
                                  (per the pin-guard docstring's own KNOWN-UNCAUGHT section) is
                                  disclosed as unable to see: os.system (a shell string), a
                                  keyword-only `subprocess.run(args=[...])` call, a match/case-
-                                 built argv, the deprecated `./led` alias chain, and a direct
-                                 `libexec/autoharn/led` invocation that skips ./autoharn
-                                 entirely. Every one refuses identically -- exit 21, the same
-                                 teaching text -- because the refusal lives in the verb, not in
-                                 a parser looking for the verb.
+                                 built argv, and a direct `libexec/autoharn/led` invocation that
+                                 skips ./autoharn entirely. Every one refuses identically -- exit
+                                 21, the same teaching text -- because the refusal lives in the
+                                 verb, not in a parser looking for the verb.
+                                 RETIRED 2026-07-26 (root-shim-pruning, ledger rows 1357/1358/
+                                 1359): this case used to include a fifth specimen, (d), the
+                                 deprecated `./led` alias chain -- proving the refusal survived
+                                 one hop of indirection through that shim before reaching
+                                 ./autoharn. The shim is now deleted (row 1357: pruned as a
+                                 2.0.0 precondition), so that hop no longer exists to witness;
+                                 see this file's git history for the removed case body, and
+                                 seen-red/fixture-sandbox-runtime-foreclosure/red.txt for the
+                                 dated retirement note. Case (e) below (direct libexec bypass)
+                                 still covers the OTHER indirection direction -- skipping
+                                 ./autoharn's own dispatch entirely -- and is unaffected.
   3-waiver-proceeds         -- AUTOHARN_FIXTURE_SANDBOX_WAIVER="<reason>" -> no refusal text, the
                                  reason is echoed into the verb's own output.
   4-empty-waiver-refuses    -- AUTOHARN_FIXTURE_SANDBOX_WAIVER="" (present but empty) -> refused
@@ -95,7 +105,6 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 AUTOHARN = REPO / "autoharn"
-LED_ALIAS = REPO / "led"
 LIBEXEC_LED = REPO / "libexec" / "autoharn" / "led"
 LIBEXEC_SERVICE = REPO / "libexec" / "autoharn-service"
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
@@ -182,11 +191,10 @@ def case2_evasion_specimens() -> None:
     check("2c-match-case-argv-refused", is_refused(cp_c),
           f"exit={cp_c.returncode} tail={(cp_c.stdout + cp_c.stderr).strip()[-200:]!r}")
 
-    # (d) alias chain: the deprecated `./led` shim (execs `./autoharn led "$@"` underneath) --
-    # proves the refusal survives one full hop of indirection, not just a direct ./autoharn call.
-    cp_d = run([str(LED_ALIAS), "--recent", "1"])  # fixture-scratch-pinning-guard-waiver: this family IS the runtime-foreclosure witness (FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §6) -- every repo-verb invocation here runs under AUTOHARN_FIXTURE_SANDBOX=1 precisely to witness the verb REFUSING (exit 21) before touching any deployment; the refusal is the reviewed invariant
-    check("2d-alias-chain-refused", is_refused(cp_d),
-          f"exit={cp_d.returncode} tail={(cp_d.stdout + cp_d.stderr).strip()[-200:]!r}")
+    # (d) RETIRED 2026-07-26 (root-shim-pruning, ledger rows 1357/1358/1359): this used to be
+    # the alias-chain specimen -- the deprecated `./led` shim (execs `./autoharn led "$@"`
+    # underneath), proving the refusal survives one full hop of indirection. The shim is now
+    # deleted; see the docstring's own note above and red.txt for the dated retirement record.
 
     # (e) direct libexec bypass: skips ./autoharn's own dispatch entirely, landing straight on
     # libexec/autoharn/led -- this is the "alias chain" evasion in the OTHER direction (going
