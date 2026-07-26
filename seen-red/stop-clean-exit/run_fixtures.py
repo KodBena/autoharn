@@ -177,7 +177,9 @@ def led_stamped(session: str, *args: str) -> subprocess.CompletedProcess[str]:
     for `session` (see `_stamped_env`) -- the only way to land a `stamp_session`-bearing row
     outside a live Claude Code session, which is exactly what the queue-semantics narrowing AND
     the stop-disposition check both key on (claim ownership and disposition stamping alike)."""
-    return sh([str(PROBE_DIR / "led"), *args], cwd=str(PROBE_DIR), env=_stamped_env(session))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh([str(PROBE_DIR / "autoharn"), "led", *args], cwd=str(PROBE_DIR),
+              env=_stamped_env(session))
 
 
 def teardown_probe() -> None:
@@ -203,7 +205,8 @@ def led(*args: str, actor: str | None = None) -> subprocess.CompletedProcess[str
     env = dict(os.environ)
     if actor:
         env["LED_ACTOR"] = actor
-    return sh([str(PROBE_DIR / "led"), *args], cwd=str(PROBE_DIR), env=env)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh([str(PROBE_DIR / "autoharn"), "led", *args], cwd=str(PROBE_DIR), env=env)
 
 
 def build_env(case: Path) -> dict[str, str]:

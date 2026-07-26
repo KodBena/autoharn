@@ -207,17 +207,19 @@ def main() -> int:
         if r.returncode != 0:
             print("FRESH --new-world SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "judge", "pickup"):
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): one dispatcher now, not two shims.
+        for verb in ("autoharn",):
             p = world_dir / verb
             if p.exists():
                 p.chmod(0o755)
         dep = json.loads((world_dir / "deployment.json").read_text(encoding="utf-8"))
         fschema, fkern = dep["schema"], dep["kern"]
         fresh_epoch = psql(["-tA", "-c", f"SELECT epoch FROM {fkern}.migration_epoch;"]).stdout.strip()
-        led = world_dir / "led"
-        sh(["bash", str(led), "work", "open", "fresh-item", "Fresh"], cwd=str(world_dir))
-        sh(["bash", str(led), "work", "claim", "fresh-item"], cwd=str(world_dir))
-        rj = sh(["bash", str(led), "work", "close", "fresh-item", "dropped"], cwd=str(world_dir))
+        dispatcher = world_dir / "autoharn"
+        sh(["bash", str(dispatcher), "led", "work", "open", "fresh-item", "Fresh"], cwd=str(world_dir))
+        sh(["bash", str(dispatcher), "led", "work", "claim", "fresh-item"], cwd=str(world_dir))
+        rj = sh(["bash", str(dispatcher), "led", "work", "close", "fresh-item", "dropped"],
+                cwd=str(world_dir))
         out_j = rj.stdout + rj.stderr
         ok_fresh = (fresh_epoch == "0" and rj.returncode != 0
                     and "unrepresentable" in out_j)

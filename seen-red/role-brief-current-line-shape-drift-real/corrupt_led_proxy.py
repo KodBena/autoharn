@@ -17,6 +17,7 @@ reasoning seen-red/s51-artifact-store/run_fixtures.py's own WA6 corruption drill
 tampers stored bytes directly to test a real refusal path against real infra.
 """
 import os
+import shlex
 import subprocess
 import sys
 
@@ -25,7 +26,10 @@ CORRUPT_MATCH = os.environ["CORRUPT_MATCH"]
 
 
 def main(argv: list[str]) -> int:
-    proc = subprocess.run([REAL_LED] + argv, capture_output=True, text=True)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): REAL_LED is now "<dispatcher> led"
+    # (an argv prefix, space-joined) rather than a single executable path -- shlex-split before
+    # exec, matching role_brief.py's own DEFAULT_LED/run_led treatment.
+    proc = subprocess.run(shlex.split(REAL_LED) + argv, capture_output=True, text=True)
     if argv[:1] != ["current"]:
         sys.stdout.write(proc.stdout)
         sys.stderr.write(proc.stderr)

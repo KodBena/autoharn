@@ -44,15 +44,16 @@ autoharn repo itself, that content lives in
 [`user-guide/PROJECT-OVERVIEW.md`](user-guide/PROJECT-OVERVIEW.md) — not here. One exception,
 worth knowing before you deploy: the pointer immediately below.
 
-> **Note on invocation spelling (2026-07-23):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
-> introduced `./autoharn <verb>` (`autoharn --help` for the generated, self-updating roster) as
-> the primary way to run a command **inside THIS autoharn checkout's own root** — the tree you
-> clone to build from, not the project you deploy it to. It does NOT change anything this page
-> describes: everything below scaffolds a SEPARATE project directory, which still receives the
-> ten bare per-verb shims (`led`, `judge`, `pickup`, …) this page names, unchanged, until a
-> follow-on build migrates `bootstrap/new-project.sh`'s own scaffold (see CLAUDE.md's
-> operator-surface sentence, or `user-guide/ORCH-OPERATING-CARD.md`'s forward note, for the
-> current, honestly-scoped status of that migration).
+> **Note on invocation spelling (2026-07-26, UPDATED — the scaffold clause discharged):** design/
+> FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md introduced `./autoharn <verb>` (`autoharn --help` for the
+> generated, self-updating roster) as the primary way to run a command **inside THIS autoharn
+> checkout's own root** — the tree you clone to build from, not the project you deploy it to.
+> Its §6 amendment (ledger rows 1357/1365/1366/1367) carries the SAME shape to a scaffolded
+> project directory too: everything below scaffolds a SEPARATE project directory, which now
+> receives one `./autoharn` dispatcher (`led`, `judge`, `pickup`, … reached as `./autoharn
+> <verb>`), not bare per-verb shims — see CLAUDE.md's operator-surface sentence, or
+> `user-guide/ORCH-OPERATING-CARD.md`'s forward note, for the full account. A project scaffolded
+> before this migration keeps its older ten-bare-shim shape (untouched, runs-are-linear).
 
 ### Architecture at a glance
 
@@ -317,16 +318,24 @@ With a real `<deployment-dir>`, the script, in order:
 1. Checks `<deployment-dir>/deployment.json` exists and parses. Refuses and stops if not.
 2. Checks the deployment isn't already pinned (no `.autoharn` present already). If it is, it
    tells you to use `bootstrap/upgrade-submodule.sh` instead.
-3. Reads the original eight operator-verb shims (`led`, `judge`, `pickup`, `audit`,
-   `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`) plus `doctor` if
-   present (added after this script's original eight, so deliberately optional rather than
-   required — a deployment scaffolded before `./doctor` existed legitimately has no such shim;
-   the script's own comment states this), and confirms they all agree on which autoharn checkout
-   they currently `exec` out of. Refuses if any of those (eight, or nine with `doctor`) is
-   missing, malformed, or they disagree with each other. **Disclosed gap, found in reach, not
-   fixed here:** unlike `doctor`, `asof-export` (also scaffolded by `new-project.sh`, ten shims
+3. **Detects the deployment's shape first** (§6 amendment, design/FABLE-AUTOHARN-UMBRELLA-CLI-
+   SPEC.md, ledger rows 1357/1365/1366/1367): a deployment scaffolded by TODAY's
+   `bootstrap/new-project.sh` has ONE dispatcher, `./autoharn`, not per-verb shims — if it's
+   present, the script reads its exec line directly to discover which autoharn checkout it
+   currently routes into. A deployment scaffolded BEFORE this migration keeps the older shape
+   (runs-are-linear, worlds are born not upgraded), so absent that dispatcher the script falls
+   back to its original discovery: reads the original eight operator-verb shims (`led`, `judge`,
+   `pickup`, `audit`, `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`)
+   plus `doctor` if present (added after this script's original eight, so deliberately optional
+   rather than required — a deployment scaffolded before `./doctor` existed legitimately has no
+   such shim), and confirms they all agree on which autoharn checkout they currently `exec` out
+   of. Either way, refuses if the discovery target is missing, malformed, or (old shape only)
+   the shims disagree with each other. **Disclosed gap, found in reach, not fixed here, old
+   shape only:** unlike `doctor`, `asof-export` (also scaffolded by `new-project.sh`, ten shims
    total) is never checked at all, even when present — a deployment whose `asof-export` shim
    disagrees with the others on which checkout it points at would not be caught by this check.
+   (The new dispatcher shape has no per-verb variant to disagree with itself — one file, one
+   exec line — so this gap does not apply there.)
 4. Confirms that discovered autoharn checkout is a clean git repository (no uncommitted changes)
    and reads its current commit — that is the commit your deployment gets pinned to (**not**
    autoharn's current tip; converting is not the same act as upgrading).
@@ -336,15 +345,18 @@ With a real `<deployment-dir>`, the script, in order:
    `<deployment-dir>`.
 6. Prints exactly what it is about to do and asks you to type `CONVERT` to proceed (unless
    `--yes`).
-7. Adds the `.autoharn` submodule pinned to that commit, repoints those shims (eight, or nine
-   with `doctor` — same set step 3 discovered; `asof-export` is not repointed by this script even
-   if present, the same disclosed gap named in step 3 above) and the hook wiring in
-   `<deployment-dir>/.claude/settings.json` at the pinned copy, and commits the change in
-   `<deployment-dir>`'s own git history.
-8. Verifies every verb resolves into the new pin, then runs `./led --recent 1` inside
-   `<deployment-dir>` as a smoke test.
-9. Prints the exact `./led decision "..."` lines to record the conversion, both in this autoharn
-   checkout's own ledger and (if `<deployment-dir>` has one) in the deployment's own ledger.
+7. Adds the `.autoharn` submodule pinned to that commit, then repoints EITHER the one dispatcher
+   (a blanket string replacement of the old exec-root path, in place — the new shape) OR the
+   discovered shims (the old shape, same set step 3 discovered; `asof-export` is not repointed
+   by this script even if present, the same disclosed gap named in step 3 above), plus the hook
+   wiring in `<deployment-dir>/.claude/settings.json` at the pinned copy, and commits the change
+   in `<deployment-dir>`'s own git history.
+8. Verifies the dispatcher (or every shim, old shape) resolves into the new pin, then runs
+   `./autoharn led --recent 1` (or `./led --recent 1`, old shape) inside `<deployment-dir>` as a
+   smoke test.
+9. Prints the exact `./autoharn led decision "..."` (or `./led decision "..."`, old shape) lines
+   to record the conversion, both in this autoharn checkout's own ledger and (if
+   `<deployment-dir>` has one) in the deployment's own ledger.
 
 If verification fails after the commit, the script says so explicitly — the commit has already
 happened at that point, and the message tells you to fix the named verb by hand or `git revert`
@@ -392,10 +404,14 @@ With real arguments, the script:
 6. Verifies nine of the ten operator verbs (the original eight plus `doctor`, this script's own
    `VERBS` list — `asof-export` is not checked, the same disclosed gap
    [step 2's convert-to-submodule.sh section above](#2-convert-an-existing-deployment-to-a-submodule)
-   names) still resolve to an executable file at the new pin, then runs `./led --recent 1` as a
-   smoke test.
-7. Prints the exact `./led decision "..."` lines to record the upgrade, in both ledgers as in
-   step 2.
+   names) still resolve to an executable file **at the pinned checkout's own template tree** —
+   this check reads `.autoharn/bootstrap/templates/*.tmpl`, which exists identically regardless
+   of whether `<deployment-dir>` itself carries the new one-dispatcher shape or the old ten-shim
+   shape, so it needs no shape branch of its own. The smoke test does: `./autoharn led
+   --recent 1` if `<deployment-dir>/autoharn` exists (the new shape), else `./led --recent 1`
+   (the old shape).
+7. Prints the exact `./autoharn led decision "..."` (or `./led decision "..."`, old shape) lines
+   to record the upgrade, in both ledgers as in step 2.
 
 Every operator verb and hook in the deployment picks up the new bytes on its very next
 invocation after the commit — nothing else changes.

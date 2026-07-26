@@ -117,7 +117,11 @@ def _row_count(schema: str, role: str) -> int:
 
 
 def _run(dest: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([str(dest / args[0]), *args[1:]], capture_output=True, text=True,
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has bare
+    # per-verb shim files -- routed through the one dispatcher now (NOTE: this function's own
+    # `main()` is dead code, bypassed by `_retired_track_work_arc()` below -- fixed for fossil
+    # accuracy in case track-work worlds are ever revived, not because it currently executes).
+    return subprocess.run([str(dest / "autoharn"), *args], capture_output=True, text=True,
                            cwd=str(dest), input=stdin)
 
 
@@ -134,7 +138,7 @@ def main() -> int:
         dest_full = tmp_full / WORLD_FULL
         r = subprocess.run(["bash", str(NEW_PROJECT), str(dest_full), "--new-world", WORLD_FULL,
                              "--db", DB, "--host", PGHOST], capture_output=True, text=True)
-        for verb in ("led", "judge", "pickup"):
+        for verb in ("autoharn",):
             p = dest_full / verb
             if p.exists():
                 p.chmod(0o755)

@@ -110,7 +110,10 @@ def teardown_all() -> None:
 
 
 def led(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return sh([str(world_dir / "led"), *args], cwd=str(world_dir))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now
+    # (NOTE: this function's own `main()` is dead code, bypassed by `_retired_track_work_arc()`
+    # below -- fixed for fossil accuracy in case track-work worlds are ever revived).
+    return sh([str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir))
 
 
 def scaffold_full() -> tuple[Path, dict]:
@@ -121,7 +124,7 @@ def scaffold_full() -> tuple[Path, dict]:
             "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
         raise RuntimeError(f"SCAFFOLD-FULL FAILED: {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
+    for verb in ("autoharn",):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)

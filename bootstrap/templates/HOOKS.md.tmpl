@@ -38,7 +38,7 @@
   distinguishable by reading the row's actor (which principal signed it) together with its
   stamp state (whether a live Claude session invocation stamped it), never by prose claims
   alone.
-- **Orienting in this world:** run `./pickup` (below) any time you need a live resume brief —
+- **Orienting in this world:** run `./autoharn pickup` (below) any time you need a live resume brief —
   in-force decisions, open questions, review debt, recent changes — derived fresh, never stale.
 
 __LAW_SECTION__
@@ -84,7 +84,7 @@ pointed at this project's ledger:
    **UNWITNESSED-until-run caveat**: `apparatus.json`'s `deny_hint` is baked into
    `.claude/settings.json` at scaffold time, not read live; see `APPARATUS.md`'s honest-limit
    note. On a deny, the message tells the agent exactly what to do:
-   `./led -f <file> decision "<why>"`, then re-issue the same edit. State and journal live under
+   `./autoharn led -f <file> decision "<why>"`, then re-issue the same edit. State and journal live under
    `.claude/` (gitignored).
 
    **Known host-connection limitation (BACKLOG, autoharn, 2026-07-09):** the change gate's
@@ -192,14 +192,14 @@ invocation with synthesized payloads, on scratch worlds, never by wiring it in h
 ## `led` — one-liner ledger entries
 
 ```sh
-./led decision "..."
-./led -f palette.py decision "palette.py: ..."   # authorizes editing palette.py
-./led --recent [N]           # last N rows (default 10)
-./led current [N]            # last N rows of ledger_current (supersedes filtered)
-./led register-principal reviewer subagent   # already done for you in --new-world mode --
+./autoharn led decision "..."
+./autoharn led -f palette.py decision "palette.py: ..."   # authorizes editing palette.py
+./autoharn led --recent [N]           # last N rows (default 10)
+./autoharn led current [N]            # last N rows of ledger_current (supersedes filtered)
+./autoharn led register-principal reviewer subagent   # already done for you in --new-world mode --
                                               # see the "reviewer principal status" bullet above;
                                               # this form registers any FURTHER principal you need
-./led review 12 attest technical "independent read: ... checks out"
+./autoharn led review 12 attest technical "independent read: ... checks out"
 ```
 
 **UNWITNESSED** — run these against this project's own ledger and replace this line with the
@@ -229,7 +229,7 @@ DIFFERENT invocation than the row it regards — otherwise the trigger refuses a
 
 ## `judge` — the engine differential verdict
 
-`./judge` is `led`'s sibling, wiring this project's ledger to autoharn's deductive engine. It
+`./autoharn judge` is `led`'s sibling, wiring this project's ledger to autoharn's deductive engine. It
 invokes autoharn's `engine/ledger_differential.py __PROJECT_NAME__ --retain` (via
 `LEDGER_DEPLOYMENT=__PROJECT_ROOT__/deployment.json`, autoharn `engine/targets.py`'s THIRD
 resolution source — vestigial_documentation/design/ORCH-OPUS-READINESS.md move 1) and prints the closed verdict vocabulary
@@ -237,19 +237,19 @@ resolution source — vestigial_documentation/design/ORCH-OPUS-READINESS.md move
 `DIVERGE_DEFECT`/`QUARANTINED`. **Observer-first**: not wired into either project's gates.
 
 ```sh
-./judge                  # ordinary run: retain DerivationRecords, print the verdict
-./judge --drop-record    # negative control: drop the ASP witness, watch the consumer refuse
+./autoharn judge                  # ordinary run: retain DerivationRecords, print the verdict
+./autoharn judge --drop-record    # negative control: drop the ASP witness, watch the consumer refuse
 ```
 
-**UNWITNESSED** — run `./judge` against this project's own live ledger and replace this line
+**UNWITNESSED** — run `./autoharn judge` against this project's own live ledger and replace this line
 with the observed verdict line before trusting this doc's claim about `judge`.
 
 ## `pickup` — the resume verb
 
-`./pickup` derives a resume brief from live sources every time it runs (never stored — a stored
+`./autoharn pickup` derives a resume brief from live sources every time it runs (never stored — a stored
 handoff decays from the moment of writing): in-force decisions, open questions, review debt,
 recent changes, this repo's git state, and an explicit "in-flight: UNAVAILABLE" line (no
 work-item layer yet — v2 territory). See `pickup --help`.
 
-**UNWITNESSED** — run `./pickup` against this project's own live ledger and replace this line
+**UNWITNESSED** — run `./autoharn pickup` against this project's own live ledger and replace this line
 with its actual section-by-section output before trusting this doc's claim about `pickup`.

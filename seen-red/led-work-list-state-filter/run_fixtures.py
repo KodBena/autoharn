@@ -110,7 +110,9 @@ def _drop_scratch() -> None:
 
 
 def _run(dest: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(dest / args[0]), *args[1:]], capture_output=True, text=True, cwd=str(dest))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): `args[0]` (e.g. "led") is now the
+    # FIRST ARGUMENT to the one dispatcher, `dest/autoharn`, not a filename to resolve directly.
+    return subprocess.run([str(dest / "autoharn"), *args], capture_output=True, text=True, cwd=str(dest))
 
 
 def _run_reverted(dest: Path, reverted: Path, *args: str) -> subprocess.CompletedProcess:
@@ -134,7 +136,7 @@ def main() -> int:
     # work_review_disposition column, which only --new-world's full birth chain carries.
     r = subprocess.run(["bash", str(NEW_PROJECT), str(dest), "--new-world", SCRATCH_NAME,
                         "--db", DB, "--host", PGHOST], capture_output=True, text=True, cwd=str(REPO))
-    for verb in ("led", "judge", "pickup"):
+    for verb in ("autoharn",):
         p = dest / verb
         if p.exists():
             p.chmod(0o755)

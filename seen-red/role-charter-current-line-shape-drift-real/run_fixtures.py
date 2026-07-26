@@ -91,7 +91,11 @@ def _drop_scratch() -> None:
 
 
 def _run_led(dest: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+    # SPEC.md's scaffold clause executes): a scaffolded world no longer has a bare `<dest>/led`
+    # shim file -- `<dest>/autoharn led ...` is the one dispatcher every verb routes through now.
+    return subprocess.run([str(dest / "autoharn"), "led", *args], cwd=str(dest),
+                           capture_output=True, text=True)
 
 
 def main() -> int:
@@ -113,7 +117,10 @@ def main() -> int:
     crashed_with: BaseException | None = None
     try:
         proc = bs_fixtures.serve_existing_world(dest / "deployment.json", tmpdir)
-        real_led = str(dest / "led")
+        # §6 amendment: role_charter.py's own --led is shlex-split into an argv prefix now
+        # (tools/role_charter.py's DEFAULT_LED comment) -- "<dispatcher> led", space-joined,
+        # matches that default's own shape exactly.
+        real_led = f"{dest / 'autoharn'} led"
 
         reg = _run_led(dest, "register-principal", ROLE_NAME, "human",
                         "--purpose", "role-charter-current-line-shape-drift-real fixture")

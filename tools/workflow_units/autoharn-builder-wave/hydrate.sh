@@ -23,13 +23,27 @@ set -uo pipefail
 # legacy-led-retirement pass (row 1149): flipped to served "./led" -- SAFE (unlike DRIVE_TEMPLATE
 # below, still on legacy): every verb here (work open/depends, obligate) is COVERED, and every
 # string matched in `$out` is the KERNEL's own RAISE EXCEPTION text either way.
-# Re-flipped to "libexec/autoharn/led" (root-shim-pruning, ledger row 1357, 2026-07-26): this
-# workflow is self-referential to THIS repo's own root (design/workflows/autoharn-builder-
-# wave.toml's own header names it "this repository's own builder-wave shape"), so the bare
-# "./led" root alias this default relied on is gone; libexec/autoharn/led is the same file the
-# old shim exec'd.
-LED="libexec/autoharn/led"
+LED="libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
 INSTANCE=""
+# CONFIRMING-REVIEW FIX ROUND, finding 3 (2026-07-26): the round-1 commit message claimed this
+# script "never needed the shlex fix (sh's unquoted $LED already word-splits)" -- FACTUALLY
+# WRONG, corrected in this round's own commit message. Every use of $LED below has ALWAYS been
+# quoted ("$LED" work open ..., "$LED" obligate ...), so a multi-token --led override (e.g.
+# "python3 /bin/echo", or a scaffolded world's own "./autoharn led") was passed as ONE literal,
+# nonexistent filename -- the identical class of bug DRIVE_TEMPLATE's run_led had, just never
+# actually exercised against this script until this round's fixture did. led_run() below gives
+# real multi-token support: POSIX-sh clean (works under bash or dash alike, matching this
+# script's own portable `[ ]`-test style), no eval, no bash arrays -- `set -- $LED "$@"` under
+# `set -f` (glob disabled so a token containing e.g. `*` is never glob-expanded, only field-split
+# on IFS) prepends $LED's own word-split tokens as a positional-parameter prefix ahead of this
+# call's own args, then `"$@"` executes the assembled argv. Every prior direct `"$LED" ...` call
+# site below is now `led_run ...` instead.
+led_run() {
+  set -f
+  set -- $LED "$@"
+  set +f
+  "$@"
+}
 OBLIGATE_ASSIGNED_BY="reviewer"
 OBLIGATE_OBLIGED_ACTOR="author"
 NO_OBLIGATE=0
@@ -82,7 +96,7 @@ echo "-- led: $LED --"
 # opened -- caller proceeds). Sets $OPEN_RC as the raw led exit code for callers that care.
 open_phase() {
   local slug="$1" title="$2"
-  out=$("$LED" work open "$slug" "$title" 2>&1)
+  out=$(led_run work open "$slug" "$title" 2>&1)
   OPEN_RC=$?
   if [ "$OPEN_RC" -eq 0 ]; then
     echo "$out"
@@ -117,21 +131,21 @@ PHASE_ORCHESTRATOR_MERGE_FRESH=$?
 
 
 if [ "$PHASE_BUILD_AND_WITNESS_FRESH" -eq 1 ]; then
-  out=$("$LED" work depends "$SLUG_BUILD_AND_WITNESS" "$SLUG_CLAIM" --type blocks-start 2>&1); rc=$?
+  out=$(led_run work depends "$SLUG_BUILD_AND_WITNESS" "$SLUG_CLAIM" --type blocks-start 2>&1); rc=$?
   echo "$out"
   [ $rc -eq 0 ] || { echo "$0: REFUSED writing depends edge $SLUG_BUILD_AND_WITNESS -> $SLUG_CLAIM" >&2; exit 1; }
 else
   echo "$SLUG_BUILD_AND_WITNESS: skipping depends_on edge to $SLUG_CLAIM (phase already hydrated)"
 fi
 if [ "$PHASE_CLOSE_DEFERRED_FRESH" -eq 1 ]; then
-  out=$("$LED" work depends "$SLUG_CLOSE_DEFERRED" "$SLUG_BUILD_AND_WITNESS" --type blocks-start 2>&1); rc=$?
+  out=$(led_run work depends "$SLUG_CLOSE_DEFERRED" "$SLUG_BUILD_AND_WITNESS" --type blocks-start 2>&1); rc=$?
   echo "$out"
   [ $rc -eq 0 ] || { echo "$0: REFUSED writing depends edge $SLUG_CLOSE_DEFERRED -> $SLUG_BUILD_AND_WITNESS" >&2; exit 1; }
 else
   echo "$SLUG_CLOSE_DEFERRED: skipping depends_on edge to $SLUG_BUILD_AND_WITNESS (phase already hydrated)"
 fi
 if [ "$PHASE_ORCHESTRATOR_MERGE_FRESH" -eq 1 ]; then
-  out=$("$LED" work depends "$SLUG_ORCHESTRATOR_MERGE" "$SLUG_CLOSE_DEFERRED" --type blocks-start 2>&1); rc=$?
+  out=$(led_run work depends "$SLUG_ORCHESTRATOR_MERGE" "$SLUG_CLOSE_DEFERRED" --type blocks-start 2>&1); rc=$?
   echo "$out"
   [ $rc -eq 0 ] || { echo "$0: REFUSED writing depends edge $SLUG_ORCHESTRATOR_MERGE -> $SLUG_CLOSE_DEFERRED" >&2; exit 1; }
 else
@@ -162,7 +176,7 @@ elif [ "0" = "1" ]; then
     if [ "$REPLY" = "OBLIGATE" ]; then CONFIRMED=1; else CONFIRMED=0; fi
   fi
   if [ "$CONFIRMED" -eq 1 ]; then
-    out=$("$LED" obligate "autoharn-builder-wave-${INSTANCE}-review" "$OBLIGATE_ASSIGNED_BY" "$OBLIGATE_OBLIGED_ACTOR" 2>&1)
+    out=$(led_run obligate "autoharn-builder-wave-${INSTANCE}-review" "$OBLIGATE_ASSIGNED_BY" "$OBLIGATE_OBLIGED_ACTOR" 2>&1)
     rc=$?
     if [ $rc -eq 0 ]; then
       echo "$out"

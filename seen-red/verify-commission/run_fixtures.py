@@ -230,13 +230,16 @@ def main() -> int:
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "verify-commission"):
-            (world_dir / verb).chmod(0o755)
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): one dispatcher now, not two shims.
+        for verb in ("autoharn",):
+            p = world_dir / verb
+            if p.exists():
+                p.chmod(0o755)
         proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
         print("  scaffold OK.\n")
 
         statement = "Build the GPG trust layer per design/MAINT-GPG-TRUST-LAYER.md, all three rungs."
-        r = sh(["bash", str(world_dir / "led"), "commission", statement],
+        r = sh(["bash", str(world_dir / "autoharn"), "led", "commission", statement],
                env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
         if r.returncode != 0:
             print("COMMISSION WRITE FAILED:", r.stdout, r.stderr)

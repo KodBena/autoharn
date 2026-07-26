@@ -163,7 +163,8 @@ def led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.Comp
     e = dict(os.environ)
     if env:
         e.update(env)
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir), env=e)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir), env=e)
 
 
 def psql_tuples(sql: str) -> str:
@@ -183,7 +184,7 @@ def scaffold_classic_s35(world: str) -> Path:
             "--schema", schema, "--kern", kern, "--role", role])
     if r.returncode != 0:
         raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
+    for verb in ("autoharn",):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)

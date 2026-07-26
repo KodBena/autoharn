@@ -5,7 +5,7 @@ WHY THIS EXISTS: row 1147's finding named the real gap plainly -- a newborn worl
 self-describing enough to keep a cheap orchestrator oriented, and the maintainer proposed two
 fixes: a self-describing CLAUDE.md (see bootstrap/templates/CLAUDE.md.tmpl's own new opening
 block) and a `doctor` verb answering the operator's actual question in one witnessed call,
-rather than requiring several separate reads (deployment.json, a psql session, `./led`, ...)
+rather than requiring several separate reads (deployment.json, a psql session, `./autoharn led`, ...)
 before an orchestrator can say whether a world is healthy.
 
 READ-ONLY, ALWAYS. This file issues no INSERT/UPDATE/DELETE and writes no file -- every check
@@ -64,7 +64,7 @@ if any(a in ("--help", "-h") for a in sys.argv[1:]):
         "\n"
         "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
         "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
-        "high-water/epoch, ./led answers a read query, boundary URL, principals registered.\n"
+        "high-water/epoch, ./autoharn led answers a read query, boundary URL, principals registered.\n"
         "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
         "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
         "least one FAIL line. Takes no arguments beyond --help/-h."
@@ -191,7 +191,14 @@ def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     teaching, whether the boundary was never configured at all (no boundary-multiplex.toml) or
     was configured but is not currently reachable (`check_boundary` below reports the SAME
     unreachable fact independently; this FAIL is not contingent on that check having run)."""
-    led_bin = PROJECT_ROOT / "led"
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a world no longer has a standalone
+    # `led` shim file -- `./autoharn led ...` is the one dispatcher every verb routes through
+    # now (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment). This check used to drive
+    # `PROJECT_ROOT / "led"` directly; that file no longer exists on a freshly-scaffolded world,
+    # so driving it unconditionally would FAIL every newborn world at birth -- exactly the kind
+    # of hazard this migration must not leave behind. Drives the world's own `./autoharn`
+    # dispatcher with `led --recent 1` instead; same live read, same PASS/FAIL shape.
+    dispatcher_bin = PROJECT_ROOT / "autoharn"
     toml_path = PROJECT_ROOT / "boundary-multiplex.toml"
     if not dep.boundary_url:
         if toml_path.is_file():
@@ -204,23 +211,25 @@ def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
                      f"it: (cd {AUTOHARN} && python3 tools/setup_tui/app.py {PROJECT_ROOT}), "
                      f"select Boundary in the tree, and commit -- there is no legacy/led fallback "
                      f"to reach for (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)")
-        return _line("./led answers a read query", FAIL,
+        return _line("./autoharn led answers a read query", FAIL,
                      f"boundary_url absent from deployment.json -- {teach}"), FAIL
-    if not (led_bin.is_file() and os.access(led_bin, os.X_OK)):
-        return _line("./led answers a read query", FAIL, f"no executable ./led at {PROJECT_ROOT}"), FAIL
+    if not (dispatcher_bin.is_file() and os.access(dispatcher_bin, os.X_OK)):
+        return _line("./autoharn led answers a read query", FAIL,
+                     f"no executable ./autoharn dispatcher at {PROJECT_ROOT}"), FAIL
     try:
-        r = subprocess.run([str(led_bin), "--recent", "1"], cwd=PROJECT_ROOT,
+        r = subprocess.run([str(dispatcher_bin), "led", "--recent", "1"], cwd=PROJECT_ROOT,
                            capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return _line("./led answers a read query", FAIL, f"{e.__class__.__name__}: {e}"), FAIL
+        return _line("./autoharn led answers a read query", FAIL, f"{e.__class__.__name__}: {e}"), FAIL
     if r.returncode != 0:
         detail = _first_line(r.stderr) or _first_line(r.stdout) or f"exit {r.returncode}"
         teach = (f"start the boundary service: (cd {AUTOHARN} && python3 -m "
                  f"serving.boundary_service --config {toml_path} --port <PORT>) then re-run "
-                 f"doctor -- the served ./led shim refuses every query while the boundary it "
-                 f"depends on is down (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5)")
-        return _line("./led answers a read query", FAIL, f"(./led) {detail} -- {teach}"), FAIL
-    return _line("./led answers a read query", PASS, f"./led --recent 1 exited 0"), PASS
+                 f"doctor -- the served ./autoharn led dispatch refuses every query while the "
+                 f"boundary it depends on is down (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-"
+                 f"REBASE-SPEC.md §5)")
+        return _line("./autoharn led answers a read query", FAIL, f"(./autoharn led) {detail} -- {teach}"), FAIL
+    return _line("./autoharn led answers a read query", PASS, f"./autoharn led --recent 1 exited 0"), PASS
 
 
 def _boundary_pidfile_consistency_note(dep: deployment_record.DeploymentRecord) -> str:
@@ -299,7 +308,7 @@ def main() -> int:
     if dep is None:
         skip_reason = "deployment.json did not parse (see line above)"
         for label in ("database reachable", "schema + kern schema exist",
-                      "lineage high-water/epoch", "./led answers a read query",
+                      "lineage high-water/epoch", "./autoharn led answers a read query",
                       "boundary URL", "principals registered"):
             print(_line(label, SKIP, skip_reason))
             verdicts.append(SKIP)

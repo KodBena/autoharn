@@ -38,6 +38,13 @@ CASES (both polarities, all live subprocess runs of the real scaffold — never 
                         and writes NO `.claude/settings.json`, NO root `CLAUDE.md` (the "standing
                         project is not a governed world" contract, checked directly, not just
                         asserted by the scaffold's own stdout).
+  GREEN-HELP-LINES   -- (fix round, 2026-07-26, strengthened-review finding 4) `./autoharn --help`
+                        prints every one of the ten SHIM_VERBS_ALL verb names on its OWN line
+                        (line count >= verb count) -- structural guard against the exact
+                        run-on-line heredoc/command-substitution defect batch 1's first draft of
+                        this dispatcher hit and fixed (see the mechanism's own commit history);
+                        this is the ONLY family that exercises a scaffold's `--help` output at
+                        all, so it is where that guard belongs.
   GREEN-BOUNDARY-AUTOSPAWN -- no boundary daemon is running after GREEN-ADOPT (no
                         `.autoharn-service.pid`); the FIRST `./led work open` call spawns one
                         automatically (ensure-running) and the write succeeds.
@@ -68,6 +75,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -191,9 +199,18 @@ def main() -> int:
     r = _run_scaffold(dest, "--name", SCRATCH_NAME, "--schema", SCHEMA, "--kern", KERN, "--role", ROLE)
     ok = r.returncode == 0
     dep_path = dest / "deployment.json"
-    scaffold_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
-                      "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
-    verbs_present = all((dest / v).exists() and (dest / v).stat().st_mode & 0o111 for v in scaffold_verbs)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+    # SPEC.md's scaffold clause executes): the RED-leg shape change itself -- a tracker-profile
+    # world now gets ONE dispatcher, `autoharn`, and NONE of the ten bare per-verb shims (the
+    # old-shape absence is the red leg; a pre-migration scaffold HAD each of these ten files).
+    old_shim_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
+                       "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
+    no_old_shims = not any((dest / v).exists() for v in old_shim_verbs)
+    verbs_present = bool(
+        no_old_shims
+        and (dest / "autoharn").exists()
+        and (dest / "autoharn").stat().st_mode & 0o111
+    )
     boundary_toml = (dest / "boundary-multiplex.toml").is_file()
     no_hooks = not (dest / ".claude" / "settings.json").exists() and not (dest / "CLAUDE.md").exists()
     dep = json.loads(dep_path.read_text(encoding="utf-8")) if dep_path.exists() else {}
@@ -209,10 +226,38 @@ def main() -> int:
           f"{boundary_keys_present} -- "
           f"{'PASS' if ok and dep_path.exists() and verbs_present and boundary_toml and no_hooks and boundary_keys_present else 'FAIL'}")
 
+    # ---------------------------------------------------------- GREEN-HELP-LINES (fix round,
+    # 2026-07-26, strengthened-review finding 4): the dispatcher's own --help roster is built
+    # from a `cat <<'DISPATCHVERBS' ... DISPATCHVERBS` heredoc piped through `awk` -- batch 1's
+    # first draft of this exact mechanism (see the freeze-at-stamp.sh sibling's own commit
+    # history) once glued all ten verbs onto ONE run-on line when a command-substitution step ate
+    # the heredoc's trailing newlines; unguarded, a future heredoc reformat could silently
+    # reintroduce that. Structural assertion: every one of the ten SHIM_VERBS_ALL verb NAMES
+    # appears on its OWN line of `--help` output, and the total line count is at least the verb
+    # count (never fewer lines than verbs, which a run-on glue would produce).
+    help_r = subprocess.run([str(dest / "autoharn"), "--help"], capture_output=True, text=True)
+    help_lines = help_r.stdout.splitlines()
+    ten_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
+                 "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
+    own_line_re = {v: re.compile(rf"^\s*{re.escape(v)}\b") for v in ten_verbs}
+    verbs_on_own_line = {v: any(rx.match(line) for line in help_lines) for v, rx in own_line_re.items()}
+    all_verbs_on_own_line = all(verbs_on_own_line.values())
+    enough_lines = len(help_lines) >= len(ten_verbs)
+    help_ok = help_r.returncode == 0 and all_verbs_on_own_line and enough_lines
+    if not help_ok:
+        failures.append(
+            f"GREEN-HELP-LINES: exit={help_r.returncode} line_count={len(help_lines)} "
+            f"verb_count={len(ten_verbs)} verbs_on_own_line={verbs_on_own_line}\n"
+            f"STDOUT:\n{help_r.stdout}\nSTDERR:\n{help_r.stderr}")
+    print(f"GREEN-HELP-LINES: exit={help_r.returncode} help output has {len(help_lines)} lines "
+          f"(>= {len(ten_verbs)} verbs: {enough_lines}), every verb on its own line: "
+          f"{all_verbs_on_own_line} -- {'PASS' if help_ok else 'FAIL'}")
+
     # ---------------------------------------------------------------- GREEN-BOUNDARY-AUTOSPAWN
     pidfile_before = (dest / ".autoharn-service.pid").exists()
-    r_open = subprocess.run([str(dest / "led"), "work", "open", "smoke", "fixture smoke item"],
-                            capture_output=True, text=True, cwd=str(dest))
+    # §6 amendment: routed through the one dispatcher now, not a bare `led` shim.
+    r_open = subprocess.run([str(dest / "autoharn"), "led", "work", "open", "smoke",
+                             "fixture smoke item"], capture_output=True, text=True, cwd=str(dest))
     autospawned = "spawned it" in r_open.stderr or "unreachable" in r_open.stderr.lower() and r_open.returncode == 0
     pidfile_after = (dest / ".autoharn-service.pid").exists()
     autospawn_ok = (not pidfile_before) and r_open.returncode == 0 and pidfile_after
@@ -225,13 +270,16 @@ def main() -> int:
           f"{'PASS' if autospawn_ok else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-ROUNDTRIP
-    r_list1 = subprocess.run([str(dest / "led"), "work", "list"], capture_output=True, text=True, cwd=str(dest))
+    r_list1 = subprocess.run([str(dest / "autoharn"), "led", "work", "list"],
+                             capture_output=True, text=True, cwd=str(dest))
     list1_ok = r_list1.returncode == 0 and '"slug": "smoke"' in r_list1.stdout
-    r_claim = subprocess.run([str(dest / "led"), "work", "claim", "smoke"], capture_output=True, text=True, cwd=str(dest))
-    r_close = subprocess.run([str(dest / "led"), "work", "close", "smoke", "shipped",
+    r_claim = subprocess.run([str(dest / "autoharn"), "led", "work", "claim", "smoke"],
+                             capture_output=True, text=True, cwd=str(dest))
+    r_close = subprocess.run([str(dest / "autoharn"), "led", "work", "close", "smoke", "shipped",
                               "--review-deferred", "--witness", "test:fixture"],
                              capture_output=True, text=True, cwd=str(dest))
-    r_list2 = subprocess.run([str(dest / "led"), "work", "list"], capture_output=True, text=True, cwd=str(dest))
+    r_list2 = subprocess.run([str(dest / "autoharn"), "led", "work", "list"],
+                             capture_output=True, text=True, cwd=str(dest))
     list2_ok = r_list2.returncode == 0 and '"slug": "smoke"' not in r_list2.stdout
     roundtrip_ok = (list1_ok and r_claim.returncode == 0 and r_close.returncode == 0 and list2_ok)
     if not roundtrip_ok:
@@ -243,7 +291,8 @@ def main() -> int:
           f"list(excludes closed) -- {'PASS' if roundtrip_ok else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-DOCTOR
-    r_doctor = subprocess.run([str(dest / "doctor")], capture_output=True, text=True, cwd=str(dest))
+    r_doctor = subprocess.run([str(dest / "autoharn"), "doctor"], capture_output=True, text=True,
+                              cwd=str(dest))
     doctor_ok = r_doctor.returncode == 0 and "0 FAIL" in r_doctor.stdout
     if not doctor_ok:
         failures.append(f"GREEN-DOCTOR: exit={r_doctor.returncode}\n{r_doctor.stdout}")

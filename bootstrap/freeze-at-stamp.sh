@@ -1,8 +1,9 @@
 #!/bin/sh
 # freeze-at-stamp.sh -- produce a "tree correlated with db frozen in time": a git tree pinned at
 # one commit PLUS this repo's own tracker (the autoharn root ledger) truncated to the same
-# instant, wired together so the frozen dest's own ./pickup/./led/./judge/etc. read ONLY the
-# frozen snapshot, never the live tracker and never the live checkout.
+# instant, wired together so the frozen dest's own ./autoharn dispatcher (pickup/led/judge/etc.,
+# design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment) reads ONLY the frozen snapshot, never
+# the live tracker and never the live checkout.
 #
 # WHY THIS EXISTS (tracker slug `freeze-at-stamp`, `./autoharn led show 225` for the full commission; see
 # also decision rows 228/229 for the two spec amendments this script implements): a control-
@@ -558,8 +559,8 @@ write_deployment(path, DeploymentRecord(db=db, host=host, schema=schema, kern=ke
 print(f"wrote {path}")
 PYEOF
 
-echo "== writing $DEST verb shims (exec the DEST's OWN bootstrap/templates, never the live" \
-     "checkout's -- live-verbs semantics are exactly wrong for settled evidence) =="
+echo "== writing $DEST/autoharn (dispatcher, exec's the DEST's OWN bootstrap/templates, never the" \
+     "live checkout's -- live-verbs semantics are exactly wrong for settled evidence) =="
 # WHY PGUSER=$DB_RO_ROLE IS SET HERE (a real hazard found and closed while witnessing this script,
 # not assumed): every existing verb template (led.tmpl/pickup.tmpl/judge.tmpl/verify-chain.tmpl/...)
 # connects with a bare `psql -h <host> -d <db> ...` -- NO `-U` flag anywhere -- and relies on the
@@ -571,20 +572,74 @@ echo "== writing $DEST verb shims (exec the DEST's OWN bootstrap/templates, neve
 # database, witnessed live while building this script (a bare `psql -h ... -d autoharn_test`
 # refuses with "no pg_hba.conf entry for ... user \"bork\"", before any SET ROLE is even reached).
 # `PGUSER` is libpq's own standard env-var override for the connecting role (psql's `-U` flag reads
-# the identical variable) -- setting it in the shim's exec environment makes every one of those
-# unmodified verb templates connect AS `$DB_RO_ROLE` directly, with no edit to any .tmpl file
-# needed (ADR-0012 P1: the ONE existing connection mechanism, given the right identity, rather than
-# a second one grown here). The subsequent `SET ROLE <role>` each template still issues becomes a
-# harmless no-op (a role may always SET ROLE to itself).
+# the identical variable) -- setting it in the dispatcher's exec environment makes every one of
+# those unmodified verb templates connect AS `$DB_RO_ROLE` directly, with no edit to any .tmpl
+# file needed (ADR-0012 P1: the ONE existing connection mechanism, given the right identity,
+# rather than a second one grown here). The subsequent `SET ROLE <role>` each template still
+# issues becomes a harmless no-op (a role may always SET ROLE to itself).
+#
+# §6 AMENDMENT (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+# SPEC.md's scaffold clause executes): this used to write TEN separate per-verb shim files
+# (SHIM_VERBS_ALL), each an `exec` one-liner differing only in verb name -- collapsed into ONE
+# dispatcher, same env vars, same exec target per verb, byte-identical downstream behavior.
+# Unlike new-project.sh's dispatcher (which points at a live, external autoharn checkout), a
+# frozen dest is SELF-CONTAINED -- EXEC_ROOT is "\$HERE" itself, so AUTOHARN="\$HERE" is set
+# explicitly rather than left to the templates' own default (their fallback resolves relative to
+# the .tmpl file's own on-disk parent, which for a frozen dest IS "\$HERE" too, but this dispatcher
+# states it rather than relying on that coincidence).
+DISPATCH_TABLE_FROZEN=""
 for verb in $SHIM_VERBS_ALL; do
-    cat > "$DEST/$verb" <<SHIM
-#!/bin/sh
-HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" AUTOHARN="\$HERE" PGUSER="$DB_RO_ROLE" "\$HERE/bootstrap/templates/$verb.tmpl" "\$@"
-SHIM
-    chmod +x "$DEST/$verb"
+    if [ -z "$DISPATCH_TABLE_FROZEN" ]; then
+        DISPATCH_TABLE_FROZEN="$verb"
+    else
+        DISPATCH_TABLE_FROZEN="$DISPATCH_TABLE_FROZEN
+$verb"
+    fi
 done
-echo "wrote $SHIM_VERBS_ALL"
+cat > "$DEST/autoharn" <<DISPATCHEREOF
+#!/bin/sh
+# autoharn -- this frozen destination's ONE operator-surface dispatcher (design/FABLE-AUTOHARN-
+# UMBRELLA-CLI-SPEC.md §6 amendment, ledger rows 1357/1365/1366/1367). Routes \`autoharn <verb>
+# [args...]\` to THIS destination's own bootstrap/templates/<verb>.tmpl, never a live checkout's
+# -- live-verbs semantics are exactly wrong for settled evidence (bootstrap/freeze-at-stamp.sh's
+# own header). PGUSER is set to this destination's own read-only (or --writable) role -- see
+# freeze-at-stamp.sh's own comment on why, immediately above where this file is written.
+set -eu
+
+HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+
+_dispatch_table() {
+    cat <<'DISPATCHVERBS'
+$DISPATCH_TABLE_FROZEN
+DISPATCHVERBS
+}
+
+if [ \$# -eq 0 ] || [ "\$1" = "--help" ] || [ "\$1" = "-h" ] || [ "\$1" = "help" ]; then
+    echo "usage: autoharn <verb> [args...]"
+    echo
+    echo "verbs (this frozen destination's own bootstrap/templates/<verb>.tmpl):"
+    _dispatch_table | while read -r v; do printf '  %s\n' "\$v"; done
+    echo
+    echo "For a verb's own full usage, run 'autoharn <verb> --help'."
+    exit 0
+fi
+
+VERB="\$1"; shift
+
+if ! _dispatch_table | grep -qx "\$VERB"; then
+    echo "autoharn: REFUSED -- unrecognized verb '\$VERB'." >&2
+    echo >&2
+    echo "Known verbs:" >&2
+    _dispatch_table | while read -r v; do printf '  %s\n' "\$v" >&2; done
+    echo >&2
+    echo "Run 'autoharn --help' for the full roster. Nothing was touched." >&2
+    exit 2
+fi
+
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" AUTOHARN="\$HERE" PGUSER="$DB_RO_ROLE" "\$HERE/bootstrap/templates/\$VERB.tmpl" "\$@"
+DISPATCHEREOF
+chmod +x "$DEST/autoharn"
+echo "wrote $DEST/autoharn (dispatcher, roster: $SHIM_VERBS_ALL)"
 
 # --- PROVENANCE: the honest "settled evidence, never refreshed" record --------------------------
 cat > "$DEST/FROZEN-PROVENANCE.md" <<PROV
@@ -613,4 +668,4 @@ PROV
 echo "wrote $DEST/FROZEN-PROVENANCE.md"
 
 echo "== done: $DEST is frozen at $RESOLVED_SHA / ledger id <= $CUTOFF_ID =="
-echo "   cd $DEST && ./pickup   # reads ONLY the frozen ${DB} snapshot, via this dest's own templates"
+echo "   cd $DEST && ./autoharn pickup   # reads ONLY the frozen ${DB} snapshot, via this dest's own templates"

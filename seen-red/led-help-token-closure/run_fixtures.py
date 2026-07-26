@@ -150,7 +150,10 @@ def _drop_scratch() -> None:
 
 
 def _run(dest: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(dest / args[0]), *args[1:]],
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has bare
+    # per-verb shim files -- `args[0]` (e.g. "led") is now the FIRST ARGUMENT to the one
+    # dispatcher, `dest/autoharn`, rather than a filename to resolve directly.
+    return subprocess.run([str(dest / "autoharn"), *args],
                            capture_output=True, text=True, cwd=str(dest))
 
 

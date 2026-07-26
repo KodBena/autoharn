@@ -20,9 +20,11 @@ library -- `fetch_commission_statement` below names this explicitly, once.
 
 TWO VERBS, TWO MOMENTS, kept distinct throughout (spec §1 items 3-4; RE-SEQUENCED, design/
 FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion, ledger row 1158/1159):
-  * `<dest>/led` -- this world's OWN served shim (bootstrap/templates/led.tmpl) -- lists/writes
-    the genesis commission. USED TO be `<dest>/legacy/led` (the direct-psql original), back when
-    this screen sat between Birth and Boundary -- the rebased shim refused outright without
+  * `<dest>/autoharn led` -- this world's OWN served verb (bootstrap/templates/led.tmpl), reached
+    through the one dispatcher (§6 amendment, rows 1357/1365/1366/1367; a bare `<dest>/led` shim
+    no longer exists) -- lists/writes the genesis commission. USED TO be `<dest>/legacy/led`
+    (the direct-psql original), back when this screen sat between Birth and Boundary -- the
+    rebased shim refused outright without
     deployment.json's `boundary_url`/`boundary_deployment` keys (serving/boundary_cli_client.py
     `load_served_config`), which `screen_boundary` wrote LATER. The re-sequencing moved
     "boundary" to run BEFORE this screen (screens.py's own `SCREENS` list, "ORDER IS
@@ -161,21 +163,18 @@ FINGERPRINT_PRODUCES = "fingerprint"
 ARMORED_KEY_PRODUCES = "armored-key"
 
 
-def write_commission_act(dest: str, statement: str, led: str | None = None) -> tuple[CommandAct, str]:
-    """`LED_ACTOR=commissioner <led> commission "<statement>"` -- FULL mode, as a plan act. The
+def write_commission_act(dest: str, statement: str,
+                          led: tuple[str, ...] | None = None) -> tuple[CommandAct, str]:
+    """`LED_ACTOR=commissioner <led...> commission "<statement>"` -- FULL mode, as a plan act. The
     row id `led` prints on success resolves (at commit) through `COMMISSION_PRODUCES`; a later
     step needing it (the ceremony's own asc-path/verify-id) holds a
     `Hole(of=COMMISSION_PRODUCES, ..., extract=parse_row_id)`, never a value read here.
 
-    `led` (module docstring, Part C completion re-sequencing, ledger row 1158/1159): the CALLER
-    resolves which `led` this act drives -- the "boundary" screen now runs BEFORE this one, so
-    by the time this act actually EXECUTES at commit time the world's own boundary is always
-    configured and live (legacy-led-retirement inventory pass, ledger row 1149/1150: boundary
-    configuration has no decline option anymore), making the served path the ONLY choice.
-    `None` (unwired callers) falls back to `served_led_path(dest)`, the ordinary default --
-    there is no other lawful `led` for this act to drive since legacy-led.tmpl's own retirement."""
+    `led` (module docstring; §6 amendment rows 1357/1365/1366/1367 for the argv-PREFIX tuple
+    shape): served, always -- the "boundary" screen runs BEFORE this one, so the boundary is
+    live by commit time. `None` falls back to `served_led_path(dest)`, the only lawful default."""
     led = led if led is not None else served_led_path(dest)
-    argv = (led, "commission", statement)
+    argv = (*led, "commission", statement)
     return CommandAct(argv=argv, extra_env=(("LED_ACTOR", "commissioner"),)), COMMISSION_PRODUCES
 
 

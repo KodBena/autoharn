@@ -13,8 +13,8 @@ precedent this directory follows (a deployment-owned trust artifact, never autoh
 ## Current state: empty
 
 No attestation has been recorded here yet. This is the honest starting state, not an error —
-`./attest-doc check` reports every in-scope document as `NO-ATTESTATION` against an empty
-ledger, exactly as `./led --recent` shows nothing for a project that has not yet written a
+`./autoharn attest-doc check` reports every in-scope document as `NO-ATTESTATION` against an empty
+ledger, exactly as `./autoharn led --recent` shows nothing for a project that has not yet written a
 ledger row. Nothing here is required until you choose to run the A:B:C loop over a document you
 write or edit; the discipline is opt-in (`.claude/apparatus.json`'s `doc_attestation` mechanism
 defaults `"off"` for exactly this reason — see `.claude/APPARATUS.md`).
@@ -22,7 +22,7 @@ defaults `"off"` for exactly this reason — see `.claude/APPARATUS.md`).
 ## What lands here
 
 - `doc-legibility-attestations.jsonl` — one JSON object per line, appended ONLY by
-  `./attest-doc record <json-file>`, never hand-edited (the file is append-only by convention,
+  `./autoharn attest-doc record <json-file>`, never hand-edited (the file is append-only by convention,
   the same discipline autoharn's own copy of this ledger follows). Each line names the document
   reviewed, its exact content hash, which rounds ran, and whether the loop converged or
   escalated — see `gates/doc_attestation_presence.py`'s module docstring (in the autoharn
@@ -35,6 +35,6 @@ defaults `"off"` for exactly this reason — see `.claude/APPARATUS.md`).
 - `design/ORCH-SPEC-ABC-OFFERING.md` (in the autoharn checkout) — the design that decided this
   ledger lives here, per-deployment, rather than upstream.
 - `.claude/APPARATUS.md` — the `doc_attestation` switchboard entry governing whether
-  `./distance-to-clean` counts debt from this ledger.
+  `./autoharn distance-to-clean` counts debt from this ledger.
 - `../keys/README.md` — the sibling deployment-local trust artifact (this deployment's OWN GPG
   keyring) this directory's residence pattern follows.

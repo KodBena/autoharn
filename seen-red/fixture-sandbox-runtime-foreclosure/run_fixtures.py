@@ -251,12 +251,14 @@ def case5_scratch_world_unaffected() -> None:
                   "--db", "toy", "--host", PGHOST], timeout=180)
         check("5 scaffold exit", cp.returncode == 0, f"exit={cp.returncode} stderr_tail={cp.stderr[-500:]!r}")
         if cp.returncode == 0:
-            # The scratch world's OWN ./led, run with THIS fixture's own marked environment
-            # inherited (no override) -- if the marker leaked into this world's shim the way it
-            # leaks into every REPO-root verb, this would refuse exactly like case 1. It does
-            # not, because dest/led execs dest/bootstrap/templates/led.tmpl DIRECTLY, never this
-            # repo's ./autoharn or libexec/autoharn/* -- the choke-point argument, witnessed live.
-            led_cp = run([str(dest / "led"), "--recent", "1"], cwd=str(dest))
+            # The scratch world's OWN ./autoharn led, run with THIS fixture's own marked
+            # environment inherited (no override) -- if the marker leaked into this world's
+            # dispatcher the way it leaks into every REPO-root verb, this would refuse exactly
+            # like case 1. It does not, because dest/autoharn execs dest/bootstrap/templates/
+            # led.tmpl DIRECTLY (§6 amendment, rows 1357/1365/1366/1367: one dispatcher replaces
+            # the bare `dest/led` shim, same direct routing), never this repo's ./autoharn or
+            # libexec/autoharn/* -- the choke-point argument, witnessed live.
+            led_cp = run([str(dest / "autoharn"), "led", "--recent", "1"], cwd=str(dest))
             combined = led_cp.stdout + led_cp.stderr
             check("5-scratch-led-not-refused", not any(m in combined for m in REFUSAL_MARKERS),
                   f"exit={led_cp.returncode} tail={combined.strip()[-300:]!r}")

@@ -163,14 +163,18 @@ def main() -> int:
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "verify-chain"):
-            (world_dir / verb).chmod(0o755)
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): one dispatcher now, not two shims.
+        for verb in ("autoharn",):
+            p = world_dir / verb
+            if p.exists():
+                p.chmod(0o755)
         proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
         # birth-sequence rows (author + standing decls + registrations) precede this fixture's
         # own write now -- baselined rather than assuming a birth of zero rows (row 1170).
         before_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
                                 f"SELECT count(*) FROM {WORLD}.ledger;"]).stdout.strip())
-        rl = sh(["bash", str(world_dir / "led"), "decision", "row one, via led"], cwd=str(world_dir))
+        rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision", "row one, via led"],
+                cwd=str(world_dir))
         if rl.returncode != 0:
             print("led write FAILED:", rl.stdout, rl.stderr)
             return 1

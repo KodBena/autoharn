@@ -161,7 +161,8 @@ def verify_chain(world_dir: Path, extra_env: dict | None = None) -> tuple[int, s
     e = dict(os.environ)
     if extra_env:
         e.update(extra_env)
-    cp = sh(["sh", str(world_dir / "verify-chain")], cwd=str(world_dir), env=e)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    cp = sh(["sh", str(world_dir / "autoharn"), "verify-chain"], cwd=str(world_dir), env=e)
     return cp.returncode, cp.stdout + cp.stderr
 
 

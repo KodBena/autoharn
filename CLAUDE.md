@@ -65,12 +65,15 @@ it; the key restates the reading posture the bullet above mandates):
   executed ahead of the planned post-2.0.0-minor deprecation window as a precondition of the
   2.0.0 tag — their functionality is unchanged and reached only via `./autoharn <verb>` or
   `libexec/autoharn/<verb>` now) plus refusals that teach.
-  **This is scoped to this repo's own root** — every world scaffolded by
-  `bootstrap/new-project.sh` still gets the ten bare per-verb shims untouched by this build (the
-  scaffold migration is a named follow-on, not yet done); see
-  `user-guide/ORCH-OPERATING-CARD.md`'s forward note for the current, honestly-scoped status of
-  that gap. Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/ and
-  design/ archives are history unless a current spec cites them.
+  **Worlds now carry the same one-surface shape.** The scaffold migration (rows 1365/1366/1367,
+  §6 amendment to design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md) is EXECUTED, not a follow-on:
+  `bootstrap/new-project.sh` (both `--new-world` and `--profile tracker`) and
+  `bootstrap/freeze-at-stamp.sh` now write ONE world-local `./autoharn` dispatcher per world, no
+  bare per-verb shims — `./autoharn led ...`, `./autoharn judge`, `./autoharn doctor`, etc.
+  `bootstrap/convert-to-submodule.sh`/`upgrade-submodule.sh` detect shape and serve both (a world
+  scaffolded before this migration keeps its ten shims untouched — runs-are-linear, worlds are
+  born not upgraded). Operational truth lives in ORCH-CAPABILITIES.md + those verbs; judgment/
+  and design/ archives are history unless a current spec cites them.
 - **Claims carry witnesses.** A report states, per item: WITNESSED (with observed output),
   REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker. Docs follow the same rule
   (an example carries real output or an UNWITNESSED mark). No umbrella claims.

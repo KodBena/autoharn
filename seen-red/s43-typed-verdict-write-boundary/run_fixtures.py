@@ -203,7 +203,8 @@ def birth_via_boundary(world: str) -> None:
 
 
 def verify_chain(world_dir: Path) -> tuple[int, str]:
-    cp = sh(["sh", str(world_dir / "verify-chain")], cwd=str(world_dir))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    cp = sh(["sh", str(world_dir / "autoharn"), "verify-chain"], cwd=str(world_dir))
     return cp.returncode, cp.stdout + cp.stderr
 
 
@@ -211,7 +212,7 @@ def led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.Comp
     e = dict(os.environ)
     if env:
         e.update(env)
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir), env=e)
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir), env=e)
 
 
 def oracle(world: str) -> tuple[int, int]:

@@ -2,13 +2,13 @@
 
 > **THIS WORLD IS COMPLETE AND BORN.** `__PROJECT_ROOT__` is a finished, fully-scaffolded
 > world (this file is only written once the birth sequence below has actually run) — not a
-> partial or in-progress scaffold. Its operator verbs (`./led`, `./judge`, `./pickup`,
-> `./doctor`, ...) live IN THIS DIRECTORY and run from here, never from PATH.
+> partial or in-progress scaffold. Its operator verbs (`./autoharn led`, `./autoharn judge`, `./autoharn pickup`,
+> `./autoharn doctor`, ...) live IN THIS DIRECTORY and run from here, never from PATH.
 > `__AUTOHARN_ROOT__` is MACHINERY this world's verbs execute against — a DIFFERENT
 > project, with its own git history, its own ledger (if any), its own state. Read ITS OWN
 > files to learn about IT; never read them as a proxy for THIS world's state. (Provenance:
 > ledger row 1147 — a cheap orchestrator wandered into that checkout and reported its state
-> as this world's.) Run `./doctor` here for a witnessed one-shot answer to "is this world
+> as this world's.) Run `./autoharn doctor` here for a witnessed one-shot answer to "is this world
 > set up right?"
 
 Read .claude/HOOKS.md first. You are the author principal; reviewer and commissioner
@@ -17,10 +17,10 @@ principals exist (see point 11 for the commissioner's role).
 __LAW_SECTION__
 1. Decompose the ENTIRE commission into ledgered work items BEFORE implementing — every
    increment the task names, including ones you will not start this session
-   (./led work open <slug> <title...> per item, titled so a FRESH session could build
-   from it; claim only what you begin: ./led work claim <slug>). Close each with
-   ./led work close <slug> <resolution> --witness <ref> once delivered. Record a real
-   precedence constraint between two items with ./led work depends <slug> <on-slug>
+   (./autoharn led work open <slug> <title...> per item, titled so a FRESH session could build
+   from it; claim only what you begin: ./autoharn led work claim <slug>). Close each with
+   ./autoharn led work close <slug> <resolution> --witness <ref> once delivered. Record a real
+   precedence constraint between two items with ./autoharn led work depends <slug> <on-slug>
    --type blocks-close|informs — informs (the default if --type is omitted) is context
    only, never enforced at close; blocks-close is the only type the kernel conjoins at
    --strict close, so use it whenever the honest prose would be "<on-slug> must finish
@@ -50,18 +50,18 @@ __LAW_SECTION__
 3. Assign the decomposition's countersign obligation to reviewer; reviewer countersigns
    via LED_ACTOR=reviewer claiming technical independence, AND runs an antecedent audit:
    enumerate design facts the artifacts encode with no antecedent in task text, ledger
-   rows, or assumption rows; file each one found as its own `./led assumption "<fact>"
+   rows, or assumption rows; file each one found as its own `./autoharn led assumption "<fact>"
    --refs <artifact>` (assumption, not finding — it's the same unledgered-design-fact
    defect as point 7, just caught by the other principal instead of self-reported).
    `hooks/pretooluse_change_gate.py`'s `decomposition_review` mechanism makes this a
    BLOCKER, not backloggable debt (maintainer ruling 2026-07-12): a substantive edit is
    denied while a claimed work item's own opening row is undischarged. Disclosed-self-
    review fallback (solo worlds only, no second principal genuinely available): register
-   a second principal for the SAME operator (`./led register-principal <name>
+   a second principal for the SAME operator (`./autoharn led register-principal <name>
    human|model|subagent|tool`) — the kernel refuses a review by the SAME actor id
    regardless of the independence label, so a second principal id is required even when
    one human operates both — then countersign
-   disclosing it plainly: `LED_ACTOR=<second-principal> ./led review <id> attest
+   disclosing it plainly: `LED_ACTOR=<second-principal> ./autoharn led review <id> attest
    self-review "<basis; disclose no independent reviewer was available>"`. `self-review`
    is a first-class `independence` value precisely for this case, and `review_gap`'s own
    discharge test does not distinguish it from technical/managerial/financial — it only
@@ -71,11 +71,11 @@ __LAW_SECTION__
    (refs is the sanctioned channel for a non-review kind to cite an antecedent row,
    so the criteria->result link is queryable, not prose).
 5. A task that produces files is complete only when they are committed to git.
-6. Done means ./led review-gap, question-status, and ./led work violations are all clean
-   (./distance-to-clean composes these same three views into one read, if a single command is
+6. Done means ./autoharn led review-gap, question-status, and ./autoharn led work violations are all clean
+   (./autoharn distance-to-clean composes these same three views into one read, if a single command is
    preferred for a closure check — the three views above remain the documented default).
 7. Any design fact you commit to that has no antecedent in the task or an existing ledger
-   row gets recorded FIRST via `./led assumption "<the fact and why it was assumed>"` —
+   row gets recorded FIRST via `./autoharn led assumption "<the fact and why it was assumed>"` —
    an unledgered load-bearing assumption is a defect, not a convenience.
 8. Investigation and delegation are work: ledger them BEFORE doing them. "I lack the
    spec" has more than one honest kind — classify, don't default: a `question` row when
@@ -93,7 +93,7 @@ __LAW_SECTION__
    work (recovered only via `git fsck`).
 9. Stopping is a ledgered act. Before you stop — done, blocked, or leaving work for
    later — write the disposition a successor resumes from:
-   `./led decision "stopping: <why>; stands: <what is done>; remains: <slugs/refs>"`.
+   `./autoharn led decision "stopping: <why>; stands: <what is done>; remains: <slugs/refs>"`.
    Workers leave their work resumable for whoever picks it up; a stop with no trail
    strands the successor in archaeology.
 10. Record as you go — one row at the moment of the act. Batching declarations you are
@@ -102,7 +102,7 @@ __LAW_SECTION__
    as if live.
 11. On RECEIVING a commission (the ask this session was given), your FIRST ledger act —
     before point 1's decomposition — is to record it verbatim as its own row:
-    `./led commission "<ask verbatim as received>"`. This is LAZY-mode signing: you are
+    `./autoharn led commission "<ask verbatim as received>"`. This is LAZY-mode signing: you are
     the implementer transcribing the ask vicariously, not the commissioner attesting it
     yourself, so the statement carries the prefix "(vicarious transcription by the
     implementer; carries no commissioner guarantee)" IN ADDITION to your own stamped
@@ -113,18 +113,18 @@ __LAW_SECTION__
     started it (vestigial_documentation/design/ORCH-RETROSPECTIVE-RUN10.md, could-not-answer item 4: "the commission
     itself is not in the governed record" — this closes that gap). If the maintainer
     instead signs the commission himself, FULL mode, in his own terminal
-    (`LED_ACTOR=commissioner ./led commission "<ask>"`), that row already exists when you
-    start — check `./led --recent` before writing your own; do not double-record the
+    (`LED_ACTOR=commissioner ./autoharn led commission "<ask>"`), that row already exists when you
+    start — check `./autoharn led --recent` before writing your own; do not double-record the
     same ask under two rows. On a world scaffolded before kernel/lineage/
     s25-commission-kind.sql landed, `commission` is refused by the kind vocabulary check
     (the refusal itself names the valid list, live) — record the ask in a `decision` row
     instead and say so in its text, same as any other pre-s25 world. Immediately after the
-    commission row exists (either mode), run `./verify-commission` and carry its verdict
+    commission row exists (either mode), run `./autoharn verify-commission` and carry its verdict
     (VERIFIED / UNSIGNED / FORGED-OR-CORRUPT) into the FIRST row of point 1's decomposition —
     a FORGED-OR-CORRUPT verdict is a stop-and-escalate event, never a silently-proceeded-past
     detail (design/MAINT-GPG-TRUST-LAYER.md §3).
 12. A load-bearing decision names what was rejected and why, IN THE STATEMENT — not a
-    separate row, not left implicit. `./led decision "<the choice>; rejected: <the
+    separate row, not left implicit. `./autoharn led decision "<the choice>; rejected: <the
     alternative(s)> because <why>"`. Convention only (no kernel column enforces this —
     filed, not built, awaiting a witnessed need before a schema change is warranted);
     the retrospective's could-not-answer item 1 named the gap this closes: "why the two

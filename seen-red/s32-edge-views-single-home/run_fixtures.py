@@ -97,7 +97,8 @@ def led(world_dir: Path, *args: str, actor: str | None = None) -> subprocess.Com
     if actor is not None:
         env = dict(os.environ)
         env["LED_ACTOR"] = actor
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir), env=env)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir), env=env)
 
 
 def psql_tuples(sql: str) -> str:
@@ -116,7 +117,7 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
             "--schema", schema, "--kern", kern, "--role", role])
     if r.returncode != 0:
         raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
+    for verb in ("autoharn",):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)
@@ -361,7 +362,8 @@ def main() -> int:
         tmps.append(wj.parent)
         led(wj, "work", "open", "j-item", "JItem")
         led(wj, "decision", "record a decision so judge has T_now facts to derive")
-        rj = sh(["bash", str(wj / "judge")], cwd=str(wj))
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the dispatcher now.
+        rj = sh(["bash", str(wj / "autoharn"), "judge"], cwd=str(wj))
         out_j = rj.stdout + rj.stderr
         ok_d = rj.returncode == 0 and ("AGREE" in out_j or "agree" in out_j.lower())
         check("d-judge-agree-unaffected", ok_d,

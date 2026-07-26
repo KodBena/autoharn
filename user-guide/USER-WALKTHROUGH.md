@@ -168,15 +168,15 @@ the connection principal.
 
 **Success looks like:** the block above ending in `== done ==` with no `psql` error lines
 (a `NOTICE: ... does not exist, skipping` is normal — see section 1), `deployment.json` and a
-rendered `CLAUDE.md` present at the dest root, and `./led`/`./judge`/`./pickup` all executable
+rendered `CLAUDE.md` present at the dest root, and `./autoharn led`/`./autoharn judge`/`./autoharn pickup` all executable
 there. A quick sanity check:
 
 ```sh
-cd <dest-dir> && ./led decision "world opened" && ./led --recent 1 && ./judge && ./pickup
+cd <dest-dir> && ./autoharn led decision "world opened" && ./autoharn led --recent 1 && ./autoharn judge && ./autoharn pickup
 ```
 
-`./judge` should print `AGREE` (the engine and the SQL floor agree on an empty-but-consistent
-ledger); `./pickup` prints a live resume brief in five sections (in-force decisions, open
+`./autoharn judge` should print `AGREE` (the engine and the SQL floor agree on an empty-but-consistent
+ledger); `./autoharn pickup` prints a live resume brief in five sections (in-force decisions, open
 questions, review debt, recent changes, git state) — this IS the "orienting in any world" verb;
 run it any time, in any world, to get your bearings without trusting a stale stored handoff.
 Both were witnessed clean against `runverbprobe`: `judge` printed `AGREE`; `pickup` printed all
@@ -185,7 +185,7 @@ governance preamble below names).
 
 **Starting the run — no more hand-register, no more hand-paste.** Until this session, opening a
 world left two things for the operator to do by hand before the first real session: register a
-`reviewer` principal (`./led register-principal reviewer subagent`), and paste a six-point
+`reviewer` principal (`./autoharn led register-principal reviewer subagent`), and paste a six-point
 governance prompt into the Claude session. Both are now done AT SCAFFOLD TIME — the transcript
 above already shows the `reviewer` registration; the `.claude/` wiring step now also writes a
 `CLAUDE.md` at the world's root carrying that six-point prompt verbatim (rendered with this

@@ -25,16 +25,18 @@ files into *your own* project directory — the [world](../GLOSSARY.md#world) or
 this page calls "your project" throughout.
 
 **Two deployment shapes exist; [`README.md`](../README.md) is the one page that owns which is
-current — read it before choosing.** As of 2.0 the default is **pinned**: your project's shims
-`exec` out of its own `.autoharn` git submodule, pinned to an exact commit, so a `git pull` on
+current — read it before choosing.** As of 2.0 the default is **pinned**: your project's ONE
+dispatcher (`./autoharn` -- §6 amendment, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, rows
+1357/1365/1366/1367; it used to be ten separate per-verb shim files, consolidated into one)
+routes into its own `.autoharn` git submodule, pinned to an exact commit, so a `git pull` on
 some other autoharn checkout never touches your project. The section immediately below (["the
 install-path contract"](#the-install-path-contract--read-this-before-you-move-anything)) and the
 "live verbs" design it describes are about the **older, unpinned shape** — still supported,
-described in `README.md` as the legacy shape — where your project's `./led`/`./judge`/`./pickup`
-are three-line shims that `exec` straight out of *this* autoharn checkout, live, forever, and
-carry the relocation cost that section states plainly. Whichever shape you're on, every piece of
-**your** state — your ledger's connection facts, your per-project switches, your secrets, your
-work log — lives in **your** directory, never in autoharn's.
+described in `README.md` as the legacy shape — where your project's `./autoharn led`/`./autoharn judge`/`./autoharn pickup`
+route through THIS same one dispatcher, which routes straight out of *this* autoharn checkout,
+live, forever, and carry the relocation cost that section states plainly. Whichever shape you're
+on, every piece of **your** state — your ledger's connection facts, your per-project switches,
+your secrets, your work log — lives in **your** directory, never in autoharn's.
 
 This is a deliberate boundary, not an accident of how the scaffold happened to be written: **an
 adopter's project owns all of its own state; autoharn owns none of it.** Concretely, and checked
@@ -68,8 +70,9 @@ that give a fresh Postgres schema pair its append-only, obligation-aware ledger 
 GLOSSARY.md's [birth chain](../GLOSSARY.md#birth-chain) entry for the exact chain applied — to a
 fresh schema pair you name, provisions a stamp secret, registers the standard principals, writes
 `deployment.json` + `.claude/apparatus.json` + `.claude/governed_files.json` + a governance
-preamble `CLAUDE.md`, and writes `led`/`judge`/`pickup`/`audit`/`distance-to-clean`/
-`verify-commission`/`verify-chain` as thin shims. Nothing is pasted into the first chat message —
+preamble `CLAUDE.md`, and writes the one `autoharn` dispatcher routing `led`/`judge`/`pickup`/
+`audit`/`distance-to-clean`/`verify-commission`/`verify-chain`/etc. Nothing is pasted into the
+first chat message —
 the governance preamble auto-loads. If you already have a project and only want the
 [permit-to-work](../GLOSSARY.md#permit-to-work)-free, non-governed cousin of this — a standing work
 tracker with no hooks, no kernel-delta regime, usable by a script or an occasional session — see
@@ -91,42 +94,43 @@ Every file the scaffold writes, where it lands, and whether it is meant to be co
 | `keys/` (your own signing-key directory) | your project root | your project | your call — the scaffold writes a `README.md` stub and leaves the directory otherwise empty (a state this project's tooling calls "AWAITING-KEY": no public key committed yet) until you opt into SIGNED-mode commissions; a committed public key here is the point, a private key never belongs here |
 | `.claude/logs/*.journal.jsonl` | your project root | your project | your call — these are observation journals (mutation, delegation, read, bash-completion), not secrets, but they grow unboundedly |
 | `CLAUDE.md` (the governance preamble) | your project root | your project | yes |
-| `led` / `judge` / `pickup` / `audit` / `distance-to-clean` / `verify-commission` / `verify-chain` | your project root | your project | yes — they are 3-line shims, not copies of the logic (see below) |
-| kernel lineage SQL, `hooks/*.py`, `bootstrap/templates/*.tmpl` | **autoharn's checkout only** | autoharn | n/a — never copied into your project; every world's shims `exec` these live |
+| `autoharn` (the one dispatcher — `led`/`judge`/`pickup`/`audit`/`distance-to-clean`/`verify-commission`/`verify-chain`/`attest-doc`/`asof-export`/`doctor`, reached as `./autoharn <verb>`) | your project root | your project | yes — one file, not a copy of the logic (see below); a world scaffolded before the §6 amendment (rows 1357/1365/1366/1367) instead carries the ten separate per-verb shim files this table used to describe — untouched, still working, runs-are-linear |
+| kernel lineage SQL, `hooks/*.py`, `bootstrap/templates/*.tmpl` | **autoharn's checkout only** | autoharn | n/a — never copied into your project; every world's dispatcher `exec`s these live |
 
-The last row is the one adopters most often expect to be copied and is not: your project's `led`
-is not a standalone program, it is `exec env PICKUP_DEPLOYMENT=<your-project>/deployment.json
-<autoharn-checkout>/bootstrap/templates/led.tmpl "$@"` — three lines, committed, but pointing back
-at the autoharn checkout by absolute path. This is why the next section matters before you
-reorganize anything.
+The last row is the one adopters most often expect to be copied and is not: your project's
+`./autoharn` is not a standalone program per verb, it routes `autoharn <verb> [args...]` to
+`exec env PICKUP_DEPLOYMENT=<your-project>/deployment.json
+<autoharn-checkout>/bootstrap/templates/<verb>.tmpl "$@"` — one dispatcher file, committed, but
+pointing back at the autoharn checkout by absolute path. This is why the next section matters
+before you reorganize anything.
 
 ## The install-path contract — read this before you move anything
 
 **This section describes the older, unpinned ("live verbs") shape** — see ["autoharn as a
 library"](#autoharn-as-a-library) above for the 2.0 default (pinned submodule), which does not
-carry this cost: a pinned deployment's shims `exec` out of its own committed `.autoharn`
+carry this cost: a pinned deployment's dispatcher `exec`s out of its own committed `.autoharn`
 submodule, not out of the autoharn checkout that scaffolded it, so moving that original checkout
 does not break an already-pinned project.
 
-**Every scaffolded project's `.claude/settings.json` and verb shims bake in the absolute
-filesystem path of the autoharn checkout that scaffolded them**, captured once at scaffold time
-(`bootstrap/new-project.sh`: `AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"`). This is not an
-oversight — it is the deliberate "live verbs" design (maintainer ruling 2026-07-11): a hook fix or
-a template fix in the autoharn checkout takes effect in *every* already-scaffolded project on its
-very next invocation, with no re-scaffold needed, because every project's tooling really does
-execute the autoharn checkout's own files, live, every time.
+**Every scaffolded project's `.claude/settings.json` and its `./autoharn` dispatcher bake in the
+absolute filesystem path of the autoharn checkout that scaffolded them**, captured once at
+scaffold time (`bootstrap/new-project.sh`: `AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"`).
+This is not an oversight — it is the deliberate "live verbs" design (maintainer ruling
+2026-07-11): a hook fix or a template fix in the autoharn checkout takes effect in *every*
+already-scaffolded project on its very next invocation, with no re-scaffold needed, because
+every project's tooling really does execute the autoharn checkout's own files, live, every time.
 
 The honest cost of that design, stated plainly rather than left for you to discover the hard way:
 **this project has no relocation story today.** If you move, rename, or delete the autoharn
 checkout after scaffolding one or more projects from it, every one of those projects' hooks and
-verb shims silently point at a path that no longer resolves — `led`/`judge`/`pickup` fail, and
-Claude Code's own hook invocations (`.claude/settings.json`'s `command` lines) fail the same way.
-The current, honest contract is: **pick a path for your autoharn checkout and keep it** for as
-long as any project scaffolded from it is in use.
+their dispatcher silently point at a path that no longer resolves — `./autoharn led`/`judge`/
+`pickup` fail, and Claude Code's own hook invocations (`.claude/settings.json`'s `command` lines)
+fail the same way. The current, honest contract is: **pick a path for your autoharn checkout and
+keep it** for as long as any project scaffolded from it is in use.
 
 **If you must move it anyway**, the remedy is re-scaffolding, not a live-patch: run
 `bootstrap/new-project.sh <same-project-dir> ... --force` again from the checkout's *new* location
-— it regenerates `.claude/settings.json` and every verb shim against the new
+— it regenerates `.claude/settings.json` and the dispatcher against the new
 `AUTOHARN_ROOT`, in place, without touching your `deployment.json`, your Postgres schema, or your
 ledger history. (`--force` only permits overwriting the scaffold-owned files this page's table
 lists as "your project" above; it never touches your database.) There is no narrower one-line fix
@@ -214,8 +218,8 @@ bootstrap/new-project.sh <dest-dir> --new-world <world> --db <db> --host <host> 
   one-command path the quick-start above uses. An explicit `--schema`/`--kern`/`--role` still wins
   if given (e.g. the derived name collides with something that already exists).
 - `--name` — your project's own label, written into `deployment.json` and used by the scaffolded
-  `judge` shim as the target name for autoharn's own derivation-banking subdirectory — the
-  directory `engine/ledger_differential.py` files each `./judge` run's evidence under, inside
+  `judge` verb as the target name for autoharn's own derivation-banking subdirectory — the
+  directory `engine/ledger_differential.py` files each `./autoharn judge` run's evidence under, inside
   the autoharn checkout, keyed by this name. Pick something that will not collide with
   autoharn's own curated target names (`toy`, `nla`,
   `e15`–`e18`) or its scratch-naming conventions (`^s\d+[a-z]*$`, `*_scratch`) — default is your
@@ -243,8 +247,9 @@ bootstrap/new-project.sh <project-dir> --profile tracker --name <name> --db <db>
 Gives **any** directory — it need not be a git repository, need not be a Claude Code project, need
 not ever run a governed Claude Code session — a standing, indefinite-lifetime work-tracking
 deployment: `deployment.json`, `boundary-multiplex.toml`, this deployment's own `keys/`, the FULL
-CURRENT kernel lineage (not a fixed-era cap), the current ten-verb shim set (`SHIM_VERBS_ALL`,
-`bootstrap/shim-verbs.sh`), and the three standard principals, with **no hooks wired, no
+CURRENT kernel lineage (not a fixed-era cap), the current ten-verb roster (`SHIM_VERBS_ALL`,
+`bootstrap/shim-verbs.sh`) reached through the one `autoharn` dispatcher, and the three standard
+principals, with **no hooks wired, no
 governance `CLAUDE.md` preamble, no [runs-are-linear](../GLOSSARY.md#run) posture**. Where
 `bootstrap/new-project.sh --new-world` stands up a habitat for *one governed run*, this profile
 stands up a Postgres-backed replacement for a hand-edited `TODO.md` — usable by a human, a
@@ -257,7 +262,7 @@ contract, since `--name` derives `boundary_deployment` too).
 
 The boundary is configured (a free port, `boundary-multiplex.toml`) but **not started** at
 scaffold time: `serving/ensure_running.py` spawns it as a detached child, automatically, on this
-deployment's first `./led`/`./pickup`/etc call — no standing daemon to launch by hand. See
+deployment's first `./autoharn led`/`./autoharn pickup`/etc call — no standing daemon to launch by hand. See
 [`TRACK-WORK-RETIREMENT-HERITAGE.md`](TRACK-WORK-RETIREMENT-HERITAGE.md) for the full account of
 what the retired script was and why its serviceless shape retired.
 
@@ -384,7 +389,7 @@ variables you are most likely to set, run from `tools/autoharn-panel`:
 | ledger schema / kernel schema | `LEDGER_SCHEMA` / `LEDGER_KERNEL_SCHEMA` | which schema pair to read |
 | write-capable role | `LEDGER_ROLE` | omit for a read-only reader role |
 | autoharn `deployment.json` path | `LEDGER_DEPLOYMENT` | fourth-priority fallback: if none of the above are set at all, the panel finds and reads an adjacent autoharn checkout's own `deployment.json` (default search: `tools/autoharn-panel/deployment.json`, then `tools/autoharn-panel/../deployment.json` — the latter is exactly your autoharn project root when mounted as this submodule) |
-| `led` shim path | `LED_BIN` | unset ⇒ read-only mode (no `POST /api/cosign`, no writes); set ⇒ write mode, shelling out to your project's own `./led` |
+| `led` shim path | `LED_BIN` | unset ⇒ read-only mode (no `POST /api/cosign`, no writes); set ⇒ write mode, shelling out to your project's own `./autoharn led` |
 | bind host/port | `PANEL_BIND` / `PANEL_PORT` | default `127.0.0.1:8420` — loopback by default |
 | which extensions load | `PANEL_EXTENSIONS` | comma-separated, default `autoharn` |
 
@@ -501,7 +506,7 @@ Then, from a **fresh** terminal:
 *Witness A — the hole is closed:* `psql -h <host> -U <superuser> -d <db>` now prompts for a
 password (or refuses without one) — never a bare prompt.
 
-*Witness B — your projects still work:* `./led ...` (or whatever your project's own role
+*Witness B — your projects still work:* `./autoharn led ...` (or whatever your project's own role
 connects as) behaves exactly as before — no new prompt, no new failure. **Both are required** —
 one without the other is either an unfixed hole or a new outage, not "done."
 

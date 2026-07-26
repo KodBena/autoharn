@@ -171,8 +171,11 @@ def main() -> int:
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "verify-chain"):
-            (world_dir / verb).chmod(0o755)
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): one dispatcher now, not two shims.
+        for verb in ("autoharn",):
+            p = world_dir / verb
+            if p.exists():
+                p.chmod(0o755)
         genesis_ok = "one fresh genesis seed provisioned" in r.stdout
         print(f"  scaffold OK (genesis auto-provisioned: {genesis_ok}).\n")
 
@@ -191,7 +194,8 @@ def main() -> int:
         before_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
                                 f"SELECT count(*) FROM {WORLD}.ledger;"]).stdout.strip())
         for stmt in ("row one, via led", "row two, via led", "row three, via led"):
-            rl = sh(["bash", str(world_dir / "led"), "decision", stmt], cwd=str(world_dir))
+            rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision", stmt],
+                    cwd=str(world_dir))
             if rl.returncode != 0:
                 print("led write FAILED:", rl.stdout, rl.stderr)
                 return 1
