@@ -9,18 +9,28 @@ acts-for edge of its own -- so it does not chain-reach genesis. kernel/lineage/
 s60-entitlement-enforcement.sql (merged) already classifies `principal_registered` as
 authority-bearing (register_principal_act was ALREADY broken on any s60+ world, a hazard broader
 than ledger row 1390's own framing); kernel/lineage/s62-delegation-lifecycle-gating.sql (branch
-worktree-agent-a9b3bd5031b11cd5a, commit f099ed0, NOT yet on main) additionally classifies the
-acts-for relate as authority-bearing (delegation_lifecycle). THE FIX: all three acts now leave
-LED_ACTOR unset, letting the served connection's own declared-default actor resolve (bound to
-'author' at birth) -- charter_register_act already had this shape and needed no change.
+worktree-agent-a9b3bd5031b11cd5a, commit 4b425b3 -- the FIXED s62 after a same-branch fix round
+closed a critical supersession-classification bypass a fresh-context review found in the first
+cut, f099ed0; NOT yet on main, but becomes main-reachable at the coupled merge) additionally
+classifies the acts-for relate as authority-bearing (delegation_lifecycle). THE FIX: all three
+acts now leave LED_ACTOR unset, letting the served connection's own declared-default actor
+resolve (bound to 'author' at birth) -- charter_register_act already had this shape and needed
+no change. INFORMATIONAL: that declared-default resolution holds absent ambient LED_ACTOR
+contamination in the operator's own environment (env=None passthrough, the same shape as the
+pre-existing charter_register_act) -- not an unconditional guarantee, and no new machinery is
+proposed here.
 
-Real captured stdout, 2026-07-26, a live run against this build's working tree (real Postgres,
+Real captured stdout, 2026-07-26, a live re-run against this build's working tree, re-pinned to
+the literal SHA 4b425b3 (the FIXED s62, review row 1401 -- this fixture's own S62_SRC_COMMIT
+previously read a live branch ref, a review finding; content below is byte-identical to the
+prior banked run against the same branch's earlier HEAD, since this ceremony only exercises the
+fresh acts-for assertion, unaffected by 4b425b3's own supersession-side fix) (real Postgres,
 real `<dest>/led` served CLI, real boundary_service spawned via ensure-running, s62 SQL
-cherry-picked from f099ed0 into kernel/lineage/ at fixture start and removed again at fixture
+cherry-picked from 4b425b3 into kernel/lineage/ at fixture start and removed again at fixture
 end -- working-tree only, never committed by this fixture or this build):
 
 $ python3 seen-red/setup-tui-ceremony-chain-authorship/run_fixtures.py
--- cherry-picked s62 SQL from worktree-agent-a9b3bd5031b11cd5a into kernel/lineage/s62-delegation-lifecycle-gating.sql (working tree only, NEVER committed by this fixture or this build) --
+-- cherry-picked s62 SQL from 4b425b3 into kernel/lineage/s62-delegation-lifecycle-gating.sql (working tree only, NEVER committed by this fixture or this build) --
 == scaffolding classic world cauths60 (chain ends s60-entitlement-enforcement.sql) ==
 $ <dest>/led register-principal orchestrator subagent --purpose 'orchestrator connection principal'
 led: boundary at http://127.0.0.1:19420 was unreachable -- spawned it (pid ...); proceeding.
