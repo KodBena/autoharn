@@ -20,7 +20,7 @@ UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway
 falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
 J1 behavior, preserved only as an explicit opt-in degraded path).
 
-Usage:
+Usage (invoked from THIS repo's own root, `led`'s AUTOHARN_ROOT convention -- --led's default is relative to THAT cwd; elsewhere pass an explicit --led <path>):
     python3 autoharn-builder-wave/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
                               [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
                               [--dry-run] [--rounds N]
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -47,14 +48,14 @@ ROLE_CHARTER_PY = "/home/bork/w/vdc/1/autoharn/tools/role_charter.py"
 ROLE_BRIEF_PY = "/home/bork/w/vdc/1/autoharn/tools/role_brief.py"
 
 PHASES = ['claim', 'build-and-witness', 'close-deferred', 'orchestrator-merge']
-BRIEFS = {'claim': "authors: maintainer/orchestrator (ledger work item authored via ./led work open, prior to this wave)\nimplements: sonnet builder (./led work claim <slug> inside its own isolated worktree)\ndone: the ledger row `work_claimed: <slug>` exists for this builder's principal, per CLAUDE.md's standing delegation contract.\nlanding_zone: this project's append-only Postgres ledger (via ./led), read by ./pickup on the next hydration.", 'build-and-witness': "authors: sonnet builder\nimplements: sonnet builder\nreviews: sonnet builder, self-witnessed both polarities on scratch worlds (t/t and f/f, per the standing witness discipline) -- CLAUDE.md's 'Class-ratified fail-safe deltas' ruling names this as the bar for kernel-lineage work; this build item (non-kernel) applies the same witness discipline by analogy, not by that ruling's own scope.\ndone: the deliverable is witnessed on both polarities (or, for non-kernel work like this DSL build, the equivalent: every deliverable exercised and its refusal paths exercised too) before any close is attempted -- CLAUDE.md's standing witness discipline: 'A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker.'\nlanding_zone: the builder's own isolated worktree under .claude/worktrees/, committed but not pushed; witness output recorded in the builder's final report to the orchestrator.", 'close-deferred': 'authors: sonnet builder\nimplements: sonnet builder (./led work close <slug> shipped --review-deferred --witness <short-sha>)\nreviews: deferred explicitly -- --review-deferred means the independent countersign has NOT yet happened at this phase; it is owed to the orchestrator at the next phase, not skipped.\ndone: `./led work close <slug> shipped --review-deferred --witness <short-sha>` is filed, naming the commit the witness evidence lives at.\nlanding_zone: the ledger row `work_closed: <slug> (shipped)` with `--review-deferred` and `--witness <short-sha>`, naming the worktree commit; the worktree branch itself, awaiting merge.', 'orchestrator-merge': "authors: orchestrator\nimplements: orchestrator (merges each builder's worktree branch, wires cross-item seams no single builder could see)\nreviews: orchestrator, discharging the review deferred at close-deferred, per CLAUDE.md's runs-are-linear ruling: a run's world is dust once merged, so this review happens at the seam, not by reopening the builder's own worktree.\ndone: the branch is merged, cross-item seams (files two builders both touched) are wired and re-verified, and the deferred review from close-deferred is discharged -- either confirmed or sent back.\nlanding_zone: the repository's main branch (post-merge), plus a `decision` ledger row per user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's merge convention (`merge: <branch> -> <commit> (work items: <slug>)`)."}
+BRIEFS = {'claim': "authors: maintainer/orchestrator (ledger work item authored via ./autoharn led work open, prior to this wave)\nimplements: sonnet builder (./autoharn led work claim <slug> inside its own isolated worktree)\ndone: the ledger row `work_claimed: <slug>` exists for this builder's principal, per CLAUDE.md's standing delegation contract.\nlanding_zone: this project's append-only Postgres ledger (via ./autoharn led), read by ./autoharn pickup on the next hydration.", 'build-and-witness': "authors: sonnet builder\nimplements: sonnet builder\nreviews: sonnet builder, self-witnessed both polarities on scratch worlds (t/t and f/f, per the standing witness discipline) -- CLAUDE.md's 'Class-ratified fail-safe deltas' ruling names this as the bar for kernel-lineage work; this build item (non-kernel) applies the same witness discipline by analogy, not by that ruling's own scope.\ndone: the deliverable is witnessed on both polarities (or, for non-kernel work like this DSL build, the equivalent: every deliverable exercised and its refusal paths exercised too) before any close is attempted -- CLAUDE.md's standing witness discipline: 'A report states, per item: WITNESSED (with observed output), REFUSED-AS-EXPECTED, or UNEXERCISED with the concrete blocker.'\nlanding_zone: the builder's own isolated worktree under .claude/worktrees/, committed but not pushed; witness output recorded in the builder's final report to the orchestrator.", 'close-deferred': 'authors: sonnet builder\nimplements: sonnet builder (./autoharn led work close <slug> shipped --review-deferred --witness <short-sha>)\nreviews: deferred explicitly -- --review-deferred means the independent countersign has NOT yet happened at this phase; it is owed to the orchestrator at the next phase, not skipped.\ndone: `./autoharn led work close <slug> shipped --review-deferred --witness <short-sha>` is filed, naming the commit the witness evidence lives at.\nlanding_zone: the ledger row `work_closed: <slug> (shipped)` with `--review-deferred` and `--witness <short-sha>`, naming the worktree commit; the worktree branch itself, awaiting merge.', 'orchestrator-merge': "authors: orchestrator\nimplements: orchestrator (merges each builder's worktree branch, wires cross-item seams no single builder could see)\nreviews: orchestrator, discharging the review deferred at close-deferred, per CLAUDE.md's runs-are-linear ruling: a run's world is dust once merged, so this review happens at the seam, not by reopening the builder's own worktree.\ndone: the branch is merged, cross-item seams (files two builders both touched) are wired and re-verified, and the deferred review from close-deferred is discharged -- either confirmed or sent back.\nlanding_zone: the repository's main branch (post-merge), plus a `decision` ledger row per user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md's merge convention (`merge: <branch> -> <commit> (work items: <slug>)`)."}
 BOOKKEEPING_PHASES = []
 DEFAULT_ACTOR = "author"
 INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
-    proc = subprocess.run([led] + args, capture_output=True, text=True,
+    proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True,  # multi-token --led
                            env={**os.environ, "LED_ACTOR": actor})
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
@@ -86,13 +87,7 @@ def main(argv: list[str]) -> int:
     # Flipped to served "./led" (row 1307/1308, 2026-07-26): "./legacy/led" is a pure exit-1
     # stub, so this default made check_charter/fetch_brief fail unconditionally, UNCHARTED
     # regardless of any real charter. Prior rationale (role_brief.py misparsing) is dead too: 417b200 made it refuse loudly.
-    # Re-flipped to "libexec/autoharn/led" (root-shim-pruning, ledger row 1357, 2026-07-26): this
-    # workflow is self-referential to THIS repo's own root (design/workflows/autoharn-builder-
-    # wave.toml's own header: "this repository's own builder-wave shape"), so the bare "./led"
-    # alias this default relied on is gone; libexec/autoharn/led is the same file the old shim
-    # execed, still a single-token executable path (unlike "./autoharn led", which is two argv
-    # words and would need argv splitting here).
-    led = "libexec/autoharn/led"
+    led = "libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
     instance: str | None = None
     role_map: dict[str, str] = {}
     allow_uncharted = False

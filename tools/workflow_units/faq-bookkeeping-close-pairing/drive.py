@@ -20,7 +20,7 @@ UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway
 falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
 J1 behavior, preserved only as an explicit opt-in degraded path).
 
-Usage:
+Usage (invoked from THIS repo's own root, `led`'s AUTOHARN_ROOT convention -- --led's default is relative to THAT cwd; elsewhere pass an explicit --led <path>):
     python3 faq-bookkeeping-close-pairing/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
                               [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
                               [--dry-run] [--rounds N]
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -47,14 +48,14 @@ ROLE_CHARTER_PY = "/home/bork/w/vdc/1/autoharn/tools/role_charter.py"
 ROLE_BRIEF_PY = "/home/bork/w/vdc/1/autoharn/tools/role_brief.py"
 
 PHASES = ['open-items', 'claim-items', 'close-judgment', 'close-companion']
-BRIEFS = {'open-items': 'authors: the operator/orchestrator opening both work items together: the judgment item, and a companion item citing it (--refs work:<slug>) whose entire resolution IS the promised commit\nimplements: the operator/orchestrator, via ./led work open (judgment item) and ./led work open ... --refs work:<slug> (companion item)\ndone: both work_opened rows exist -- the judgment item and the companion item citing it\nlanding_zone: the ledger -- the two work_opened rows (judgment item, companion item)', 'claim-items': 'implements: the operator/orchestrator, via ./led work claim on both items\ndone: both work_claimed rows exist\nlanding_zone: the ledger -- the two work_claimed rows', 'close-judgment': "authors: whichever principal's judgment the first item's close actually carries -- the FAQ's own text: 'the first item closes on its own merits... because it carries judgment'\nimplements: the operator/orchestrator, via ./led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred\nreviews: the review disposition itself IS the judgment content of this phase -- whichever of the two ordinary constructors is used, per the FAQ's own worked example (--review-witness self-review, in the scratch-world transcript)\ndone: a work_closed row exists for the judgment item, resolution=shipped, carrying exactly one review-disposition constructor (--review-witness or --review-deferred)\nlanding_zone: the ledger -- the judgment item's work_closed row, carrying its review disposition", 'close-companion': "implements: the operator/orchestrator, via ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>\nreviews: explicitly none -- the FAQ's own text: '--review-bookkeeping claims ONLY this commit exists -- nothing about its content, correctness, or completeness'; the CLI machine-checks the claim structurally (COMMIT-EXISTENCE, s38 Element 3) rather than via a judgment review\ndone: a work_closed row exists for the companion item, resolution=shipped, --review-bookkeeping, with a --witness commit:<sha> the CLI has confirmed exists in this world's own repository\nlanding_zone: the ledger -- the companion item's work_closed row, carrying work_review_disposition=bookkeeping and work_review_ref=commit:<sha>; the commit itself lands in the world's own git repository, which the close act's construction-time check confirms rather than merely asserts"}
+BRIEFS = {'open-items': 'authors: the operator/orchestrator opening both work items together: the judgment item, and a companion item citing it (--refs work:<slug>) whose entire resolution IS the promised commit\nimplements: the operator/orchestrator, via ./autoharn led work open (judgment item) and ./autoharn led work open ... --refs work:<slug> (companion item)\ndone: both work_opened rows exist -- the judgment item and the companion item citing it\nlanding_zone: the ledger -- the two work_opened rows (judgment item, companion item)', 'claim-items': 'implements: the operator/orchestrator, via ./autoharn led work claim on both items\ndone: both work_claimed rows exist\nlanding_zone: the ledger -- the two work_claimed rows', 'close-judgment': "authors: whichever principal's judgment the first item's close actually carries -- the FAQ's own text: 'the first item closes on its own merits... because it carries judgment'\nimplements: the operator/orchestrator, via ./autoharn led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred\nreviews: the review disposition itself IS the judgment content of this phase -- whichever of the two ordinary constructors is used, per the FAQ's own worked example (--review-witness self-review, in the scratch-world transcript)\ndone: a work_closed row exists for the judgment item, resolution=shipped, carrying exactly one review-disposition constructor (--review-witness or --review-deferred)\nlanding_zone: the ledger -- the judgment item's work_closed row, carrying its review disposition", 'close-companion': "implements: the operator/orchestrator, via ./autoharn led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>\nreviews: explicitly none -- the FAQ's own text: '--review-bookkeeping claims ONLY this commit exists -- nothing about its content, correctness, or completeness'; the CLI machine-checks the claim structurally (COMMIT-EXISTENCE, s38 Element 3) rather than via a judgment review\ndone: a work_closed row exists for the companion item, resolution=shipped, --review-bookkeeping, with a --witness commit:<sha> the CLI has confirmed exists in this world's own repository\nlanding_zone: the ledger -- the companion item's work_closed row, carrying work_review_disposition=bookkeeping and work_review_ref=commit:<sha>; the commit itself lands in the world's own git repository, which the close act's construction-time check confirms rather than merely asserts"}
 BOOKKEEPING_PHASES = ['close-companion']
 DEFAULT_ACTOR = "author"
 INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
-    proc = subprocess.run([led] + args, capture_output=True, text=True,
+    proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True,  # multi-token --led
                            env={**os.environ, "LED_ACTOR": actor})
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
@@ -86,7 +87,7 @@ def main(argv: list[str]) -> int:
     # Flipped to served "./led" (row 1307/1308, 2026-07-26): "./legacy/led" is a pure exit-1
     # stub, so this default made check_charter/fetch_brief fail unconditionally, UNCHARTED
     # regardless of any real charter. Prior rationale (role_brief.py misparsing) is dead too: 417b200 made it refuse loudly.
-    led = "./led"
+    led = "libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
     instance: str | None = None
     role_map: dict[str, str] = {}
     allow_uncharted = False

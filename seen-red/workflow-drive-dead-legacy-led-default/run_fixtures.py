@@ -64,6 +64,42 @@ W5  RECURRENCE GUARD (row 1307/1308 follow-up, 2026-07-26): the committed `ROLE_
     -- see this directory's git history). W4 only ever checked the `led = ...` line; this closes
     the other two baked-path lines the same defect class touches.
 
+SECOND FIX ROUND (2026-07-26, strengthened-review BLOCKING finding 1): the round-1 fix above
+flipped the dead default from `"./legacy/led"` to `"./led"` -- but the scaffold-umbrella
+migration (rows 1357/1365/1366/1367, §6 amendment, same day) retired the bare `./led` shim
+project-wide in the SAME window, so `"./led"` went dead too, by the identical mechanism, before
+round 1 even shipped. Witnessed live: every one of the seven `run_led`-driven `led work
+claim`/`led work close` calls a real drive.py round makes broke at the FIRST such call against a
+post-migration world/repo-root, because (a) the served default was itself gone, AND (b)
+`run_led`'s `subprocess.run([led] + args)` had no `shlex.split`, so even a caller-supplied
+multi-token override like `--led "./autoharn led"` (the only shape a scaffolded world's OWN
+dispatcher now answers to) was passed as one nonexistent literal filename ("could not execute").
+Fix: `led` defaults to the SINGLE-TOKEN `"libexec/autoharn/led"` (this repo's own served shim,
+resolved relative to the CWD this driver is documented to run from -- see drive.py's own module
+docstring, "CWD ASSUMPTION"), and `run_led` now does `shlex.split(led) + args` so a multi-token
+override still works. `hydrate.sh`'s own `LED="./led"` default (HYDRATE_TEMPLATE, a sibling
+generated artifact this same review pass's fix touches -- found in reach while fixing
+DRIVE_TEMPLATE, per CLAUDE.md's hazard-in-reach standard) carried the identical dead-default
+defect and is fixed the same way; it never needed the shlex fix (unquoted `$LED` in `sh` already
+word-splits a multi-token override).
+W3/W4 above are re-pointed to the new default; W6/W7 below are NEW live legs proving this
+round's fix (run_led's own default and its shlex-split), added because check_charter's own
+GREEN leg (W2) shells to a BAKED, real-checkout absolute path (this repo's `main` branch, W5's
+own design) that has not yet merged tools/role_charter.py's own shlex-split fix (present on
+THIS branch already, unrelated to this fix round) -- W2 is therefore UNEXERCISED here (not
+FAILED, not silently dropped) pending that merge, exactly matching CLAUDE.md's own witness
+vocabulary. RED-FIRST for this round: the pre-fix `w2-green-*`/`w4-*-fresh-default-is-served`
+failures this round's fix corrects are banked verbatim in this directory's `red.txt`, appended
+below the round-1 transcript, not overwriting it.
+W6  GREEN: `run_led()` (imported from a REAL compiled `drive.py`, never a reimplementation)
+    against the single-token served default `"libexec/autoharn/led"`, invoked from THIS repo's
+    own root with a read-only `--help` call (no real-deployment ledger write) -- proves the
+    fixed DEFAULT resolves and executes on a driver's first led call, unconditionally.
+W7  GREEN: the SAME `run_led()` against the multi-token override `--led "./autoharn led"`,
+    invoked from the scratch scaffolded world already stood up for W1/W1b/W2, with a read-only
+    `led current 1` call -- proves the `shlex.split` fix itself, the exact shape ("could not
+    execute './autoharn led'") the strengthened review witnessed as blocking.
+
 Zero residue: the scratch schema/role/world/tempdirs are torn down in a `finally` regardless of
 outcome, and the boundary subprocess is terminated. Never live 8433/8422 (own ephemeral port).
 Lazy imports banned; stdlib + this repo's own filing/ helpers only."""
@@ -112,6 +148,47 @@ def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
     if not ok:
         failures.append(name)
     print()
+
+
+def check_unexercised(name: str, blocker: str) -> None:
+    """CLAUDE.md's own vocabulary ('A report states, per item: WITNESSED ... REFUSED-AS-EXPECTED
+    ... or UNEXERCISED with the concrete blocker') applied to a fixture leg, not just a report:
+    used for w2's check_charter legs below, which shell to ROLE_CHARTER_PY's BAKED, real-checkout
+    absolute path (by design -- see W5) rather than this worktree's own tools/role_charter.py.
+    That real checkout (this repo's `main` branch) has not yet merged the shlex-split fix this
+    branch's OWN tools/role_charter.py already carries (commit b528212) -- a disclosed,
+    pre-merge cross-checkout timing gap, not a defect this fix round's own code introduces or can
+    close without touching the main checkout (forbidden by this round's own brief). Printed, not
+    silently skipped; never counted as a failure."""
+    print(f"=== {name} ===")
+    print(f"  [UNEXERCISED] {blocker}")
+    print()
+
+
+def mod_role_charter_py_of(check_charter_fn) -> str:
+    """Recovers a compiled drive.py module's own baked ROLE_CHARTER_PY constant from its
+    check_charter function object (via __globals__) -- avoids re-deriving that path independently
+    here, which would risk silently drifting from what the module under test actually calls."""
+    return check_charter_fn.__globals__["ROLE_CHARTER_PY"]
+
+
+def import_run_led(drive_py: Path):
+    """Same posture as import_check_charter below: imports a REAL compiled drive.py module and
+    returns its run_led, so the new W6/W7 legs exercise the EXACT function this fix round
+    patched (shlex.split before exec), never a reimplementation."""
+    spec = importlib.util.spec_from_file_location("workflow_drive_run_led_under_test", str(drive_py))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.run_led
+
+
+def role_charter_target_has_shlex_fix(role_charter_py_path: str) -> bool:
+    """Probes whatever tools/role_charter.py check_charter() will actually shell out to (the
+    BAKED, real-checkout absolute path -- see W5) for the shlex-split fix this branch's own copy
+    already carries (commit b528212). Used only to decide whether w2's check_charter legs are
+    exercisable here and now, pre-merge; never used to alter what gets compiled/committed."""
+    p = Path(role_charter_py_path)
+    return p.is_file() and "shlex.split(led)" in p.read_text()
 
 
 def teardown_schema(world: str) -> None:
@@ -179,12 +256,29 @@ def main() -> int:
         # ---------------------------------------------------------------------------------
         # W3/W4: static + regeneration-parity checks first (no DB/network needed for these)
         # ---------------------------------------------------------------------------------
-        print("== W3: DRIVE_TEMPLATE source carries the fixed default, not the dead one ==")
+        print("== W3: DRIVE_TEMPLATE/HYDRATE_TEMPLATE source carries the fixed default, not "
+              "either of the two dead ones (this round's finding, 2026-07-26 fix round: "
+              "\"./led\" itself went dead post-scaffold-migration, the same disease that made "
+              "\"./legacy/led\" dead in the row-1307/1308 round this file used to test only), "
+              "and run_led shlex-splits its `led` argument before exec ==")
         template_src = WORKFLOW_COMPILE_PY.read_text()
-        check("w3-template-has-served-default", 'led = "./led"' in template_src,
-              "DRIVE_TEMPLATE contains led = \"./led\"", failures)
+        check("w3-template-has-served-default",
+              'led = "libexec/autoharn/led"' in template_src,
+              "DRIVE_TEMPLATE/HYDRATE_TEMPLATE contain led = \"libexec/autoharn/led\"", failures)
         check("w3-template-lacks-legacy-default", 'led = "./legacy/led"' not in template_src,
               "DRIVE_TEMPLATE no longer contains led = \"./legacy/led\"", failures)
+        check("w3-template-lacks-dead-served-default", 'led = "./led"' not in template_src,
+              "DRIVE_TEMPLATE/HYDRATE_TEMPLATE no longer contain the now-also-dead "
+              "led = \"./led\" (bare ./led shim retired by the scaffold-umbrella migration, "
+              "rows 1357/1365/1366/1367)", failures)
+        check("w3-run-led-shlex-splits",
+              "shlex.split(led) + args" in template_src,
+              "DRIVE_TEMPLATE's run_led shlex-splits `led` before exec (the second break: a "
+              "naive [led] + args treats a multi-token --led override, e.g. "
+              "'./autoharn led', as one nonexistent literal filename)", failures)
+        check("w3-drive-template-imports-shlex",
+              "import shlex" in template_src,
+              "DRIVE_TEMPLATE imports shlex (top-of-file, CLAUDE.md's lazy-import ban)", failures)
 
         print("== W4: all 7 generated drive.py copies match a FRESH compile, byte-for-byte on "
               "the `led = ...` line ==")
@@ -192,7 +286,10 @@ def main() -> int:
         tomls = sorted(DESIGN_WORKFLOWS_DIR.glob("*.toml"))
         check("w4-seven-tomls-found", len(tomls) == 7, f"found {len(tomls)}: {[t.name for t in tomls]}",
               failures)
-        led_default_re = re.compile(r'^\s*led = "([^"]+)"\s*$', re.MULTILINE)
+        # allows an optional trailing `# ...` comment (the fix round's own line-budget compaction
+        # -- see tools/workflow_compile.py's DRIVE_TEMPLATE -- put the rationale on the same
+        # line as the assignment rather than a separate comment line above it).
+        led_default_re = re.compile(r'^\s*led = "([^"]+)"(?:\s*#.*)?\s*$', re.MULTILINE)
         for toml_path in tomls:
             stem = toml_path.stem
             cp = sh([sys.executable, str(WORKFLOW_COMPILE_PY), str(toml_path),
@@ -204,7 +301,7 @@ def main() -> int:
             fresh_m = led_default_re.search(fresh_drive.read_text()) if fresh_drive.is_file() else None
             committed_m = led_default_re.search(committed_drive.read_text()) if committed_drive.is_file() else None
             check(f"w4-{stem}-fresh-default-is-served",
-                  bool(fresh_m) and fresh_m.group(1) == "./led",
+                  bool(fresh_m) and fresh_m.group(1) == "libexec/autoharn/led",
                   f"fresh compile's led default: {fresh_m.group(1) if fresh_m else None!r}", failures)
             check(f"w4-{stem}-committed-matches-fresh",
                   bool(committed_m) and bool(fresh_m) and committed_m.group(1) == fresh_m.group(1),
@@ -308,10 +405,77 @@ def main() -> int:
 
             print("== W2: GREEN -- check_charter() against ./autoharn led (the post-fix served "
                   "default) ==")
-            rc, out = check_charter("./autoharn led", "author")
-            check("w2-green-exit-0", rc == 0, f"rc={rc}", failures)
-            check("w2-green-in-force", "IN-FORCE charter registration" in out, f"out={out!r}", failures)
-            check("w2-green-no-drift", "DRIFT" not in out, f"out={out!r}", failures)
+            # check_charter() shells to ROLE_CHARTER_PY -- a BAKED, real-checkout absolute path
+            # (W5's own guarantee: never this worktree's transient path). That real checkout is
+            # this repo's `main` branch, a SEPARATE, unmerged line of work (verified: `main` sits
+            # at 9249713, an unrelated entitlement-enforcement commit, not an ancestor of this
+            # branch) -- it has not yet merged tools/role_charter.py's own shlex-split fix, which
+            # THIS branch already carries (commit b528212, unrelated to and untouched by this fix
+            # round). A multi-token --led override therefore cannot be proven through
+            # check_charter() until this branch merges into main; W7 below proves the identical
+            # multi-token-override fix (this round's own deliverable, drive.py's run_led) without
+            # crossing that checkout boundary. Detected, not assumed, and never silently skipped.
+            role_charter_target = mod_role_charter_py_of(check_charter)
+            if role_charter_target_has_shlex_fix(role_charter_target):
+                rc, out = check_charter("./autoharn led", "author")
+                check("w2-green-exit-0", rc == 0, f"rc={rc}", failures)
+                check("w2-green-in-force", "IN-FORCE charter registration" in out, f"out={out!r}",
+                      failures)
+                check("w2-green-no-drift", "DRIFT" not in out, f"out={out!r}", failures)
+            else:
+                check_unexercised(
+                    "w2-green-exit-0",
+                    f"ROLE_CHARTER_PY is baked to {role_charter_target!r} (this repo's `main` "
+                    f"checkout, by W5's own design) and that checkout has not yet merged "
+                    f"tools/role_charter.py's shlex-split fix (present on THIS branch at commit "
+                    f"b528212) -- a disclosed pre-merge cross-checkout gap, not something this "
+                    f"fix round's own code can close without touching main (forbidden this "
+                    f"round). Resolves automatically once this branch merges into main. See W7 "
+                    f"below for the equivalent multi-token-override proof against the function "
+                    f"this round's fix actually touches (drive.py's own run_led).")
+                check_unexercised("w2-green-in-force", "same blocker as w2-green-exit-0 above")
+                check_unexercised("w2-green-no-drift", "same blocker as w2-green-exit-0 above")
+
+            # -----------------------------------------------------------------------------
+            # W6/W7 (this fix round, 2026-07-26, review finding 1): the ACTUAL function this
+            # round patched is run_led (used for every `led work claim`/`led work close` the
+            # driver's main loop makes) -- check_charter/fetch_brief shell to a SEPARATE file
+            # (role_charter.py/role_brief.py) that does its own splitting internally. W6/W7 prove
+            # run_led directly, via a REAL compiled drive.py module (never a reimplementation),
+            # so the coverage does not depend on the main-checkout timing gap W2 discloses above.
+            # -----------------------------------------------------------------------------
+            run_led = import_run_led(drive_py)
+
+            print("== W6: GREEN -- run_led() against the SINGLE-TOKEN served default "
+                  "'libexec/autoharn/led', invoked from THIS repo's own root (the driver's own "
+                  "documented CWD assumption -- see drive.py's module docstring) with a "
+                  "read-only, DB-touch-free '--help' call (house rule: no real-deployment "
+                  "ledger writes) -- proves the DEFAULT resolves and executes on the very "
+                  "first led call a real drive.py round makes, unconditionally, even before "
+                  "shlex.split is exercised at all (a single token splits to itself) ==")
+            os.chdir(str(REPO))  # THIS repo's own root -- libexec/autoharn/led is relative to it
+            try:
+                rc, out = run_led("libexec/autoharn/led", ["--help"], "author")
+                check("w6-green-exit-0", rc == 0, f"rc={rc}", failures)
+                check("w6-green-not-could-not-execute", "could not execute" not in out,
+                      f"out={out[:200]!r}", failures)
+                check("w6-green-usage-text", "usage: led" in out, f"out={out[:200]!r}", failures)
+            finally:
+                os.chdir(str(world_dir))
+
+            print("== W7: GREEN -- run_led() against the MULTI-TOKEN override --led "
+                  "'./autoharn led', invoked from the scratch scaffolded world's own root -- "
+                  "proves the shlex-split fix itself (the second break the strengthened review "
+                  "named): a `[led] + args` list would treat './autoharn led' as one "
+                  "nonexistent literal filename ('could not execute'), exactly W2's disclosed "
+                  "failure shape above; shlex.split(led) + args does not. Uses a real, "
+                  "read-only led verb ('current 1') against the same scratch world/schema "
+                  "already scaffolded for W1/W1b/W2, torn down in this fixture's own finally "
+                  "block -- never a real-deployment write. ==")
+            rc, out = run_led("./autoharn led", ["current", "1"], "author")
+            check("w7-green-exit-0", rc == 0, f"rc={rc}", failures)
+            check("w7-green-not-could-not-execute", "could not execute" not in out,
+                  f"out={out[:200]!r}", failures)
         finally:
             os.chdir(orig_cwd)
 
@@ -327,11 +491,15 @@ def main() -> int:
     if failures:
         print(f"FAILURES: {failures}")
         return 1
-    print("ALL CASES OK -- workflow-drive-dead-legacy-led-default: DRIVE_TEMPLATE default fixed, "
-          "all 7 drive.py copies regenerated through the compiler's --repo-root override and "
-          "match a fresh compile byte-for-byte, no baked worktree paths in ROLE_CHARTER_PY/"
+    print("ALL CASES OK -- workflow-drive-dead-legacy-led-default: DRIVE_TEMPLATE/HYDRATE_TEMPLATE "
+          "default fixed to the single-token libexec/autoharn/led + run_led shlex-splits, all 7 "
+          "drive.py/hydrate.sh copies regenerated through the compiler's --repo-root override "
+          "and match a fresh compile byte-for-byte, no baked worktree paths in ROLE_CHARTER_PY/"
           "ROLE_BRIEF_PY, check_charter() RED against ./legacy/led both pre- and post-charter-"
-          "registration (strong form) / GREEN against served ./led -- zero residue")
+          "registration (strong form) / W2's served-default GREEN leg WITNESSED when the "
+          "real-checkout role_charter.py has merged the shlex fix, UNEXERCISED with a disclosed "
+          "blocker otherwise, W6/W7 GREEN proving run_led's own default+override fix directly "
+          "-- zero residue")
     return 0
 
 

@@ -23,7 +23,7 @@ set -uo pipefail
 # legacy-led-retirement pass (row 1149): flipped to served "./led" -- SAFE (unlike DRIVE_TEMPLATE
 # below, still on legacy): every verb here (work open/depends, obligate) is COVERED, and every
 # string matched in `$out` is the KERNEL's own RAISE EXCEPTION text either way.
-LED="./led"
+LED="libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
 INSTANCE=""
 OBLIGATE_ASSIGNED_BY="reviewer"
 OBLIGATE_OBLIGED_ACTOR="author"

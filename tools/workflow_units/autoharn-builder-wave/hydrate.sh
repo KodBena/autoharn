@@ -23,12 +23,7 @@ set -uo pipefail
 # legacy-led-retirement pass (row 1149): flipped to served "./led" -- SAFE (unlike DRIVE_TEMPLATE
 # below, still on legacy): every verb here (work open/depends, obligate) is COVERED, and every
 # string matched in `$out` is the KERNEL's own RAISE EXCEPTION text either way.
-# Re-flipped to "libexec/autoharn/led" (root-shim-pruning, ledger row 1357, 2026-07-26): this
-# workflow is self-referential to THIS repo's own root (design/workflows/autoharn-builder-
-# wave.toml's own header names it "this repository's own builder-wave shape"), so the bare
-# "./led" root alias this default relied on is gone; libexec/autoharn/led is the same file the
-# old shim exec'd.
-LED="libexec/autoharn/led"
+LED="libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
 INSTANCE=""
 OBLIGATE_ASSIGNED_BY="reviewer"
 OBLIGATE_OBLIGED_ACTOR="author"

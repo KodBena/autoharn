@@ -71,3 +71,50 @@ registration" in its output -- and (W1b, added this pass) the SAME call against 
 `./legacy/led` default still returns rc=1 with the identical stub text even AFTER that real,
 in-force charter is registered, re-proving the severe part of this finding as a standing case
 rather than leaving it only in this banked transcript.
+
+================================================================================================
+ROUND 2 RED (2026-07-26, fix round, strengthened-review BLOCKING finding 1). Captured live,
+HARNESS_PGHOST=192.168.122.1, against this fixture's own run_fixtures.py as it stood at branch
+tip b3b116d -- i.e. BEFORE this round's DRIVE_TEMPLATE/HYDRATE_TEMPLATE edit, with the ROUND-1
+fix above (`led = "./led"`) still in place, run against the scaffold-umbrella migration
+(rows 1357/1365/1366/1367) that landed in the SAME branch's own history and retired the bare
+`./led` shim project-wide. Banked BEFORE touching tools/workflow_compile.py this round, per
+CLAUDE.md's red-first discipline.
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/workflow-drive-dead-legacy-led-default/run_fixtures.py
+[... W1/W1b PASS unchanged, elided ...]
+== W2: GREEN -- check_charter() against ./autoharn led (the post-fix served default) ==
+=== w2-green-exit-0 ===
+  [FAIL] rc=1
+
+=== w2-green-in-force ===
+  [FAIL] out="role_charter: REFUSED -- './autoharn led current 100000' failed:\ncould not execute
+  './autoharn led': [Errno 2] No such file or directory: './autoharn led'"
+
+=== w2-green-no-drift ===
+  [ok] out="role_charter: REFUSED -- './autoharn led current 100000' failed:\ncould not execute
+  './autoharn led': [Errno 2] No such file or directory: './autoharn led'"
+
+FAILURES: ['w4-autoharn-builder-wave-committed-matches-fresh', 'w2-green-exit-0',
+'w2-green-in-force']
+
+READING THIS RED: the w4 failure is because the COMMITTED autoharn-builder-wave/drive.py had
+ALREADY been hand-patched (out of sync with the other six units and with DRIVE_TEMPLATE itself)
+to default to "libexec/autoharn/led" under a DIFFERENT justification comment ("root-shim-pruning,
+ledger row 1357") -- discovered while diffing this round's regeneration output, itself an
+instance of the SAME "committed generated file silently hand-edited, drifted from its template"
+hazard class W5 above already exists to catch (there, for the two ROLE_*_PY lines). The w2
+failures are "could not execute './autoharn led'" -- Python's subprocess treating the two-token
+override as ONE nonexistent literal filename, because `role_charter.py`'s own `run_led` at the
+BAKED, real-checkout (`main`) absolute path predates that branch's shlex-split fix -- see this
+round's fix-round commit message and the module docstring's "SECOND FIX ROUND" section for the
+full disposition (W2 -> UNEXERCISED with a disclosed blocker; W6/W7 added, proving the actual
+in-scope fix -- drive.py's own `run_led` default + shlex-split -- directly, without crossing that
+checkout boundary).
+
+Fix this round: DRIVE_TEMPLATE's/HYDRATE_TEMPLATE's `led` default flips from `"./led"` (itself
+now dead) to the single-token `"libexec/autoharn/led"`, `run_led` gains `shlex.split(led)` before
+exec, and all 7 `tools/workflow_units/*/{drive.py,hydrate.sh}` pairs are regenerated (never
+hand-edited) through the compiler's own `--repo-root` machinery, restoring the previously
+hand-patched autoharn-builder-wave copy to a genuinely generated, template-consistent state
+along with the other six.

@@ -20,7 +20,7 @@ UNLESS --allow-uncharted was given, the loud escape hatch, which proceeds anyway
 falls back to the TOML's own raw authors/implements/reviews prose as DISPATCH content (the old
 J1 behavior, preserved only as an explicit opt-in degraded path).
 
-Usage:
+Usage (invoked from THIS repo's own root, `led`'s AUTOHARN_ROOT convention -- --led's default is relative to THAT cwd; elsewhere pass an explicit --led <path>):
     python3 panel-msched-resource-provisioning/drive.py --instance <token> [--led <path>] [--role-map <phase>=<principal> ...]
                               [--allow-uncharted] [--commit-witness <phase>=<sha> ...]
                               [--dry-run] [--rounds N]
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -54,7 +55,7 @@ INSTANCE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def run_led(led: str, args: list[str], actor: str) -> tuple[int, str]:
-    proc = subprocess.run([led] + args, capture_output=True, text=True,
+    proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True,  # multi-token --led
                            env={**os.environ, "LED_ACTOR": actor})
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
@@ -86,7 +87,7 @@ def main(argv: list[str]) -> int:
     # Flipped to served "./led" (row 1307/1308, 2026-07-26): "./legacy/led" is a pure exit-1
     # stub, so this default made check_charter/fetch_brief fail unconditionally, UNCHARTED
     # regardless of any real charter. Prior rationale (role_brief.py misparsing) is dead too: 417b200 made it refuse loudly.
-    led = "./led"
+    led = "libexec/autoharn/led"  # flipped again 2026-07-26 (finding 1): bare ./led also retired
     instance: str | None = None
     role_map: dict[str, str] = {}
     allow_uncharted = False

@@ -311,6 +311,36 @@ def main() -> int:
               rc6.returncode == 1 and "ALREADY" in rc6.stderr and "PINNED" in rc6.stderr,
               rc6.stdout + rc6.stderr)
 
+        # RED 6b (fix round, 2026-07-26, strengthened-review finding 2): a HYBRID deployment --
+        # the post-§6 `./autoharn` dispatcher AND a stray legacy per-verb shim (`./led`) both
+        # present -- must be refused loudly, not silently converted via the dispatcher branch
+        # while the stray shim goes unmentioned (the PRIOR behavior). Fresh classic scaffold,
+        # then a stray `led` file dropped in by hand (simulating a half-migrated deployment --
+        # e.g. a `--force` re-scaffold that didn't clean up an older shim).
+        dest6b = tmproot / "red6b-hybrid"
+        schema6b, kern6b, role6b = f"dpf{STAMP}g6b", f"dpf{STAMP}g6b_kernel", f"dpf{STAMP}g6b_rw"
+        r6b = _sh(["bash", str(worktree / "bootstrap" / "new-project.sh"), str(dest6b),
+                  "--db", DB, "--host", HOST, "--schema", schema6b, "--kern", kern6b,
+                  "--role", role6b, "--name", f"dpf{STAMP}g6b", "--governed", "*.py"], cwd=worktree)
+        schemas_to_drop.append((schema6b, kern6b, role6b))
+        check("SETUP: dispatcher-shape deployment scaffolded for the hybrid-refusal case",
+              r6b.returncode == 0 and (dest6b / "autoharn").exists(), r6b.stdout + r6b.stderr)
+        stray_led = dest6b / "led"
+        stray_led.write_text(
+            "#!/bin/sh\n"
+            "HERE=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n"
+            "exec env PICKUP_DEPLOYMENT=\"$HERE/deployment.json\" "
+            f"{worktree}/bootstrap/templates/led.tmpl \"$@\"\n"
+        )
+        stray_led.chmod(0o755)
+        rc6b = _sh(["bash", str(CONVERT), str(dest6b), "--yes"], cwd=REPO)
+        check("RED 6b (convert-to-submodule.sh REFUSES a hybrid deployment -- dispatcher + stray "
+              "legacy shim both present -- names the stray shim, touches nothing)",
+              rc6b.returncode == 1 and "REFUSED" in rc6b.stderr
+              and "stray legacy per-verb shim" in rc6b.stderr and "led" in rc6b.stderr
+              and not (dest6b / ".autoharn").exists(),
+              rc6b.stdout + rc6b.stderr)
+
         # RED 7: convert against a BUSY deployment (a REAL claude-shaped process sitting inside
         # it -- REFUSE-class per bootstrap/live_session_check.py's 2026-07-15 narrowing, ledger
         # row 1055: argv[0]'s basename == "claude". Real runnable approach, no mock of the code

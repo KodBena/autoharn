@@ -31,6 +31,11 @@
 #
 # REFUSES LOUDLY, and touches NOTHING, on any of:
 #   - <deployment-dir> missing deployment.json, or it fails to parse (filing/deployment_record.py).
+#   - <deployment-dir> has BOTH the post-§6 ./autoharn dispatcher AND a stray legacy per-verb
+#     shim (e.g. ./led) -- a real scaffold has one shape or the other, NEVER both; a hybrid mix
+#     is a sign something half-migrated, so this is refused rather than silently preferring the
+#     dispatcher and ignoring the stray file (fix round, 2026-07-26, strengthened-review finding
+#     2 -- the PRIOR behavior here, before this fix).
 #   - the required operator-verb shims (SHIM_VERBS_ORIGINAL_EIGHT; asof-export/doctor are
 #     discovery-optional, see bootstrap/shim-verbs.sh) are missing, malformed, already pinned (already has .autoharn), or
 #     DISAGREE with each other about which autoharn checkout they exec (a pre-existing hazard this
@@ -121,6 +126,37 @@ fi
 # shape a real, already-scaffolded deployment carries.
 if [ -x "$DEST/autoharn" ]; then
     echo "-- $DEST/autoharn dispatcher found -- new (post-§6) scaffold shape --"
+    # HYBRID-SHAPE REFUSAL (fix round, 2026-07-26, strengthened-review finding 2): a deployment
+    # legitimately has EITHER the one dispatcher (post-§6) OR the ten bare per-verb shims
+    # (pre-§6, runs-are-linear -- "existing worlds untouched") -- never both. A dispatcher
+    # coexisting with a STRAY bare shim (e.g. $DEST/led alongside $DEST/autoharn) is not a third
+    # legitimate shape: it means something half-migrated (a hand-run new-project.sh --force that
+    # didn't clean up an old shim, a partial manual edit, or a bug) -- a hazard, not a
+    # convenience to route around by silently preferring the dispatcher, which is what this
+    # script used to do (the `else` branch below was simply never reached, so a stray shim went
+    # unmentioned, unconverted, and untouched). Refused loudly here instead, naming every stray
+    # shim found and how to resolve it, before this script commits to either code path.
+    STRAY_SHIMS=""
+    for v in $SHIM_VERBS_ALL; do
+        [ -e "$DEST/$v" ] && STRAY_SHIMS="$STRAY_SHIMS $v"
+    done
+    if [ -n "$STRAY_SHIMS" ]; then
+        echo "convert-to-submodule.sh: REFUSED -- $DEST has BOTH the $DEST/autoharn dispatcher" >&2
+        echo "                         (post-§6 scaffold shape) AND a stray legacy per-verb shim" >&2
+        echo "                         at:$STRAY_SHIMS" >&2
+        echo "                         This is not a recognized deployment shape -- a real" >&2
+        echo "                         scaffold has EITHER the one dispatcher OR the ten bare" >&2
+        echo "                         shims, never both. A hybrid mix is a sign something" >&2
+        echo "                         half-migrated (a partial re-scaffold, a hand-added shim," >&2
+        echo "                         or a bug), and this script will not silently pick the" >&2
+        echo "                         dispatcher and ignore the rest. To resolve: if the stray" >&2
+        echo "                         shim(s) are vestigial (the dispatcher is what this" >&2
+        echo "                         deployment actually uses), remove them by hand and re-run;" >&2
+        echo "                         if this deployment is actually still on the pre-§6 shim" >&2
+        echo "                         shape and $DEST/autoharn is the stray file instead, remove" >&2
+        echo "                         IT and re-run. Nothing touched." >&2
+        exit 1
+    fi
     DISCOVERED="$(sed -n 's|.*exec env PICKUP_DEPLOYMENT="[^"]*" \(.*\)/bootstrap/templates/"\$VERB"\.tmpl.*|\1|p' "$DEST/autoharn" | head -1)"
     if [ -z "$DISCOVERED" ]; then
         echo "convert-to-submodule.sh: $DEST/autoharn does not match the expected dispatcher shape" >&2

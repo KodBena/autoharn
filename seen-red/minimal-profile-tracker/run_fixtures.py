@@ -38,6 +38,13 @@ CASES (both polarities, all live subprocess runs of the real scaffold — never 
                         and writes NO `.claude/settings.json`, NO root `CLAUDE.md` (the "standing
                         project is not a governed world" contract, checked directly, not just
                         asserted by the scaffold's own stdout).
+  GREEN-HELP-LINES   -- (fix round, 2026-07-26, strengthened-review finding 4) `./autoharn --help`
+                        prints every one of the ten SHIM_VERBS_ALL verb names on its OWN line
+                        (line count >= verb count) -- structural guard against the exact
+                        run-on-line heredoc/command-substitution defect batch 1's first draft of
+                        this dispatcher hit and fixed (see the mechanism's own commit history);
+                        this is the ONLY family that exercises a scaffold's `--help` output at
+                        all, so it is where that guard belongs.
   GREEN-BOUNDARY-AUTOSPAWN -- no boundary daemon is running after GREEN-ADOPT (no
                         `.autoharn-service.pid`); the FIRST `./led work open` call spawns one
                         automatically (ensure-running) and the write succeeds.
@@ -68,6 +75,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -217,6 +225,33 @@ def main() -> int:
           f"NO hooks/CLAUDE.md={no_hooks} boundary_url+boundary_deployment in deployment.json="
           f"{boundary_keys_present} -- "
           f"{'PASS' if ok and dep_path.exists() and verbs_present and boundary_toml and no_hooks and boundary_keys_present else 'FAIL'}")
+
+    # ---------------------------------------------------------- GREEN-HELP-LINES (fix round,
+    # 2026-07-26, strengthened-review finding 4): the dispatcher's own --help roster is built
+    # from a `cat <<'DISPATCHVERBS' ... DISPATCHVERBS` heredoc piped through `awk` -- batch 1's
+    # first draft of this exact mechanism (see the freeze-at-stamp.sh sibling's own commit
+    # history) once glued all ten verbs onto ONE run-on line when a command-substitution step ate
+    # the heredoc's trailing newlines; unguarded, a future heredoc reformat could silently
+    # reintroduce that. Structural assertion: every one of the ten SHIM_VERBS_ALL verb NAMES
+    # appears on its OWN line of `--help` output, and the total line count is at least the verb
+    # count (never fewer lines than verbs, which a run-on glue would produce).
+    help_r = subprocess.run([str(dest / "autoharn"), "--help"], capture_output=True, text=True)
+    help_lines = help_r.stdout.splitlines()
+    ten_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
+                 "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
+    own_line_re = {v: re.compile(rf"^\s*{re.escape(v)}\b") for v in ten_verbs}
+    verbs_on_own_line = {v: any(rx.match(line) for line in help_lines) for v, rx in own_line_re.items()}
+    all_verbs_on_own_line = all(verbs_on_own_line.values())
+    enough_lines = len(help_lines) >= len(ten_verbs)
+    help_ok = help_r.returncode == 0 and all_verbs_on_own_line and enough_lines
+    if not help_ok:
+        failures.append(
+            f"GREEN-HELP-LINES: exit={help_r.returncode} line_count={len(help_lines)} "
+            f"verb_count={len(ten_verbs)} verbs_on_own_line={verbs_on_own_line}\n"
+            f"STDOUT:\n{help_r.stdout}\nSTDERR:\n{help_r.stderr}")
+    print(f"GREEN-HELP-LINES: exit={help_r.returncode} help output has {len(help_lines)} lines "
+          f"(>= {len(ten_verbs)} verbs: {enough_lines}), every verb on its own line: "
+          f"{all_verbs_on_own_line} -- {'PASS' if help_ok else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-BOUNDARY-AUTOSPAWN
     pidfile_before = (dest / ".autoharn-service.pid").exists()
