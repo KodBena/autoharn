@@ -1,8 +1,12 @@
 CASE 1 (em-dash-separator table, gate mode): exit=1
 doc-tables: 1 borked table(s):
 
-  !! /tmp/tmpa6wssdrc/bad.md:3-5: separator-invalid-chars: row 2 is a delimiter-row ATTEMPT (dash/colon-family characters only) but fails strict GFM syntax (only '-'/':' are valid) — got ['—', '—', '—']
+  !! /tmp/tmpq6iz0x6m/bad.md:3-5: separator-invalid-chars: row 2 is a delimiter-row ATTEMPT (dash/colon-family characters only) but fails strict GFM syntax (only '-'/':' are valid) — got ['—', '—', '—']
 CASE 2 (canonical hyphen separator, gate mode): exit=0
 CASE 3 (a real judgment/ doc, gate mode): exit=0
 CASE 4 (repo-wide report mode): exit=0 (findings are informational; exit must be 0)
-doc-tables red-specimen: all four cases behaved as designed — red on the em-dash-separator doc naming the reason, green on the canonical-separator doc, the excluded prefix reported but not gated, report mode never failing.
+CASE 5 (--gate alone, no FILE args): exit=0
+doc-tables: clean ✓
+CASE 6 (--gate + a real file): exit=0
+CASE 7 (unrecognized flag): exit=2
+doc-tables red-specimen: all seven cases behaved as designed — red on the em-dash-separator doc naming the reason, green on the canonical-separator doc, the excluded prefix reported but not gated, report mode never failing, and --gate (alone, with a file, and rejecting an unknown flag) parsing correctly (row 1313).
