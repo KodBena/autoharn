@@ -57,3 +57,48 @@ green afterward (see this build's own report for that transcript). Case 5 (the n
 positive leg) was separately exercised LIVE with HARNESS_PGHOST=192.168.122.1 against the built
 (not reverted) code, since it requires the fix to be present, not absent, to prove anything; its
 own transcript lives in the build report, not here.
+
+--------------------------------------------------------------------------------------------
+
+Appendix, 2026-07-26: case 7 (libexec/autoharn-service's --help exemption made strict two-token,
+matching every other check site) added in response to a CLEARED-BUT-MODERATE-SILENT review
+finding on this build. The pre-fix shape (`if not argv or argv[0] in ("--help", "-h"): ...
+return` -- BEFORE fixture_sandbox.check()) let `AUTOHARN_FIXTURE_SANDBOX=1 python3 libexec/
+autoharn-service --help start` print help and exit 0 without the sandbox check ever running; not
+exploitable today (the early return precedes dispatch to any subcommand), but an undisclosed
+inconsistency and a latent hazard next to the strict shape used everywhere else.
+
+Reproduction: libexec/autoharn-service was temporarily replaced with its pre-fix content at the
+commit this fix was built on top of (`git show c065485:libexec/autoharn-service`), then this
+fixture was re-run unmodified:
+
+$ cp libexec/autoharn-service /tmp/autoharn-service.mine
+$ git show c065485:libexec/autoharn-service > libexec/autoharn-service; chmod +x libexec/autoharn-service
+$ python3 seen-red/fixture-sandbox-runtime-foreclosure/run_fixtures.py
+7a-service-help-trailing-token-refused: FAIL -- exit=0 tail="...refuses, never guesses, otherwise"
+7b-service-exact---help-still-prints-help: PASS -- exit=0 ...
+7b-service-exact--h-still-prints-help: PASS -- exit=0 ...
+7c-service-bare-argv-refused-under-marker: FAIL -- exit=0 tail="...refuses, never guesses, otherwise"
+7d-no-marker-byte-identical-[...]: PASS (all six argv shapes) -- the NO-MARKER path was already
+  identical pre-fix (expected: this leg diffs against this exact commit's own content, so it is
+  a tautology before the fix and stays a live regression guard after)
+FAILURES: [..., '7a-service-help-trailing-token-refused', '7c-service-bare-argv-refused-under-marker']
+
+Cases 7a and 7c go RED exactly as expected: the pre-fix exemption's loose `argv[0] in (...)`
+test matched `--help` regardless of trailing tokens (7a) and matched nothing for bare argv,
+falling through to the same short-circuit via `not argv` (7c) -- both printed help and exited 0
+under the marker instead of refusing, proving the pre-fix dispatcher's help path did not run the
+sandbox check at all for either shape. 7b and 7d stay green, exactly as expected: 7b's shape
+(exactly `--help`/`-h`) was never broken by the pre-fix code, and 7d diffs the NO-MARKER path
+against this same pre-fix content, so it is definitionally identical before the fix.
+
+libexec/autoharn-service was restored to its built (post-fix) content immediately after this
+capture:
+
+$ cp /tmp/autoharn-service.mine libexec/autoharn-service; chmod +x libexec/autoharn-service
+$ git diff --stat libexec/autoharn-service
+ libexec/autoharn-service | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+-- byte-identical to the fix's own committed content (zero remaining delta once restored) -- and
+the fixture re-run green afterward, all 7a-7d cases PASS, no regression in cases 1-6.

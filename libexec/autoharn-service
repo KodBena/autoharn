@@ -251,7 +251,28 @@ _SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop}
 
 
 def main(argv: list[str]) -> int:
+    # Fixture-sandbox gate: strict two-token exemption, matching the shape used at every other
+    # check site (the dispatcher's own `_fixture_sandbox_gate` in ./autoharn, and every
+    # libexec/autoharn/<verb> preamble) -- `[ "$#" -eq 1 ] && argv[0] in ("--help", "-h")`. The
+    # loose `argv[0] in (...)` test this replaced ignored trailing tokens (`--help start` would
+    # exempt itself) and, worse, returned BEFORE fixture_sandbox.check() ran at all, so the
+    # sandbox check never even saw the invocation. Bare argv (no args at all) is NOT this strict
+    # shape either -- it does not match len(argv) == 1 -- so it is not exempt: under the marker it
+    # goes through check() same as any other non-help invocation, which mirrors what
+    # `./autoharn service` (bare, no args) does through the dispatcher's own gate (its exemption
+    # is exactly as strict, and 0 args also fails "$#" -eq 1 there, so the marker check runs
+    # before autoharn-service is even exec'd). The two entry paths -- dispatcher-mediated and this
+    # file invoked directly -- now agree: bare argv under the marker is refused by the sandbox
+    # check at both, not silently allowed through only when this file is invoked directly.
+    strict_help = len(argv) == 1 and argv[0] in ("--help", "-h")
+    if not strict_help:
+        fixture_sandbox.check("autoharn service " + " ".join(argv))
     if not argv or argv[0] in ("--help", "-h"):
+        # NO-MARKER help decision is intentionally unchanged from before this fix (loose
+        # argv[0]-based test, so `--help start` still prints help under no marker) -- the hazard
+        # fixed above is the sandbox check being skipped, not this file's own argument parsing.
+        # Byte-identical NO-MARKER behavior is witnessed in
+        # seen-red/fixture-sandbox-runtime-foreclosure/run_fixtures.py.
         print("usage: autoharn service status|start|stop\n\n"
               "  status   probe the boundary this world's deployment.json names; never writes\n"
               "  start    ensure-running: spawn a detached child if unreachable, or adopt\n"
@@ -260,7 +281,6 @@ def main(argv: list[str]) -> int:
               "           (tracked via a pidfile, and re-checked against /proc at stop time);\n"
               "           refuses, never guesses, otherwise")
         return 0
-    fixture_sandbox.check("autoharn service " + " ".join(argv))
     verb = argv[0]
     if verb not in _SUBCOMMANDS:
         print(f"autoharn service: REFUSED -- unrecognized subcommand '{verb}' (known: "

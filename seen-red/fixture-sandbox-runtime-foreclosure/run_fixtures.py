@@ -48,6 +48,25 @@ Cases:
                                  registered run_fixtures.py with no marker line -> census RED
                                  naming "MARKER MISSING"; the same file with the marker added ->
                                  census GREEN.
+  7-service-help-strict-two-token -- added 2026-07-26 (moderate-silent finding on the fixture-
+                                 sandbox build's own review): libexec/autoharn-service's --help
+                                 exemption used to be `argv[0] in ("--help", "-h")`, a LOOSE
+                                 shape that ignored trailing tokens and returned before
+                                 fixture_sandbox.check() ever ran -- unlike the strict two-token
+                                 exemption (`argv exactly == ["--help"] or ["-h"]`) used at every
+                                 other check site (e.g. ./autoharn's own `_fixture_sandbox_gate`).
+                                 Direct invocation of libexec/autoharn-service, bypassing
+                                 ./autoharn entirely, is exactly the "alias chain in the OTHER
+                                 direction" case 2e already exercises for led -- this case does
+                                 the same for service's own help path: marker + `--help start`
+                                 (trailing token) now refuses exit 21; marker + exactly `--help`/
+                                 `-h` still prints help, exit 0, no refusal; marker + bare argv
+                                 (no args) also refuses now, matching what `./autoharn service`
+                                 (bare) already did through the dispatcher's own strict gate (0
+                                 args also fails that gate's "$#" -eq 1 test); and the NO-MARKER
+                                 path is diffed byte-for-byte against the banked c065485 (pre-
+                                 fix) content for the same argv shapes, proving the fix changed
+                                 nothing for an ordinary, unmarked invocation.
 
 Nothing here ever writes to this repo's own real deployment (every refused case is refused
 BEFORE deployment.json is ever opened, per this repo's own worktree lacking one; case 5's world
@@ -78,8 +97,12 @@ REPO = HERE.parents[1]
 AUTOHARN = REPO / "autoharn"
 LED_ALIAS = REPO / "led"
 LIBEXEC_LED = REPO / "libexec" / "autoharn" / "led"
+LIBEXEC_SERVICE = REPO / "libexec" / "autoharn-service"
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 TEARDOWN = REPO / "bootstrap" / "teardown-world.sh"
+SERVICE_HELP_FIX_COMMIT = "c065485"  # the pre-fix banked content case 7's byte-identity leg
+# diffs the NO-MARKER path against, and (per this fixture family's convention) the content this
+# case's marker-path assertions are proven RED against before the fix landed.
 PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST") or ""
 
 FAILURES: list[str] = []
@@ -315,6 +338,65 @@ def case6_census_red_green() -> None:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------------------------
+# 7 -- libexec/autoharn-service's --help exemption: strict two-token, matching every other site.
+# --------------------------------------------------------------------------------------------
+
+def case7_service_help_strict_two_token() -> None:
+    # (a) marker + trailing token after --help now refuses -- the loose pre-fix exemption
+    # (`argv[0] in ("--help", "-h")`) ignored the trailing "start" and returned before
+    # fixture_sandbox.check() ever ran.
+    cp_trailing = run([str(LIBEXEC_SERVICE), "--help", "start"])
+    check("7a-service-help-trailing-token-refused", is_refused(cp_trailing),
+          f"exit={cp_trailing.returncode} tail={(cp_trailing.stdout + cp_trailing.stderr).strip()[-200:]!r}")
+
+    # (b) marker + exactly --help / -h (the one shape still exempt) still prints help, exit 0.
+    for flag in ("--help", "-h"):
+        cp_exact = run([str(LIBEXEC_SERVICE), flag])
+        combined = cp_exact.stdout + cp_exact.stderr
+        check(f"7b-service-exact-{flag}-still-prints-help",
+              cp_exact.returncode == 0 and "usage: autoharn service" in combined
+              and not any(m in combined for m in REFUSAL_MARKERS),
+              f"exit={cp_exact.returncode} tail={combined.strip()[-200:]!r}")
+
+    # (c) marker + bare argv (no args at all) also refuses now -- consistent with what
+    # `./autoharn service` (bare) already did through the dispatcher's own strict gate: 0 args
+    # fails that gate's "$#" -eq 1 exemption test too, so the dispatcher path was already
+    # refusing bare argv under the marker before this fix; this closes the direct-invocation
+    # path (bypassing ./autoharn) to agree with it instead of silently printing help.
+    cp_bare = run([str(LIBEXEC_SERVICE)])
+    check("7c-service-bare-argv-refused-under-marker", is_refused(cp_bare),
+          f"exit={cp_bare.returncode} tail={(cp_bare.stdout + cp_bare.stderr).strip()[-200:]!r}")
+
+    # (d) NO-MARKER byte-identity witness: this fixture's own process carries the marker (set at
+    # import time, top of this file), so a clean env with it stripped is needed to exercise the
+    # ordinary, unmarked path -- diffed against the banked pre-fix content at
+    # SERVICE_HELP_FIX_COMMIT for the same argv shapes, proving the fix changed nothing for an
+    # ordinary invocation.
+    no_marker_env = {k: v for k, v in os.environ.items() if k != "AUTOHARN_FIXTURE_SANDBOX"}
+    baseline_src = subprocess.run(
+        ["git", "-C", str(REPO), "show", f"{SERVICE_HELP_FIX_COMMIT}:libexec/autoharn-service"],
+        capture_output=True, text=True, timeout=30).stdout
+    # Written INTO libexec/ itself (not a scratch tempdir) so the baseline's own
+    # HERE.parent-relative imports (serving/, filing/) resolve exactly as they do for the real
+    # file -- a copy dropped elsewhere would ModuleNotFoundError before ever reaching argv
+    # parsing, which is not the thing being tested here.
+    baseline_path = REPO / "libexec" / ".autoharn-service-baseline-witness-tmp.py"
+    try:
+        baseline_path.write_text(baseline_src)
+        for argv_tail in ([], ["--help"], ["-h"], ["--help", "start"], ["-h", "foo"], ["bogus"]):
+            base_cp = subprocess.run(["python3", str(baseline_path), *argv_tail],
+                                      capture_output=True, text=True, timeout=30, env=no_marker_env)
+            cur_cp = subprocess.run(["python3", str(LIBEXEC_SERVICE), *argv_tail],
+                                     capture_output=True, text=True, timeout=30, env=no_marker_env)
+            same = (base_cp.stdout == cur_cp.stdout and base_cp.stderr == cur_cp.stderr
+                    and base_cp.returncode == cur_cp.returncode)
+            check(f"7d-no-marker-byte-identical-{argv_tail}", same,
+                  f"baseline_exit={base_cp.returncode} current_exit={cur_cp.returncode}")
+    finally:
+        baseline_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     case1_marker_refuses()
     case2_evasion_specimens()
@@ -322,6 +404,7 @@ def main() -> int:
     case4_empty_waiver_refuses()
     case5_scratch_world_unaffected()
     case6_census_red_green()
+    case7_service_help_strict_two_token()
 
     if UNEXERCISED:
         print("UNEXERCISED cases (named blocker, not faked):")
