@@ -51,14 +51,26 @@ report; if it is a probe-coverage gap, file it, do not silently widen scope).
 
 ## 3. Mechanical guard against recurrence (generic, non-kernel, ships with the delta)
 
-A new gate `gates/lineage_reissue_lineage.py`: for every function name defined more than
-once across `kernel/lineage/s[0-9]*-*.sql` (in numeric order), each later re-issue must
-name the file of the immediately-prior re-issue in its header comment. Anchored
-whole-line regex, same idiom as `gates/lineage_chain_coverage.py`. This makes the false
-"base = s45" claim class mechanically impossible to repeat: a re-issue citing a stale
-base fails the gate because the cited file is not the actual prior definer. s61's own
-header is grandfathered by an explicit dated waiver entry inside the gate (the defect is
-already on the record as row 1430; rewriting frozen history is not the remedy).
+A new gate `gates/lineage_reissue_lineage.py`, two mechanical checks per re-issued
+function name across `kernel/lineage/s[0-9]*-*.sql` (numeric order):
+
+1. **Citation:** each later re-issue must name the file of the immediately-prior
+   re-issue in its header comment. Anchored whole-line regex, same idiom as
+   `gates/lineage_chain_coverage.py`.
+2. **Prior-body hash binding (amendment, maintainer-approved 2026-07-26):** each
+   re-issue must carry a `-- prior-body-sha256: <hex> (<file>)` line; the gate extracts
+   the prior definer's `CREATE OR REPLACE FUNCTION <name> ... $$...$$;` statement text
+   from the cited file and recomputes the hash. A stale base is then unrepresentable,
+   not merely un-citable: s61's "base = s45" would have failed because the hash of
+   s45's body is not the hash of s58's. The extraction is mechanical (anchored on the
+   function name and dollar-quote delimiters); a file the extractor cannot parse is a
+   gate FAILURE, never a skip.
+
+s61's own header is grandfathered by an explicit dated waiver entry inside the gate for
+BOTH checks (the defect is already on the record as row 1430; rewriting frozen history
+is not the remedy). s63 itself is the first conforming instance: it cites s61 Element 7
+and embeds the hash of s61's deployed body — the base it textually replaces — while the
+restored branches are byte-diffed from s58 per §2.
 
 ## 4. Witness plan (scratch, both polarities, red first)
 
