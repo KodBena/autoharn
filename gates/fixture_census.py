@@ -250,6 +250,10 @@ REGISTRY: dict[str, str] = {
     # ([a-z0-9]{1,64}) -- both-polarity proof against pinned pre-fix idtypes.py + the real
     # steps_boundary.submit() + the real serving.boundary_multiplex_config loader.
     "setup-tui-worldname-boundary-allowlist": "seen-red/setup-tui-worldname-boundary-allowlist/run_fixtures.py",
+    # work item deploy-feature-manifest (ledger row 1274/1322): the declarative feature manifest
+    # bootstrap/new-project.sh reads (--features-file / discrete flags) -- portable ADRs,
+    # vendored skills, panel extension, principal set, makespan-scheduler RESOURCES tier.
+    "deploy-feature-manifest":          "seen-red/deploy-feature-manifest/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
     # cycle-4 audit finding 1 fix round (ledger rows 1124/1133/1138): the mid-section
     # cancellation-token fix (rehearsal's own subprocess layer) and the control/help split

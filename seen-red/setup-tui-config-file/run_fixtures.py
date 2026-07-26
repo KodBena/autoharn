@@ -66,6 +66,11 @@ def _minimal_valid_values() -> dict[str, object]:
     # (boundary is now mandatory, no decline gate); "boundary.start_now" moves from a
     # contextually-required scalar to REQUIRED_GATES (see config_file.py's own comment).
     return {
+        # deploy-feature-manifest (ledger row 1274/1322): "features" is unconditional (no gate
+        # of its own, mirrors "boundary"/"fork_target") -- its four scalars are REQUIRED_GATES
+        # members exactly the way "boundary.start_now" already is (config_file.py's own comment).
+        "features.portable_adrs": True, "features.vendored_skills": True,
+        "features.panel_extension": False, "features.makespan_tier": "off",
         "substrate.run": False, "rehearsal.run": False, "birth.run": False,
         "principals_authority.run": False, "signed_genesis.run": False,
         "boundary.start_now": False, "observability.run": False, "hydration.run": False,

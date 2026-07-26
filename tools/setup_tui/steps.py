@@ -16,7 +16,7 @@ from tools.configtree import CommitSpec, SectionResult
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
 from tools.setup_tui import config_seam, content, signed_genesis
-from tools.setup_tui import steps_boundary, steps_fork_target, steps_hydration
+from tools.setup_tui import steps_boundary, steps_features, steps_fork_target, steps_hydration
 from tools.setup_tui import steps_load_config, steps_observability, steps_preflight
 from tools.setup_tui import steps_principals_authority
 from tools.setup_tui import steps_rehearsal_birth, steps_signed_genesis, steps_substrate
@@ -28,6 +28,14 @@ ACTIONS = (steps_load_config.STEP,)
 
 SECTIONS = (
     steps_preflight.STEP,
+    steps_features.STEP,
+    # deploy-feature-manifest (ledger row 1274/1322): placed AHEAD of Fork/target + Birth --
+    # `steps.py`'s own module docstring names this tuple as both the sidebar order AND the real
+    # commit-time execution order (`commit_pane._run_submit_sweep` calls every section's `submit`
+    # "exactly once, in registry order"); Birth's own `new-project.sh` invocation
+    # (`steps_rehearsal_birth.birth_submit`) needs this section's resolved
+    # `state["features_manifest_path"]` ALREADY WRITTEN by the time its own submit runs, which is
+    # only true if Features commits first.
     steps_substrate.STEP,
     steps_fork_target.STEP,
     steps_rehearsal_birth.REHEARSAL_STEP,

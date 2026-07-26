@@ -1,0 +1,129 @@
+seen-red/deploy-feature-manifest — banked both-polarity evidence (fixture-census)
+
+Work item deploy-feature-manifest (ledger row 1274/1322, maintainer verdict row 1274 "as
+recommended"): a DECLARATIVE FEATURE MANIFEST bootstrap/new-project.sh itself reads and applies
+-- portable ADRs (mirrors the existing --no-law flag), vendored skills (new opt-out), the panel
+extension (a local git clone of tools/autoharn-panel into <dest>/panel), a principal set to
+pre-register at scaffold time, and the makespan-scheduler RESOURCES tier (blessed/mandated/
+forbidden/available/off) -- supersedes deploy-time-feature-selection and
+deployment-makespan-offering.
+
+FORMAT DECISION: a new file, `features.json`, beside deployment.json in the scaffold -- NOT an
+extension of `.claude/apparatus.json`. USER-CONFIGURATION.md's own words scope apparatus.json to
+ONE closed vocabulary (per-mechanism enforce/observe/off switches for safety mechanisms this
+project ships); a scaffold-time inclusion decision is a different kind of fact (WHAT got born,
+not HOW HARD an already-born mechanism polices itself), and folding it into apparatus.json would
+widen that file's own unknown-key sweep (gates/apparatus_unknown_keys.py) to a class it was
+never written to reason about. `features.json` is hand-editable, self-describing keys, no
+comments needed to use it (tools/setup_tui/steps_features.py's own module docstring has the full
+account, including why this is ALSO not the same file as the wizard's own self-application
+`world-config.toml`).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/deploy-feature-manifest/run_fixtures.py, live run
+against toy@192.168.122.1, 2026-07-26, exit 0):
+
+  1. RED-FIRST baseline -- a scaffold given NEITHER --features-file NOR any discrete feature
+     flag writes features.json reflecting EXACTLY today's unchanged default behavior (portable
+     ADRs on, skills vendored, no panel, no makespan declaration, no extra principals) -- the
+     ONE enumerated difference from a pre-manifest scaffold, no other file touched.
+  2. A declined feature genuinely changes nothing: --no-vendored-skills -> no .claude/skills/ at
+     all (not merely a flag recorded); makespan tier "off" -> no resources/ directory.
+  3. An engaged feature is genuinely wired, not a stub: --panel-extension performs a real LOCAL
+     (never network) git clone of tools/autoharn-panel into <dest>/panel (a real .git present,
+     not a copy); a non-off makespan tier writes a resources/ declaration naming TIER=<tier> and
+     its own honest NOT-yet-applied/NOT-automated disposition -- never a fabricated "installed"
+     claim (checked against stdout too).
+  4. principal_set declared against a run with NO kernel lineage (neither --new-world nor
+     --profile tracker) is REFUSED loudly, before any act -- there is no principal table to
+     register into, and nothing is written (dest never created).
+  5. principal_set declared against a --profile tracker run (kernel lineage present) is APPLIED
+     LIVE, through the just-written `led` shim, immediately after birth: a real
+     `principal_registered` ledger row, confirmed by a direct psql query against the live
+     schema (not merely a "would register" claim).
+  6. Malformed manifest input is refused loudly, naming the exact problem, nothing written:
+     an unknown JSON key, a bad TIER value, a reserved principal name (author/reviewer/
+     commissioner/write-boundary), a bad agent_class, and a discrete flag AND --features-file
+     both setting the same decision (ambiguity, never silently resolved one way).
+
+THREE real defects this fixture's own build caught and fixed before banking (named per this
+project's own "claims carry witnesses" discipline, not silently smoothed over -- the third is
+the more instructive one: a fix that LOOKED like it worked, on this fixture's own first honest
+green run, until a separate manual process-residue audit caught it):
+  - `git clone --local` (no `--no-hardlinks`) fails outright ("Invalid cross-device link")
+    whenever <dest-dir> is on a different filesystem/mount than the autoharn checkout --
+    witnessed live against a /tmp scratch dest. Fixed: `--no-hardlinks` added (still zero-
+    network; forces a real copy instead of a hardlink attempt).
+  - `led register-principal` (case 5) auto-spawns the boundary service (ensure-running) -- a
+    live process outliving the fixture's own scope unless explicitly stopped.
+  - FIRST FIX ATTEMPT WAS WRONG, AND THE FIXTURE DID NOT CATCH IT: `autoharn service stop`
+    called with `cwd=dest` (reasoning: "it must resolve the target from its own directory,
+    like the scaffolded shims do") APPEARED to work -- exit 0, no assertion on it, fixture
+    reported "zero residue". A separate manual `pgrep -af boundary_service` audit, run AFTER
+    this fixture's own "all cases PASS" line, found FOUR orphaned boundary_service processes
+    still running (two from this fixture's own earlier case-5 runs, two from a sibling
+    fixture's own live-birth case) -- `libexec/autoharn-service`'s own `DEPLOYMENT_PATH`
+    resolves from the `PICKUP_DEPLOYMENT` ENV VAR (defaulting to THIS AUTOHARN CHECKOUT'S OWN
+    deployment.json), never from cwd -- so the "stop" call was silently stopping nothing
+    (refusing against the wrong, autoharn-root deployment) while a real orphan kept running
+    at the scratch world's own port. FIXED: `PICKUP_DEPLOYMENT=<dest>/deployment.json` passed
+    as an explicit env var, AND the fixture now asserts the stop call's own exit code and
+    output (case5's own new "boundary service stopped" row) instead of trusting silence --
+    re-run live: the specific pid is confirmed gone via `pgrep` immediately after.
+
+Full fixture transcript (seen-red/deploy-feature-manifest/run_fixtures.py, live run against
+toy@192.168.122.1, 2026-07-26, exit 0):
+
+case1 scaffold exit: PASS -- exit 0:
+case1 features.json written: PASS
+case1 features.json matches today's unchanged defaults: PASS -- {"features_format": 1, "makespan_scheduler_tier": "off", "panel_extension": false, "portable_adrs": true, "principal_set": [], "vendored_skills": true}
+case1 .claude/skills present (unconditional-vendor default unchanged): PASS
+case1 no resources/ directory (makespan tier off): PASS
+case1 no panel/ directory (panel_extension off): PASS
+case2 scaffold exit: PASS -- exit 0:
+case2 .claude/skills NOT written: PASS
+case2 DECLINED line printed: PASS
+case2 features.json vendored_skills=false: PASS
+case3 scaffold exit: PASS -- exit 0: (git detached-HEAD advisory from the local clone, harmless)
+case3 panel/README.md present (real local clone): PASS
+case3 panel/.git present (a real clone, not a copy): PASS
+case3 resources/ declaration written: PASS
+case3 declaration names TIER=blessed: PASS
+case3 declaration honestly names its NOT-yet-applied blocker: PASS
+case3 stdout admits declarative-only, never a fake 'installed' claim: PASS
+case4 REFUSED (nonzero exit): PASS -- exit 1
+case4 refusal names the real reason (no kernel lineage): PASS -- new-project.sh: REFUSED -- --features-file declares a non-empty principal_set, but this
+                run applies no kernel lineage at all (neither --new-world nor --profile
+                tracker) -- there is no principal table yet to register into. Nothing
+                touched.
+case4 nothing written (dest never created): PASS
+case5 scaffold exit: PASS -- exit 0 (kernel lineage NOTICE-level skips, harmless; boundary auto-spawn line: "led: boundary at http://127.0.0.1:8420 was unreachable -- spawned it (pid 839778, ...); proceeding.")
+case5 register-principal-set.sh written: PASS
+case5 stdout reports live WITNESSED application: PASS
+case5 real ledger row exists for the declared principal: PASS -- principal 'orchestrator-fixture' registered (class model)
+case5 boundary service stopped (autoharn service stop): PASS -- exit 0: autoharn service: sent SIGTERM to pid 839778 (was serving http://127.0.0.1:8420); pidfile removed.
+case6 (unknown key) REFUSED: PASS -- exit 1
+case6 (unknown key) names the problem: PASS -- new-project.sh: --features-file '<tmp>/case6-unknown-key.json' REFUSED -- unknown key(s) (closed schema): not_a_real_key
+case6 (unknown key) nothing written: PASS
+case6 (bad tier) REFUSED: PASS -- exit 1
+case6 (bad tier) names the problem: PASS -- new-project.sh: --features-file '<tmp>/case6-bad-tier.json' REFUSED -- 'makespan_scheduler_tier' must be one of ['available', 'blessed', 'forbidden', 'mandated', 'off'], got 'urgent'
+case6 (bad tier) nothing written: PASS
+case6 (reserved principal name) REFUSED: PASS -- exit 1
+case6 (reserved principal name) names the problem: PASS -- new-project.sh: --features-file '<tmp>/case6-reserved-principal-name.json' REFUSED -- 'principal_set'[0].name 'reviewer' is reserved -- registered automatically by every --new-world birth's own s40/s43 ceremony; do not re-declare it
+case6 (reserved principal name) nothing written: PASS
+case6 (bad agent_class) REFUSED: PASS -- exit 1
+case6 (bad agent_class) names the problem: PASS -- new-project.sh: --features-file '<tmp>/case6-bad-agent_class.json' REFUSED -- 'principal_set'[0].agent_class must be one of ['human', 'model', 'subagent', 'tool'], got 'alien'
+case6 (bad agent_class) nothing written: PASS
+case6 (discrete-flag/features-file overlap) REFUSED: PASS -- exit 1
+case6 (overlap) names ambiguity: PASS -- new-project.sh: --no-vendored-skills AND --features-file both set vendored_skills --
+                ambiguous. Pick one authority for this decision. Nothing touched.
+
+deploy-feature-manifest fixture: all cases PASS, scratch substrate torn down to zero residue
+(tempdir removed, schema dfmc5live/dfmc5live_kernel/role dfmc5live_rw dropped, spawned boundary
+service stopped via `autoharn service stop`, zero process/schema/role residue confirmed).
+
+Related: seen-red/setup-tui-config-file/run_fixtures.py (the wizard's own --from-config/
+--initial-config config-file feature, whose schema now also carries features.* keys as a
+parallel, NOT-identical, mirror -- see this fixture's case_full_dry_run_and_roundtrip, unchanged
+except for the shared _minimal_valid_values fixture data gaining the four features.* scalars);
+tools/setup_tui/steps_features.py (the TUI screen); bootstrap/new-project.sh (the scaffold that
+actually reads and applies the manifest).

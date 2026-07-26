@@ -186,6 +186,13 @@ usage() {
     echo "          --new-world mode) by default -- tracker item portable-adr-delivery, maintainer" >&2
     echo "          instruction 2026-07-15: deployments must at least optionally receive the" >&2
     echo "          portable ADRs; default is ON)" >&2
+    echo "         (--features-file <path> reads a JSON feature manifest (deploy-feature-manifest," >&2
+    echo "          ledger row 1274/1322) and applies it -- portable_adrs/vendored_skills/" >&2
+    echo "          panel_extension/makespan_scheduler_tier/principal_set; writes the canonical" >&2
+    echo "          <dest-dir>/features.json durable record. --no-vendored-skills/" >&2
+    echo "          --panel-extension/--makespan-tier <tier> are the same three decisions as" >&2
+    echo "          discrete flags for scriptability -- REFUSED if BOTH a discrete flag and" >&2
+    echo "          --features-file set the same decision, never silently resolved one way)" >&2
     echo "         (--accept-existing-content: <dest-dir> classifies FOREIGN -- non-empty, no" >&2
     echo "          autoharn birth evidence (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md) --" >&2
     echo "          is REFUSED unless this flag is given explicitly; the setup TUI passes it" >&2
@@ -236,6 +243,24 @@ LAW_SECTION=1
 # now REFUSED (see the classify_destination gate below, right before mkdir -p) unless this flag
 # says so explicitly.
 ACCEPT_EXISTING_CONTENT=0
+# deploy-feature-manifest (ledger row 1274/1322, work item deploy-feature-manifest): the
+# DECLARATIVE FEATURE MANIFEST this scaffold reads and applies. Every default below reproduces
+# TODAY'S exact behavior byte-for-byte (portable ADRs on via LAW_SECTION above, skills vendored
+# unconditionally, no panel, no makespan declaration, no extra principals) -- a scaffold given
+# NONE of these flags/--features-file writes NO new file and changes NO other file; the ONLY
+# observable difference vs. a pre-manifest scaffold is the new, additive `features.json` durable
+# record itself, and ONLY when --features-file is actually given (fail-safe additive, ADR-0004).
+FEATURES_FILE=""
+VENDOR_SKILLS=1
+PANEL_EXTENSION=0
+MAKESPAN_TIER="off"
+# "was this discrete flag actually typed" trackers -- distinct from the flag's own value (whose
+# default already equals "not given"), needed so a --features-file that ALSO sets the same
+# decision can be refused as ambiguous (never silently resolved one way, ADR-0002) rather than
+# only detectable by accident when the two happen to disagree.
+_VENDOR_SKILLS_GIVEN=0
+_PANEL_EXTENSION_GIVEN=0
+_MAKESPAN_TIER_GIVEN=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --db) DB="$2"; shift 2 ;;
@@ -254,6 +279,10 @@ while [ $# -gt 0 ]; do
         --no-law) LAW_SECTION=0; shift ;;
         --force) FORCE=1; shift ;;
         --accept-existing-content) ACCEPT_EXISTING_CONTENT=1; shift ;;
+        --features-file) FEATURES_FILE="$2"; shift 2 ;;
+        --no-vendored-skills) VENDOR_SKILLS=0; _VENDOR_SKILLS_GIVEN=1; shift ;;
+        --panel-extension) PANEL_EXTENSION=1; _PANEL_EXTENSION_GIVEN=1; shift ;;
+        --makespan-tier) MAKESPAN_TIER="$2"; _MAKESPAN_TIER_GIVEN=1; shift 2 ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
 done
@@ -527,6 +556,138 @@ if [ "$DEST_KIND" = "foreign" ] && [ "$ACCEPT_EXISTING_CONTENT" -ne 1 ]; then
     echo "                Pass --accept-existing-content to scaffold into it anyway (the setup" >&2
     echo "                TUI passes this exactly when its fork-target screen recorded the" >&2
     echo "                operator's typed acknowledgment). Nothing touched." >&2
+    exit 1
+fi
+
+# deploy-feature-manifest (ledger row 1274/1322): resolve the feature manifest BEFORE any
+# filesystem/DB act (same "refuse before touching anything" posture every check above this line
+# already follows). `_FEAT_PARSE.py` is a closed-schema JSON validator, never a bare tomllib/
+# json.loads trusted further -- unknown keys, a bad TIER value, or a malformed principal_set row
+# all REFUSE loudly here, nothing partially applied. Emits shell-assignable `KEY=value` lines
+# (python's own `shlex.quote`, never hand-rolled escaping) for `eval`, plus a temp file of
+# principal_set rows (name<TAB>agent_class<TAB>purpose per line) bash can loop over without
+# re-parsing JSON itself.
+F_PORTABLE_ADRS=""            # "" = not set by --features-file; 1/0 once resolved below
+F_VENDORED_SKILLS=""
+F_PANEL_EXTENSION=""
+F_MAKESPAN_TIER=""
+F_PRINCIPAL_SET_FILE=""
+if [ -n "$FEATURES_FILE" ]; then
+    [ -f "$FEATURES_FILE" ] || {
+        echo "new-project.sh: --features-file '$FEATURES_FILE' does not exist. Nothing touched." >&2
+        exit 1
+    }
+    _FEAT_ROWS_FILE="$(mktemp)"
+    _FEAT_EVAL="$("$PY" - "$FEATURES_FILE" "$_FEAT_ROWS_FILE" <<'PYEOF'
+import json, shlex, sys
+
+path, rows_path = sys.argv[1], sys.argv[2]
+CLOSED_KEYS = {"features_format", "portable_adrs", "vendored_skills", "panel_extension",
+               "makespan_scheduler_tier", "principal_set"}
+TIERS = {"off", "available", "blessed", "mandated", "forbidden"}
+CLASSES = {"human", "model", "subagent", "tool"}
+RESERVED = {"author", "reviewer", "commissioner", "write-boundary"}
+
+def refuse(msg):
+    print(f"new-project.sh: --features-file '{path}' REFUSED -- {msg}", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+except (OSError, json.JSONDecodeError) as exc:
+    refuse(f"could not read/parse as JSON: {exc}")
+if not isinstance(doc, dict):
+    refuse("top level must be a JSON object")
+unknown = sorted(set(doc) - CLOSED_KEYS)
+if unknown:
+    refuse(f"unknown key(s) (closed schema): {', '.join(unknown)}")
+
+portable_adrs = doc.get("portable_adrs", True)
+vendored_skills = doc.get("vendored_skills", True)
+panel_extension = doc.get("panel_extension", False)
+tier = doc.get("makespan_scheduler_tier", "off")
+principal_set = doc.get("principal_set", [])
+
+for name, val in (("portable_adrs", portable_adrs), ("vendored_skills", vendored_skills),
+                  ("panel_extension", panel_extension)):
+    if not isinstance(val, bool):
+        refuse(f"'{name}' must be a JSON boolean, got {val!r}")
+if tier not in TIERS:
+    refuse(f"'makespan_scheduler_tier' must be one of {sorted(TIERS)}, got {tier!r}")
+if not isinstance(principal_set, list):
+    refuse("'principal_set' must be a JSON array")
+
+seen = set()
+rows = []
+for i, row in enumerate(principal_set):
+    if not isinstance(row, dict) or {"name", "agent_class", "purpose"} - set(row):
+        refuse(f"'principal_set'[{i}] must be an object with name/agent_class/purpose")
+    name, cls, purpose = row["name"], row["agent_class"], row["purpose"]
+    if not isinstance(name, str) or not name.strip():
+        refuse(f"'principal_set'[{i}].name must be a non-empty string")
+    if name in RESERVED:
+        refuse(f"'principal_set'[{i}].name '{name}' is reserved -- registered automatically by "
+                f"every --new-world birth's own s40/s43 ceremony; do not re-declare it")
+    if name in seen:
+        refuse(f"'principal_set' declares '{name}' more than once")
+    seen.add(name)
+    if cls not in CLASSES:
+        refuse(f"'principal_set'[{i}].agent_class must be one of {sorted(CLASSES)}, got {cls!r}")
+    if not isinstance(purpose, str) or not purpose.strip():
+        refuse(f"'principal_set'[{i}].purpose must be a non-empty string")
+    rows.append((name, cls, purpose))
+
+with open(rows_path, "w", encoding="utf-8") as f:
+    for name, cls, purpose in rows:
+        f.write(f"{name}\t{cls}\t{purpose}\n")
+
+print(f"F_PORTABLE_ADRS={shlex.quote('1' if portable_adrs else '0')}")
+print(f"F_VENDORED_SKILLS={shlex.quote('1' if vendored_skills else '0')}")
+print(f"F_PANEL_EXTENSION={shlex.quote('1' if panel_extension else '0')}")
+print(f"F_MAKESPAN_TIER={shlex.quote(tier)}")
+PYEOF
+    )" || exit 1
+    eval "$_FEAT_EVAL"
+    F_PRINCIPAL_SET_FILE="$_FEAT_ROWS_FILE"
+fi
+# Discrete-flag / --features-file overlap: refused, never silently resolved one way (ADR-0002).
+if [ -n "$FEATURES_FILE" ] && [ "$_VENDOR_SKILLS_GIVEN" -eq 1 ]; then
+    echo "new-project.sh: --no-vendored-skills AND --features-file both set vendored_skills --" >&2
+    echo "                ambiguous. Pick one authority for this decision. Nothing touched." >&2
+    exit 1
+fi
+if [ -n "$FEATURES_FILE" ] && [ "$_PANEL_EXTENSION_GIVEN" -eq 1 ]; then
+    echo "new-project.sh: --panel-extension AND --features-file both set panel_extension --" >&2
+    echo "                ambiguous. Pick one authority for this decision. Nothing touched." >&2
+    exit 1
+fi
+if [ -n "$FEATURES_FILE" ] && [ "$_MAKESPAN_TIER_GIVEN" -eq 1 ]; then
+    echo "new-project.sh: --makespan-tier AND --features-file both set makespan_scheduler_tier --" >&2
+    echo "                ambiguous. Pick one authority for this decision. Nothing touched." >&2
+    exit 1
+fi
+# Reconcile into the ONE set of vars the rest of this script reads from here on, regardless of
+# whether the decision came from --features-file, a discrete flag, or (absent both) today's
+# unchanged default.
+if [ -n "$FEATURES_FILE" ]; then
+    [ "$F_PORTABLE_ADRS" = "0" ] && LAW_SECTION=0
+    [ "$F_VENDORED_SKILLS" = "0" ] && VENDOR_SKILLS=0
+    [ "$F_PANEL_EXTENSION" = "1" ] && PANEL_EXTENSION=1
+    MAKESPAN_TIER="$F_MAKESPAN_TIER"
+fi
+if [ "$MAKESPAN_TIER" != "off" ] && [ "$MAKESPAN_TIER" != "available" ] \
+   && [ "$MAKESPAN_TIER" != "blessed" ] && [ "$MAKESPAN_TIER" != "mandated" ] \
+   && [ "$MAKESPAN_TIER" != "forbidden" ]; then
+    echo "new-project.sh: --makespan-tier '$MAKESPAN_TIER' is not recognized (must be one of" >&2
+    echo "                off/available/blessed/mandated/forbidden). Nothing touched." >&2
+    exit 1
+fi
+if [ -n "$F_PRINCIPAL_SET_FILE" ] && [ -s "$F_PRINCIPAL_SET_FILE" ] && [ "$FULL_LINEAGE" -ne 1 ]; then
+    echo "new-project.sh: REFUSED -- --features-file declares a non-empty principal_set, but this" >&2
+    echo "                run applies no kernel lineage at all (neither --new-world nor --profile" >&2
+    echo "                tracker) -- there is no principal table yet to register into. Nothing" >&2
+    echo "                touched." >&2
     exit 1
 fi
 
@@ -1263,7 +1424,10 @@ echo "wrote .claude/settings.json, governed_files.json, GOVERNED_FILES.md, appar
 # for the precedence fact: Claude Code resolves same-named skills enterprise > personal >
 # project, so a user's personal copy of the same name silently shadows this one -- duplication
 # is idempotent by that platform rule, not a drift hazard needing a warning mechanism here).
-if [ -d "$TEMPLATES/claude-skills" ]; then
+# deploy-feature-manifest (ledger row 1274/1322): VENDOR_SKILLS opt-out (--no-vendored-skills /
+# features.json's "vendored_skills": false) -- default stays ON (VENDOR_SKILLS=1), so an
+# operator who never touches this decision gets today's exact unconditional-copy behavior.
+if [ "$VENDOR_SKILLS" -eq 1 ] && [ -d "$TEMPLATES/claude-skills" ]; then
     mkdir -p "$PROJECT_ROOT/.claude/skills"
     for _skill_dir in "$TEMPLATES/claude-skills"/*/; do
         [ -d "$_skill_dir" ] || continue
@@ -1271,6 +1435,65 @@ if [ -d "$TEMPLATES/claude-skills" ]; then
         cp -r "$_skill_dir" "$PROJECT_ROOT/.claude/skills/$_skill_name"
         echo "wrote .claude/skills/$_skill_name (vendored skill, verbatim)"
     done
+elif [ "$VENDOR_SKILLS" -eq 0 ]; then
+    echo "-- vendored skills: DECLINED (--no-vendored-skills / features.json vendored_skills=false) -- .claude/skills/ NOT written --"
+fi
+
+# deploy-feature-manifest (ledger row 1274/1322): panel extension -- a LOCAL (never network)
+# `git clone` of THIS checkout's own tools/autoharn-panel submodule into <dest>/panel. Nested at
+# <dest>/panel specifically because tools/autoharn-panel/README.md's own config.py discovery
+# order looks for `<repo_root>/../deployment.json` when nested under an autoharn-adjacent
+# checkout -- <dest>/panel/../deployment.json is exactly <dest>/deployment.json, this world's own
+# record, so the clone needs zero extra configuration to find its ledger. REFUSES loudly (never a
+# silent skip) if the submodule is not populated in THIS autoharn checkout (`git submodule update
+# --init --recursive` is the teaching text) -- an unpopulated source is a real blocker, not
+# nothing to report.
+if [ "$PANEL_EXTENSION" -eq 1 ]; then
+    _PANEL_SRC="$AUTOHARN_ROOT/tools/autoharn-panel"
+    if [ ! -f "$_PANEL_SRC/README.md" ]; then
+        echo "new-project.sh: REFUSED -- --panel-extension asked to wire in tools/autoharn-panel," >&2
+        echo "                but $_PANEL_SRC is not populated in this autoharn checkout (an" >&2
+        echo "                uninitialized submodule). Run 'git submodule update --init" >&2
+        echo "                --recursive' in $AUTOHARN_ROOT, then re-run this scaffold." >&2
+        exit 1
+    fi
+    # --no-hardlinks: a plain `--local` clone tries to HARD-LINK object files by default, which
+    # fails outright ("Invalid cross-device link") whenever <dest-dir> is on a different
+    # filesystem/mount than this autoharn checkout (witnessed live: a /tmp scratch dest against a
+    # checkout on a different mount) -- forcing a real copy instead is still zero-network (the
+    # source is a local path, never a remote URL) and works across any filesystem boundary.
+    if git clone --quiet --local --no-hardlinks -- "$_PANEL_SRC" "$PROJECT_ROOT/panel"; then
+        echo "wrote panel/ (ledger-panel SPA, local clone of tools/autoharn-panel -- see panel/README.md; start with: cd panel && python3 -m pip install --user -r backend/requirements.txt, then backend/app.py finds this world's own deployment.json automatically)"
+    else
+        echo "new-project.sh: REFUSED -- 'git clone --local $_PANEL_SRC $PROJECT_ROOT/panel' failed." >&2
+        exit 1
+    fi
+fi
+
+# deploy-feature-manifest (ledger row 1274/1322): makespan-scheduler RESOURCES tier --
+# DECLARATIVE-ONLY in this build (named blocker, not a silent stub): the carried-forward
+# deployment-makespan-offering instance is a sibling checkout + editable venv install
+# (design/workflows/panel-msched-resource-provisioning.toml's own witnessed specimen), but an
+# operator-designated venv path is not knowable at scaffold time, and this scaffold makes no
+# network/pip calls of its own -- so this writes a ready-to-paste `resource:` declaration
+# template (design/ORCH-SPEC-RESOURCE-REGISTRY.md §2's six-field convention) plus the honest
+# UNWITNESSED note, never a fabricated "installed" claim.
+if [ "$MAKESPAN_TIER" != "off" ]; then
+    mkdir -p "$PROJECT_ROOT/resources"
+    cat > "$PROJECT_ROOT/resources/makespan-scheduler.resource-declaration.txt" <<MSCHED
+# makespan-scheduler RESOURCES declaration -- prepared by new-project.sh (deploy-feature-manifest,
+# ledger row 1274/1322), NOT yet applied. UNWITNESSED capability, named blocker: the sibling
+# checkout + editable venv install this declaration presumes is NOT automated by this scaffold --
+# the operator's own venv path is not known at scaffold time, and this scaffold makes no
+# network/pip calls. To actually provision it (design/workflows/panel-msched-resource-provisioning.toml's
+# own witnessed specimen):
+#   1. sibling checkout: git clone <makespan-scheduler remote or local path> ../makespan-scheduler
+#   2. editable install into your own operator-designated venv:
+#        <your-venv>/bin/pip install -e ../makespan-scheduler
+#   3. paste the line below (fill REACH with your venv's actual import path) as a ledger decision:
+#        ./led decision "resource: NAME=makespan-scheduler; CLASS=solver; REACH=<your venv>/bin/python -c 'import makespan_scheduler'; WHAT-IT-PROVES=constraint-based precedence scheduling for multi-item commissions (s30 blocks-close edges as the precedence DAG); GUIDANCE=reach for this when a commission spans 3+ dependent/precedence-constrained/resource-conflicting work items; TIER=$MAKESPAN_TIER: <name the task shape here>"
+MSCHED
+    echo "wrote resources/makespan-scheduler.resource-declaration.txt (DECLARATIVE-ONLY -- tier=$MAKESPAN_TIER; sibling-checkout+install NOT automated, see file for the named blocker)"
 fi
 
 if [ -n "$NEW_WORLD" ]; then
@@ -1371,6 +1594,48 @@ SHIM
     echo "wrote $verb (shim -> $EXEC_ROOT/bootstrap/templates/$verb.tmpl)"
 done
 
+# deploy-feature-manifest (ledger row 1274/1322): principal_set, applied through the just-written
+# `led` shim (--new-world mode only -- refused earlier, before any act, for classic mode). A
+# `register-principal` write needs the boundary service REACHABLE (`led`'s served-shim rebase,
+# design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md) -- for `--new-world`, unlike
+# `--profile tracker`, this scaffold does NOT auto-configure ensure-running (that is the TUI's
+# own separate "boundary" screen/step, run AFTER birth, or an explicit --boundary-url/
+# --boundary-deployment pair on THIS invocation). So this writes a PREPARED script either way
+# (mirrors steps_substrate.py's own pg_hba PREPARED-block precedent: an act this scaffold cannot
+# safely perform blind is handed to the operator as an exact, ready-to-run command, never
+# silently skipped) and, ONLY IF the boundary is ALREADY resolvable at this exact invocation
+# (BOUNDARY_URL/BOUNDARY_DEPLOYMENT non-empty), ALSO runs it now, live, and reports the real
+# witnessed result -- never a fabricated "registered" claim when the boundary was not up.
+if [ -n "$F_PRINCIPAL_SET_FILE" ] && [ -s "$F_PRINCIPAL_SET_FILE" ]; then
+    {
+        echo "#!/bin/sh"
+        echo "# principal_set, prepared by new-project.sh (deploy-feature-manifest, ledger row 1274/1322)."
+        echo "# Run this once ./led is REACHABLE (boundary configured -- the TUI's own 'Boundary'"
+        echo "# step, or ensure-running already spawned it on a prior ./led call)."
+        echo 'HERE="$(cd "$(dirname "$0")" && pwd)"'
+        while IFS="$(printf '\t')" read -r _pn _pc _pp; do
+            [ -n "$_pn" ] || continue
+            printf '"$HERE"/led register-principal %s %s --purpose %s\n' \
+                "$(printf '%s' "$_pn" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")" \
+                "$(printf '%s' "$_pc" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")" \
+                "$(printf '%s' "$_pp" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")"
+        done < "$F_PRINCIPAL_SET_FILE"
+    } > "$PROJECT_ROOT/register-principal-set.sh"
+    chmod +x "$PROJECT_ROOT/register-principal-set.sh"
+    echo "wrote register-principal-set.sh (PREPARED -- one 'led register-principal' line per principal_set row)"
+    if [ -n "$BOUNDARY_URL" ] && [ -n "$BOUNDARY_DEPLOYMENT" ]; then
+        echo "-- boundary already resolvable this run (BOUNDARY_URL/BOUNDARY_DEPLOYMENT set) -- applying principal_set live --"
+        if "$PROJECT_ROOT/register-principal-set.sh"; then
+            echo "principal_set: WITNESSED (applied live -- see the led output above)"
+        else
+            echo "principal_set: REFUSED -- register-principal-set.sh exited nonzero; nothing further attempted. Re-run $PROJECT_ROOT/register-principal-set.sh by hand once the cause is fixed." >&2
+            exit 1
+        fi
+    else
+        echo "principal_set: PREPARED, NOT YET APPLIED -- boundary not resolvable at this invocation (typical for --new-world; the TUI's own Boundary step, or an explicit --boundary-url/--boundary-deployment pair, configures it). Run $PROJECT_ROOT/register-principal-set.sh once ./led is reachable."
+    fi
+fi
+
 # ./legacy/ (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row 1631):
 # the direct-psql originals of the rebased verbs, whole and executable, demoted by placement
 # never deleted -- "operator recovery when the boundary is down" (spec §5's own words). judge/
@@ -1442,6 +1707,44 @@ if [ "$PIN" = "submodule" ]; then
         echo "   committed: $(cd "$PROJECT_ROOT" && git log -1 --oneline)"
     fi
 fi
+
+# deploy-feature-manifest (ledger row 1274/1322): the canonical, hand-editable durable record --
+# written EVERY run (regardless of whether --features-file/any discrete feature flag was given),
+# reflecting the RESOLVED decisions this run actually applied. Absent every new flag, this is the
+# ONE new file a scaffold now writes vs. before this build (RED-FIRST's own "manifest absent =
+# today's scaffold byte-comparable, or differences enumerated" -- the enumerated difference is
+# exactly this one additive file, its own values matching today's unchanged default behavior:
+# portable ADRs on, skills vendored, no panel, no makespan declaration, no extra principals).
+"$PY" - "$PROJECT_ROOT/features.json" "$LAW_SECTION" "$VENDOR_SKILLS" "$PANEL_EXTENSION" "$MAKESPAN_TIER" "${F_PRINCIPAL_SET_FILE:-}" <<'PYEOF'
+import json, sys
+
+out_path, law_section, vendor_skills, panel_extension, tier, rows_path = sys.argv[1:7]
+principal_set = []
+if rows_path:
+    try:
+        with open(rows_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                name, cls, purpose = line.split("\t", 2)
+                principal_set.append({"name": name, "agent_class": cls, "purpose": purpose})
+    except OSError:
+        pass
+manifest = {
+    "features_format": 1,
+    "portable_adrs": law_section == "1",
+    "vendored_skills": vendor_skills == "1",
+    "panel_extension": panel_extension == "1",
+    "makespan_scheduler_tier": tier,
+    "principal_set": principal_set,
+}
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, indent=2, sort_keys=True)
+    f.write("\n")
+PYEOF
+echo "wrote features.json (the durable, hand-editable feature-manifest record of this run's resolved decisions)"
+[ -n "$F_PRINCIPAL_SET_FILE" ] && rm -f "$F_PRINCIPAL_SET_FILE" 2>/dev/null || true
 
 echo "== done =="
 echo "Next steps:"

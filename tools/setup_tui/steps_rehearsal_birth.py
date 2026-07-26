@@ -205,6 +205,15 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
         extra += ["--governed", governed_files.governed_flag_value(state["governed_patterns"])]
     if state.get("dest_accept_foreign"):
         extra += ["--accept-existing-content"]
+    # deploy-feature-manifest (ledger row 1274/1322): steps_features.py stages the resolved
+    # manifest to a temp path (its own submit, which runs first -- see steps.py's SECTIONS
+    # comment) and leaves that path in state; new-project.sh reads it, applies it, and writes
+    # the canonical `<dest>/features.json` durable record. Absent (the Features section was
+    # somehow never reached -- not possible through the ordinary tree, but --initial-config could
+    # in principle seed straight past it) means no flag at all: byte-identical to a pre-manifest
+    # scaffold, the fail-safe-additive invariant the manifest's own commission requires.
+    if state.get("features_manifest_path"):
+        extra += ["--features-file", state["features_manifest_path"]]
     argv = _new_project_argv(state["_repo_root"], dest, world, db, host, extra=extra)
     lines = [f"$ {' '.join(argv)}", "(the real birth output streams at commit time; this step "
              "only queues the act.)"]
