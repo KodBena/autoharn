@@ -1,0 +1,54 @@
+seen-red/setup-tui-worldname-boundary-allowlist -- banked RED evidence (both-polarity proof,
+fixture-census). Work item setup-tui-worldname-boundary-allowlist (row 1317 arc).
+
+Real captured stdout, 2026-07-26, a live run against this commit's working tree:
+
+$ python3 seen-red/setup-tui-worldname-boundary-allowlist/run_fixtures.py
+case RED ok: pre-fix WorldName + steps_boundary.submit() silently accept 'MyWorld' and queue
+  [deployments.MyWorld] -- reproducing the closed defect
+case RED ok: the REAL boundary service's config loader REFUSES the pre-fix-queued TOML naming
+  [deployments.MyWorld] -- MultiplexConfigError: boundary-multiplex config at
+  /tmp/setup-tui-worldname-boundary-allowlist-XXXXXXXX/boundary-multiplex.toml: deployment name
+  'MyWorld' does not match ^[a-z0-9-]{1,64}$ (spec §2 -- deployment names are [a-z0-9-]{1,64})
+case GREEN leg 1 ok: current WorldName refuses 'MyWorld' at construction, naming the boundary-slug
+  contract; steps_boundary.submit() never reaches a plan entry -- WorldNameError: world name
+  'MyWorld' must match ^[a-z0-9]{1,64}$ -- lowercase letters and digits only, 1-64 characters.
+  This is the INTERSECTION of the shell/SQL identifier allowlist ([A-Za-z0-9_]+, law/adr/0012's
+  interpreter-boundary rule) and the boundary service's own deployment-slug allowlist
+  ([a-z0-9-]{1,64}, serving/boundary_multiplex_config.py spec §2) that this world name is written
+  into verbatim as a boundary-multiplex.toml [deployments.{name}] table key
+  (tools/setup_tui/steps_boundary.py) -- a name outside this intersection would pass here but
+  make the boundary service refuse to start later, silently to this screen. Pick a name using
+  only lowercase letters and digits.
+case GREEN leg 2 ok: clean name 'myworld123' passes steps_boundary.submit() AND the real
+  boundary_multiplex_config loader end to end
+ALL CASES OK -- WorldName's boundary-slug-intersection contract, red before green, pinned pre-fix
+idtypes.py vs current, real steps_boundary.submit() + real boundary_multiplex_config loader, no
+live Postgres, zero mocks
+
+exit 0. Zero residue: the scratch tempdir (tempfile.mkdtemp) is removed in the fixture's own
+`finally` block -- `git status --short` after this run shows no such path, only this seen-red/
+directory itself as untracked (pending its own commit).
+
+Separately witnessed, same defect, the bootstrap/new-project.sh leg (STRENGTHENED tier, no
+fixture needed -- a direct scratch invocation, classic mode, no live Postgres):
+
+$ ./bootstrap/new-project.sh /tmp/nps-witness/d1 --profile tracker --name MyWorld --db toy --host 192.0.2.1
+new-project.sh: REFUSED -- --profile tracker's --name ('MyWorld') must match
+                [a-z0-9]{1,64} (lowercase letters and digits only, at most 64
+                characters) -- the intersection of the boundary service's own
+                deployment-name contract ([a-z0-9-]{1,64}, no underscores/
+                uppercase -- serving/boundary_multiplex_config.py spec §2) and
+                the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --name
+                also derives --schema/--kern/--role from. Pick a compliant
+                --name, or supply --boundary-url/--boundary-deployment
+                explicitly with a compliant label (and --schema/--kern/--role
+                explicitly too, if --name itself must stay outside
+                [a-z0-9]{1,64}). Nothing was touched.
+exit 1, nothing written (ls /tmp/nps-witness/d1 -> no such directory).
+
+$ ./bootstrap/new-project.sh /tmp/nps-witness/d2 --profile tracker --name <65 lowercase a's> --db toy --host 192.0.2.1
+(same REFUSED text, exit 1, nothing written) -- this leg exercises the length-cap half of the
+intersection this build ADDED to that script's own check (the pre-existing `case` pattern tested
+only the character class, not the 64-char cap that is part of the true intersection with
+serving/boundary_multiplex_config.py's own [a-z0-9-]{1,64}).

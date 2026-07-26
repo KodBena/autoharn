@@ -319,27 +319,38 @@ fi
 # (service.log: "deployment name '...' does not match ^[a-z0-9-]{1,64}$") against a scratch name
 # that was perfectly legal SQL-identifier-wise. Refused here, loudly, before any schema/kernel DDL
 # runs -- rather than silently lowercasing/stripping characters (a silent transform risks a
-# collision the operator never asked for). NOTE FOR A FUTURE READER: this same INCOMPATIBILITY is
-# independently reachable through tools/setup_tui/idtypes.py's `WorldName` (allows
-# `[A-Za-z0-9_]+`) feeding `steps_boundary.py`'s `boundary_deployment = world` unchecked -- a
-# DIFFERENT screen/call path, out of this build's own scope to fix, flagged here rather than
-# silently routed around.
+# collision the operator never asked for). CROSS-REFERENCE (work item
+# setup-tui-worldname-boundary-allowlist, row 1317 arc): this same INCOMPATIBILITY is
+# independently reachable through tools/setup_tui/idtypes.py's `WorldName`, feeding
+# `steps_boundary.py`'s `boundary_deployment = world` -- a DIFFERENT screen/call path with no
+# shared code to this shell script (a Python SSOT a `sh` script cannot import without a
+# shell/Python contortion neither side's build wants). `WorldName.__post_init__` now enforces the
+# SAME `[a-z0-9]{1,64}$` intersection this check derives below, independently, in its own home --
+# the two homes MUST agree if either allowlist ever changes; this comment and that module's own
+# docstring name each other for exactly that reason. This check's own `case` pattern below tests
+# only the character class, not the length cap -- the omission this cross-reference flags and
+# fixes below (an over-64-char --name would otherwise pass this gate and only break at boundary
+# service start-up, the identical silent-downstream-break class this whole check exists to close).
 if [ "$PROFILE" = "tracker" ] && [ -z "$BOUNDARY_URL" ] && [ -z "$BOUNDARY_DEPLOYMENT" ]; then
     case "$NAME" in
         *[!a-z0-9]*|"") _tracker_name_bad=1 ;;
         *) _tracker_name_bad=0 ;;
     esac
+    if [ "$_tracker_name_bad" -eq 0 ] && [ "${#NAME}" -gt 64 ]; then
+        _tracker_name_bad=1
+    fi
     if [ "$_tracker_name_bad" -eq 1 ]; then
         echo "new-project.sh: REFUSED -- --profile tracker's --name ('$NAME') must match" >&2
-        echo "                [a-z0-9]+ (lowercase letters and digits only) -- the intersection" >&2
-        echo "                of the boundary service's own deployment-name contract" >&2
-        echo "                ([a-z0-9-]{1,64}, no underscores/uppercase -- serving/" >&2
-        echo "                boundary_multiplex_config.py spec §2) and the SQL-identifier" >&2
-        echo "                allowlist ([A-Za-z0-9_]+, no hyphens) --name also derives" >&2
-        echo "                --schema/--kern/--role from. Pick a compliant --name, or supply" >&2
-        echo "                --boundary-url/--boundary-deployment explicitly with a compliant" >&2
-        echo "                label (and --schema/--kern/--role explicitly too, if --name itself" >&2
-        echo "                must stay outside [a-z0-9]+). Nothing was touched." >&2
+        echo "                [a-z0-9]{1,64} (lowercase letters and digits only, at most 64" >&2
+        echo "                characters) -- the intersection of the boundary service's own" >&2
+        echo "                deployment-name contract ([a-z0-9-]{1,64}, no underscores/" >&2
+        echo "                uppercase -- serving/boundary_multiplex_config.py spec §2) and" >&2
+        echo "                the SQL-identifier allowlist ([A-Za-z0-9_]+, no hyphens) --name" >&2
+        echo "                also derives --schema/--kern/--role from. Pick a compliant" >&2
+        echo "                --name, or supply --boundary-url/--boundary-deployment" >&2
+        echo "                explicitly with a compliant label (and --schema/--kern/--role" >&2
+        echo "                explicitly too, if --name itself must stay outside" >&2
+        echo "                [a-z0-9]{1,64}). Nothing was touched." >&2
         exit 1
     fi
     unset _tracker_name_bad
