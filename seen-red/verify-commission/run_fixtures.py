@@ -17,9 +17,10 @@ NO-COMMITTED-KEY case. AUTOHARN itself is now only needed for the `filing/` modu
 "autoharn with/without a key" axis to vary, because autoharn's own `law/keys/` is no longer on
 verify-commission's read path at all (design/MAINT-GPG-TRUST-LAYER.md §7; law/keys/README.md).
 
-Cases (five: the closed VERIFIED/UNSIGNED/FORGED-OR-CORRUPT vocabulary, plus the two typed
-REFUSALS verify-commission.tmpl's own module docstring names — gpg missing, and no committed key
-to check a claimed signature against):
+Cases (five original: the closed VERIFIED/UNSIGNED/FORGED-OR-CORRUPT vocabulary, plus the two
+typed REFUSALS verify-commission.tmpl's own module docstring names — gpg missing, and no
+committed key to check a claimed signature against; PLUS two v1.1 cases (design/
+FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2) proving the s41 binding-grade upgrade):
   a-unsigned                        -- a FULL-mode commission with no .asc banked -> UNSIGNED,
                                         exit 0.
   b-verified                        -- the SAME statement signed with `printf '%s' "$STATEMENT" |
@@ -45,6 +46,14 @@ to check a claimed signature against):
                                         banked, but `gpg` is not on PATH -> the OTHER typed
                                         refusal, GPG-UNAVAILABLE, exit 2 -- never silently folded
                                         into any of the three verdicts either.
+  f-directory-verified-grade-before-binding -- case b's own JSON, re-inspected: before ANY s41
+                                        key binding exists, a VERIFIED verdict grades
+                                        DIRECTORY-VERIFIED (the fail-safe default -- no binding
+                                        claimed where none exists).
+  g-binding-verified-grade-after-s41-bind -- `commissioner` binds the SAME test fingerprint to
+                                        themself (./led principal bind-key), then the SAME good
+                                        signature re-verifies at BINDING-VERIFIED grade -- the s41
+                                        binding upgrade, witnessed live.
 
 Usage: python3 seen-red/verify-commission/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -213,6 +222,32 @@ def main() -> int:
         ok_b = rsign.returncode == 0 and rb.returncode == 0 and body_b.get("verdict") == "VERIFIED"
         check("b-verified", ok_b, f"sign_exit={rsign.returncode} verify_exit={rb.returncode} "
                                    f"verdict={body_b.get('verdict')}", failures)
+
+        # --- f/g: v1.1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2) -- the s41
+        # binding grade. At this point the test key verifies (case b) but is not yet bound to
+        # ANY principal via s41 -- case b's own JSON body must already carry
+        # grade=DIRECTORY-VERIFIED (the committed-keys-only grade). Then `commissioner` binds the
+        # SAME fingerprint to themself and a re-verify of the SAME good signature must upgrade to
+        # BINDING-VERIFIED, naming the s41 binding explicitly -- never silently staying at
+        # DIRECTORY-VERIFIED once a binding exists, and never silently claiming BINDING-VERIFIED
+        # before one does (case b is the fail-safe-default control for this very case).
+        ok_f = body_b.get("grade") == "DIRECTORY-VERIFIED" and body_b.get("signing_key_fingerprint") == test_fpr
+        check("f-directory-verified-grade-before-binding", ok_f,
+              f"grade={body_b.get('grade')} signing_key={body_b.get('signing_key_fingerprint')} "
+              f"(expected DIRECTORY-VERIFIED / {test_fpr})", failures)
+
+        r_bind = sh(["bash", str(world_dir / "led"), "principal", "bind-key", "commissioner",
+                     "--fingerprint", test_fpr],
+                    env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
+        rg = run_verify_commission(world_dir, commission_id=commission_id)
+        body_g = json.loads(rg.stdout) if rg.stdout.strip() else {}
+        ok_g = (r_bind.returncode == 0 and rg.returncode == 0
+                and body_g.get("verdict") == "VERIFIED" and body_g.get("grade") == "BINDING-VERIFIED"
+                and body_g.get("signing_key_fingerprint") == test_fpr)
+        check("g-binding-verified-grade-after-s41-bind", ok_g,
+              f"bind_exit={r_bind.returncode} verify_exit={rg.returncode} "
+              f"verdict={body_g.get('verdict')} grade={body_g.get('grade')} "
+              f"(bind stdout tail: {r_bind.stdout[-300:]!r})", failures)
 
         # --- c: same .asc path, signature over a DIFFERENT statement -> FORGED-OR-CORRUPT ------
         sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o", str(asc_path), "-"],

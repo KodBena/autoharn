@@ -77,3 +77,22 @@ def build_scratch_keyring(keys: list[Path]) -> Path:
 def teardown_scratch_keyring(gnupghome: Path | None) -> None:
     if gnupghome is not None:
         shutil.rmtree(gnupghome, ignore_errors=True)
+
+
+def signing_key_fingerprint(gpg_status_stdout: str) -> str | None:
+    """v1.1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2, item 3): the fingerprint of
+    the key that actually produced a VERIFIED signature, read from gpg's OWN machine-readable
+    `--status-fd`-emitted stream (a `VALIDSIG` line's second field, gpg's documented status-fd
+    format) -- NEVER parsed out of the locale-dependent, human-readable "Good signature from
+    ..." text (that names a user id string, not a fingerprint, and its wording is translatable).
+    ONE HOME (ADR-0012 P1): bootstrap/templates/verify-commission.tmpl's own `--attest` mode and
+    bootstrap/templates/led.tmpl's `attest-possession` verb both call this rather than each
+    re-deriving the VALIDSIG-line parse. Callers MUST invoke `gpg --status-fd 1 --verify ...` (or
+    equivalent) and pass its stdout here; None if no VALIDSIG line is present (should not happen
+    once the caller has already confirmed "Good signature", but never assumed)."""
+    for line in gpg_status_stdout.splitlines():
+        if line.startswith("[GNUPG:] VALIDSIG "):
+            fields = line.split()
+            if len(fields) >= 3:
+                return fields[2].upper()
+    return None

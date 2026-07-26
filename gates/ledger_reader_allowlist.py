@@ -85,6 +85,7 @@ CHAIN = [
     "s58-missive-substrate.sql",
     "s59-missive-views.sql",
     "s60-entitlement-enforcement.sql",
+    "s61-signature-symmetry-and-key-binding.sql",
 ]
 # s60 (kernel/lineage/s60-entitlement-enforcement.sql, design/FABLE-ENTITLEMENT-ENFORCEMENT-
 # SPEC.md §1) extends this SAME gate's scratch CHAIN and ships THREE declared raw-`ledger`
@@ -346,15 +347,36 @@ ALLOWLIST: dict[str, str] = {
     "validate_independence": "reads (stamp_session, stamp_agent) off the two named rows — row-addressed "
                              "forensics, not a truth projection (s17/s21/s29).",
     "validate_supersession_target": "write-boundary BEFORE INSERT trigger (s43 R6, widened s45 "
-                                    "§3.4, widened s53 §3.2 item 4, widened s58 §2.5/Q7): a "
-                                    "single row-addressed read of the supersession TARGET's "
-                                    "(kind, principal_db_role, principal_subject, actor, "
-                                    "missive_thread, regards) -- write_refused? standing-"
-                                    "lifecycle identity restated? belief kind/actor restated? "
-                                    "missive_sent same-thread successor? missive_received "
-                                    "refused outright? missive_disposed same-regards "
-                                    "re-disposition? -- same history-typed reasoning as "
-                                    "validate_review, six columns now instead of four.",
+                                    "§3.4, widened s53 §3.2 item 4, widened s58 §2.5/Q7, widened "
+                                    "s61 item 1): a single row-addressed read of the supersession "
+                                    "TARGET's (kind, principal_db_role, principal_subject, actor, "
+                                    "missive_thread, regards, signature_symmetry_witness) -- "
+                                    "write_refused? standing-lifecycle identity restated? belief "
+                                    "kind/actor restated? missive_sent same-thread successor? "
+                                    "missive_received refused outright? missive_disposed "
+                                    "same-regards re-disposition? does the target's force rest "
+                                    "on a verified signature (s61)? -- same history-typed "
+                                    "reasoning as validate_review, plus a read of the (current-"
+                                    "truth-factored, ledger_current-only) signed_commissions view "
+                                    "for the symmetry check itself.",
+    "validate_principal_binding": "write-boundary BEFORE INSERT trigger (s41 D-3, widened s61 "
+                                  "item 3): the self-edge/human-only-subject checks read "
+                                  "kernel.principal only (no raw ledger); s61 adds a row-"
+                                  "addressed read of the key_binding_possession_ref TARGET's "
+                                  "(kind, principal_key_fingerprint) on a FRESH bind -- same "
+                                  "history-typed, row-addressed reasoning as "
+                                  "validate_supersession_target, one field over: the referenced "
+                                  "possession-proof row must be inspected regardless of its own "
+                                  "current-truth status (it carries no supersession semantics of "
+                                  "its own, Element 1's note -- a plain, permanent assertion).",
+    "validate_signature_witness": "write-boundary BEFORE INSERT trigger (s61 item 1, the s48/s52 "
+                                  "third-sibling idiom): two same-row-addressed target reads -- "
+                                  "a commission_signature_verified row's signature_attests_row "
+                                  "target must be kind=commission; any row's "
+                                  "signature_symmetry_witness, when supplied, must target a "
+                                  "commission_signature_verified row -- well-formedness only, "
+                                  "history-typed for the identical reason validate_supersession_"
+                                  "target's own row-addressed target reads are.",
     "validate_missive_dedup": "write-boundary BEFORE INSERT trigger (s58 §2.4 item 2): raw "
                               "`ledger` reads for received-side AND sent-side (author_world, "
                               "thread, seq) uniqueness -- HISTORY-typed by design (a superseded "

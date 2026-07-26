@@ -1,0 +1,64 @@
+== scaffolding classic world s61fxred (chain ends s61-signature-symmetry-and-key-binding.sql) ==
+=== RED-1-unsigned-supersession-of-signed-act-refused ===
+  [ok] verdict={'row_id': None, 'message': 'Ledger policy: SIGNED supersession symmetry refused (s61, design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 1) — target row 5 (kind \'commission\') rests its force on a VERIFIED signature (an independently GPG-attested commission); it may only be superseded by an act whose OWN force also rests on a verified signature. This write carries no signature_symmetry_witness naming a commission_signature_verified row. Remedy: have the maintainer write a SIGNED commission directing this supersession (gpg --detach-sign --armor, then LED_ACTOR=commissioner ./led commission "<the ask>", then ./verify-commission --attest --id <that commission\'s id> — VERIFIED only), then supply --signature-witness <the attestation row\'s id> on this write.', 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+=== RED-1b-malformed-witness-refused ===
+  [ok] verdict={'row_id': None, 'message': "Ledger policy: signature_symmetry_witness must name a commission_signature_verified row (s61) — row 6 has kind 'commission'. This field grounds a claim that THIS row's own force rests on a verified signature; only an independently GPG-verified attestation row can carry that grounding (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 1).", 'sqlstate': 'P0001', 'refusal_id': 11, 'disposition': 'refused'}
+
+=== GREEN-1-signed-supersession-accepted ===
+  [ok] verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RED-3-fresh-bind-no-possession-ref-refused ===
+  [ok] verdict={'row_id': None, 'message': "Ledger policy: a FRESH principal_key_bound row (principal_binding_active=true) must name a key_binding_possession_ref (s61, design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 3) — this write supplies none. Run ./led principal attest-possession <fingerprint> --asc <detached-signature-path> first (proves you hold the private key by verifying a detached signature over a canonical proof-of-possession statement against THIS deployment's committed keys/ entry for that fingerprint), then bind citing the returned row id.", 'sqlstate': 'P0001', 'refusal_id': 15, 'disposition': 'refused'}
+
+=== RED-3b-possession-ref-wrong-kind-refused ===
+  [ok] verdict={'row_id': None, 'message': "Ledger policy: key_binding_possession_ref must name a principal_key_possession_verified row (s61) — row 5 has kind 'commission'. A FRESH key binding requires proof the binder holds the private key: run ./led principal attest-possession <fingerprint> --asc <detached-signature-path> first (verifies a signature over a canonical proof-of-possession statement against THIS deployment's committed keys/ entry for that fingerprint), then bind citing the returned row id.", 'sqlstate': 'P0001', 'refusal_id': 17, 'disposition': 'refused'}
+
+=== RED-3c-fingerprint-mismatch-refused ===
+  [ok] verdict={'row_id': None, 'message': "Ledger policy: key_binding_possession_ref names a possession proof for fingerprint 'AAAA000011112222333344445555666677778888', but this binding is for fingerprint 'BBBB000011112222333344445555666677778888' (s61) — a possession proof authorizes ONLY the exact fingerprint it proved, never a different one. Run ./led principal attest-possession for the fingerprint you intend to bind.", 'sqlstate': 'P0001', 'refusal_id': 20, 'disposition': 'refused'}
+
+=== GREEN-3-matching-possession-ref-accepted ===
+  [ok] verdict={'row_id': 21, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-3-revocation-needs-no-possession-ref ===
+  [ok] verdict={'row_id': 22, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding classic world s61fxpre (chain ends s60-entitlement-enforcement.sql, NO s61) ==
+=== GREEN-zero-friction-ordinary-act-verdict-shape ===
+  [ok] pre={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, post={'row_id': 23, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+
+KERNEL-LEVEL: ALL GREEN
+
+============================================================
+RUNNING THE VERB-SIDE/SERVED-CLI/REAL-GPG COMPLEMENT (run_fixtures_cli.py)
+============================================================
+
+== generating throwaway test key (Ed25519, test-only) ==
+  test key: 648FAB6ED58E596F684BC6DE84BE15D63B50E145
+
+== classic scaffold s61clifxprobe + manual chain apply (s15..s61) ==
+== standing served boundary_service ==
+  served OK.
+
+=== a-attest-directory-verified ===
+  [ok] sign_exit=0 attest_exit=0 body={'id': 7, 'actor': 'commissioner', 'signing_mode': 'FULL', 'verdict': 'VERIFIED', 'detail': 'statement sha256=c0b145484c88d1e310f076d62ef4c0a8f913c418585314305e083b514bc66de6. signing_key=648FAB6ED58E596F684BC6DE84BE15D63B50E145. grade=DIRECTORY-VERIFIED (verified against keys/; actor \'commissioner\' has bound no key via s41 (principal_key_bound)). [GNUPG:] NEWSIG\n[GNUPG:] KEY_CONSIDERED 648FAB6ED58E596F684BC6DE84BE15D63B50E145 0\n[GNUPG:] SIG_ID LY3Z1e8XyaUA+3N7xgCJTiPyQDg 2026-07-26 1785050003\n[GNUPG:] GOODSIG 84BE15D63B50E145 AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>\n[GNUPG:] VALIDSIG 648FAB6ED58E596F684BC6DE84BE15D63B50E145 2026-07-26 1785050003 0 4 0 22 10 00 648FAB6ED58E596F684BC6DE84BE15D63B50E145\n[GNUPG:] TRUST_UNDEFINED 0 pgp\ngpg: Signature made Sun Jul 26 09:13:23 2026 CEST\ngpg:                using EDDSA key 648FAB6ED58E596F684BC6DE84BE15D63B50E145\ngpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\n      648FAB6ED58E596F684BC6DE84BE15D63B50E145', 'grade': 'DIRECTORY-VERIFIED', 'signing_key_fingerprint': '648FAB6ED58E596F684BC6DE84BE15D63B50E145', 'attest': {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}}
+
+=== b-unsigned-supersession-refused ===
+  [ok] exit=1 out='ies no signature_symmetry_witness naming a commission_signature_verified row. Remedy: have the maintainer write a SIGNED commission directing this supersession (gpg --detach-sign --armor, then LED_ACTOR=commissioner ./led commission "<the ask>", then ./verify-commission --attest --id <that commission\'s id> — VERIFIED only), then supply --signature-witness <the attestation row\'s id> on this write.\n'
+
+=== c-signed-supersession-accepted ===
+  [ok] exit=0 out='led: row 11 written.\n'
+
+=== d-attest-possession-and-bind ===
+  [ok] attest_exit=0 possess_row=12 bind_ok=True attest_out='led: row 12 written.\n'
+
+=== e-bind-without-possession-ref-refused ===
+  [ok] exit=1 out="n ./led principal attest-possession 0000000000000000000000000000000000000000 --asc <detached-signature-path> first (verifies a signature over the canonical proof text against THIS deployment's committed keys/ entry for 0000000000000000000000000000000000000000), then bind citing the returned row id.\n"
+
+
+ALL GREEN
+
+CLI-LEVEL: ALL GREEN
+
+OVERALL: ALL GREEN

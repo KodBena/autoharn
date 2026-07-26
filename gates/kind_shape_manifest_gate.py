@@ -173,6 +173,7 @@ CHAIN = [
     "s58-missive-substrate.sql",
     "s59-missive-views.sql",
     "s60-entitlement-enforcement.sql",
+    "s61-signature-symmetry-and-key-binding.sql",
 ]
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
@@ -514,12 +515,45 @@ MANIFEST = [
                 "entitlement_class_configured too -- REUSED, never a second 'role name' column "
                 "(ADR-0012 P1): a configuration row's required-role value shares the SAME "
                 "free-text vocabulary a binding row's bound-role value uses."),
-    dict(column="principal_key_fingerprint", kinds=("principal_key_bound",),
+    dict(column="principal_key_fingerprint",
+         kinds=("principal_key_bound", "commission_signature_verified",
+                "principal_key_possession_verified"),
          arity="two-way", mechanism="CHECK", constraint="principal_key_fingerprint_kind_shape",
-         defining_delta="s41-principal-bindings-and-relations.sql",
+         defining_delta="s41-principal-bindings-and-relations.sql "
+                         "(kinds widened to three by s61-signature-symmetry-and-key-binding.sql)",
          reason="identity field; the OpenPGP v4 shape is a separate kind-free value CHECK "
                 "(principal_key_fingerprint_shape); the human-subject-only rule is D-3's "
-                "trigger, not a CHECK (cross-table lookup)."),
+                "trigger, not a CHECK (cross-table lookup). s61 widens the iff to license "
+                "commission_signature_verified (the signing key that produced a VERIFIED "
+                "signature) and principal_key_possession_verified (the fingerprint whose "
+                "possession was proven) -- REUSED, never a second fingerprint column "
+                "(ADR-0012 P1)."),
+    dict(column="signature_attests_row", kinds=("commission_signature_verified",),
+         arity="two-way", mechanism="CHECK", constraint="signature_attests_row_kind_shape",
+         defining_delta="s61-signature-symmetry-and-key-binding.sql",
+         reason="identity field: the commission row (kind=commission) this attestation regards "
+                "-- a genuine FK to ledger(id), existence kernel-enforced by the REFERENCES "
+                "clause itself; the target-kind check (must be 'commission') is a trigger "
+                "(validate_signature_witness), not a CHECK, since it needs a cross-row lookup."),
+    dict(column="signature_grade", kinds=("commission_signature_verified",),
+         arity="two-way", mechanism="CHECK", constraint="signature_grade_kind_shape",
+         defining_delta="s61-signature-symmetry-and-key-binding.sql",
+         reason="value field: which vocabulary the attested VERIFIED verdict earned "
+                "(binding-verified | directory-verified) -- design/"
+                "FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2's grade, banked permanently. "
+                "The closed two-member vocabulary is a separate kind-free value CHECK "
+                "(signature_grade_vocabulary)."),
+    dict(column="key_binding_possession_ref", kinds=("principal_key_bound",),
+         arity="two-way", mechanism="CHECK", constraint="key_binding_possession_ref_kind_shape",
+         defining_delta="s61-signature-symmetry-and-key-binding.sql",
+         reason="mandatory-iff-a-FRESH-bind (principal_binding_active IS TRUE), forbidden "
+                "otherwise (retraction or any other kind) -- a genuine FK to ledger(id) naming "
+                "the principal_key_possession_verified row (item 3) proving possession of the "
+                "fingerprint being bound. The target-kind-and-fingerprint-match check is a "
+                "trigger (validate_principal_binding, re-issued), not a CHECK (cross-row "
+                "lookup); IS TRUE is used throughout to keep every other kind's NULL "
+                "principal_binding_active out of three-valued-logic trouble (the s41 D-1 "
+                "idiom)."),
     dict(column="principal_competence_activity", kinds=("principal_competence_granted",),
          arity="two-way", mechanism="CHECK",
          constraint="principal_competence_activity_kind_shape",
@@ -845,6 +879,12 @@ CORE_COLUMNS = frozenset({
     # row of any kind carries 'explicit'/'declared-default' from s40 onward (set_actor's own
     # assignment), NULL only on pre-s40 history. Its value CHECK carries no kind test.
     "principal_actor_resolution",
+    # s61: signature_symmetry_witness is licensed on EVERY kind by design (Element 1's own
+    # note) -- no kind-shape CHECK exists for it, mirroring `refs`' own structural/universal
+    # standing above; its ONLY constraint is a target-KIND check (the row it names must be
+    # commission_signature_verified), enforced by a trigger (validate_signature_witness), not a
+    # CHECK on the CARRYING row's own kind.
+    "signature_symmetry_witness",
 })
 
 
