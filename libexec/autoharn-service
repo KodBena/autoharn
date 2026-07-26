@@ -145,6 +145,11 @@ def _pidfile_path() -> Path:
 # remove the pidfile if the process is STILL alive after that (uninterruptible kernel sleep is
 # the only realistic way SIGKILL fails to end a process promptly, but "realistic" is not
 # "impossible" -- reporting success while a live pid is orphaned is exactly the defect this fixes).
+# PID_REUSE, second-signal case (review 2026-07-26): pid identity (pid_is_boundary_service) is
+# verified ONCE, before the first SIGTERM -- it is deliberately NOT re-verified before the SIGKILL
+# escalation, so a pid recycled to an unrelated process inside the 5s grace window would be
+# SIGKILL'd blind. Accepted, matching the row-1340 _kill_boundary precedent's identical posture;
+# the window is seconds and the pid was boundary-shaped at entry. Disclosed, not silently absent.
 _STOP_SIGTERM_TIMEOUT_S = 5.0   # grace period for a clean shutdown; matches _kill_boundary's own
                                 # 5.0s SIGTERM grace window above, chosen there (and here) as
                                 # generous enough for an ordinary ASGI app's shutdown handlers to
