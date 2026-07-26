@@ -52,6 +52,7 @@ asof-export	export a point-in-time snapshot of the ledger
 verify-chain	reconcile the row-hash chain and the refusal_seq completeness oracle
 courier	pull missives from each counterpart world's outbound feed and record receipts locally
 service	ensure-running control: status|start|stop the boundary service this world depends on
+fixture-sweep	read-only live re-execution sweep over every gates/fixture_census.py family (autoharn-repo-specific, not scaffolded into worlds)
 EOF
 }
 
@@ -66,7 +67,7 @@ _print_help() {
     echo "verbs:"
     _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", $1, $2}'
     echo
-    echo "The eleven-verb-plus-service roster above is generated from this dispatcher's own dispatch"
+    echo "The twelve-verb-plus-service roster above is generated from this dispatcher's own dispatch"
     echo "table -- it cannot drift from what actually runs (design/FABLE-AUTOHARN-UMBRELLA-CLI-"
     echo "SPEC.md §1). For a verb's own full usage, run 'autoharn <verb> --help'."
 }
