@@ -1,0 +1,19 @@
+=== dispatch-principal-charset-guard: seen-red witness ===
+
+=== R1-pre-fix-hostile-name-prints-unquoted-and-evals-to-real-side-effect ===
+  [ok] exit=0 printed='export LED_ACTOR=builder$(touch PWNED)' printed-unquoted=True PWNED-created-by-eval=True (pre-fix commit b4bb250, this branch's own tip before this fix round) -- the vulnerability reviewed finding 1 named, reproduced end to end: pasting and eval'ing this tool's own printed output ran an attacker-controlled command
+
+=== R2-post-fix-hostile-name-refuses-and-evals-to-no-side-effect ===
+  [ok] exit=1 refused-on-charset=True nothing-printed=True PWNED-created-by-eval=False
+  stderr="dispatch_principal: REFUSED -- 'builder$(touch PWNED)' is not a valid principal name -- only letters, digits, '_', and '-' are accepted (this fix round's review, finding 1: an unconstrained name that reaches an `export LED_ACTOR=<name>` paste line is a shell-injection hazard even when quoted, and is almost always an accident besides). Pick a name matching [A-Za-z0-9_-]+, e.g. builder-<work-item-slug>."
+
+=== R3-post-fix-hostile-name-family-all-refuse-on-charset ===
+  [ok] backticks=ok(exit=1); embedded-space=ok(exit=1); embedded-quote=ok(exit=1); semicolon=ok(exit=1)
+
+=== R4-post-fix-clean-name-prints-and-evals-to-correct-env ===
+  [ok] exit=0 printed='export LED_ACTOR=builder-ok' env-after-eval='LED_ACTOR=builder-ok'
+
+=== R5-post-fix-check-json-round-trips ===
+  [ok] registered-obj={'name': 'builder-ok', 'registered': True} unregistered-obj={'name': 'builder-ok', 'registered': False}
+
+all dispatch-principal-charset-guard cases WITNESSED clean.

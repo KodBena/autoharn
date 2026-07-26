@@ -199,6 +199,7 @@ REGISTRY: dict[str, str] = {
     "role-brief-current-line-shape-drift-real": "seen-red/role-brief-current-line-shape-drift-real/run_fixtures.py",
     "role-charter-current-line-shape-drift": "seen-red/role-charter-current-line-shape-drift/run_fixtures.py",
     "role-charter-current-line-shape-drift-real": "seen-red/role-charter-current-line-shape-drift-real/run_fixtures.py",
+    "dispatch-principal-charset-guard": "seen-red/dispatch-principal-charset-guard/run_fixtures.py",
     "judge-all-capable-layers":       "seen-red/judge-all-capable-layers/run_fixtures.py",
     "boundary-service":                "seen-red/boundary-service/run_fixtures.py",
     "deep-walk-recursion-guard":       "seen-red/deep-walk-recursion-guard/run_fixtures.py",
@@ -308,7 +309,6 @@ REGISTRY: dict[str, str] = {
     # own repo, adopted back as a git submodule at tools/autoharn-panel — both-polarity
     # discipline continues to hold there, just no longer under this repo's seen-red/ registry.
 }
-
 
 def _red_evidence_name(d: str) -> str | None:
     """A seen-red dir proves failure iff it banks a red-shaped artifact (red.txt, *-red.txt,
