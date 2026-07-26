@@ -62,7 +62,13 @@ drift and always has; the §3 gate and the body-census instrument (ledger row 14
 Tier A) are the coverage for that perimeter. This paragraph is the committed home of
 the answer the spec demanded in the build report.
 
-## 3. Mechanical guard against recurrence (generic, non-kernel, ships with the delta)
+## 3. Mechanical detector for the recurrence class (generic, non-kernel, ships with the delta)
+
+**Enforcement status (disclosure, 2026-07-26):** the gate is a DETECTOR; as shipped it is
+wired into no enforcement path (not in `hooks/pre-commit`, no other invocation site).
+Wiring it — together with the five other unwired kernel-invariant gates the s63 review
+surfaced — is a maintainer session-gap hooks decision, tracked at ledger row 1438. Until
+that lands, "the class is detected when the gate runs" is the whole claim.
 
 A new gate `gates/lineage_reissue_lineage.py`, two mechanical checks per re-issued
 function name across `kernel/lineage/s[0-9]*-*.sql` (numeric order):
