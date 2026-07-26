@@ -78,6 +78,7 @@ REGISTRY: dict[str, str] = {
     "45-criterion-reviewer-grants":   "drive/arm.sh",
     "engine-inc1-controls":           "engine/tests",
     "review-fixpoint":                "instruments/verify_review_fixpoint.py",
+    "row-resolve-hook":               "seen-red/row-resolve-hook/run_fixtures.py",
     "s19-trigger-search-path":        "kernel/fixtures/s19_search_path_fixture.py",
     "conformance_check":              "seen-red/conformance_check/run_fixtures.py",
     "stop-clean-exit":                "seen-red/stop-clean-exit/run_fixtures.py",
