@@ -59,3 +59,77 @@ exit 0. Live cases (i/vi) each real-birth into /tmp scratch destinations and rea
 schemas, torn down (bootstrap/teardown-world.sh --force-non-scratch) and boundary-service
 processes killed in a `finally`, verified zero residue after the run above (no cfgfx*/sentinel*
 schema, no boundary_service process, no /tmp/setup-tui-config-file-* directory left).
+
+---
+
+RE-BANKED 2026-07-26, work item config-seam-plan-key-silent-loss (ledger rows 1330/1331): a
+NEW case vii added -- `capture_resolved_config` (`tools/setup_tui/config_seam.py:327`) read
+`state.get("plan")`; the real state key every `steps_*.py` module writes through is
+`state["_plan"]` (`steps.initial_state`'s own infrastructure-key trio) -- so
+`principals_authority.register`/`.competences`/`.relations` captured as `[]` in every self-
+saved `world-config.toml`, silently, exit 0, since fbbe7b547d ("loadable config files"). Case
+vii drives the REAL `steps_principals_authority.submit` (no mock) to queue one register/
+competence/relation row, captures + renders `world-config.toml` through the real
+`config_seam`/`config_file` path, and asserts the rows survive -- plus a second assertion that
+`capture_resolved_config` now FAILS LOUDLY (`KeyError` naming `_plan`) on a state dict missing
+the `_plan` infrastructure key at all, the net this postmortem asked for (ADR-0000 (b)): every
+OTHER key `capture_resolved_config` reads is a DECISION key where absence is legitimate (that
+section never ran) and stays a plain `.get(..., default)`; `_plan` is the one INFRASTRUCTURE
+key with no legitimate "absent" state, so it alone gets a loud guard instead of a silent
+default.
+
+RED, captured against the pre-fix line (`state.get("plan")`), no HARNESS_PGHOST needed
+(case vii is a pure state/Plan construction, not a live birth):
+
+$ python3 seen-red/setup-tui-config-file/run_fixtures.py
+case ii ok: ...
+case iii ok: ...
+Traceback (most recent call last):
+  ...
+  File ".../seen-red/setup-tui-config-file/run_fixtures.py", line 321, in case_plan_key_capture
+    assert resolved.get("principals_authority.register"), (
+AssertionError: case vii RED: principals_authority.register captured empty -- the plan-key
+  silent loss is back (resolved=[])
+exit 1
+
+GREEN, post-fix (`state.get("_plan")` + the loud-`KeyError` net), both without and with a live
+Postgres host:
+
+$ python3 seen-red/setup-tui-config-file/run_fixtures.py
+case ii ok: ...
+case iii ok: ...
+case vii ok: capture_resolved_config reads the wizard's real '_plan' state key -- a registered
+  principal's register/competences/relations rows survive into the rendered world-config.toml
+  (plan-key silent-loss regression guard, ledger row 1330)
+case iv (schema leg) UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST
+case iv ok (sentinel leg): ...
+case v UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST
+case i ok: ...
+case vi UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST -- needs a live, reachable Postgres
+  host for two real births
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+exit 0
+
+$ HARNESS_PGHOST=192.168.122.1 python3 -c "... (cases ii/iii/vii/iv/i/vi called directly) ..."
+case ii ok / case iii ok / case vii ok / case iv ok (schema leg) / case iv ok (sentinel leg) /
+  case i ok / case vi ok (a live birth's own saved world-config.toml, re-applied via
+  --from-config to a SECOND world, carries the SAME real register/competences/relations rows a
+  fixed point, checked mechanically) -- zero residue verified (no cfgfx*/probe-named schema, no
+  matching boundary_service process left after teardown).
+
+FLAGGED, NOT FIXED (out of this work item's scope, hazard found in reach of the file this round
+touched -- surfaced loudly per CLAUDE.md rather than silently routed around): with
+HARNESS_PGHOST set, `case_initial_config_override` (case v) now fails on THIS base commit
+(0ffc8da) ALREADY, before any change in this round -- confirmed via `git stash` against the
+unmodified tree -- with `setup_tui: error: unrecognized arguments: --scripted --start-at
+substrate`. `--scripted`/`ScriptedUi` were deleted by the 2026-07-22 wholesale rebuild (this
+same file's own module docstring says so), but `case_initial_config_override` was never
+updated off that flag -- it silently reads UNEXERCISED whenever no HARNESS_PGHOST is set (the
+common case), so the drift went unnoticed. The case's actual SUBJECT (a config default
+threading into an interactive prompt, overridable) already has a current, correct home:
+`seen-red/setup-tui-seeded-value-visibility/run_fixtures.py` drives the real live app via
+Textual's `Pilot`/`app.run_test()`, the post-rebuild convention `--scripted` no longer has.
+Recommend: a follow-on work item to either rewrite case v onto the `Pilot` convention or retire
+it as redundant with setup-tui-seeded-value-visibility, and re-bank this file's own red.txt once
+that lands. Left as-is here to keep this round's diff scoped to the plan-key bug.
