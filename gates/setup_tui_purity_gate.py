@@ -49,13 +49,26 @@ each detector must fail red) lives in seen-red/setup-tui-purity-gate/run_fixture
 this module's own `check_print_or_io`/`check_core_imports_app`/`check_raw_layout_containers`
 directly against synthetic source text -- never touching the real tree for the red leg.
 
-Usage: python3 gates/setup_tui_purity_gate.py
-Lazy imports are banned."""
+Usage: python3 gates/setup_tui_purity_gate.py [--tree]
+Lazy imports are banned.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): these three invariants are all
+properties of a file's BYTES, so `scan_file`/`scan_configtree_file` read each file's STAGED
+bytes by default (gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's
+own pattern), falling back to the working-tree file only when a path is not staged at all.
+Otherwise: stage a raw `print(` (or a raw `Vertical(...)` outside the declared exceptions),
+restore a clean file in the tree without re-staging, and this gate would pass on the tree's
+clean bytes while the commit still embeds the staged violation. `--tree` forces the
+working-tree read unconditionally instead."""
 from __future__ import annotations
 
 import ast
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE_DIR = os.path.join(ROOT, "tools", "setup_tui")
@@ -247,34 +260,33 @@ def check_raw_layout_containers(tree: ast.AST, filename: str) -> "list[str]":
     return violations
 
 
-def scan_file(path: str) -> "list[str]":
+def scan_file(path: str, use_tree: bool = False) -> "list[str]":
     """Detections 1+2, over `tools/setup_tui/` (PACKAGE_DIR) only."""
     filename = os.path.basename(path)
-    with open(path, encoding="utf-8") as f:
-        source = f.read()
+    source = read_source_text(Path(path), use_tree=use_tree)
     tree = ast.parse(source, filename=path)
     return check_print_or_io(tree, filename) + check_core_imports_app(tree, filename)
 
 
-def scan_configtree_file(path: str) -> "list[str]":
+def scan_configtree_file(path: str, use_tree: bool = False) -> "list[str]":
     """Detection 3 only, over `tools/configtree/` -- kept as its OWN scan (never folded into
     `scan_file`'s detections 1/2, which are specifically about `tools/setup_tui/`'s core-vs-app
     boundary and key their exemption dicts by basename; `tools/configtree/app.py` and
     `tools/setup_tui/app.py` share a basename, and running detections 1/2 against the former under
     the LATTER's own exemptions would be a category error, not a real check)."""
     filename = os.path.basename(path)
-    with open(path, encoding="utf-8") as f:
-        source = f.read()
+    source = read_source_text(Path(path), use_tree=use_tree)
     tree = ast.parse(source, filename=path)
     return check_raw_layout_containers(tree, filename)
 
 
 def main() -> int:
+    use_tree = "--tree" in sys.argv[1:]
     violations: list[str] = []
     for path in _iter_py_files():
-        violations.extend(scan_file(path))
+        violations.extend(scan_file(path, use_tree=use_tree))
     for path in _iter_py_files(CONFIGTREE_DIR):
-        violations.extend(scan_configtree_file(path))
+        violations.extend(scan_configtree_file(path, use_tree=use_tree))
     if violations:
         print("setup_tui_purity_gate: VIOLATIONS FOUND:")
         for v in violations:

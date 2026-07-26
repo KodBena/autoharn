@@ -1,0 +1,11 @@
+case 1 (no_lazy_imports) ok: staged lazy import refused despite restored clean tree; --tree reads the clean tree
+case 2 (max_lines) ok: staged over-ceiling file refused despite restored short tree; --tree reads the short tree
+case 3 (link_integrity) ok: staged broken link refused despite restored clean tree; --tree reads the clean tree
+case 4 (doc_shapes) ok: staged FRAGMENT refused despite restored clean tree; use_tree=True reads the clean tree
+case 5 (doc_attestation_presence) ok: staged unreviewed edit refused (hash mismatch) despite a restored tree that hashes to an already-attested record; --tree hashes the restored tree and passes
+case 6 (setup_tui_purity_gate) ok: staged print(...) refused despite restored clean tree; use_tree=True reads the clean tree
+  (a) RED  raw unstripped `-C sub rev-parse --show-toplevel` under a live worktree hook's captured env misresolves toplevel to the subdir itself: /tmp/gitdir-worktree-linked-uj5nnmns/sub
+  (b) GREEN read_staged_bytes, same polluted env, correctly returns the STAGED (violating) bytes
+  (c) GREEN no_lazy_imports.py, run as a live subprocess under the identical polluted env, exit 1 -- staged violation caught despite the restored clean tree
+case 7 (GIT_DIR worktree regression) ok: raw -C call misresolves toplevel under a live worktree hook's harvested env (pre-fix reproduction); _staged_read.read_staged_bytes and no_lazy_imports.py both correctly read staged bytes under the identical env (post-fix)
+ALL CASES OK -- gates-staged-vs-tree-blindness (ledger row 1234), six converted gates plus the GIT_DIR-worktree mechanism case, zero residue

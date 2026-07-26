@@ -216,6 +216,13 @@ REGISTRY: dict[str, str] = {
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
     "asof-export":                  "seen-red/asof-export/run_fixtures.py",  # RETIRED-SCAFFOLD
     "watchdog-liveness":            "seen-red/watchdog-liveness/run_fixtures.py",
+    # gates-staged-vs-tree-blindness (ledger row 1234, this commission): the shared seen-red
+    # family for the FIVE gates converted alongside gates/deep_walk_recursion_guard.py's own
+    # original staged-vs-tree fixture (seen-red/deep-walk-recursion-guard/, unaffected by this
+    # entry) -- no_lazy_imports/max_lines/link_integrity/doc_shapes/doc_attestation_presence/
+    # setup_tui_purity_gate now all read staged bytes by default via the shared
+    # gates/_staged_read.py primitive.
+    "gates-staged-vs-tree-blindness": "seen-red/gates-staged-vs-tree-blindness/run_fixtures.py",
     # setup-tui-* (design/FABLE-SETUP-TUI-REBUILD-SPEC.md, 2026-07-22 wholesale rebuild): the
     # teletype-shaped fixtures (scripted-smoke, navigation, textual-shell, typed-elements,
     # ctrlc-quit-shadow) and every fixture whose ONLY mechanism was driving the deleted

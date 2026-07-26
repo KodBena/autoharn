@@ -62,6 +62,25 @@ for deliberate fragments and quoted historical references. A waiver is a claim r
 any other; it names its reason inline by construction.
 
 Exit codes: 0 clean (or report mode), 1 violations in gate mode, 2 usage/IO error.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): GATE mode is a content-checking
+gate over the touched set at commit time, so `check_file` reads each named file's STAGED bytes
+by default (gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's own
+pattern), falling back to the working-tree file only when a path is not staged at all. Otherwise:
+stage a FRAGMENT/HANDOFF-POSITIONAL defect, restore the previous clean text in the tree without
+re-staging, and this gate would pass on the clean tree bytes while the commit still embeds the
+defect. REPORT mode (whole-repo sweep, never blocking) reads the WORKING TREE unconditionally, not
+staged bytes -- corrected 2026-07-26 (fresh-context review of this class's own fix caught the
+prior claim false: `main()` used to pass the SAME `use_tree` variable, defaulting False, to
+`check_file` in both modes, so an un-`--tree`'d report-mode run silently preferred whatever was
+staged over whatever was on disk, contradicting this very docstring's own words). Report mode has
+no commit to protect and no touched set of its own -- it exists so a human can see the standing
+back-catalog debt (Rule 4: migrates on touch, never by sweep), and a human reading a whole-repo
+sweep wants the text actually sitting in their working tree, not whatever happens to be staged in
+someone's half-finished `git add`. `main()` therefore forces `use_tree=True` whenever `gate_mode`
+is false, regardless of whether `--tree` was passed (harmless if it was: same effect, stated
+explicitly rather than left to rely on the flag). GATE mode is unchanged: `--tree` remains
+available there for the same manual/fixture use deep_walk_recursion_guard.py's own flag serves.
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """
 from __future__ import annotations
@@ -69,6 +88,9 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, the shared home)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -111,10 +133,10 @@ def _line_kind(stripped: str) -> str:
     return "prose"
 
 
-def check_file(path: Path) -> list[str]:
+def check_file(path: Path, use_tree: bool = False) -> list[str]:
     """Return violation strings ('path:line: CHECK message') for one markdown file."""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = read_source_text(path, use_tree=use_tree).splitlines()
     except (OSError, UnicodeDecodeError) as e:
         return [f"{path}:0: IO could not read file ({e})"]
     rel = path
@@ -185,6 +207,8 @@ def _repo_markdown_files() -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
+    use_tree = "--tree" in argv
+    argv = [a for a in argv if a != "--tree"]
     gate_mode = bool(argv)
     if gate_mode:
         targets = []
@@ -200,10 +224,17 @@ def main(argv: list[str]) -> int:
             targets.append(p)
     else:
         targets = _repo_markdown_files()
+        # Report mode reads the WORKING TREE unconditionally (module docstring's READ MODE
+        # section, corrected 2026-07-26): there is no touched set or pending commit to protect
+        # here, so a whole-repo sweep should show a human what is actually on disk, not whatever
+        # a half-finished `git add` happens to have staged. Overrides `--tree`'s own value (a
+        # no-op when it was already passed) rather than leaving report mode's correctness
+        # dependent on the caller remembering the flag.
+        use_tree = True
 
     all_violations: list[str] = []
     for p in targets:
-        all_violations.extend(check_file(p))
+        all_violations.extend(check_file(p, use_tree=use_tree))
 
     mode_word = "gate" if gate_mode else "report"
     if all_violations:

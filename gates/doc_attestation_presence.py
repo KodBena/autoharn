@@ -222,6 +222,37 @@ WIRING STANZA — reproduced here as the source text hooks/pre-commit's own
     fi
 
 Exit codes: 0 clean (gate) / always (report), 1 gate-mode violations, 2 usage/IO/record error.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): the check this gate performs is a
+hash match against a doc's CONTENT, so `check_file`'s `content_sha256` is computed over the
+doc's STAGED bytes by default (gates/_staged_read.py's `read_source_bytes`,
+gates/deep_walk_recursion_guard.py's own pattern), falling back to the working-tree file only
+when a path is not staged at all. Otherwise: stage an edit that invalidates an existing
+attestation record's hash, restore the previously-attested bytes in the tree without
+re-staging, and this gate would compute the OLD (still-attested) hash from the tree and pass,
+while the commit actually embeds the un-attested edit. `--tree` forces the working-tree read of
+the doc's bytes unconditionally instead (gate mode only; `classify()`/`discover_md()`, the
+deployment-facing three-way read used by `attest-doc check`/`distance-to-clean`, are unaffected
+-- those already read a DIFFERENT tree's bytes by design, a deployment with no git-staging
+concept of its own, see `discover_md`'s own docstring).
+
+REPORT mode (repo-wide, never blocking) reads the WORKING TREE unconditionally, not staged bytes
+-- aligned 2026-07-26 with gates/doc_shapes.py's own identical correction, caught by the same
+fresh-context review pass: `main()` used to thread the SAME `use_tree` variable (defaulting False)
+into `check_file`/`_has_waiver` in BOTH gate and report mode, so an un-`--tree`'d report-mode
+sweep silently preferred a doc's staged bytes over its on-disk text whenever the two differed.
+This docstring never explicitly claimed report mode read the tree the way doc_shapes.py's prior
+text did -- so there was no FALSE claim here, only the same underlying behavioral mismatch -- but
+the reasoning for closing it is identical: report mode has no commit to protect and exists only
+so a human can see the standing attestation debt (Rule 4: migrates on touch, never by sweep), so
+it should show what is actually on disk, not a half-finished `git add`'s staged content. `main()`
+now forces `use_tree=True` whenever `gate_mode` is false, the same device doc_shapes.py uses; GATE
+mode is unchanged, `--tree` remains available there exactly as documented above. The ATTESTATION
+LEDGER itself
+(`attestations/doc-legibility-attestations.jsonl`) is deliberately left a plain working-tree
+read: a record is appended by `--record` as its own, separate, already-committed act (never
+staged in the SAME commit as the doc edit it attests, by this discipline's own two-step design),
+so there is no staged/tree gap to close there the way there is for the doc's own bytes.
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """
 from __future__ import annotations
@@ -229,11 +260,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_bytes, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = REPO_ROOT / "attestations" / "doc-legibility-attestations.jsonl"
@@ -288,8 +321,15 @@ ADJUDICATION_FIELDS = ("adjudicated_by", "disposition", "adjudicated_at")
 
 
 def _tracked_md() -> list[str]:
-    r = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "*.md"],
-                        capture_output=True, text=True, check=True)
+    """Every git-tracked *.md under REPO_ROOT (this repo's own commit-time universe -- see
+    `discover_md` above for the DEPLOYMENT-facing, non-git-required sibling). Routed through
+    `_staged_read.run_git` (2026-07-26): this call site was not itself named in the
+    gates-staged-vs-tree-blindness follow-up finding that flagged the sibling gates' own
+    `tracked_*` enumerations, but it is the identical bare `subprocess.run(["git", "-C",
+    ROOT, "ls-files", ...])` shape, in one of the SAME six converted gates -- routed here too
+    rather than left on the same coincidence the finding named for the others."""
+    r = run_git(["-C", str(REPO_ROOT), "ls-files", "*.md"],
+                capture_output=True, text=True, check=True)
     return [ln for ln in r.stdout.splitlines() if ln.strip()]
 
 
@@ -301,7 +341,21 @@ def _rel(path: Path) -> str:
 
 
 def _sha256_of(path: Path) -> str:
+    """The doc's WORKING-TREE bytes, hashed -- used by `classify()`/`discover_md()`'s deployment-
+    facing three-way read (a deployment tree has no git-staging concept of its own to prefer, see
+    `discover_md`'s docstring) and by `_cmd_record`/`--record` (a separate, deliberately manual
+    authoring step, run over whatever the author currently has on disk). NOT used by the
+    commit-time gate path (`check_file` below) -- see `_content_sha256_for_commit`."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _content_sha256_for_commit(path: Path, use_tree: bool = False) -> str:
+    """The commit-time gate's own hash source (gates-staged-vs-tree-blindness, ledger row 1234):
+    the doc's STAGED bytes by default, falling back to the working-tree file only when the path
+    is not staged at all -- what the commit will actually embed, not whatever the tree happens to
+    hold when the gate runs. `use_tree=True` (the gate's `--tree` flag) forces the working-tree
+    read unconditionally."""
+    return hashlib.sha256(read_source_bytes(path, use_tree=use_tree)).hexdigest()
 
 
 def in_scope(rel: str) -> bool:
@@ -367,16 +421,21 @@ def deployment_in_scope(rel: str) -> bool:
 _WAIVER_COMMENT = re.compile(r"<!--\s*" + re.escape(WAIVER_TOKEN) + r".*?-->", re.DOTALL)
 
 
-def _has_waiver(path: Path) -> bool:
+def _has_waiver(path: Path, use_tree: bool = False) -> bool:
     """A waiver requires the token inside an HTML comment (`<!-- doc-attest-exempt: reason
     -->`), never a bare substring match. A raw substring check was tried first and caught
     itself live: this gate's own recipe doc (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) explains the
     waiver token in prose as a worked example, and that explanation alone tripped a false
     wholesale exemption under a plain 'WAIVER_TOKEN in text' check. Requiring the HTML-comment
     wrapper is the same device gates/link_integrity.py's strip_inline_code / strip_fences use
-    to keep an example from being mistaken for the real thing."""
+    to keep an example from being mistaken for the real thing.
+
+    READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): reads STAGED bytes by default,
+    same as `_content_sha256_for_commit` -- the FAIL-OPEN direction matters here too: a tree file
+    that still carries a waiver comment the STAGED edit already removed must not silently exempt
+    the commit that removed it."""
     try:
-        return bool(_WAIVER_COMMENT.search(path.read_text(encoding="utf-8")))
+        return bool(_WAIVER_COMMENT.search(read_source_bytes(path, use_tree=use_tree).decode("utf-8")))
     except (OSError, UnicodeDecodeError):
         return False
 
@@ -436,8 +495,14 @@ def _git_ignored_rel_paths(doc_root: Path, rel_paths: list[str]) -> set[str] | N
     tree with no git at all still gets every `.md` file it always got (the false-CLEAN fix
     `discover_md` exists to preserve, see that function's docstring)."""
     try:
-        probe = subprocess.run(
-            ["git", "-C", str(doc_root), "rev-parse", "--is-inside-work-tree"],
+        # Routed through _staged_read.run_git (2026-07-26, second site in this module -- see
+        # `_tracked_md`'s own comment above and gates/_staged_read.py's run_git docstring for the
+        # full six-gate census this belongs to): the identical GIT_DIR-inheritance class the
+        # gates-staged-vs-tree-blindness fresh-context review flagged, this call site missed on
+        # the first pass because it lives in a `-> set[str] | None` helper rather than one of the
+        # obvious `tracked_*`-named enumerations the census went looking for.
+        probe = run_git(
+            ["-C", str(doc_root), "rev-parse", "--is-inside-work-tree"],
             capture_output=True, text=True, timeout=8)
     except (OSError, FileNotFoundError):
         return None  # no git binary on PATH
@@ -450,8 +515,8 @@ def _git_ignored_rel_paths(doc_root: Path, rel_paths: list[str]) -> set[str] | N
         # subprocess per file) and exits 0 (>=1 match), 1 (no match), or 128 (fatal git error,
         # e.g. a corrupt repo) -- 128 degrades to the same "can't tell, don't filter" contract
         # as no-git-at-all, rather than risk silently widening or narrowing the scope.
-        out = subprocess.run(
-            ["git", "-C", str(doc_root), "check-ignore", "--stdin"],
+        out = run_git(
+            ["-C", str(doc_root), "check-ignore", "--stdin"],
             input="\n".join(rel_paths) + "\n", capture_output=True, text=True, timeout=15)
     except (OSError, FileNotFoundError):
         return None
@@ -673,13 +738,13 @@ def validate_record(rec: dict) -> list[str]:
 # Gate / report
 # ---------------------------------------------------------------------------------------
 
-def check_file(rel: str, records: list[dict]) -> list[str]:
+def check_file(rel: str, records: list[dict], use_tree: bool = False) -> list[str]:
     path = REPO_ROOT / rel
     if not path.exists():
         return [f"{rel}: IO file does not exist"]
-    if _has_waiver(path):
+    if _has_waiver(path, use_tree=use_tree):
         return []  # printed as excluded-by-waiver at the call site, not a violation
-    content_sha256 = _sha256_of(path)
+    content_sha256 = _content_sha256_for_commit(path, use_tree=use_tree)
     rec = latest_record_for(records, rel, content_sha256)
     if rec is None:
         return [f"{rel}: NO-ATTESTATION no fresh-context attestation record in "
@@ -731,6 +796,9 @@ def main(argv: list[str]) -> int:
     if argv and argv[0] == "--record":
         return _cmd_record(argv[1:])
 
+    use_tree = "--tree" in argv
+    argv = [a for a in argv if a != "--tree"]
+
     gate_mode = bool(argv)
     if gate_mode:
         targets = []
@@ -746,15 +814,21 @@ def main(argv: list[str]) -> int:
             targets.append(_rel(p))
     else:
         targets = _tracked_md()
+        # Report mode reads the WORKING TREE unconditionally (module docstring's READ MODE
+        # section, aligned 2026-07-26 with gates/doc_shapes.py's identical fix): no touched set,
+        # no commit to protect -- a whole-repo debt sweep should show what a human actually has
+        # on disk, not whatever a half-finished `git add` happens to have staged. Overrides
+        # `--tree`'s own value (a no-op if it was already passed).
+        use_tree = True
 
     scope = [t for t in targets if in_scope(t)]
     excluded = [t for t in targets if not in_scope(t)]
-    waived = [t for t in scope if _has_waiver(REPO_ROOT / t)]
+    waived = [t for t in scope if _has_waiver(REPO_ROOT / t, use_tree=use_tree)]
 
     records = load_ledger()
     all_violations: list[str] = []
     for rel in scope:
-        all_violations.extend(check_file(rel, records))
+        all_violations.extend(check_file(rel, records, use_tree=use_tree))
 
     mode_word = "gate" if gate_mode else "report"
     _print_exclusions(scope, excluded, waived)

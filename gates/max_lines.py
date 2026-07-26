@@ -88,14 +88,25 @@ Census-registered in gates/fixture_census.py under "max-lines".
 Exit 0 clean (prints a one-line summary); exit 1 listing every breach as
 `path: <N> lines (<reason>)`.
 
-Usage: python3 gates/max_lines.py [root]      # default: repo root, git-tracked *.py in SCOPE
+Usage: python3 gates/max_lines.py [root] [--tree]  # default: repo root, git-tracked *.py in SCOPE
 Lazy imports banned.
+
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): line count is a property of a
+file's BYTES, so this gate reads each file's STAGED bytes by default
+(gates/_staged_read.py's `read_source_text`, gates/deep_walk_recursion_guard.py's own pattern),
+falling back to the working-tree file only when a path is not staged at all. Otherwise: stage a
+file that grows past its ratchet, restore a short version in the tree without re-staging, and
+this gate would pass on the tree's line count while the commit still embeds the over-ratchet
+staged bytes. Pass `--tree` to force the working-tree read unconditionally instead.
 """
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_bytes, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -191,7 +202,26 @@ BASELINE: dict[str, int] = {
     "engine/judgment_registry.py":                      889,
     "tools/experiments/compound_nominal_scan2.py":      869,
     "hooks/demurral_detect.py":                         837,
-    "gates/doc_attestation_presence.py":                837,
+    # Reconciled +36 to 873 (gates-staged-vs-tree-blindness, ledger row 1234, this commission):
+    # `check_file` now reads its STAGED bytes (`_content_sha256_for_commit`, threading `use_tree`
+    # through, plus the shared `_staged_read` import); `_has_waiver` gained the same `use_tree`
+    # parameter and its own read-mode docstring paragraph explaining the fail-open direction this
+    # closes. Genuinely new decision-boundary logic and its own reasoning, not padding. Written
+    # plain, no golfing (ADR-0007's no-go clause); witnessed growth.
+    # Reconciled +27 to 900 (2026-07-26 fix round, fresh-context review of the above commission's
+    # own fix): `_tracked_md` routed through `_staged_read.run_git` (finding 4, a bypass-the-
+    # stripped-env hazard found in the same six-gate family this file belongs to); report mode's
+    # READ MODE docstring paragraph corrected and aligned with gates/doc_shapes.py's identical
+    # fix (finding 3); `main()`'s report-mode branch forces `use_tree=True`. Genuinely new
+    # decision logic and its own reasoning, not padding. Witnessed growth.
+    # Reconciled +5 to 905 (2026-07-26 second fix round, the confirming lap's own residuals):
+    # `_git_ignored_rel_paths()`'s two bare `git -C doc_root ...` calls (a second, previously-
+    # missed site of the same bypass this file's own prior reconciliation just closed for
+    # `_tracked_md`) routed through `_staged_read.run_git`, with an inline comment explaining why
+    # the census missed it the first time; the now-dead `import subprocess` removed (net cost of
+    # the fix, not padding -- the removal partially offsets the added explanatory lines). Written
+    # plain, no golfing; witnessed growth.
+    "gates/doc_attestation_presence.py":                905,
     # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
     # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
@@ -253,7 +283,13 @@ BASELINE: dict[str, int] = {
     # legacy/led unconditionally) plus the docstring update explaining the re-sequencing. Genuinely
     # new decision-boundary logic, not padding. Written plain, no golfing.
     "tools/setup_tui/signed_genesis.py":                532,
-    "gates/interpreter_boundary_lint.py":               498,
+    # Reconciled +1 to 499 (2026-07-26 fix round, the staged-vs-tree confirming lap's residual
+    # finding 2): `tracked_py_files` routed through `_staged_read.run_git` -- a net one-line
+    # comment cost after the `import subprocess` removal and the call-site swap wash out. Not
+    # padding: this was one of the two out-of-scope-census gates judged trivially safe to route
+    # rather than write a standing justification for leaving unrouted (see
+    # gates/_staged_read.py's run_git docstring). Written plain, no golfing.
+    "gates/interpreter_boundary_lint.py":               499,
     "hooks/stamp_intercept.py":                         482,
     # NEW to BASELINE, 461 (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md build, ledger row 1944):
     # was 375 lines, under ceiling, before this build. The CLI surface gains three new flags
@@ -306,15 +342,6 @@ BASELINE: dict[str, int] = {
     # flagged), not grandfathered debt -- the ratchet working, same shape as durable_decisions.py
     # above.
     "hooks/pretooluse_sql_block.py":                    420,
-    # NEW to BASELINE 2026-07-26 (merge 9a2c672, workflow-drive line x main line): this file's
-    # own merge union landed at 404 -- both branches grew it independently (main's growth vs
-    # the branch's baseline-bump comments), the union crossed the ceiling by 4, and with no
-    # self-entry the gate refused EVERY commit on main outright (witnessed live, spec-only
-    # commit blocked). Baselined at 413 -- the merged 404 plus this entry's own nine lines
-    # (the reconciliation that unblocks main must count itself) -- rather than golfed under;
-    # the ratchet forbids growth from here. Same cross-branch same-file contention class as
-    # the concurrent-builders ruling (2026-07-21), now witnessed on the gate's own file.
-    "gates/max_lines.py":                               413,
     # NEW to BASELINE 2026-07-23 (integration merge, TUI-rebuild line x retirement line):
     # 406 lines -- both sides' own docstrings (the rebuild's P10 CONTENT SPLIT note, the
     # retirement's SCREEN POSITION AND VERB CHOICE re-sequencing note) are genuinely independent
@@ -332,6 +359,36 @@ BASELINE: dict[str, int] = {
     "tools/setup_tui/runner.py":                        405,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
+    # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
+    # gate's OWN file crossed 400 for the first time carrying its own read-mode conversion --
+    # `line_count` now reads STAGED bytes via `_staged_read.read_source_bytes` (with the
+    # errors="replace" decode preserved manually, since that helper makes no encoding
+    # assumption), `main()` grew the `--tree`/root-arg split, and this very row (plus its own
+    # explanatory comment) is the ratchet-bootstrapping cost every self-measuring census gate
+    # pays (gates/fixture_census.py's own registry carries the identical self-reference).
+    # Genuinely new decision logic and its own reasoning, not padding. Written plain, no golfing
+    # (ADR-0007's no-go clause); the exact count below is measured AFTER this comment is in
+    # place, not guessed.
+    # Reconciled again, 2026-07-26 fix round (fresh-context review of the above commission's own
+    # fix): `tracked_scope_files` routed through `_staged_read.run_git` (finding 4) plus its own
+    # BASELINE entry and this comment for gates/doc_attestation_presence.py's parallel reconciling
+    # -- the same self-measuring-census cost paid again, one commission later. Exact count below
+    # measured AFTER every edit in this file is in place, not guessed.
+    # Reconciled again, 2026-07-26 SECOND fix round (the confirming lap's four residuals): three
+    # more BASELINE entries reconciled inline (doc_attestation_presence.py, +5 for the
+    # _git_ignored_rel_paths route-through; interpreter_boundary_lint.py, +1 for its own
+    # route-through) plus this entry, and this comment, for the exact same self-measuring-census
+    # cost paid a third time. Exact count below measured AFTER every edit in this file is in
+    # place, not guessed.
+    # Reconciled again, 2026-07-26, at the CENSUS MERGE itself (main x staged-read branch):
+    # both parents carried their own self-entry (main's 413 from the 9a2c672 merge-union
+    # unblock; this branch's 457 above), git's union kept BOTH duplicate dict keys and both
+    # comment blocks, and the merged file landed at 478 against the surviving 457 ratchet --
+    # blocking the merge commit. The duplicate 413 block is removed (its story is subsumed
+    # here), this note added, and the count below is the measured post-consolidation total.
+    # Fourth payment of the self-measuring cost; second witnessed merge-union crossing on
+    # this same file (the concurrent-builders commit-phase contention class, 2026-07-21).
+    "gates/max_lines.py":                                477,
 }
 
 
@@ -354,9 +411,12 @@ def evaluate(rel_path: str, count: int, baseline: dict[str, int] = BASELINE) -> 
 
 
 def tracked_scope_files(root: str) -> list[str]:
-    """Every git-tracked *.py path (relative to `root`) under SCOPE_PREFIXES, minus EXCLUDE_*."""
-    r = subprocess.run(["git", "-C", root, "ls-files", "*.py"],
-                       capture_output=True, text=True, check=True)
+    """Every git-tracked *.py path (relative to `root`) under SCOPE_PREFIXES, minus EXCLUDE_*.
+    Routed through `_staged_read.run_git` (2026-07-26 follow-up finding), not a bare
+    `subprocess.run(["git", ...])` -- an inherited GIT_DIR (a live worktree hook) must not
+    misresolve `-C root` the way it demonstrably can for the staged-blob read above."""
+    r = run_git(["-C", root, "ls-files", "*.py"],
+                capture_output=True, text=True, check=True)
     out: list[str] = []
     for line in r.stdout.splitlines():
         if not any(line.startswith(p) for p in SCOPE_PREFIXES):
@@ -369,20 +429,24 @@ def tracked_scope_files(root: str) -> list[str]:
     return out
 
 
-def line_count(path: str) -> int:
-    with open(path, encoding="utf-8", errors="replace") as f:
-        return len(f.read().splitlines())
+def line_count(path: str, use_tree: bool = False) -> int:
+    # errors="replace" (the original tree-reading behavior) preserved via manual bytes-then-
+    # decode, since read_source_bytes (unlike read_source_text) makes no encoding assumption.
+    raw = read_source_bytes(Path(path), use_tree=use_tree)
+    return len(raw.decode("utf-8", errors="replace").splitlines())
 
 
 def main() -> int:
-    root = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else REPO
+    argv = [a for a in sys.argv[1:] if a != "--tree"]
+    use_tree = "--tree" in sys.argv[1:]
+    root = os.path.abspath(argv[0]) if argv else REPO
     files = tracked_scope_files(root)
     present = set(files)
 
     breaches: list[str] = []
     review_band = 0
     for rel in files:
-        n = line_count(os.path.join(root, rel))
+        n = line_count(os.path.join(root, rel), use_tree=use_tree)
         v = evaluate(rel, n)
         if v:
             breaches.append(v)

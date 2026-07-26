@@ -14,7 +14,30 @@
 # commission Track 1 item 2 — max_lines added, blocking, mechanically alongside fixture_census
 # since its own idiom (a same-shaped pipe-and-echo-and-exit-1 block) made the addition mechanical;
 # the sibling setup_tui purity-gate wiring queued at ledger row 1847: DISCHARGED 2026-07-22 in the
-# session-boundary batch, unrelated to whether THIS gate's wiring was mechanical):
+# session-boundary batch, unrelated to whether THIS gate's wiring was mechanical;
+# further extended 2026-07-25 gates-staged-vs-tree-blindness census, ledger row 1234: every
+# CONTENT-checking gate below now reads its subject's STAGED bytes by default, not the working
+# tree, via the shared gates/_staged_read.py primitive gates/deep_walk_recursion_guard.py's own
+# 2026-07-23 fix was extracted into -- see each gate's own inline comment below for its read-mode
+# disposition (converted / already-staged / genuinely-tree-correct census / named residual));
+# amended 2026-07-26, a fix round on a fresh-context strengthened-tier review of that census's own
+# fix (four findings, none of which changed WHICH gates block or on what: (1) the GIT_DIR-inside-
+# a-worktree mechanism gates/_staged_read.py's own docstring names as the REAL BUG this census
+# closed now has an executable regression case, not just narrative, in seen-red/gates-staged-vs-
+# tree-blindness/run_fixtures.py; (2) gates/link_integrity.py's target-existence check now also
+# treats a target STAGED FOR DELETION (`git rm --cached`, file still on disk) as not-existing --
+# see that gate's own inline comment below; (3) gates/doc_shapes.py's and
+# gates/doc_attestation_presence.py's REPORT modes (whole-repo sweeps, never invoked from this
+# hook -- see each gate's own inline comment below) now genuinely read the tree unconditionally,
+# matching what this file already (correctly) described them as doing; (4) the six converted
+# gates' own `git ls-files`/`submodule status`/`diff --cached` ENUMERATION calls (finding which
+# files to check, distinct from reading a checked file's bytes) now route through the same
+# stripped-env `_staged_read.run_git` the staged-blob read already used, closing the same
+# GIT_DIR-inheritance fragility class for those calls too. THIS FILE'S OWN CONTENT is part of
+# this fix round (comment corrections only, no gate added/removed/reordered) -- per this
+# project's hooks/ discipline, the ACTUAL MERGE of this change into the live hooks/pre-commit a
+# running session enforces stays gated for the maintainer's own session-boundary batch, same as
+# every other hooks/ edit; this worktree's copy is the reviewable artifact, not a live wire.):
 # staging_guard -> no_lazy_imports -> fixture_census -> deep_walk_recursion_guard -> max_lines ->
 # link_integrity ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
@@ -48,6 +71,10 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 
 # staging_guard FIRST — a swept-in path is a scope defect to resolve before any
 # content gate matters (finding 33 foreclosure). Repo-local, its one home (P1).
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): this gate reads the staged PATH
+# SET (`git diff --cached --name-only`) and per-path blob HASHES via git's own `:path`/`HEAD:path`
+# spec -- it never reads a working-tree file's bytes at all. Correctly staged/index-based
+# already; no conversion needed.
 "$PY" "$REPO_ROOT/gates/staging_guard.py" || {
     echo "" >&2
     echo "pre-commit: staging guard FAILED — commit refused (finding 33, commit-scope-sweep)." >&2
@@ -58,12 +85,17 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # later content gate's verdict meaningless (witnessed: merge b25272f landed raw markers
 # in BACKLOG.md past the whole chain; gate added 2026-07-12, same day, seen-red both
 # polarities).
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): reads `git diff --cached -U0` --
+# the staged diff's own ADDED lines -- already staged-bytes based; no conversion needed.
 "$PY" "$REPO_ROOT/gates/no_conflict_markers.py" || {
     echo "" >&2
     echo "pre-commit: conflict-marker gate FAILED — commit refused (unresolved merge in staged additions)." >&2
     exit 1
 }
 
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- now reads each
+# scanned file's STAGED bytes by default (gates/_staged_read.py, deep_walk_recursion_guard.py's
+# own pattern), falling back to the working tree only when a path is not staged at all.
 "$PY" "$REPO_ROOT/gates/no_lazy_imports.py" || {
     echo "" >&2
     echo "pre-commit: lazy-import gate FAILED — commit refused (CLAUDE.md edict 2026-07-02)." >&2
@@ -71,6 +103,10 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
     exit 1
 }
 
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): this gate is a layout/tracking
+# CENSUS (seen-red/'s on-disk presence cross-checked against `git ls-files` tracking), not a
+# content check -- tree-reading the directory listing is correct here (see gates/fixture_census.py's
+# own module docstring, point 4); no conversion needed.
 "$PY" "$REPO_ROOT/gates/fixture_census.py" || {
     echo "" >&2
     echo "pre-commit: fixture census FAILED — commit refused (a gate/seen-red is not intact, ADR-0011/C20)." >&2
@@ -82,12 +118,20 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # 2026-07-23 (review finding against commit d5f809e: the gate existed, seen-red both polarities,
 # but was invoked by NOTHING here -- a fourth deep-walk site reintroducing the defect landed
 # clean through git commit; the commit message's "mechanically enforces" claim was false as
-# delivered until this stanza). Same house INVOCATION shape as no_lazy_imports/fixture_census
-# above, but DIFFERENT read semantics, deliberately: this gate judges the STAGED bytes
-# (git show :./path) -- what the commit will actually embed -- while its neighbors read the
-# working tree. Do not "harmonize" it back to tree-reads for uniformity: the staged/tree gap
-# is a witnessed silent false-success (stage a violation, restore the tree, neighbors pass).
-# The rest of the chain's staged-vs-tree census is tracked as its own ledger work item.
+# delivered until this stanza). This gate was the ORIGINAL specimen of the STAGED-BYTES read
+# discipline (git show :./path -- what the commit will actually embed, not whatever the working
+# tree happens to hold when the gate runs): stage a violation, restore the tree, and a
+# tree-reading gate would pass while the commit still embeds the violation. THIS IS NO LONGER
+# THIS GATE'S OWN DIVERGENCE (gates-staged-vs-tree-blindness, ledger row 1234, chain-wide census):
+# every content-checking gate in this chain now reads staged bytes the same way, via the shared
+# gates/_staged_read.py primitive this gate's own read-mode fix was extracted into -- see each
+# gate's own comment below for its read-mode disposition. The two gates immediately above
+# (no_lazy_imports, fixture_census) are the two genuinely different shapes: no_lazy_imports now
+# ALSO reads staged bytes (converted alongside this census); fixture_census reads seen-red/'s
+# on-disk PRESENCE cross-checked against `git ls-files` tracking, a layout/tracking census where
+# tree-reading the directory listing is the correct query (there is no "staged directory
+# listing" to prefer over `os.listdir` -- tracked-or-not is the fact fixture_census needs, and
+# `git ls-files` already answers that against the index).
 "$PY" "$REPO_ROOT/gates/deep_walk_recursion_guard.py" || {
     echo "" >&2
     echo "pre-commit: deep-walk recursion guard FAILED — commit refused (a RecursionError catch" >&2
@@ -101,6 +145,9 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # refused outright; a pre-existing offender may only shrink or hold its ratcheted baseline, never
 # grow past it. See gates/max_lines.py's own module docstring for the full scope table and
 # ratcheting-baseline rationale.
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- line counts now come
+# from each file's STAGED bytes by default (gates/_staged_read.py), tree fallback for unstaged
+# paths.
 "$PY" "$REPO_ROOT/gates/max_lines.py" || {
     echo "" >&2
     echo "pre-commit: max-lines gate FAILED — commit refused (ADR-0007's 400-line ceiling; see" >&2
@@ -113,6 +160,9 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # gate itself). Wired 2026-07-22, the session-boundary batch discharging the wiring queued at
 # ledger row 1847 (autoharn1 era) — the gate itself had run green manually on every merge
 # since; this makes it mechanical rather than remembered.
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- all three AST
+# detectors now scan each file's STAGED bytes by default (gates/_staged_read.py), tree fallback
+# for unstaged paths.
 "$PY" "$REPO_ROOT/gates/setup_tui_purity_gate.py" || {
     echo "" >&2
     echo "pre-commit: setup-tui purity gate FAILED — commit refused (a wizard module bypasses the typed Ui seam; see gates/setup_tui_purity_gate.py)." >&2
@@ -123,6 +173,17 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # (2026-07-11 doc-legibility-indictment commission). Two documented exclusions (judgment/,
 # vestigial_documentation/design/ORCH-ARCHITECTURE.md, moved there by the 2026-07-12
 # vestigial-doc-sweep) printed in its own output every run — never silent.
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- the linking doc's own
+# text is now read from its STAGED bytes by default (gates/_staged_read.py), tree fallback for
+# unstaged paths. The TARGET-existence check (does the linked-to path resolve on disk) is
+# primarily a plain filesystem read still, deliberately -- see gates/link_integrity.py's own
+# module docstring's READ MODE section. Amended 2026-07-26: a target STAGED FOR DELETION (`git rm
+# --cached target.md`, file still physically present) is now ALSO treated as not-existing
+# (`staged_deletions()`, closing a real DELETE-direction gap a fresh-context review reproduced --
+# a doc's own text being un-re-staged is not the only way this gate could have missed a commit
+# that orphans a link). The remaining named residual (a target that is itself staged-but-not-yet-
+# on-disk, the ADD direction) stays disclosed, not closed -- see the gate's own docstring for why
+# the two directions are treated asymmetrically.
 "$PY" "$REPO_ROOT/gates/link_integrity.py" || {
     echo "" >&2
     echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
@@ -134,6 +195,13 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 # 2026-07-11, gap 1). Gated ONLY when the template is part of this commit (most commits don't
 # touch it); report mode (its own default target) is the same file, so this call is redundant
 # with the module's own default but explicit here for the blocking case.
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED (partially) -- the
+# TARGET apparatus.json is now read from its STAGED bytes by default (gates/_staged_read.py),
+# tree fallback for unstaged paths. NAMED RESIDUAL: the known-mechanism SET this gate checks
+# against is derived by filing/apparatus_registry.py scanning hooks/*.py + bootstrap/templates/
+# *.tmpl + tools/*.py's own WORKING-TREE source -- shared infrastructure this gate does not own
+# and other non-commit-time consumers also read; not converted here (see gates/
+# apparatus_unknown_keys.py's own module docstring's READ MODE section).
 if git diff --cached --name-only --diff-filter=ACMR | grep -qx "bootstrap/templates/apparatus.json"; then
     "$PY" "$REPO_ROOT/gates/apparatus_unknown_keys.py" "$REPO_ROOT/bootstrap/templates/apparatus.json" || {
         echo "" >&2
@@ -153,6 +221,13 @@ TOUCHED_MD=$(git diff --cached --name-only --diff-filter=ACMR -- '*.md')
 # gates/doc_shapes.py's own header names this exact gate-mode invocation shape — built and
 # seen-red days before this wiring, never actually invoked from here until the run-10-closure-
 # audit commission caught the gap (BACKLOG "Run-10 closure audit (2026-07-11)").
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- gate mode now reads
+# each named doc's STAGED bytes by default (gates/_staged_read.py), tree fallback for unstaged
+# paths (report mode, the whole-repo sweep -- not invoked from this hook, since it never fails --
+# reads the tree unconditionally; this line's claim was stale between 2026-07-25 and its
+# 2026-07-26 fix, when the code actually threaded gate mode's `use_tree` into report mode too --
+# see gates/doc_shapes.py's own module docstring for the correction, made honest by forcing
+# `use_tree=True` in report mode rather than left to rely on the caller passing `--tree`).
 if [ -n "$TOUCHED_MD" ]; then
     # shellcheck disable=SC2086
     "$PY" "$REPO_ROOT/gates/doc_shapes.py" $TOUCHED_MD || {
@@ -168,6 +243,15 @@ fi
 # ratified 2026-07-11). Checks PRESENCE+SHAPE only, never the attestation's conclusions — nothing
 # here blocks on LLM judgment. This IS gates/doc_attestation_presence.py's own WIRING STANZA,
 # applied verbatim (only its target file list generalized to the shared $TOUCHED_MD above).
+# READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): CONVERTED -- the content_sha256
+# match and the waiver-comment check now read each named doc's STAGED bytes by default
+# (gates/_staged_read.py), tree fallback for unstaged paths. The attestation LEDGER file itself
+# (attestations/doc-legibility-attestations.jsonl) stays a plain working-tree read -- a record is
+# appended by a separate `--record` act, not staged in the same commit as the doc edit it
+# attests, so there is no staged/tree gap to close there. Report mode (whole-repo sweep -- not
+# invoked from this hook, same as doc_shapes above) was aligned 2026-07-26 to read the tree
+# unconditionally too, the same fix doc_shapes.py got, for the same reason (no commit to protect,
+# a human debt-sweep wants what's on disk).
 if [ -n "$TOUCHED_MD" ]; then
     # shellcheck disable=SC2086
     "$PY" "$REPO_ROOT/gates/doc_attestation_presence.py" $TOUCHED_MD || {

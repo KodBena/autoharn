@@ -11,15 +11,28 @@ import) and are legal, if odd.
 Exit 0 with no output when clean; exit 1 listing every violation as
 `path:line: import <names>  (inside <qualname>)` otherwise.
 
+READ MODE (gates-staged-vs-tree-blindness, ledger row 1234): this is a content-checking gate --
+whether a file carries a lazy import is a property of its BYTES, not its filename -- so, like
+gates/deep_walk_recursion_guard.py (this class's own pattern exemplar), it reads each file's
+STAGED bytes by default (gates/_staged_read.py's `read_source_text`), falling back to the
+working-tree file only when a path is not staged at all (untracked files, or the tempfile paths
+this module's own seen-red-family fixture drives it against). Without this, staging a lazy
+import and then restoring a clean file in the tree (without re-staging) would pass this gate
+while the commit still embeds the violation -- the exact silent-pass shape
+deep_walk_recursion_guard.py's own "Finding A" first closed for one gate; this is the same class,
+closed here for this one. Pass `--tree` to force the working-tree read unconditionally instead.
+
 Usage:
-    python3 tools/no_lazy_imports.py [root]          # default: repo root, git-tracked *.py
+    python3 tools/no_lazy_imports.py [root] [--tree]   # default: repo root, git-tracked *.py
 """
 from __future__ import annotations
 
 import ast
-import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _staged_read import read_source_text, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -66,9 +79,9 @@ def _names(node: ast.Import | ast.ImportFrom) -> str:
     return "import " + ", ".join(a.name for a in node.names)
 
 
-def violations_in(path: Path, base: Path = REPO) -> list[str]:
+def violations_in(path: Path, base: Path = REPO, use_tree: bool = False) -> list[str]:
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(read_source_text(path, use_tree=use_tree), filename=str(path))
     except (SyntaxError, UnicodeDecodeError) as e:
         return [f"{path}:0: UNPARSEABLE ({e.__class__.__name__}) — gate cannot certify this file"]
 
@@ -97,8 +110,14 @@ def violations_in(path: Path, base: Path = REPO) -> list[str]:
 
 
 def tracked_py_files(root: Path) -> list[Path]:
-    r = subprocess.run(["git", "-C", str(root), "ls-files", "*.py"],
-                       capture_output=True, text=True, check=True)
+    """Every git-tracked *.py under `root`, filtered by EXCLUDE_*. Routed through
+    `_staged_read.run_git` (2026-07-26, gates-staged-vs-tree-blindness follow-up finding) rather
+    than a bare `subprocess.run(["git", ...])`, so an inherited GIT_DIR/GIT_WORK_TREE/GIT_PREFIX/
+    GIT_COMMON_DIR (a live pre-commit hook running inside a git WORKTREE) cannot silently
+    misresolve `-C root` the same way it demonstrably can for the staged-blob read this module's
+    READ MODE already fixed."""
+    r = run_git(["-C", str(root), "ls-files", "*.py"],
+                capture_output=True, text=True, check=True)
     files = []
     for line in r.stdout.splitlines():
         p = root / line
@@ -111,10 +130,12 @@ def tracked_py_files(root: Path) -> list[Path]:
 
 
 def main() -> int:
-    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else REPO
+    argv = [a for a in sys.argv[1:] if a != "--tree"]
+    use_tree = "--tree" in sys.argv[1:]
+    root = Path(argv[0]).resolve() if argv else REPO
     bad: list[str] = []
     for f in tracked_py_files(root):
-        bad.extend(violations_in(f, base=root))
+        bad.extend(violations_in(f, base=root, use_tree=use_tree))
     if bad:
         print(f"LAZY-IMPORT VIOLATIONS ({len(bad)}) — banned by CLAUDE.md law 2026-07-02:")
         print("\n".join(bad))
