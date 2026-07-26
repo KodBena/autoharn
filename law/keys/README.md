@@ -7,11 +7,11 @@ This directory holds the GPG (GNU Privacy Guard, the OpenPGP signing standard) *
 keys that verify ONE thing: signatures over THIS repository's own `ratified/*` git tags —
 the maintainer's act of ratifying an ADR, a delta, or a design in autoharn's own law. It is
 written for the maintainer generating or rotating this repository's own ratification key, and
-for anyone reading `./attest-tags`'s output and wanting to know what it checked against. The
+for anyone reading `./autoharn attest-tags`'s output and wanting to know what it checked against. The
 [GPG trust layer spec](../../design/MAINT-GPG-TRUST-LAYER.md) names three signing mechanisms in
 build order, calling each a "Rung" (a tier of what gets signed and how strongly, Rung 1
 being the lightest): this directory serves Rung 1 only, its §2 — signed `ratified/*` tags —
-and `./attest-tags` is the only verb that reads this directory. Every file here is a
+and `./autoharn attest-tags` is the only verb that reads this directory. Every file here is a
 **public** key (`.asc`, ASCII-armored, safe to commit) — never a private key, never a
 passphrase, never a revocation certificate (that last one is printed and stored offline per
 the spec's §7, deliberately **not** committed, so its existence is never leaked alongside the
@@ -44,7 +44,7 @@ for a reader to infer from usage.
 **`law/keys/maintainer.asc` does not exist yet.** No real maintainer keypair has been
 generated as of this writing. This file is a placeholder explaining what belongs here once
 one is, not a fabricated key — inventing a key here would be worse than the gap it fills:
-`./attest-tags` treats "no key" as LOUD, never a silent pass — it reports every `ratified/*`
+`./autoharn attest-tags` treats "no key" as LOUD, never a silent pass — it reports every `ratified/*`
 tag as `UNVERIFIABLE` when this directory carries no key, and says so in its own output. A
 repo with no key here is honest about having no verifiable ratifications yet; a repo with a
 fake key would be dishonest about having any.
@@ -82,9 +82,9 @@ fake key would be dishonest about having any.
   [`design/GPG-TRUST-LAYER-FAQ.md`](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) — this stub only
   states what belongs in this directory and why nothing does yet.
 
-## What `./attest-tags` does when this directory is empty (today's state)
+## What `./autoharn attest-tags` does when this directory is empty (today's state)
 
-`./attest-tags` reads `law/keys/*.asc` at the moment it runs and degrades **honestly**,
+`./autoharn attest-tags` reads `law/keys/*.asc` at the moment it runs and degrades **honestly**,
 never silently: every `ratified/*` tag is reported `UNVERIFIABLE` (not a pass) when no key
 is committed here, printed in the tool's own output, never fabricated trust. This file is
 the honest record of that absence, kept where the next reader — human or agent — will look
@@ -97,5 +97,7 @@ first.
   deployment's own `keys/` are deliberately different places).
 - [`design/GPG-TRUST-LAYER-FAQ.md`](../../user-guide/USER-GPG-TRUST-LAYER-FAQ.md) — the operator
   walkthrough, §3 for the two-domain commit ceremony side by side.
-- [`attest-tags`](../../attest-tags), [`filing/gpg_trust.py`](../../filing/gpg_trust.py) —
+- [`attest-tags`](../../libexec/autoharn/attest-tags) (invoked as `autoharn attest-tags` —
+  root-shim-pruning, ledger row 1357: the root alias `./attest-tags` is retired, the umbrella
+  dispatcher's target is the current link), [`filing/gpg_trust.py`](../../filing/gpg_trust.py) —
   the verb that reads this directory, and the shared scratch-keyring mechanics it uses.

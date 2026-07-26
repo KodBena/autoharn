@@ -534,7 +534,7 @@ waiting for your next real world, scaffold a disposable one first —
 [USER-GUIDE.md](USER-GUIDE.md) §3b has the `bootstrap/new-project.sh --new-world`
 walkthrough — and play there; tear it down when done.
 
-**Does MY world actually have s40/s41?** Run `./migrate <deployment-dir> --dry-run` from your
+**Does MY world actually have s40/s41?** Run `./autoharn migrate <deployment-dir> --dry-run` from your
 autoharn checkout (`<deployment-dir>` is the path to your scaffolded world). Per its own
 documented behavior ([README.md §4](../README.md#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel)):
 it prints the resolved db/host/schema, then reports which deltas — by name — your world's
@@ -745,7 +745,7 @@ every column instead of thirty. Delivery record:
 
 **Prominent caveat, read before typing anything below:** none of this exists in a world whose
 [birth chain](../GLOSSARY.md#birth-chain) predates commits `1fc4e8c` (s42) and `84729de` (s43) —
-runs are strictly linear, so an already-scaffolded world gains nothing here. Run `./migrate
+runs are strictly linear, so an already-scaffolded world gains nothing here. Run `./autoharn migrate
 <deployment-dir> --dry-run` to see whether your world has s42/s43; if it names them as missing,
 everything below is unavailable until your next real world is born on a checkout that carries
 these commits.
@@ -883,7 +883,7 @@ before s40/s41 there was only a way in. Delivery record:
 
 **Prominent caveat, read before typing anything below:** none of this exists in a world whose
 [birth chain](../GLOSSARY.md#birth-chain) predates commit `94f5b7a` — runs are strictly linear,
-so an already-scaffolded world gains nothing here. Run `./migrate <deployment-dir> --dry-run`
+so an already-scaffolded world gains nothing here. Run `./autoharn migrate <deployment-dir> --dry-run`
 to see whether your world has s45; if it names it as missing, the two verbs below are
 unavailable until your next real world is born on a checkout that carries this commit.
 
@@ -943,7 +943,7 @@ still counting is looking at the design, not a defect.
 **EXISTING WORLDS GAIN NOTHING HERE, restated because it matters most.** Both mechanisms above
 are authored, scratch-witnessed, and wired into the scaffold's lineage chain only — they reach
 reality solely at a *future* world's birth. If your world predates `94f5b7a`, `undeclare-standing`
-and `lift-suspension` are not verbs your `led` script has; `./migrate --dry-run` will name
+and `lift-suspension` are not verbs your `led` script has; `./autoharn migrate --dry-run` will name
 `s45-standing-lifecycle` among the missing deltas.
 
 **Honest limits.** A schema owner/superuser can bypass every trigger this delta adds, the
@@ -1465,7 +1465,7 @@ is each one's owning page):
   per-deployment sibling `attest-doc`, whose witnessed `STALE` verdict appears in
   [the "Verifying tags, signed commissions, and documentation debt" section below](#verifying-tags-signed-commissions-and-documentation-debt-attest-tags-verify-commission-attest-doc-distance-to-clean))
   — a doc's current bytes vs the content hash its last fresh-context read attested.
-- [./migrate](../migrate) `--dry-run` ([bootstrap/migrate_core.py](../bootstrap/migrate_core.py)) —
+- [./autoharn migrate](../libexec/autoharn/migrate) `--dry-run` ([bootstrap/migrate_core.py](../bootstrap/migrate_core.py)) —
   a deployment's live schema vs the kernel lineage chain, one `.detect.sql` probe per delta,
   reporting exactly which deltas the world lacks.
 
@@ -2434,7 +2434,7 @@ honest boundary the CLI output does.
 This section is for operators of scaffolded deployments: new scaffolds now include an
 `./orchlog` shim beside `led`/`pickup`, so a deployment session can read the harness
 changelog without leaving its own directory. Ledger item `deployment-orchlog-surfacing`,
-half (b) (half (a) — `./migrate` printing
+half (b) (half (a) — `./autoharn migrate` printing
 `./orchlog since <pre-migration-head>` at the end of a run — belongs to the separate,
 not-yet-approved migrate-verb item and is untouched here). Merge `bd949af`, delivery
 record: ledger row 1585. This is a different thing from the `./orchlog` verb itself (that

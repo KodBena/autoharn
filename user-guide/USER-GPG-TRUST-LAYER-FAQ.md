@@ -135,7 +135,7 @@ gpg --armor --export <FINGERPRINT> > law/keys/maintainer.asc
 Commit `law/keys/maintainer.asc` to the autoharn repository, and record its fingerprint in
 [`law/keys/README.md`](../law/keys/README.md) (replacing that file's "AWAITING-KEY" section
 with the fingerprint and generation date) — so any later verification is self-contained: a
-fresh clone never has to trust a fingerprint pasted into chat. `./attest-tags` is the only
+fresh clone never has to trust a fingerprint pasted into chat. `./autoharn attest-tags` is the only
 verb that reads this directory, ever.
 
 **3b. Signing a DEPLOYMENT's own commissions and chain heads** (Rung 2 and Rung 3 — SIGNED
@@ -181,7 +181,7 @@ git push origin ratified/adr-0017    # once this repo has a remote push policy
 Verify (anyone, anywhere, with only a clone and the committed public key):
 
 ```sh
-./attest-tags
+./autoharn attest-tags
 ```
 
 **Witnessed** (throwaway test key, scratch repo — `seen-red/attest-tags/red.txt` banks the full
@@ -190,7 +190,7 @@ transcript): a tag signed with a committed key reports
 `[!!] ... BAD`, with git's own `cannot verify a non-tag object` detail, exit 1. A tag signed by a
 key that was never committed to `law/keys/` — the **forged** case — reports `[!!] ... BAD`, exit
 1, identically loud. A commit whose message contains the word "RATIFIED" with no covering tag is
-listed by id and subject as an uncovered claim. `./attest-tags` also runs cleanly against THIS
+listed by id and subject as an uncovered claim. `./autoharn attest-tags` also runs cleanly against THIS
 repository today: zero `ratified/*` tags exist yet, so it reports every RATIFIED-marked commit in
 this repo's own history as uncovered — an honest, expected finding given no key has been
 committed yet, not a bug in the tool.
@@ -637,7 +637,7 @@ That is the whole procedure: four steps, each already exercised above, none of i
 - A deployment's own `keys/README.md` (§3b) — written by the scaffold at
   `bootstrap/templates/keys-README.md.tmpl`; not a repo-relative link here because it lives
   inside each scaffolded deployment, not in this repository.
-- [`attest-tags`](../attest-tags), [`bootstrap/templates/verify-commission.tmpl`](../bootstrap/templates/verify-commission.tmpl),
+- [`attest-tags`](../libexec/autoharn/attest-tags) (invoked as `autoharn attest-tags`), [`bootstrap/templates/verify-commission.tmpl`](../bootstrap/templates/verify-commission.tmpl),
   [`bootstrap/templates/verify-chain.tmpl`](../bootstrap/templates/verify-chain.tmpl),
   [`filing/gpg_trust.py`](../filing/gpg_trust.py) — the implementation each ceremony above drives.
 - [`design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md`](../design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md),
