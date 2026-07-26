@@ -1,7 +1,8 @@
-"""userpromptsubmit_row_resolve — zero-LLM-cost `/row <id> [<id> ...]` ledger resolver
+"""userpromptsubmit_row_resolve — zero-LLM-cost `row <id> [<id> ...]` ledger resolver
 (maintainer commission 2026-07-26, verbatim constraint: fine only "if a '/row nnnn' doesn't
 invoke the claude LLM backend"). A UserPromptSubmit hook that recognizes the exact shape
-`/row 1325` (or `/row 1325 1326 ...`) typed as the whole prompt, resolves each id via the
+`row 1325` (or `rows 1325 1326 ...`) typed as the whole prompt (originally `/row ...` — see the
+TRIGGER CHANGED note at the regex below: slash-prefixed input never reaches this event), resolves each id via the
 LOCAL, READ-ONLY `./autoharn led show <id>` CLI, and BLOCKS the prompt with the row text —
 no model turn, no tokens spent, for that shape only. Every other prompt passes through
 completely untouched (module design constraint: a hook that slows or mangles an ordinary
@@ -51,7 +52,7 @@ commit's own message for the two conflicting first-pass reads this build discard
 WHY THIS HOOK NEVER USES `additionalContext` OR PLAIN-STDOUT CONTEXT INJECTION on the
 matching path: those are the two exit-0 mechanisms hooks.md documents for ADDING context
 ALONGSIDE a prompt that still proceeds to the model — the opposite of this hook's job, which
-is to make sure the model is never invoked for a `/row` prompt at all.
+is to make sure the model is never invoked for a row-resolve prompt at all.
 
 RESOLUTION MECHANICS (design constraint 1, maintainer commission verbatim): shells out to the
 LOCAL, READ-ONLY `./autoharn led show <id>` CLI ONLY — never the HTTP boundary service
@@ -65,8 +66,8 @@ is expected to touch.
 
 MATCHING — tight and anchored (design constraint 2, maintainer commission verbatim: "the
 matcher is a tight anchored regex on the whole prompt... anything else exits pass-through
-immediately"): `^/row\\s+\\d+(\\s+\\d+)*\\s*$` against the prompt text. Anything else — a
-`/row` with no digits, a `/row` embedded mid-sentence, a completely unrelated prompt — is not
+immediately"): `^rows?\\s+\\d+(\\s+\\d+)*\\s*$` against the prompt text. Anything else — a
+bare `row` with no digits, a `row N` embedded mid-sentence, a completely unrelated prompt — is not
 this hook's business, full stop, zero cost past one regex check.
 
 LATENCY HAZARD, NAMED AND MITIGATED (not in the commission's own text, but a hazard this build
@@ -75,7 +76,7 @@ engineering-responsibility standard): "A UserPromptSubmit command... hook that r
 timeout is canceled and its output... is discarded. The prompt still reaches Claude without
 that context" (hooks.md "UserPromptSubmit" section). If this hook's own CLI calls ran long
 enough to trip Claude Code's own 30s default UserPromptSubmit hook timeout, the OUTCOME WOULD BE
-THE OPPOSITE OF THE COMMISSION: the block JSON is discarded, and the `/row` prompt — the exact
+THE OPPOSITE OF THE COMMISSION: the block JSON is discarded, and the row-resolve prompt — the exact
 text this whole hook exists to intercept — reaches the model anyway, silently, defeating the
 zero-cost guarantee on exactly the turn it matters. Mitigated by a wall-clock BUDGET
 (`_HOOK_BUDGET_S`, comfortably under the 30s default, itself overridable via
@@ -85,15 +86,15 @@ per-call timeout is clamped to whatever budget remains, and once the budget is e
 hook stops resolving further ids and says so in the block text, rather than let the whole
 invocation run past Claude Code's own hook timeout and leak the prompt through. A hard cap on
 the NUMBER of ids in one prompt (`_MAX_IDS`) is the same hazard's belt-and-suspenders twin: a
-pathological `/row 1 2 3 ... 500` is still syntactically a match for the anchored regex above.
+pathological `row 1 2 3 ... 500` is still syntactically a match for the anchored regex above.
 
 FAILURE IS HONEST (design constraint 3, maintainer commission verbatim): an unknown row ->
 `./autoharn led show <id>`'s own refusal text (stderr, exit 1: "led show: REFUSED -- no row
 <id>.", `bootstrap/templates/led.tmpl`'s `cmd_show`) is shown verbatim in the block reason,
 never swallowed or replaced. CLI unreachable (missing executable, launch failure, timeout) is
 shown as this hook's own honest error text, STILL inside a `decision: "block"` — this hook
-NEVER falls through to a silent pass-through on a `/row`-shaped prompt, because a silent
-pass-through on exactly this shape is exactly "burning a model turn on a /row prompt", the one
+NEVER falls through to a silent pass-through on a row-resolve-shaped prompt, because a silent
+pass-through on exactly this shape is exactly "burning a model turn on a row-resolve prompt", the one
 outcome the commission forbids outright.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below is imported at module load.
