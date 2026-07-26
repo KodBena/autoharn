@@ -486,6 +486,35 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
               f"immediately after the blocked role-binding sabotage attempt -- the role binding "
               f"was never severed -- verdict={v_role_binding_survived}", failures)
 
+        # ---- GREEN-CROSS-KIND-TARGET-SUPERSESSION-BY-ENTITLED-ACTOR: the round-2 mechanism must
+        # not falsely refuse a PROPERLY ENTITLED actor -- author (role ''authority'' + genesis
+        # chain, satisfying every one of the five default-mapped classes) supersedes a
+        # DISPOSABLE role-binding target (bound fresh here, not reused by any later leg, so this
+        # leg's own side effect cannot perturb any check downstream) via the SAME cross-kind
+        # work_depends_on vessel shape RED-CROSS-KIND-ROLE-BINDING used -- ACCEPTED, proving the
+        # new target-class conjunct gates on ENTITLEMENT, not merely on "is this a cross-kind
+        # write" (a naive implementation that refused ALL cross-kind supersession of a gated
+        # target, entitled or not, would ALSO pass every RED leg above but would be a correctness
+        # regression on ordinary legitimate use -- this leg is what would catch that).
+        green_party = register(world_main, "green-party", "subagent", author)
+        v_green_bind = bind_role(world_main, author, green_party, "authority")
+        if v_green_bind["disposition"] != "accepted":
+            raise RuntimeError(f"could not bind green-party's role: {v_green_bind}")
+        green_role_row_id = v_green_bind.get("row_id")
+        v_green_open = open_work(world_main, author, "xk-item-c", "xk item c")
+        if v_green_open["disposition"] != "accepted":
+            raise RuntimeError(f"author could not open ordinary work item: {v_green_open}")
+        v_green_supersede = depends_on_supersede(
+            world_main, author, "xk-item-c", "xk-item-a", green_role_row_id) \
+            if green_role_row_id else {"disposition": "error", "message": "no green_role_row_id"}
+        check("GREEN-CROSS-KIND-TARGET-SUPERSESSION-BY-ENTITLED-ACTOR",
+              v_green_supersede["disposition"] == "accepted",
+              f"author (properly entitled for principal_role_bound: role ''authority'' + "
+              f"genesis chain) supersedes green-party's disposable role-binding row via the "
+              f"SAME cross-kind work_depends_on vessel shape the RED leg above used -- must be "
+              f"ACCEPTED, not refused merely for being cross-kind -- verdict={v_green_supersede}",
+              failures)
+
         # ---- RED-SUPERSESSION-UNAUTHORIZED: an unchained actor tries to retract the edge ----
         outsider = register(world_main, "outsider", "subagent", author)
         v_bind_outsider = bind_role(world_main, author, outsider, "authority")
