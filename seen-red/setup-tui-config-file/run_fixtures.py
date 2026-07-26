@@ -19,10 +19,17 @@ design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §6 names, ledger row 1944:
 
 Cases (i)/(v)/(vi) need a live, reachable Postgres host (HARNESS_PGHOST/EPISTEMIC_PGHOST) --
 UNEXERCISED, not FAILED, when neither is set (same convention seen-red/setup-tui-principals-
-authority already uses). Every scratch destination lives under a fixture-owned tempdir, and
-every scratch world this fixture BIRTHS is torn down in a `finally`, real teardown-world.sh
-(`--force-non-scratch` -- fixture-generated world names do not match the scratch-safe pattern),
-zero residue regardless of outcome.
+authority already uses). Case (v) ALSO needs `textual` importable (it drives the real Tree+Form
+app via Pilot/`run_test()`, the current post-2026-07-22-rebuild surface for what `--initial-
+config` does -- there is no textual-free way to exercise it any more, `--scripted`'s own
+subprocess-and-parse-stdout shape having been deleted with that rebuild); UNEXERCISED, not
+FAILED, on an interpreter without it -- guarded by a top-level `try`/`except ImportError` mirroring
+`tools/setup_tui/app.py`'s own `tui_app` import guard (CLAUDE.md's lazy-import ban is about
+function-BODY imports; a guarded top-of-file import is the project's own established idiom for an
+optional heavy dependency, not a lazy import). Every scratch destination lives under a
+fixture-owned tempdir, and every scratch world this fixture BIRTHS is torn down in a `finally`,
+real teardown-world.sh (`--force-non-scratch` -- fixture-generated world names do not match the
+scratch-safe pattern), zero residue regardless of outcome.
 
 Real subprocess invocations of the actual CLI entry point (no mocks), matching every sibling
 setup_tui fixture's own Rule 1 bar. Lazy imports banned."""
@@ -32,6 +39,7 @@ import asyncio
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -41,12 +49,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO)
 
-from textual.widgets import Input, Tree  # noqa: E402
+try:
+    from textual.widgets import Input, Tree
+except ImportError:
+    Input = Tree = None  # type: ignore[assignment,misc]
 
-from tools.configtree import FieldName, NodeId, ScopedFieldKey  # noqa: E402
+from tools.configtree import NodeId  # noqa: E402
 from tools.configtree.fields import get_field_value  # noqa: E402
 from tools.setup_tui import config_file, config_seam, destination, steps  # noqa: E402
-from tools.setup_tui import steps_principals_authority, steps_substrate, tui_app  # noqa: E402
+from tools.setup_tui import steps_principals_authority, steps_substrate  # noqa: E402
+
+try:
+    from tools.setup_tui import tui_app
+except ImportError:
+    tui_app = None  # type: ignore[assignment]
 
 PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
 PGDB = "toy"
@@ -346,10 +362,12 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
 
     world2 = f"cfgfxb{int(time.time())}"
     dest2 = os.path.join(scratch, "vi-world2")
+    boundary_pid1 = boundary_pid2 = None
     try:
         cp1 = run_app(["--from-config", EXEMPLAR, "--world", world1, dest1], scratch, timeout=180)
         out1 = cp1.stdout + cp1.stderr
         assert cp1.returncode == 0, f"case vi: live birth 1 exit {cp1.returncode}: {out1[-2000:]}"
+        boundary_pid1 = _discover_boundary_pid(dest1)
         cfg_a = os.path.join(dest1, "world-config.toml")
         assert os.path.isfile(cfg_a), f"case vi: {cfg_a} was not saved: {out1[-2000:]}"
         doc_a = config_file.load_config_file(cfg_a)
@@ -358,6 +376,7 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
         cp2 = run_app(["--from-config", cfg_a, "--world", world2, dest2], scratch, timeout=180)
         out2 = cp2.stdout + cp2.stderr
         assert cp2.returncode == 0, f"case vi: live birth 2 (re-applied) exit {cp2.returncode}: {out2[-2000:]}"
+        boundary_pid2 = _discover_boundary_pid(dest2)
         cfg_b = os.path.join(dest2, "world-config.toml")
         assert os.path.isfile(cfg_b), f"case vi: {cfg_b} was not saved: {out2[-2000:]}"
         doc_b = config_file.load_config_file(cfg_b)
@@ -370,17 +389,66 @@ def case_full_dry_run_and_roundtrip(scratch: str) -> None:
               "--from-config to a SECOND world, saves the SAME resolved decision set again "
               "(a fixed point, checked mechanically)")
     finally:
-        _kill_boundary(world1)
-        _kill_boundary(world2)
+        _kill_boundary(boundary_pid1)
+        _kill_boundary(boundary_pid2)
         teardown(world1, dest1)
         teardown(world2, dest2)
 
 
-def _kill_boundary(world: str) -> None:
-    cp = subprocess.run(["pgrep", "-f", f"boundary_service.*{world}"], capture_output=True,
-                         text=True, timeout=10)
-    for pid in cp.stdout.split():
-        subprocess.run(["kill", pid], capture_output=True, timeout=5)
+def _discover_boundary_pid(dest: str) -> "int | None":
+    """PID-TRACKING, THE HONEST SHAPE (work item setup-tui-fixture-kill-boundary-never-matches,
+    ledger row 1334/1337): the fixture spawns this process (transitively, through `run_app`'s own
+    `python -m tools.setup_tui.app --from-config ...` subprocess, which `steps_boundary.py`'s
+    `BackgroundAct` Popen()s as ITS OWN child before that subprocess exits and the boundary
+    service is reparented) -- it should never need pgrep GUESSING to find it again later. The OLD
+    code guessed `boundary_service.*{world}` at KILL time, long after spawn -- but
+    `steps_boundary.py` launches the service with `--config <dest>/boundary-multiplex.toml
+    --port <port>`, an argv that NEVER contains the bare world name at all (verified: `grep -n
+    boundary_service tools/setup_tui/steps_boundary.py` shows only `--config`/`--port`), so that
+    pattern never matched, ANY --new-world/--profile-tracker run of it, ever -- every live case-vi
+    run leaked a boundary_service process, silently, on the shared scratch host (five found
+    already-orphaned from earlier sessions before this fix, ports 8420-8425).
+
+    THIS discovery call runs EXACTLY ONCE, immediately after the birth subprocess (`cp1`/`cp2`)
+    reports success -- at that point the service has ALREADY answered its own health probe
+    (`steps_boundary.py`'s own commit-time health gate, `probes.wait_for_health`, blocks the
+    birth subprocess's own exit until it does), so the process is provably up and its argv is
+    provably stable. The match target is `--config <dest>/boundary-multiplex.toml` -- a path
+    unique to THIS fixture's own scratch tempdir (`tempfile.mkdtemp`), not a name that could ever
+    collide with an unrelated process the way a bare world-name substring guess could. Returns the
+    discovered pid (an `int`, captured ONCE, held for the rest of this case's lifetime) or `None`
+    if boundary never started (e.g. no venv interpreter found -- steps_boundary.py's own
+    documented decline path) -- teardown becomes a no-op in that case, never a guess."""
+    target = os.path.join(dest, "boundary-multiplex.toml")
+    cp = subprocess.run(["pgrep", "-f", f"boundary_service.*--config {target}"],
+                         capture_output=True, text=True, timeout=10)
+    pids = [int(p) for p in cp.stdout.split()]
+    if not pids:
+        return None
+    assert len(pids) == 1, f"case vi: expected exactly one boundary_service for {target}, found {pids}"
+    return pids[0]
+
+
+def _kill_boundary(pid: "int | None") -> None:
+    """Terminate-with-wait, mirroring row 1332's own wait-confirm-escalate posture in miniature
+    (a graceful SIGTERM first, confirmed via `/proc/<pid>` liveness polling rather than assumed,
+    escalating to SIGKILL only if the process is still alive after the grace window) -- no
+    pgrep guessing at kill time, just the pid `_discover_boundary_pid` already captured."""
+    if pid is None:
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return  # already gone
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if not os.path.exists(f"/proc/{pid}"):
+            return  # confirmed gone -- SIGTERM was enough
+        time.sleep(0.2)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def case_plan_key_capture(scratch: str) -> None:
@@ -464,10 +532,13 @@ def main() -> int:
         else:
             print("case iv (schema leg) UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST")
         case_world_exists_sentinel_leg(scratch)  # read-only, no live Postgres needed
-        if PGHOST:
-            case_initial_config_override(scratch)
-        else:
+        if not PGHOST:
             print("case v UNEXERCISED: no HARNESS_PGHOST/EPISTEMIC_PGHOST")
+        elif tui_app is None:
+            print("case v UNEXERCISED: 'textual' is not importable on this interpreter -- "
+                  "case v drives the real Tree+Form app via Pilot/run_test()")
+        else:
+            case_initial_config_override(scratch)
         case_full_dry_run_and_roundtrip(scratch)
         print("ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature "
               "(design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue")

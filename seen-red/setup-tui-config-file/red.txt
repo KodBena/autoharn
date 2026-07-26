@@ -221,3 +221,85 @@ that SAME leak (ports 8426/8427, tempdir /tmp/setup-tui-config-file-<random>), k
 immediately after, since fixing _kill_boundary itself is that OTHER work item's scope, not
 this one's. Not otherwise a residue regression: schemas/roles dropped via teardown-world.sh,
 tempdir removed by the fixture's own `finally`.
+
+---
+
+RE-BANKED 2026-07-26, work item setup-tui-fixture-kill-boundary-never-matches (ledger rows
+1334/1337): `_kill_boundary`'s own pgrep pattern (`boundary_service.*{world}`) never matches --
+`steps_boundary.py` launches the service with `--config <dest>/boundary-multiplex.toml --port
+<port>`, an argv that never contains the bare world name at all (grepped: confirmed, only
+`--config`/`--port`) -- so every live case-vi run leaked its boundary_service process, silently,
+on the shared scratch host.
+
+RED, WITNESSED directly (not synthesized): the row-1327/1336 re-bank run immediately above this
+section spawned two live boundary_service processes via the OLD `_kill_boundary(world)` code
+(case vi, this same file) and both SURVIVED the fixture's own `finally` teardown:
+
+$ pgrep -fa boundary_service   # captured right after that run's own "exit 0"
+861554 /home/bork/w/vdc/venvs/generic/bin/python -m serving.boundary_service --config
+  /tmp/setup-tui-config-file-4b9lxw3f/vi-world1/boundary-multiplex.toml --port 8426
+862326 /home/bork/w/vdc/venvs/generic/bin/python -m serving.boundary_service --config
+  /tmp/setup-tui-config-file-4b9lxw3f/vi-world2/boundary-multiplex.toml --port 8427
+
+Both cmdlines confirm the diagnosis directly: neither contains the world name
+(`cfgfxa<timestamp>`/`cfgfxb<timestamp>`) anywhere, only the tempdir-scoped `--config` path --
+`boundary_service.*{world}` was never going to match. Killed by hand (`kill 861554 862326`)
+immediately after capture, confirmed gone.
+
+FIX, the honest shape (no pgrep guessing at kill time): `_discover_boundary_pid(dest)` pgreps
+EXACTLY ONCE, immediately after the birth subprocess (`cp1`/`cp2`) reports success -- at that
+point the service has already answered its own commit-time health gate
+(`steps_boundary.py`'s `probes.wait_for_health`), so the process is provably up and its argv
+provably stable -- matching `--config <dest>/boundary-multiplex.toml`, a path unique to this
+fixture's own scratch tempdir (never a name collision risk the way a bare world-name substring
+guess was). The discovered pid is held for the rest of the case's lifetime; `_kill_boundary(pid)`
+is now pure pid-tracked termination -- SIGTERM, then `/proc/<pid>` liveness polling up to 5s
+(confirm, don't assume), escalating to SIGKILL only if still alive -- mirroring row 1332's own
+wait-confirm-escalate posture in miniature. No `pgrep` call happens at teardown time at all.
+
+GREEN, WITNESSED, live, both interpreters (HARNESS_PGHOST set for the venv run):
+
+$ HARNESS_PGHOST=192.168.122.1 /home/bork/w/vdc/venvs/generic/bin/python3 \
+    seen-red/setup-tui-config-file/run_fixtures.py
+[... all nine cases OK, including case v and case vi ...]
+ALL CASES OK (or honestly UNEXERCISED) -- setup_tui config-file feature
+  (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md), zero residue
+
+$ pgrep -fa boundary_service    # immediately after the run above
+673369 /usr/bin/python3 -m serving.boundary_service --config
+  /home/bork/w/vdc/1/autoharn/boundary-multiplex.toml --port 8433 --pidfile
+  /home/bork/w/vdc/1/autoharn/.autoharn-service.pid    # the REAL deployment -- untouched
+(zero fixture-spawned processes remain)
+
+Case vi's own two live boundary_service processes were pid-tracked and cleanly SIGTERM'd within
+the wait window both times (no SIGKILL escalation needed) -- zero residue, confirmed by
+`pgrep -fa boundary_service` immediately after the run showing only the real deployment (port
+8433, non-tmp config path, `--pidfile` present -- unambiguously not fixture residue).
+
+ORPHAN CLEANUP (the five pre-existing orphans row 1334 itself named, ports 8420-8425,
+/tmp/setup-tui-config-file-manual*/manual2*/final* -- from EARLIER sessions, predating this
+fix, left running because the OLD `_kill_boundary` could never have reached them either).
+`ss -ltnp` cross-checked against each pid's own `ps -o pid,cmd` BEFORE touching anything --
+confirmed each is bound to its OWN claimed port (no confusion about which pid owns which
+port), confirmed the REAL deployment (port 8433, pid 673369, `/home/bork/w/vdc/1/autoharn/
+boundary-multiplex.toml`, no `/tmp` in its path) is a DIFFERENT pid entirely and was left alone
+throughout. Disposition, one line per pid:
+
+  pid     port  cmdline (config path)                                          disposition
+  ------  ----  --------------------------------------------------------------  -----------
+  851217  8420  /tmp/setup-tui-config-file-manual-vbsvnah8/vi-world1/...toml    fixture residue -- SIGTERM'd, confirmed gone
+  851971  8421  /tmp/setup-tui-config-file-manual-vbsvnah8/vi-world2/...toml    fixture residue -- SIGTERM'd, confirmed gone
+  852910  8422  /tmp/setup-tui-config-file-manual2-n9ubk5z9/vi-world1/...toml   fixture residue -- SIGTERM'd, confirmed gone
+  853661  8423  /tmp/setup-tui-config-file-manual2-n9ubk5z9/vi-world2/...toml   fixture residue -- SIGTERM'd, confirmed gone
+  854733  8424  /tmp/setup-tui-config-file-final-5ffie2k4/vi-world1/...toml     fixture residue -- SIGTERM'd, confirmed gone
+  855507  8425  /tmp/setup-tui-config-file-final-5ffie2k4/vi-world2/...toml     fixture residue -- SIGTERM'd, confirmed gone
+
+NOTE on port 8422: coincides with the house rule's own caution list ("never touch anything whose
+cmdline references the real deployment or ports 8433/8422") -- verified via `ss -ltnp` that pid
+852910 (not any other pid) genuinely owns that socket, and its own cmdline is unambiguously
+`/tmp/setup-tui-config-file-manual2-n9ubk5z9/...`, never the real deployment's `/home/bork/w/
+vdc/1/autoharn/boundary-multiplex.toml` -- verified fixture residue, not a coincidental hit on
+the protected port's REAL owner (which remained pid 673369/8433 throughout, confirmed unchanged
+before and after this cleanup). All six kills confirmed via `ps -o pid,cmd -p <pids>` returning
+empty (exit 1) ~2s after SIGTERM -- no SIGKILL needed. `pgrep -fa boundary_service` post-cleanup
+shows exactly one process: the real deployment, untouched.
