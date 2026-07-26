@@ -1,9 +1,9 @@
 # FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC — restore the four refusal branches s61 silently dropped
 
-<!-- doc-attest-exempt: Fable-authored spec 2026-07-26, awaiting maintainer ratification of
-the routing question in §5; the delta is built and scratch-witnessed on a branch but does
-not enter the birth chain until that answer. Removal condition: superseded by the merge
-record of the s63 delta. -->
+<!-- doc-attest-exempt: Fable-authored spec 2026-07-26; §5 routing resolved same day
+(rides the fail-safe-additive class, maintainer-delegated call, ledger row 1434); the
+delta merges once witnessed both polarities with AGREE and reviewed at the strengthened
+tier. Removal condition: superseded by the merge record of the s63 delta. -->
 
 - **Status:** ROUTING RESOLVED (§5, 2026-07-26): s63 rides the fail-safe-additive class.
   The merge is unblocked once the build lands witnessed both polarities with AGREE and
