@@ -187,13 +187,20 @@ def scaffold(world_dir: Path, world: str, n_rows: int, tmpdir: Path) -> tuple[ob
         if p.exists():
             p.chmod(0o755)
     proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmpdir)
-    birth_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
-                          f"SELECT count(*) FROM {world}.ledger;"]).stdout.strip())
-    for i in range(1, n_rows + 1):
-        rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision",
-                 f"row {i} of {n_rows}, via led"], cwd=str(world_dir))
-        if rl.returncode != 0:
-            raise RuntimeError(f"led write FAILED ({world}, row {i}): {rl.stdout} {rl.stderr}")
+    # From here to return, any raise would orphan `proc` (the caller only stop_server()s what
+    # it received back) -- the exact leak class serve_existing_world was built against (rows
+    # 1237-1244/1248; review finding on 4251e67). Stop it here before propagating.
+    try:
+        birth_count = int(sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc",
+                              f"SELECT count(*) FROM {world}.ledger;"]).stdout.strip())
+        for i in range(1, n_rows + 1):
+            rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision",
+                     f"row {i} of {n_rows}, via led"], cwd=str(world_dir))
+            if rl.returncode != 0:
+                raise RuntimeError(f"led write FAILED ({world}, row {i}): {rl.stdout} {rl.stderr}")
+    except BaseException:
+        bs_fixtures.stop_server(proc)
+        raise
     return proc, birth_count
 
 

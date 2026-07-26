@@ -178,13 +178,20 @@ def _serve_probe_dir() -> object:
         f'pgschema = "{rec.schema}"\n'
         f'pgkern = "{rec.kern}"\n', encoding="utf-8")
     proc, port = bs_fixtures.start_server(cfg_path)
-    base = f"http://127.0.0.1:{port}/d/{rec.schema}"
-    if not bs_fixtures.wait_health(base):
-        tail = bs_fixtures.stop_server(proc)
-        raise RuntimeError(f"boundary_service for {rec.schema} never became healthy: {tail[-1500:]}")
-    served = dataclasses.replace(rec, boundary_url=f"http://127.0.0.1:{port}",
-                                  boundary_deployment=rec.schema)
-    bs_fixtures.deployment_record.write_deployment(deployment_path, served)
+    # Any raise between start_server and return orphans `proc` (the caller only stop_server()s
+    # what it received back) -- same leak class as the review finding on 4251e67's scaffold().
+    try:
+        base = f"http://127.0.0.1:{port}/d/{rec.schema}"
+        if not bs_fixtures.wait_health(base):
+            tail = bs_fixtures.stop_server(proc)
+            raise RuntimeError(f"boundary_service for {rec.schema} never became healthy: {tail[-1500:]}")
+        served = dataclasses.replace(rec, boundary_url=f"http://127.0.0.1:{port}",
+                                      boundary_deployment=rec.schema)
+        bs_fixtures.deployment_record.write_deployment(deployment_path, served)
+    except BaseException:
+        if proc.poll() is None:
+            bs_fixtures.stop_server(proc)
+        raise
     return proc
 SCHEMA, KERN, ROLE = "stopprobe", "stopprobe_kernel", "stopprobe_rw"
 SEENRED_SESSION = "seenred"           # the session id every ORIGINAL case's stdin.json carries

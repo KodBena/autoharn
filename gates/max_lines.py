@@ -537,7 +537,7 @@ BASELINE: dict[str, int] = {
     # above; the union is re-measured on the merged file, this reconciliation comment and
     # its sibling above included (the usual self-referential fixpoint, settled by
     # re-measuring after writing).
-    "gates/max_lines.py":                          643,
+    "gates/max_lines.py":                          648,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
@@ -551,7 +551,12 @@ BASELINE: dict[str, int] = {
     # GREEN family unchanged) before this bump was taken. Written plain, no golfing (ADR-0007's
     # no-go clause); witnessed growth of a previously-under-ceiling file, grandfathered honestly
     # rather than silently golfed to fit.
-    "gates/fixture_sweep.py":                      406,
+    # bumped 406 -> 430 (review finding on 4251e67, fixed at merge: _module_level_import_names
+    # excludes `if TYPE_CHECKING:` bodies -- the zero-runtime-cost exemption -- via an explicit
+    # body-walk replacing ast.walk; witnessed three polarities (TYPE_CHECKING both spellings
+    # excluded, try/if-nested runtime imports still counted, relative imports still excluded)
+    # and a registry-wide zero-flagged pass before this bump was taken).
+    "gates/fixture_sweep.py":                      430,
     # bumped 626 -> 643 (this gate's own BASELINE growing to carry the gates/fixture_sweep.py
     # entry immediately above plus this comment's own settling -- self-referential, checked
     # here too, same idiom as every prior self-reference bump in this file's own history above).

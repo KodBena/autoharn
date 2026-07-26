@@ -178,14 +178,38 @@ def _module_level_import_names(source_text: str) -> set[str]:
         tree = ast.parse(source_text)
     except SyntaxError:
         return set()
+
+    def _is_type_checking_guard(node: ast.stmt) -> bool:
+        # `if TYPE_CHECKING:` / `if typing.TYPE_CHECKING:` bodies never execute at runtime
+        # (the same zero-runtime-cost exemption CLAUDE.md's lazy-import ban grants), so an
+        # import inside one is not a runtime dependency and must not flag a family
+        # UNEXERCISED (review finding on 4251e67: ast.walk alone would count it).
+        if not isinstance(node, ast.If):
+            return False
+        t = node.test
+        return (isinstance(t, ast.Name) and t.id == "TYPE_CHECKING") or (
+            isinstance(t, ast.Attribute) and t.attr == "TYPE_CHECKING")
+
     names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                names.add(alias.name.split(".", 1)[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module:
-                names.add(node.module.split(".", 1)[0])
+
+    def _collect(body: list[ast.stmt]) -> None:
+        for node in body:
+            if _is_type_checking_guard(node):
+                continue
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    names.add(alias.name.split(".", 1)[0])
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    names.add(node.module.split(".", 1)[0])
+            for child_body in (getattr(node, "body", None), getattr(node, "orelse", None),
+                               getattr(node, "finalbody", None)):
+                if isinstance(child_body, list):
+                    _collect(child_body)
+            for handler in getattr(node, "handlers", []) or []:
+                _collect(handler.body)
+
+    _collect(tree.body)
     return names
 
 
