@@ -364,7 +364,7 @@ def main() -> int:
     # rather than a second registry entry pointing at a sibling file in this SAME directory (the
     # gate's own key-equals-dirname model, verified live before choosing this shape), this file's
     # own main() ALSO runs the verb-side/served-CLI/real-gpg complement
-    # (run_fixtures_cli.py, this same directory -- see ITS module docstring for its own five
+    # (run_fixtures_cli.py, this same directory -- see ITS module docstring for its own ten
     # cases) and folds its result into this ONE entry point's exit code. Both halves' output is
     # printed in full (never summarized away) so a reader sees exactly which leg, if either,
     # went red.

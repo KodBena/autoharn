@@ -1,5 +1,5 @@
 == generating throwaway test key (Ed25519, test-only, never a real maintainer key) ==
-  test key: 6B946746D8711F28380CACD21AB439CFB2065337
+  test key: B1D30D121BA1FDBC85F51CC7CE79FE1BBFE01969
 
 == scaffolding throwaway --new-world vcfxprobe ==
   scaffold OK.
@@ -11,10 +11,10 @@
   [ok] sign_exit=0 verify_exit=0 verdict=VERIFIED
 
 === f-directory-verified-grade-before-binding ===
-  [ok] grade=DIRECTORY-VERIFIED signing_key=6B946746D8711F28380CACD21AB439CFB2065337 (expected DIRECTORY-VERIFIED / 6B946746D8711F28380CACD21AB439CFB2065337)
+  [ok] grade=DIRECTORY-VERIFIED signing_key=B1D30D121BA1FDBC85F51CC7CE79FE1BBFE01969 (expected DIRECTORY-VERIFIED / B1D30D121BA1FDBC85F51CC7CE79FE1BBFE01969)
 
 === g-binding-verified-grade-after-s41-bind ===
-  [ok] bind_exit=0 verify_exit=0 verdict=VERIFIED grade=BINDING-VERIFIED (bind stdout tail: 'led: row 8 written.\n')
+  [ok] attest_possess_exit=0 possess_row=8 bind_exit=0 verify_exit=0 verdict=VERIFIED grade=BINDING-VERIFIED (attest_possess stdout tail: 'led: row 8 written.\n'; bind stdout tail: 'led: row 9 written.\n')
 
 === c-forged-tampered-bytes ===
   [ok] exit=1 verdict=FORGED-OR-CORRUPT
@@ -26,3 +26,12 @@
   [ok] exit=2 stderr='{\n  "id": 7,\n  "actor": "commissioner",\n  "signing_mode": "FULL",\n  "refusal": "GPG-UNAVAILABLE",\n  "detail": "the \'gpg\' binary is not on PATH -- GPG trust layer verbs need GnuPG installed (see user-g'
 
 ALL CASES OK -- verify-commission both-polarity proof (UNSIGNED / VERIFIED / FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal), zero residue.
+
+FIX-ROUND RE-BANK (2026-07-26, kernel review, s61 tip c3d773a): this transcript is a fresh, live
+re-run against the CURRENT checkout (case g repaired -- see this fixture's own module docstring
+CHAIN_TAIL_S61 comment for why case g now applies the s58..s61 lineage tail additively before
+attempting the possession ceremony -- the prior banked transcript was stale, recorded BEFORE the
+led.tmpl item-3 --possession-ref mandate landed, and case g's own bind-key call silently kept
+succeeding only because bootstrap/new-project.sh's --new-world scaffold does not yet carry s60/
+s61 at all). Every line above corresponds to this committed run; no line is carried over from the
+prior (false) transcript.

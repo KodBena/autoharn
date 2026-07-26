@@ -30,6 +30,29 @@ Cases:
                                   client-side (led.tmpl's own teaching refusal) before any write
                                   is even attempted.
 
+FIX-ROUND ADDITIONS (kernel review, s61 tip c3d773a -- three legs the reviewer had to witness
+personally rather than finding shipped as fixture cases, plus one untested gpg_trust.py finding):
+  f-never-signed-zero-friction-supersession -- an ORDINARY, never-signed commission superseded by
+                                  an ORDINARY, never-signed commission -- ACCEPTED, no false
+                                  symmetry demand (neither act's force rests on a verified
+                                  signature, so the symmetry block never fires).
+  g-wrong-key-attest-possession-refused -- a SECOND throwaway key signs the possession statement
+                                  for the FIRST key's own claimed fingerprint -- REFUSED, teaching,
+                                  naming BOTH fingerprints (proof of possession must come from the
+                                  EXACT key being proven, never merely some committed key).
+  h-revoke-key-missing-supersedes-refused -- `led principal revoke-key` with no --supersedes --
+                                  REFUSED, its OWN refusal-path flag parsing (distinct from
+                                  bind-key's mandatory-possession-ref).
+  i-revoke-key-cli-path-accepted -- `led principal revoke-key` THROUGH THE REAL CLI (never the raw
+                                  kernel retraction a reviewer had to fall back to), citing the
+                                  case-d bind row via --supersedes -- ACCEPTED, no fresh possession
+                                  proof required (item 3: revocation needs none).
+  j-multi-signature-attest-possession-refused -- a .asc carrying TWO valid signatures (one per
+                                  key, both verifying, concatenated) -- REFUSED:
+                                  filing/gpg_trust.py's signing_key_fingerprint cannot honestly
+                                  pick ONE signer arbitrarily (an earlier version silently
+                                  returned the first VALIDSIG, untested until this case).
+
 Usage: python3 seen-red/s61-signature-symmetry-and-key-binding/run_fixtures_cli.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports are banned."""
 from __future__ import annotations
@@ -301,10 +324,12 @@ def main() -> int:
         ok_d1 = rd1.returncode == 0
         possess_row = row_id_from_stdout(rd1.stdout) if ok_d1 else None
         ok_d2 = False
+        bind_row = None
         if possess_row:
             rd2 = led(world_dir, "principal", "bind-key", "keyholder", "--fingerprint", fp,
                       "--possession-ref", str(possess_row))
             ok_d2 = rd2.returncode == 0
+            bind_row = row_id_from_stdout(rd2.stdout) if ok_d2 else None
         check("d-attest-possession-and-bind", ok_d1 and ok_d2,
               f"attest_exit={rd1.returncode} possess_row={possess_row} bind_ok={ok_d2} "
               f"attest_out={rd1.stdout[-300:]!r}", failures)
@@ -315,6 +340,81 @@ def main() -> int:
         check("e-bind-without-possession-ref-refused",
               re_.returncode == 1 and "possession-ref" in (re_.stdout + re_.stderr),
               f"exit={re_.returncode} out={(re_.stdout + re_.stderr)[-300:]!r}", failures)
+
+        # fix-round additions (kernel review, s61 tip c3d773a) -- the three named gaps a
+        # reviewer had to plug personally rather than finding shipped: never-signed zero-friction
+        # supersession, wrong-key attest-possession, and the revoke-key CLI path (accept + its
+        # own refusal-path flag parsing) -- plus the gpg_trust.py multi-signature finding.
+
+        # ---- f: an ORDINARY, never-signed commission superseded by an ORDINARY, never-signed
+        # commission -- accepted, no false symmetry demand (neither act's force rests on a
+        # verified signature, so validate_supersession_target's symmetry block never fires) ----
+        rc2 = led(world_dir, "commission", "an ordinary, never-signed commission (C2, fixture)",
+                  env_extra={"LED_ACTOR": "commissioner"})
+        ok_f1 = rc2.returncode == 0
+        c2 = row_id_from_stdout(rc2.stdout) if ok_f1 else None
+        ok_f2 = False
+        if c2:
+            rf = led(world_dir, "--supersedes", str(c2), "commission",
+                     "an ordinary, never-signed supersession of C2 (fixture)")
+            ok_f2 = rf.returncode == 0
+        check("f-never-signed-zero-friction-supersession", ok_f1 and ok_f2,
+              f"c2_exit={rc2.returncode} c2={c2} supersede_exit={rf.returncode if c2 else None}",
+              failures)
+
+        # ---- g: a SECOND throwaway key signs the possession statement for the FIRST key's own
+        # fingerprint -- refused, teaching, naming both fingerprints (never merely "some
+        # committed key", the EXACT key being proven) ----
+        test_fpr2 = gen_key(gnupghome, "AUTOHARN TEST KEY 2 -- THROWAWAY -- S61 CLI SEEN-RED",
+                             "s61-cli-seenred-test2@example.invalid")
+        r_export2 = sh(["gpg", "--homedir", str(gnupghome), "--armor", "--export", test_fpr2])
+        (keys_dir / "test-key-2.asc").write_text(r_export2.stdout, encoding="utf-8")
+        wrongkey_asc = tmp / "wrongkey-possession.asc"
+        rsign_wrong = sh(["gpg", "--homedir", str(gnupghome), "-u", test_fpr2, "--batch", "--yes",
+                          "--detach-sign", "--armor", "-o", str(wrongkey_asc), "-"],
+                         input=possess_statement, env=gpg_env)
+        rg1 = led(world_dir, "principal", "attest-possession", fp, "--asc", str(wrongkey_asc))
+        out_g = rg1.stdout + rg1.stderr
+        check("g-wrong-key-attest-possession-refused",
+              rsign_wrong.returncode == 0 and rg1.returncode == 1
+              and "produced by fingerprint" in out_g and test_fpr2 in out_g and fp in out_g,
+              f"sign_exit={rsign_wrong.returncode} exit={rg1.returncode} out={out_g[-400:]!r}",
+              failures)
+
+        # ---- h: revoke-key WITHOUT --supersedes -- refused, its own refusal-path flag parsing
+        # (mandatory-supersedes, distinct from bind-key's mandatory-possession-ref) ----
+        rh = led(world_dir, "principal", "revoke-key", "keyholder", "--fingerprint", fp)
+        out_h = rh.stdout + rh.stderr
+        check("h-revoke-key-missing-supersedes-refused",
+              rh.returncode == 1 and "--supersedes" in out_h and "mandatory" in out_h,
+              f"exit={rh.returncode} out={out_h[-300:]!r}", failures)
+
+        # ---- i: revoke-key THROUGH THE REAL CLI PATH (never the raw kernel retraction a
+        # reviewer had to fall back to) -- --supersedes the case-d bind row -- accepted, no fresh
+        # possession proof required (item 3's own text: revocation needs none) ----
+        ok_i = False
+        detail_i = ""
+        if bind_row:
+            ri = led(world_dir, "principal", "revoke-key", "keyholder", "--fingerprint", fp,
+                     "--supersedes", str(bind_row))
+            ok_i = ri.returncode == 0
+            detail_i = f"exit={ri.returncode} out={(ri.stdout + ri.stderr)[-300:]!r}"
+        else:
+            detail_i = "SKIPPED -- no bind row id available from case d"
+        check("i-revoke-key-cli-path-accepted", ok_i, detail_i, failures)
+
+        # ---- j: a .asc carrying TWO valid signatures (concatenated detached signature packets,
+        # one per key, both verifying) -- refused: gpg_trust.py's signing_key_fingerprint cannot
+        # honestly pick ONE signer arbitrarily (fix-round finding, first-VALIDSIG-wins was
+        # untested) ----
+        multisig_asc = tmp / "multisig-possession.asc"
+        multisig_asc.write_text(possess_asc.read_text(encoding="utf-8")
+                                 + wrongkey_asc.read_text(encoding="utf-8"), encoding="utf-8")
+        rj = led(world_dir, "principal", "attest-possession", fp, "--asc", str(multisig_asc))
+        out_j = rj.stdout + rj.stderr
+        check("j-multi-signature-attest-possession-refused",
+              rj.returncode == 1 and "more than one valid signature" in out_j,
+              f"exit={rj.returncode} out={out_j[-400:]!r}", failures)
 
     finally:
         try:

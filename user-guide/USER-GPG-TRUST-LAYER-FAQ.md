@@ -2,13 +2,18 @@
 
 <!-- doc-attest-exempt: v1.1 signature-symmetry/key-binding build (2026-07-26, design/
      FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 3) added new §10 (proof of possession +
-     revocation for principal key bindings), documenting `led principal attest-possession` and
-     `bind-key --possession-ref` -- every command shown was exercised for real against a
-     throwaway Ed25519 test key in this same build's own witness pass
-     (seen-red/s61-signature-symmetry-and-key-binding/run_fixtures_cli.py), mirroring this
-     file's own standing "every command below was exercised, for real" convention (line 19).
-     Prior exemption history (legacy-led-retirement inventory pass, 2026-07-23, ledger row
-     1149/1150) superseded by this note. -->
+     revocation for principal key bindings), documenting `led principal attest-possession`,
+     `bind-key --possession-ref`, AND `revoke-key` -- every command shown, including §10b's
+     `revoke-key`, was exercised for real against throwaway Ed25519 test keys in this same
+     build's own witness pass (seen-red/s61-signature-symmetry-and-key-binding/
+     run_fixtures_cli.py, cases d/h/i, all SHIPPED fixture cases as of the s61 fix round, kernel
+     review tip c3d773a), mirroring this file's own standing "every command below was exercised,
+     for real" convention (line 19). FIX-ROUND CORRECTION (2026-07-26, same review): an earlier
+     version of this note overclaimed -- §10b's `revoke-key` line was witnessed by the REVIEWER
+     directly, ad hoc, not exercised by any SHIPPED fixture case; that gap is closed (case i
+     above), so this note's claim is now the strong form honestly, not merely stated. Prior
+     exemption history (legacy-led-retirement inventory pass, 2026-07-23, ledger row 1149/1150)
+     superseded by this note. -->
 
 This page is written for an adopter — this page's own prose calls that reader "an operator,"
 the same role. It answers the question an operator actually has: **I've read
@@ -286,6 +291,7 @@ records them:
 | The `.asc` covers a DIFFERENT statement (tampered), a committed key exists to check it against | `FORGED-OR-CORRUPT` — a real cryptographic mismatch | 1 |
 | A signature is banked but the deployment's OWN `keys/` is empty (AWAITING-KEY, a fresh scaffold's honest starting state) | the DISTINCT typed refusal `NO-COMMITTED-KEY` — "nothing exists to check the claimed signature against," never confused with an actual forgery | 3 |
 | `gpg` itself is not installed | the OTHER typed refusal, `GPG-UNAVAILABLE` (`"the 'gpg' binary is not on PATH"`), never folded into any of the three verdicts above | 2 |
+| The `.asc` carries MORE THAN ONE valid signature (fix-round addition, 2026-07-26, kernel review tip c3d773a) | a FOURTH typed refusal, `MULTIPLE-VALID-SIGNATURES` — grading a signature against the s41 binding requires ONE unambiguous signer; `filing/gpg_trust.py`'s `signing_key_fingerprint` refuses rather than silently reporting whichever key it checked first | 4 |
 
 The `NO-COMMITTED-KEY` and `GPG-UNAVAILABLE` refusals are deliberately NOT `FORGED-OR-CORRUPT`,
 even though both are loud: `FORGED-OR-CORRUPT` means "a committed key exists and the signature

@@ -72,6 +72,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
 from _fixture_env import fixture_pghost  # noqa: E402 (filing/pghost_resolve.py via seen-red/_fixture_env.py -- never a literal host default)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "filing"))
+import deployment_record  # noqa: E402 (filing/deployment_record.py -- the ONE home for the deployment.json shape, needed below to apply the s58..s61 chain TAIL onto the schema/kern/role --new-world actually derived, never re-guessed from the world name)
 
 # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
 # environment before any subprocess is spawned -- inherited by the whole process tree
@@ -82,6 +84,32 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
+LINEAGE = REPO / "kernel" / "lineage"
+
+# fix-round finding (kernel review, s61 tip c3d773a): bootstrap/new-project.sh's OWN --new-world
+# LINEAGE_CHAIN is stale -- it ends at s57-obligation-revocation-event.sql, so a plain --new-world
+# scaffold carries NEITHER s60 (the entitlement acceptance predicate) NOR s61 (this delta's own
+# signature-symmetry/key-binding kinds and columns) -- s61's own PREREQUISITE section names s60 as
+# a hard dependency, and s60's names s59, which names s58. Case g below needs the REAL
+# `principal_key_possession_verified` kind and `key_binding_possession_ref` column s61 adds (the
+# possession ceremony the FAQ's §10a now documents), so this fixture applies the s58..s61 TAIL
+# additively onto the SAME schema/kern/role --new-world already scaffolded -- mirroring
+# seen-red/s61-signature-symmetry-and-key-binding/run_fixtures_cli.py's own CHAIN_S61 tail
+# (ADR-0012 P1: the same four filenames, not re-derived). No birth sequence is needed for either
+# new act: entitlement_act_class_of (s60 Element 7) returns NULL for principal_key_bound,
+# principal_key_possession_verified, AND commission_signature_verified alike -- none of s61's own
+# new writes fall inside s60's gated act-class set, verified by reading that function's body
+# before relying on it here.
+CHAIN_TAIL_S61 = ["s58-missive-substrate.sql", "s59-missive-views.sql",
+                   "s60-entitlement-enforcement.sql", "s61-signature-symmetry-and-key-binding.sql"]
+
+
+def apply_chain_tail(dep) -> subprocess.CompletedProcess[str]:
+    args = ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1",
+            "-v", f"schema={dep.schema}", "-v", f"kern={dep.kern}", "-v", f"role={dep.role}"]
+    for name in CHAIN_TAIL_S61:
+        args += ["-f", str(LINEAGE / name)]
+    return sh(args)
 
 # cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
 # seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
@@ -236,18 +264,50 @@ def main() -> int:
               f"grade={body_b.get('grade')} signing_key={body_b.get('signing_key_fingerprint')} "
               f"(expected DIRECTORY-VERIFIED / {test_fpr})", failures)
 
+        # apply the s58..s61 chain TAIL now (see CHAIN_TAIL_S61's own comment above) -- additive,
+        # onto the SAME schema/kern/role, so case g's ceremony below has the real s61 kinds/
+        # columns to write against, never a stale pre-s61 kernel silently accepting a fingerprint
+        # bind with no possession proof (that silent acceptance is exactly the false witness this
+        # fix round exists to close).
+        dep = deployment_record.load_deployment(world_dir / "deployment.json")
+        r_chain = apply_chain_tail(dep)
+        if r_chain.returncode != 0:
+            print("s58..s61 CHAIN TAIL APPLY FAILED:", r_chain.stdout[-2000:], r_chain.stderr[-2000:])
+            return 1
+
+        # s61 item 3 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2, landed the SAME commit as
+        # this case's own docstring update): a FRESH `bind-key` now REQUIRES proof of possession
+        # (`--possession-ref`, citing a `led principal attest-possession` row) -- this case, and
+        # user-guide/USER-GPG-TRUST-LAYER-FAQ.md §10a, both thread that ceremony through before
+        # binding, mirroring the real operator flow the FAQ teaches rather than the pre-item-3
+        # bare `bind-key --fingerprint` shape this case used to exercise.
+        possess_statement = f"autoharn key-binding proof-of-possession: fingerprint={test_fpr}"
+        possess_asc = tmp / "possession.asc"
+        rsign_possess = sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o",
+                             str(possess_asc), "-"], input=possess_statement, env=gpg_env)
+        r_attest_poss = sh(["bash", str(world_dir / "led"), "principal", "attest-possession",
+                             test_fpr, "--asc", str(possess_asc)],
+                            env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
+        possess_row = None
+        if r_attest_poss.returncode == 0:
+            m_poss = re.search(r"row (\d+) written", r_attest_poss.stdout)
+            possess_row = m_poss.group(1) if m_poss else None
         r_bind = sh(["bash", str(world_dir / "led"), "principal", "bind-key", "commissioner",
-                     "--fingerprint", test_fpr],
+                     "--fingerprint", test_fpr,
+                     "--possession-ref", possess_row or ""],
                     env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
         rg = run_verify_commission(world_dir, commission_id=commission_id)
         body_g = json.loads(rg.stdout) if rg.stdout.strip() else {}
-        ok_g = (r_bind.returncode == 0 and rg.returncode == 0
+        ok_g = (rsign_possess.returncode == 0 and r_attest_poss.returncode == 0
+                and possess_row is not None and r_bind.returncode == 0 and rg.returncode == 0
                 and body_g.get("verdict") == "VERIFIED" and body_g.get("grade") == "BINDING-VERIFIED"
                 and body_g.get("signing_key_fingerprint") == test_fpr)
         check("g-binding-verified-grade-after-s41-bind", ok_g,
+              f"attest_possess_exit={r_attest_poss.returncode} possess_row={possess_row} "
               f"bind_exit={r_bind.returncode} verify_exit={rg.returncode} "
               f"verdict={body_g.get('verdict')} grade={body_g.get('grade')} "
-              f"(bind stdout tail: {r_bind.stdout[-300:]!r})", failures)
+              f"(attest_possess stdout tail: {r_attest_poss.stdout[-200:]!r}; "
+              f"bind stdout tail: {r_bind.stdout[-300:]!r})", failures)
 
         # --- c: same .asc path, signature over a DIFFERENT statement -> FORGED-OR-CORRUPT ------
         sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o", str(asc_path), "-"],

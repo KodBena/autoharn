@@ -649,7 +649,14 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                   f"does not verify against this deployment's committed keys/ for the "
                   f"canonical statement {statement!r}. {gpg_detail}", file=sys.stderr)
             return 1
-        sig_fp = gpg_trust.signing_key_fingerprint(r.stdout)
+        try:
+            sig_fp = gpg_trust.signing_key_fingerprint(r.stdout)
+        except gpg_trust.MultipleValidSignatures as e:
+            print(f"led principal attest-possession: REFUSED -- {asc_path} carries more than "
+                  f"one valid signature ({e}) -- proof of possession must come from a SINGLE, "
+                  f"unambiguous signer; sign the canonical statement with exactly one key.",
+                  file=sys.stderr)
+            return 1
         if sig_fp != fp:
             print(f"led principal attest-possession: REFUSED -- the signature verifies, but was "
                   f"produced by fingerprint {sig_fp!r}, not the claimed {fp!r} -- proof of "

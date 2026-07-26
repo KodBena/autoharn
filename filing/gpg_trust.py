@@ -45,6 +45,28 @@ class GpgUnavailable(Exception):
     can only make once gpg itself is present to make them with."""
 
 
+class MultipleValidSignatures(Exception):
+    """Raised by `signing_key_fingerprint` when gpg's status-fd stream reports MORE THAN ONE
+    VALIDSIG line for a single `--verify` invocation -- a multi-signature .asc (several detached
+    OpenPGP signature packets concatenated into one armored file; gpg verifies every one it
+    finds and emits one VALIDSIG line per good signature, in the order it checked them, which is
+    FILE order, not signer intent or seniority). Fix-round finding (kernel review, s61 tip
+    c3d773a): an earlier version of this function silently returned only the FIRST VALIDSIG's
+    fingerprint -- untested, and a real hazard for either caller (verify-commission.tmpl's grade
+    computation, led.tmpl's attest-possession fingerprint match) to attribute a check to
+    whichever key happened to sign first in file order rather than refusing to guess. Every
+    caller of this project's signature-checking verbs names exactly ONE key per verified act (a
+    commission's signer; a possession proof's prover) -- there is no existing ceremony that asks
+    for or expects more than one signature over the same statement, so this is refused rather
+    than silently narrowed to "first wins": the caller catches this and reports the fingerprint
+    COUNT, never picking one arbitrarily on the caller's behalf."""
+
+
+def _validsig_fingerprints(gpg_status_stdout: str) -> list[str]:
+    return [ln.split()[2].upper() for ln in gpg_status_stdout.splitlines()
+            if ln.startswith("[GNUPG:] VALIDSIG ") and len(ln.split()) >= 3]
+
+
 def gpg_available() -> bool:
     return shutil.which("gpg") is not None
 
@@ -89,10 +111,14 @@ def signing_key_fingerprint(gpg_status_stdout: str) -> str | None:
     bootstrap/templates/led.tmpl's `attest-possession` verb both call this rather than each
     re-deriving the VALIDSIG-line parse. Callers MUST invoke `gpg --status-fd 1 --verify ...` (or
     equivalent) and pass its stdout here; None if no VALIDSIG line is present (should not happen
-    once the caller has already confirmed "Good signature", but never assumed)."""
-    for line in gpg_status_stdout.splitlines():
-        if line.startswith("[GNUPG:] VALIDSIG "):
-            fields = line.split()
-            if len(fields) >= 3:
-                return fields[2].upper()
-    return None
+    once the caller has already confirmed "Good signature", but never assumed). Raises
+    MultipleValidSignatures (see that exception's own docstring) if MORE than one VALIDSIG line
+    is present -- never silently returns an arbitrary one of several."""
+    fps = _validsig_fingerprints(gpg_status_stdout)
+    if len(fps) > 1:
+        raise MultipleValidSignatures(
+            f"{len(fps)} VALIDSIG lines in gpg's status-fd stream ({', '.join(fps)}) -- this "
+            f".asc carries more than one valid signature; signing_key_fingerprint() cannot "
+            f"honestly pick ONE signer arbitrarily. The caller must refuse, naming the count, "
+            f"never guess which key to attribute the check to.")
+    return fps[0] if fps else None

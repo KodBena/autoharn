@@ -35,14 +35,14 @@ RUNNING THE VERB-SIDE/SERVED-CLI/REAL-GPG COMPLEMENT (run_fixtures_cli.py)
 ============================================================
 
 == generating throwaway test key (Ed25519, test-only) ==
-  test key: 648FAB6ED58E596F684BC6DE84BE15D63B50E145
+  test key: 2959B2B170B58CF26F05DB9425EA29292E83D415
 
 == classic scaffold s61clifxprobe + manual chain apply (s15..s61) ==
 == standing served boundary_service ==
   served OK.
 
 === a-attest-directory-verified ===
-  [ok] sign_exit=0 attest_exit=0 body={'id': 7, 'actor': 'commissioner', 'signing_mode': 'FULL', 'verdict': 'VERIFIED', 'detail': 'statement sha256=c0b145484c88d1e310f076d62ef4c0a8f913c418585314305e083b514bc66de6. signing_key=648FAB6ED58E596F684BC6DE84BE15D63B50E145. grade=DIRECTORY-VERIFIED (verified against keys/; actor \'commissioner\' has bound no key via s41 (principal_key_bound)). [GNUPG:] NEWSIG\n[GNUPG:] KEY_CONSIDERED 648FAB6ED58E596F684BC6DE84BE15D63B50E145 0\n[GNUPG:] SIG_ID LY3Z1e8XyaUA+3N7xgCJTiPyQDg 2026-07-26 1785050003\n[GNUPG:] GOODSIG 84BE15D63B50E145 AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>\n[GNUPG:] VALIDSIG 648FAB6ED58E596F684BC6DE84BE15D63B50E145 2026-07-26 1785050003 0 4 0 22 10 00 648FAB6ED58E596F684BC6DE84BE15D63B50E145\n[GNUPG:] TRUST_UNDEFINED 0 pgp\ngpg: Signature made Sun Jul 26 09:13:23 2026 CEST\ngpg:                using EDDSA key 648FAB6ED58E596F684BC6DE84BE15D63B50E145\ngpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\n      648FAB6ED58E596F684BC6DE84BE15D63B50E145', 'grade': 'DIRECTORY-VERIFIED', 'signing_key_fingerprint': '648FAB6ED58E596F684BC6DE84BE15D63B50E145', 'attest': {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}}
+  [ok] sign_exit=0 attest_exit=0 body={'id': 7, 'actor': 'commissioner', 'signing_mode': 'FULL', 'verdict': 'VERIFIED', 'detail': 'statement sha256=c0b145484c88d1e310f076d62ef4c0a8f913c418585314305e083b514bc66de6. signing_key=2959B2B170B58CF26F05DB9425EA29292E83D415. grade=DIRECTORY-VERIFIED (verified against keys/; actor \'commissioner\' has bound no key via s41 (principal_key_bound)). [GNUPG:] NEWSIG\n[GNUPG:] KEY_CONSIDERED 2959B2B170B58CF26F05DB9425EA29292E83D415 0\n[GNUPG:] SIG_ID jdnJWHeY+GCyOxmxoV6yedms+yE 2026-07-26 1785052086\n[GNUPG:] GOODSIG 25EA29292E83D415 AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>\n[GNUPG:] VALIDSIG 2959B2B170B58CF26F05DB9425EA29292E83D415 2026-07-26 1785052086 0 4 0 22 10 00 2959B2B170B58CF26F05DB9425EA29292E83D415\n[GNUPG:] TRUST_UNDEFINED 0 pgp\ngpg: Signature made Sun Jul 26 09:48:06 2026 CEST\ngpg:                using EDDSA key 2959B2B170B58CF26F05DB9425EA29292E83D415\ngpg: Good signature from "AUTOHARN TEST KEY -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test@example.invalid>" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\n      2959B2B170B58CF26F05DB9425EA29292E83D415', 'grade': 'DIRECTORY-VERIFIED', 'signing_key_fingerprint': '2959B2B170B58CF26F05DB9425EA29292E83D415', 'attest': {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}}
 
 === b-unsigned-supersession-refused ===
   [ok] exit=1 out='ies no signature_symmetry_witness naming a commission_signature_verified row. Remedy: have the maintainer write a SIGNED commission directing this supersession (gpg --detach-sign --armor, then LED_ACTOR=commissioner ./led commission "<the ask>", then ./verify-commission --attest --id <that commission\'s id> — VERIFIED only), then supply --signature-witness <the attestation row\'s id> on this write.\n'
@@ -56,9 +56,32 @@ RUNNING THE VERB-SIDE/SERVED-CLI/REAL-GPG COMPLEMENT (run_fixtures_cli.py)
 === e-bind-without-possession-ref-refused ===
   [ok] exit=1 out="n ./led principal attest-possession 0000000000000000000000000000000000000000 --asc <detached-signature-path> first (verifies a signature over the canonical proof text against THIS deployment's committed keys/ entry for 0000000000000000000000000000000000000000), then bind citing the returned row id.\n"
 
+=== f-never-signed-zero-friction-supersession ===
+  [ok] c2_exit=0 c2=14 supersede_exit=0
+
+=== g-wrong-key-attest-possession-refused ===
+  [ok] sign_exit=0 exit=1 out='T\ngpg:                using EDDSA key A7F128A1364F3D6DFA270A8E99321688A9CA0F78\ngpg: Good signature from "AUTOHARN TEST KEY 2 -- THROWAWAY -- S61 CLI SEEN-RED <s61-cli-seenred-test2@example.invalid>" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\n      A7F128A1364F3D6DFA270A8E99321688A9CA0F78\n'
+
+=== h-revoke-key-missing-supersedes-refused ===
+  [ok] exit=1 out='led principal revoke-key: REFUSED -- --supersedes <old-row-id> is mandatory.\n'
+
+=== i-revoke-key-cli-path-accepted ===
+  [ok] exit=0 out='led: row 16 written.\n'
+
+=== j-multi-signature-attest-possession-refused ===
+  [ok] exit=1 out='05DB9425EA29292E83D415, A7F128A1364F3D6DFA270A8E99321688A9CA0F78) -- this .asc carries more than one valid signature; signing_key_fingerprint() cannot honestly pick ONE signer arbitrarily. The caller must refuse, naming the count, never guess which key to attribute the check to.) -- proof of possession must come from a SINGLE, unambiguous signer; sign the canonical statement with exactly one key.\n'
+
 
 ALL GREEN
 
 CLI-LEVEL: ALL GREEN
 
 OVERALL: ALL GREEN
+
+FIX-ROUND RE-BANK (2026-07-26, kernel review, s61 tip c3d773a): this transcript is a fresh, live
+re-run against the CURRENT checkout, adding cases f-j to the CLI-level family (never-signed
+zero-friction supersession; wrong-key attest-possession refusal; the revoke-key CLI path's own
+refusal-path flag parsing AND its acceptance leg; a multi-signature .asc refusal exercising
+filing/gpg_trust.py's new MultipleValidSignatures guard). Cases a-e and the kernel-level
+RED/GREEN cases are unchanged in shape from the prior banked run; every line above -- old and new
+-- corresponds to this one committed run, not a splice of an old and new transcript.

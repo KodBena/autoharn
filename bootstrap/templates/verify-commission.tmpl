@@ -40,7 +40,7 @@ VERDICTS (exit code in parentheses) — exactly the three the spec names, nothin
                          it against, and the signature does NOT verify against the statement's
                          current bytes. A real, checkable, cryptographic mismatch. LOUD.
 
-TWO TYPED REFUSALS (exit code in parentheses) — distinct from all three verdicts above, because
+THREE TYPED REFUSALS (exit code in parentheses) — distinct from all three verdicts above, because
 neither precondition leaves any of the three actually decidable:
   gpg missing       (2) — none of the three verdicts can be computed without gpg itself.
   NO-COMMITTED-KEY  (3) — a `.claude/commission-<id>.asc` EXISTS (a claim of SIGNED-mode
@@ -52,6 +52,11 @@ neither precondition leaves any of the three actually decidable:
                          `UNVERIFIABLE` verdict (a DISTINCT label there too, never folded into
                          its `BAD` outcome) — loud, never silently treated as a pass, but never
                          mislabeled as evidence of forgery either.
+  MULTIPLE-VALID-SIGNATURES (4) — fix-round addition (kernel review, s61 tip c3d773a): the
+                         `.asc` carries MORE THAN ONE valid signature (filing/gpg_trust.py's
+                         `signing_key_fingerprint` raises rather than silently reporting the
+                         first VALIDSIG it sees) — grading a signature against ONE s41 binding
+                         requires ONE unambiguous signer; never guessed.
 
 REVISION NOTE (2026-07-11/12, same commission, caught by an out-of-frame hack-rationalization
 audit before this shipped as "done" — CLAUDE.md's engineering-responsibility corollary in
@@ -97,7 +102,7 @@ USAGE:
                                         # and/or --json freely.
 
 EVENT JOURNAL (E6 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4, added 2026-07-12): every run
-that reaches a determination -- one of the three verdicts above OR one of the two typed refusals
+that reaches a determination -- one of the three verdicts above OR one of the three typed refusals
 -- appends ONE line to `<world>/.claude/logs/verify_commission.jsonl` ({"ts": <UTC-Z
 milliseconds>, "verdict": <the determination string>}), the unified hook-journal timestamp
 convention this project's other journals already use (hooks/posttooluse_bash_completion.py's own
@@ -177,9 +182,10 @@ def _journal_verify_commission(world_root: Path, verdict: str) -> None:
     """E6 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4): append ONE line naming this run's
     determination -- best-effort, fail-open (module docstring's EVENT JOURNAL section): a
     journaling failure must never turn a real verdict into a crash or change this verb's exit
-    code. `verdict` is one of the closed five: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
-    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY (the two typed refusals) --
-    never a sixth value, so a consumer's Verdict vocabulary stays closed by construction."""
+    code. `verdict` is one of the closed six: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
+    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY, MULTIPLE-VALID-SIGNATURES
+    (the three typed refusals) -- never a seventh value, so a consumer's Verdict vocabulary stays
+    closed by construction."""
     try:
         path = world_root / ".claude" / "logs" / "verify_commission.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -324,6 +330,12 @@ def verify(dep, row: dict, world_root: Path) -> tuple[str, str, str | None, str 
             detail = (r.stdout + r.stderr).strip()
             if r.returncode == 0 and "Good signature" in detail:
                 # v1.1 (spec §2 item 2): grade against the s41 binding, when one exists.
+                # fix-round finding (kernel review, s61 tip c3d773a): a multi-signature .asc
+                # (more than one VALIDSIG line) cannot honestly be graded against ONE signing
+                # key -- gpg_trust.signing_key_fingerprint refuses rather than silently picking
+                # the first; propagated here as-is (caught by main(), the caller-side typed-
+                # refusal home every other precondition in this file already uses -- see
+                # NoCommittedKey/BindingCheckUnavailable just above).
                 sig_fp = gpg_trust.signing_key_fingerprint(r.stdout)
                 grade = "DIRECTORY-VERIFIED"
                 grade_note = "verified against this deployment's keys/ directory only"
@@ -451,6 +463,21 @@ def main(argv: list[str]) -> int:
             print(f"  statement: {row['statement']!r}")
             print(f"  [!!] NO-COMMITTED-KEY -- {e}")
         return 3
+    except gpg_trust.MultipleValidSignatures as e:
+        # fix-round finding (kernel review, s61 tip c3d773a): a FOURTH typed refusal, mirroring
+        # the NO-COMMITTED-KEY precedent's own REVISION NOTE (never overload an existing verdict
+        # for a precondition none of the three actually decides) -- a .asc carrying more than one
+        # valid signature cannot honestly be graded against ONE signing key.
+        _journal_verify_commission(world_root, "MULTIPLE-VALID-SIGNATURES")
+        if as_json:
+            print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                               "refusal": "MULTIPLE-VALID-SIGNATURES", "detail": str(e)}, indent=2))
+        else:
+            print(f"verify-commission: row {row['id']} (actor={row['actor']}, "
+                  f"signing_mode={signing_mode(row)})")
+            print(f"  statement: {row['statement']!r}")
+            print(f"  [!!] MULTIPLE-VALID-SIGNATURES -- {e}")
+        return 4
 
     _journal_verify_commission(world_root, verdict)
 
