@@ -1,10 +1,16 @@
 # FABLE-CONSULT-ACCESS-CONTROL-DEPTH-2026-07-22 — the D2–D4 decision series, elaborated to the maintainer's own depth axes
 
 <!-- doc-attest-exempt: ADR-0014 consult deliverable, banked as delivered 2026-07-22
-(fidelity is the value; committed 2026-07-26 after sitting untracked since delivery,
-surfaced by the trusted-domains/taint capability question, ledger row 1377). Decision-support
-for the maintainer's D2-D4 ruling, awaiting his read. Removal condition: superseded by that
-ruling or by the access-control spec that follows it. -->
+(fidelity is the value; committed 2026-07-26, ledger rows 1377/1378). STATUS CORRECTED at
+banking (row 1378): the maintainer REJECTED this document at delivery for a commissioning
+defect -- the brief asked for a GENERIC access-control depth treatment covering taint+DMZ
+as instances, and the examples became the scope: the deliverable covers exactly taint+DMZ
+and nothing generic (the examples-became-the-scope commissioning-defect specimen, third of
+its class). Its taint and zone content remains sound AS INSTANCE ELABORATION and is read
+that way under the generic frame the later work-gating consult supplied
+(CONSULT-WORK-GATING-SHAPE-2026-07-26.md's factored acceptance predicate, whose conjunct
+seats are where this document's mechanisms slot). Removal condition: superseded by the
+maintainer's D2-D4 ruling or the access-control spec. -->
 
 
 **Provenance.** Fresh-context Fable consult, commissioned by the maintainer 2026-07-22
