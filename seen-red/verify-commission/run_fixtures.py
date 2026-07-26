@@ -100,30 +100,14 @@ REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 LINEAGE = REPO / "kernel" / "lineage"
 
-# fix-round finding (kernel review, s61 tip c3d773a): bootstrap/new-project.sh's OWN --new-world
-# LINEAGE_CHAIN is stale -- it ends at s57-obligation-revocation-event.sql, so a plain --new-world
-# scaffold carries NEITHER s60 (the entitlement acceptance predicate) NOR s61 (this delta's own
-# signature-symmetry/key-binding kinds and columns) -- s61's own PREREQUISITE section names s60 as
-# a hard dependency, and s60's names s59, which names s58. Case g below needs the REAL
-# `principal_key_possession_verified` kind and `key_binding_possession_ref` column s61 adds (the
-# possession ceremony the FAQ's §10a now documents), so this fixture applies the s58..s61 TAIL
-# additively onto the SAME schema/kern/role --new-world already scaffolded -- mirroring
-# seen-red/s61-signature-symmetry-and-key-binding/run_fixtures_cli.py's own CHAIN_S61 tail
-# (ADR-0012 P1: the same four filenames, not re-derived). No birth sequence is needed for either
-# new act: entitlement_act_class_of (s60 Element 7) returns NULL for principal_key_bound,
-# principal_key_possession_verified, AND commission_signature_verified alike -- none of s61's own
-# new writes fall inside s60's gated act-class set, verified by reading that function's body
-# before relying on it here.
-CHAIN_TAIL_S61 = ["s58-missive-substrate.sql", "s59-missive-views.sql",
-                   "s60-entitlement-enforcement.sql", "s61-signature-symmetry-and-key-binding.sql"]
-
-
-def apply_chain_tail(dep) -> subprocess.CompletedProcess[str]:
-    args = ["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1",
-            "-v", f"schema={dep.schema}", "-v", f"kern={dep.kern}", "-v", f"role={dep.role}"]
-    for name in CHAIN_TAIL_S61:
-        args += ["-f", str(LINEAGE / name)]
-    return sh(args)
+# RETIRED chain-tail application (diagnosis 2026-07-26, ledger rows 1459/1462): this fixture
+# once applied the s58..s61 tail manually because --new-world's LINEAGE_CHAIN genuinely ended
+# at s57 when the comment justifying it was written (commits 28f1f78/aee305c). Commit 66d39f0,
+# merged the same day from a parallel worktree, extended the chain through s58-s62 (now s64) --
+# so the tail re-apply became a DOUBLE application: s58's ledger_kind_check re-issue narrowed
+# the vocabulary back to 30 kinds while s60's birth sequence had already written
+# entitlement_class_configured rows, detonating at s58-missive-substrate.sql:283. The scaffold
+# now births the full chain; case g's s61 kinds/columns are present with no manual tail.
 
 # cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
 # seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
@@ -288,16 +272,10 @@ def main() -> int:
               f"grade={body_b.get('grade')} signing_key={body_b.get('signing_key_fingerprint')} "
               f"(expected DIRECTORY-VERIFIED / {test_fpr})", failures)
 
-        # apply the s58..s61 chain TAIL now (see CHAIN_TAIL_S61's own comment above) -- additive,
-        # onto the SAME schema/kern/role, so case g's ceremony below has the real s61 kinds/
-        # columns to write against, never a stale pre-s61 kernel silently accepting a fingerprint
-        # bind with no possession proof (that silent acceptance is exactly the false witness this
-        # fix round exists to close).
+        # The s58..s61 chain tail is ALREADY PRESENT from --new-world's own full-chain birth
+        # (see the RETIRED note at the top of this module); nothing is re-applied here. The
+        # load below stays: case g's ceremony needs the deployment record either way.
         dep = deployment_record.load_deployment(world_dir / "deployment.json")
-        r_chain = apply_chain_tail(dep)
-        if r_chain.returncode != 0:
-            print("s58..s61 CHAIN TAIL APPLY FAILED:", r_chain.stdout[-2000:], r_chain.stderr[-2000:])
-            return 1
 
         # s61 item 3 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2, landed the SAME commit as
         # this case's own docstring update): a FRESH `bind-key` now REQUIRES proof of possession
@@ -309,14 +287,14 @@ def main() -> int:
         possess_asc = tmp / "possession.asc"
         rsign_possess = sh(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "-o",
                              str(possess_asc), "-"], input=possess_statement, env=gpg_env)
-        r_attest_poss = sh(["bash", str(world_dir / "led"), "principal", "attest-possession",
+        r_attest_poss = sh(["bash", str(world_dir / "autoharn"), "led", "principal", "attest-possession",
                              test_fpr, "--asc", str(possess_asc)],
                             env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
         possess_row = None
         if r_attest_poss.returncode == 0:
             m_poss = re.search(r"row (\d+) written", r_attest_poss.stdout)
             possess_row = m_poss.group(1) if m_poss else None
-        r_bind = sh(["bash", str(world_dir / "led"), "principal", "bind-key", "commissioner",
+        r_bind = sh(["bash", str(world_dir / "autoharn"), "led", "principal", "bind-key", "commissioner",
                      "--fingerprint", test_fpr,
                      "--possession-ref", possess_row or ""],
                     env={**os.environ, "LED_ACTOR": "commissioner"}, cwd=str(world_dir))
