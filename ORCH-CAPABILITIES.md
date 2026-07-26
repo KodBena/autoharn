@@ -211,6 +211,16 @@ family is `DIVERGE_DEFECT`/`QUARANTINED`. Deliberately observer-first: not wired
 run banked was deliberately removed after the probe teardown (out of this pass's touch-only-
 CAPABILITIES.md scope, and specific to the torn-down `capsprobe` world).
 
+**Honest limit (named 2026-07-26, ledger row 1435; the s61→s63 incident's structural lesson):**
+the differential's guarantee perimeter EXCLUDES write-boundary refusal drift, and always has —
+the ASP twin derives from already-ACCEPTED rows and has no INSERT-time concept, while per-kind
+refusal logic lives only in the SQL write triggers; a refused write never becomes a row, so no
+corpus of accepted-row scenarios can expose a silently-dropped refusal branch (s61 dropped four
+and every `AGREE` stayed green). Coverage for that perimeter is the separate instruments:
+`gates/lineage_reissue_lineage.py` (prior-body hash binding) and `gates/kernel_function_census.py`
+(banked body census), per `design/FABLE-S63-SUPERSESSION-BODY-RESTORATION-SPEC.md` §2. Read
+`AGREE` as "derived views bit-identical," never as "the write boundary is undrifted."
+
 **`--layer` (2026-07-18, `engine/ledger_differential.py`'s own `--layer` flag, passed through
 `./judge`'s unmodified `"$@"`) — the same differential machinery run over a NAMED registry layer
 (`engine/lp_registry.py`'s `LAYERS`) instead of only the original `tnow` (record-time) stack.**
