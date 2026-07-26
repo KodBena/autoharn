@@ -205,10 +205,30 @@ def capture_all(schema: str, kern: str) -> dict[str, str]:
     return out
 
 
+def _no_duplicate_keys(pairs: list[tuple[str, str]]) -> dict[str, str]:
+    """object_pairs_hook for json.loads -- json.loads' default dict-building silently keeps only
+    the LAST value of a repeated key, so a hand-edited bank with the same function name twice
+    would pass with zero warning (the exact hazard a bank diff exists to catch, turned against
+    itself). REFUSE loudly instead, naming every duplicated key -- never a silent last-write-wins."""
+    seen: dict[str, int] = {}
+    for k, _ in pairs:
+        seen[k] = seen.get(k, 0) + 1
+    dupes = sorted(k for k, n in seen.items() if n > 1)
+    if dupes:
+        raise SystemExit(
+            f"REFUSED: gates/kernel_function_census_bank.json (or the --bank-path given) "
+            f"contains {len(dupes)} duplicated key(s), which json.loads would otherwise silently "
+            f"resolve to only the LAST occurrence's value -- corrupting the audit value of every "
+            f"diff this bank feeds. Duplicated key(s): {', '.join(dupes)}. Fix: remove the "
+            f"duplicate entry/entries (or re-run --bank to regenerate the whole file cleanly) "
+            f"before trusting any verify/self-test run against this bank.")
+    return dict(pairs)
+
+
 def load_bank(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys)
 
 
 def save_bank(path: Path, bank: dict[str, str]) -> None:
