@@ -15,7 +15,11 @@ a pinned git submodule, and it adds governance around the work you're already do
 > beyond that you should treat as aspiration until you have witnessed it yourself. (This
 > project once watched a rewrite quietly turn an "aspires to NIST..." into a bare
 > conformance claim, and wrote law about that class of drift afterwards; this notice is
-> the same honesty, applied by hand to our own front page.)
+> the same honesty, applied by hand to our own front page.) In particular: access
+> control is deeply flawed and rudimentary due to Fable→Opus demotion when planning
+> making it impossible to produce any decently robust and flexible specification
+> (maintainer's own words, 2026-07-26 — recorded so it is not forgotten; true
+> regardless of any implementation).
 
 This page is only about deployment: getting autoharn wired into a project of your own, and
 keeping it that way. It assumes you have `psql` and `git` on your `PATH` and a Postgres database
