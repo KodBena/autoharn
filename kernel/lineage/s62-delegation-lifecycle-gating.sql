@@ -81,6 +81,25 @@
 -- pre-s60 kernel fails loudly at CREATE TIME with "relation entitlement_class_roles does not
 -- exist" / "function ... does not exist", the correct, disclosed failure mode, matching every
 -- prior PREREQUISITE precedent verbatim.
+--
+-- FIX ROUND (2026-07-26, fresh-context review BLOCKS MERGE finding, addressed before any merge
+-- to main): the ORIGINAL text of the new branch classified 'delegation_lifecycle' solely off the
+-- CANDIDATE row's own principal_relation = 'acts-for' -- correct for a fresh assertion, but wrong
+-- for a supersession, because s45 (kernel/lineage/s45-standing-lifecycle.sql lines ~135-163)
+-- deliberately does not enforce value-continuity between a superseding row and its target for
+-- the s41 relation kinds. A chainless, roleless third party could therefore write {kind:
+-- principal_relation_asserted, principal_relation: 'dispatched-by', supersedes: <id of a live
+-- acts-for edge>} -- the classifier returned NULL, validate_entitlement's early return let it
+-- through ungated, and the write severed the target's delegation edge: full sabotage/DoS on the
+-- authority graph, demonstrated live by the reviewer on scratch. Element 1 below now classifies
+-- 'delegation_lifecycle' on the UNION of (a) the candidate's own principal_relation = 'acts-for'
+-- (unchanged) and (b) r.supersedes IS NOT NULL and the TARGET row's principal_relation =
+-- 'acts-for' (new) -- mirroring the sibling gate_edge_supersession branch's own target-read
+-- shape. The union only ADDS refusals (more rows now require the chain check; nothing previously
+-- gated is now ungated), so the delta stays inside the class-ratified fail-safe family this file
+-- already claimed. One new DECLARE (v_target_relation) was added to hold the target's
+-- principal_relation; s60's own DECLARE (v_target_edge_type) is untouched, preserving that
+-- earlier byte-identity claim for the sibling branch.
 -- ============================================================================================
 \if :{?schema}
 \else
@@ -96,20 +115,24 @@
 \endif
 
 -- ============================================================================================
--- ELEMENT 1 -- entitlement_act_class_of RE-ISSUED: ONE NEW BRANCH, EVERY EXISTING BRANCH
--- BYTE-PRESERVED. Diff against s60's Element 7 text (kernel/lineage/s60-entitlement-enforcement.sql
+-- ELEMENT 1 -- entitlement_act_class_of RE-ISSUED: ONE NEW BRANCH (now with two internal
+-- conditions, unioned -- see the FIX ROUND note above), EVERY EXISTING BRANCH BYTE-PRESERVED.
+-- Diff against s60's Element 7 text (kernel/lineage/s60-entitlement-enforcement.sql
 -- lines ~495-529): every IF/RETURN pair through 'work_depends_on' is copied verbatim, in the SAME
 -- order, with the SAME early-return shape; the ONLY addition is the new branch below, placed
 -- LAST (after the existing work_depends_on/gate_edge_supersession check, before the final
 -- fall-through RETURN NULL) -- an ordering choice that touches no earlier branch's own
 -- reachability (every earlier branch still RETURNs before control could ever reach this one; this
--- branch's own IF is the new final guard ahead of the pre-existing terminal 'RETURN NULL').
+-- branch's own IF is the new final guard ahead of the pre-existing terminal 'RETURN NULL'). The
+-- branch's own body mirrors the sibling gate_edge_supersession branch's target-read shape
+-- (SELECT ... INTO ... FROM ledger l WHERE l.id = r.supersedes) for its own condition (b).
 -- ============================================================================================
 CREATE OR REPLACE FUNCTION :"schema".entitlement_act_class_of(r :"schema".ledger)
     RETURNS text LANGUAGE plpgsql STABLE
     SET search_path = :"schema", :"kern", pg_temp AS $fn$
 DECLARE
   v_target_edge_type text;
+  v_target_relation text;
 BEGIN
   IF r.kind = 'principal_registered' THEN
     RETURN 'principal_registered';
@@ -139,15 +162,40 @@ BEGIN
     RETURN NULL;
   END IF;
   -- s62 (kernel/lineage/s62-delegation-lifecycle-gating.sql, design/
-  -- FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1 AMENDMENT, row 1385): principal_relation_asserted
-  -- rows naming relation 'acts-for' -- FRESH OR SUPERSEDING, kind alone decides the class,
-  -- s60's own precedent for every other branch above (fresh-vs-supersedes never distinguished by
-  -- entitlement_act_class_of anywhere in this function; conjunct (b) below is what tells the two
-  -- cases apart via the ACTOR's chain, not this classifier). r.principal_relation is the s41 D-5
-  -- column already carrying the free-text relation token (principal_relations' own source
-  -- column) -- read directly off NEW/candidate r, never a second lookup.
-  IF r.kind = 'principal_relation_asserted' AND r.principal_relation = 'acts-for' THEN
-    RETURN 'delegation_lifecycle';
+  -- FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1 AMENDMENT, row 1385, FIX ROUND per fresh-context
+  -- review BLOCKS MERGE finding): principal_relation_asserted rows join 'delegation_lifecycle'
+  -- under EITHER of two conditions, unioned -- (a) the CANDIDATE row's own principal_relation =
+  -- 'acts-for' (a fresh assertion; also covers a same-relation supersession, since a superseding
+  -- row's own principal_relation is independently populated by the writer, s41 D-5), OR (b)
+  -- r.supersedes IS NOT NULL and the TARGET row's principal_relation = 'acts-for' -- mirroring
+  -- the sibling gate_edge_supersession branch immediately above (SELECT ... INTO v_target_edge_type
+  -- FROM ledger l WHERE l.id = r.supersedes), applied to principal_relation instead of edge_type.
+  -- WHY THE UNION, NOT (a) ALONE: s45 (kernel/lineage/s45-standing-lifecycle.sql lines ~135-163)
+  -- deliberately does NOT enforce value-continuity between a superseding row and its supersession
+  -- target for the s41 binding/relation kinds (named there as a disclosed limit, retrofitting
+  -- forbidden by ADR-0004's unordered-sweep rule) -- so a candidate row is free to name ANY
+  -- principal_relation (e.g. 'dispatched-by') while supersedes points at a live 'acts-for' edge.
+  -- Classifying on (a) alone reads the CANDIDATE's own relation and returns NULL for such a row,
+  -- ungating it entirely: a chainless/roleless third party could write {principal_relation:
+  -- 'dispatched-by', supersedes: <acts-for edge id>} and sever the target's delegation edge with
+  -- no conjunct-(b) check at all -- full sabotage/DoS on the authority graph, demonstrated live
+  -- against the pre-fix text. Condition (b) closes it: ANY row superseding a live acts-for edge
+  -- is delegation_lifecycle, regardless of what relation the superseding row itself claims.
+  -- Query the TARGET only when supersedes is present (mirrors the gate_edge_supersession branch's
+  -- own guard); one new DECLARE (v_target_relation) added for this branch's own column, kept
+  -- distinct from v_target_edge_type (a different target column, edge_type, read by the sibling
+  -- branch above) rather than overloading that variable's name for a different meaning.
+  IF r.kind = 'principal_relation_asserted' THEN
+    IF r.principal_relation = 'acts-for' THEN
+      RETURN 'delegation_lifecycle';
+    END IF;
+    IF r.supersedes IS NOT NULL THEN
+      SELECT l.principal_relation INTO v_target_relation FROM ledger l WHERE l.id = r.supersedes;
+      IF v_target_relation = 'acts-for' THEN
+        RETURN 'delegation_lifecycle';
+      END IF;
+    END IF;
+    RETURN NULL;
   END IF;
   RETURN NULL;
 END; $fn$;
@@ -310,10 +358,24 @@ COMMENT ON FUNCTION :"schema".validate_entitlement() IS
 --     included, by construction (it was never act-class-specific); this delta's own header note
 --     there, and in engine/ledger_edb.py's export_entitlement() docstring, records the s62
 --     extension for the record. ./judge holds AGREE on this delta's fixture
---     (seen-red/s62-delegation-lifecycle-gating/), including on the attack scenario itself (a
---     refused principal's self-asserted edge is never written, so it never enters either side's
---     EDB -- AGREE is a statement about the CHAIN the exporter reads, unaffected by which writes
---     the trigger refused before they became rows).
+--     (seen-red/s62-delegation-lifecycle-gating/) -- STATED HONESTLY (fix-round correction, a
+--     fresh-context review finding: the ORIGINAL text here overclaimed AGREE's reach): AGREE
+--     proves CHAIN-DERIVATION CONSISTENCY ONLY -- that on the post-delegation/post-supersession
+--     ledger snapshot, the SQL function (principal_authority_chain_reaches_genesis) and the ASP
+--     closure (reaches_genesis/1) compute the IDENTICAL reachable set from the SAME in-force
+--     acts-for edges. It says nothing, by itself, about WRITE-TIME REFUSAL -- whether the right
+--     writes were classified 'delegation_lifecycle' and gated by conjunct (b) in the first place
+--     is entirely outside AGREE's scope (a refused write's edge is never written and so never
+--     enters either side's EDB at all -- AGREE cannot see, let alone confirm, a refusal that
+--     produced no row). Write-time refusal correctness is what the RED fixtures above prove
+--     (RED-ATTACK, RED-ATTACK-STILL-BLOCKED, RED-SUPERSESSION-UNAUTHORIZED) and what the GREEN
+--     fixtures prove for the accepting side (GREEN-DELEGATOR-WRITES-EDGE, GREEN-SUPERSESSION-
+--     BY-DELEGATOR). The two legs are complementary, not redundant: AGREE alone would pass even
+--     if entitlement_act_class_of classified every principal_relation_asserted row as NULL (an
+--     ungated world still has a well-defined, SQL/ASP-agreeing chain over whatever edges got
+--     written) -- coverage of THIS delta's actual claim (unauthorized writes are refused) rests
+--     on the red/green fixtures, with AGREE contributing only the independent-derivation check
+--     on the resulting chain, together, not either alone.
 --   - DENOMINATION: unchanged from s60 -- entitlement in in-force EVENTS, computed fresh, never
 --     cached; act-class identity in the SAME kernel-computed string vocabulary, now seven
 --     members; no bound is a bare round literal.

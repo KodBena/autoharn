@@ -21,6 +21,18 @@ Per row 1385's own commission, RED FIRST -- the headline is THE ATTACK ITSELF:
   GREEN-DELEGATOR-WRITES-EDGE -- the delegator (chain-connected) writes the SAME edge on the
                  attacker's behalf -- ACCEPTED -- and the attacker's NEXT authority-bearing act
                  now PASSES (the legitimate path this delta must not close).
+  RED-SUPERSESSION-WRONG-RELATION -- FIX-ROUND HEADLINE (fresh-context review BLOCKS MERGE
+                 finding, 2026-07-26, reviewer-witnessed live): a CHAINLESS AND ROLELESS third
+                 party (never bound any role) writes {kind: principal_relation_asserted,
+                 principal_relation: 'dispatched-by', supersedes: <live acts-for edge id>}. The
+                 candidate row's OWN relation is not 'acts-for', so the pre-fix classifier
+                 (reading only the candidate row) returned NULL and let the write through with
+                 ZERO entitlement check, severing the target's delegation edge -- full
+                 sabotage/DoS on the authority graph. Post-fix, the classifier ALSO reads the
+                 TARGET row's own principal_relation (s45 does not enforce value-continuity
+                 across a supersession for the s41 relation kinds, so the candidate's claimed
+                 relation cannot be trusted alone) -- REFUSED, and a follow-up act through the
+                 SAME edge proves no side effect occurred.
   RED-SUPERSESSION-UNAUTHORIZED -- an actor with no chain attempts to supersede (retract) the
                  now-live edge -- REFUSED (conjunct b, same act class).
   GREEN-SUPERSESSION-BY-DELEGATOR -- the delegator (root-chained) supersedes the SAME edge --
@@ -246,6 +258,21 @@ def supersede_acts_for(world: str, actor: str, subject: str, obj: str, old_id: s
         "supersedes": old_id})
 
 
+def supersede_with_relation(world: str, actor: str, subject: str, obj: str, relation: str,
+                             old_id: str) -> dict:
+    """The fix-round attack shape (fresh-context review finding, 2026-07-26): a superseding row
+    naming a DIFFERENT principal_relation than its target (s45 does not enforce value-continuity
+    across a supersession for the s41 relation kinds, kernel/lineage/
+    s45-standing-lifecycle.sql lines ~135-163) -- exercises whether the classifier reads the
+    TARGET's own relation, not just the candidate row's own claimed relation."""
+    return bw_call(world, "ledger_write", {
+        "kind": "principal_relation_asserted", "actor": actor,
+        "statement": f"{subject} {relation} {obj} (claims to supersede row {old_id})",
+        "principal_subject": subject, "principal_object": obj,
+        "principal_relation": relation, "principal_binding_active": "false",
+        "supersedes": old_id})
+
+
 def bind_role(world: str, actor: str, subject: str, role_name: str) -> dict:
     return bw_call(world, "ledger_write", {
         "kind": "principal_role_bound", "actor": actor,
@@ -320,6 +347,39 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
               v_now_chained["disposition"] == "accepted",
               f"attacker's next authority-bearing act, through the legitimately-written chain "
               f"-- verdict={v_now_chained}", failures)
+
+        # ---- RED-SUPERSESSION-WRONG-RELATION: the fix-round headline attack (fresh-context
+        # review BLOCKS MERGE finding, 2026-07-26) -- a CHAINLESS AND ROLELESS third party
+        # (no bind_role call at all, unlike attacker/outsider above) writes a
+        # principal_relation_asserted row naming a DIFFERENT relation ('dispatched-by', never
+        # 'acts-for') while supersedes points at the live acts-for edge. Pre-fix, the classifier
+        # read only the CANDIDATE row's own principal_relation, returned NULL for 'dispatched-by',
+        # and let the write through ungated -- severing the edge with zero entitlement check.
+        # Post-fix, the classifier also reads the TARGET row's principal_relation (mirroring the
+        # sibling gate_edge_supersession branch) and classifies this row 'delegation_lifecycle'
+        # regardless of what relation it itself claims -- REFUSED.
+        saboteur = register(world_main, "saboteur", "subagent", author)
+        v_wrong_relation = supersede_with_relation(
+            world_main, saboteur, attacker, author, "dispatched-by", edge_row_id) \
+            if edge_row_id else {"disposition": "error", "message": "no edge_row_id"}
+        check("RED-SUPERSESSION-WRONG-RELATION-refused",
+              v_wrong_relation["disposition"] == "refused"
+              and "conjunct b" in v_wrong_relation["message"]
+              and "delegation_lifecycle" in v_wrong_relation["message"],
+              f"saboteur (CHAINLESS, ROLELESS -- no role ever bound) supersedes the live "
+              f"acts-for edge with a row claiming relation 'dispatched-by' -- the pre-fix "
+              f"classifier read only the candidate's own relation and returned NULL for this "
+              f"row, ungating it entirely -- verdict={v_wrong_relation}", failures)
+
+        v_edge_survived = bw_call(world_main, "registration_write", {
+            "name": "attacker-victim-post-sabotage", "agent_class": "subagent", "actor": attacker,
+            "purpose": "attacker's act after the blocked sabotage attempt -- the edge must "
+                       "still be live, proving the refused write had no side effect"})
+        check("RED-SUPERSESSION-WRONG-RELATION-no-side-effect",
+              v_edge_survived["disposition"] == "accepted",
+              f"attacker's authority-bearing act, through the SAME edge, immediately after the "
+              f"blocked sabotage attempt -- the edge was never severed -- verdict={v_edge_survived}",
+              failures)
 
         # ---- RED-SUPERSESSION-UNAUTHORIZED: an unchained actor tries to retract the edge ----
         outsider = register(world_main, "outsider", "subagent", author)
