@@ -55,6 +55,22 @@ WITNESSES:
   R8  POST-FIX CODE, the length-cap boundary: a 65-character name refuses on charset before any
       `led` call; a 64-character name is charset-legal and reaches the registration check.
 
+  R9-R12 (ledger row 1384, dispatch-principal-run-led-shlex): a fresh migration micro-round
+  flagged that `run_led`'s own `[led] + args` never shlex-split `led` at all and had none of
+  the LedUnusable-class handling the three sibling `run_led` homes (drive.py's DRIVE_TEMPLATE,
+  role_charter.py, role_brief.py) just got in the confirming-review round above -- same class,
+  a fourth home, pre-existing at the time of that round (out of scope for it, filed instead).
+  R9  RED-FIRST, PRE-FIX CODE (git 875d0cd, this branch's own tip immediately before this
+      fix): a multi-token `--led "python3 <path>"` value -- a legitimate way to invoke a
+      non-executable-bit `led` wrapper via its interpreter -- fails, `subprocess.run` treating
+      the whole string as one literal (nonexistent) program name.
+  R10 POST-FIX CODE, GREEN counterpart to R9: the identical multi-token `--led` value now
+      shlex-splits into a real argv prefix and the dispatch succeeds.
+  R11 POST-FIX CODE: an empty/whitespace `--led` value refuses BEFORE any subprocess is
+      attempted (would otherwise exec args[0] itself as the program, silently).
+  R12 POST-FIX CODE: a malformed-quoting `--led` value (an unterminated quote) is a named,
+      teaching refusal, never an uncaught ValueError traceback.
+
 Usage: python3 seen-red/dispatch-principal-charset-guard/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned; stdlib only.
 """
@@ -83,6 +99,9 @@ PRE_FIX_COMMIT = "b4bb250"
 # tip immediately before the ORIGINAL charset-injection fix (R1). Both are real commits on this
 # branch's own history, not synthetic.
 PRE_FIX_COMMIT_HYPHEN = "81a7268"
+# row 1384's own pre-fix tip: this branch's HEAD immediately before the run_led shlex fix
+# (R9-R12 below) -- distinct from both commits above, which predate two EARLIER fix rounds.
+PRE_FIX_COMMIT_SHLEX = "875d0cd"
 REGISTER_PRINCIPAL_ARGPARSE_WITNESS = HERE / "register_principal_argparse_witness.py"
 
 HOSTILE_NAME = "builder$(touch PWNED)"
@@ -108,6 +127,19 @@ def run_preamble(dispatch_principal_path: Path, name: str, scenario: str) -> sub
     return subprocess.run(
         [sys.executable, str(dispatch_principal_path), "preamble", name,
          "--led", str(MOCK_LED), "--scan-limit", "100"],
+        capture_output=True, text=True,
+        env={"MOCK_LED_SCENARIO": scenario, "PATH": "/usr/bin:/bin",
+             "PYTHONPATH": str(REPO / "tools")},
+    )
+
+
+def run_preamble_with_led(dispatch_principal_path: Path, name: str, led: str,
+                           scenario: str) -> subprocess.CompletedProcess:
+    """Same as run_preamble, but with an explicit, possibly multi-token/malformed/empty `--led`
+    value -- R9-R12's own axis (row 1384), distinct from run_preamble's fixed MOCK_LED path."""
+    return subprocess.run(
+        [sys.executable, str(dispatch_principal_path), "preamble", name,
+         "--led", led, "--scan-limit", "100"],
         capture_output=True, text=True,
         env={"MOCK_LED_SCENARIO": scenario, "PATH": "/usr/bin:/bin",
              "PYTHONPATH": str(REPO / "tools")},
@@ -320,6 +352,44 @@ def main() -> int:
           f"stderr={r8_65.stderr.strip()!r}\n"
           f"  64-char: exit={r8_64.returncode} passed-charset-reached-registration-check="
           f"{r8_64_passed_charset} stdout={r8_64.stdout.strip()!r}")
+
+    # R9: RED-FIRST, PRE-FIX CODE (875d0cd, this branch's own tip immediately before the
+    # run_led shlex fix) -- a multi-token `--led "python3 <path>"` value fails as one literal
+    # (nonexistent) program name, `subprocess.run` never shlex-splitting it.
+    pre_fix_shlex_path = materialize_git_blob(PRE_FIX_COMMIT_SHLEX, "tools/dispatch_principal.py",
+                                               "_dispatch_principal_pre_fix_shlex.py")
+    multi_token_led = f"{sys.executable} {MOCK_LED}"
+    try:
+        r9 = run_preamble_with_led(pre_fix_shlex_path, CLEAN_NAME, multi_token_led, "clean-registered")
+        r9_failed_as_one_literal = "No such file or directory" in r9.stderr
+        check("R9-pre-fix-multi-token-led-fails-as-one-literal-program-name",
+              r9.returncode == 1 and r9_failed_as_one_literal,
+              f"exit={r9.returncode} led={multi_token_led!r} stderr={r9.stderr.strip()!r}")
+    finally:
+        pre_fix_shlex_path.unlink(missing_ok=True)
+
+    # R10: POST-FIX CODE, GREEN counterpart to R9 -- the identical multi-token `--led` value
+    # now shlex-splits into a real argv prefix and the dispatch succeeds.
+    r10 = run_preamble_with_led(POST_FIX_DISPATCH_PRINCIPAL, CLEAN_NAME, multi_token_led, "clean-registered")
+    check("R10-post-fix-multi-token-led-shlex-splits-and-succeeds",
+          r10.returncode == 0 and r10.stdout.strip() == f"export LED_ACTOR={CLEAN_NAME}",
+          f"exit={r10.returncode} led={multi_token_led!r} stdout={r10.stdout.strip()!r} stderr={r10.stderr.strip()!r}")
+
+    # R11: POST-FIX CODE -- empty/whitespace `--led` refuses before any subprocess is attempted
+    # (would otherwise exec args[0] itself as the program, silently).
+    r11 = run_preamble_with_led(POST_FIX_DISPATCH_PRINCIPAL, CLEAN_NAME, "   ", "clean-registered")
+    check("R11-post-fix-empty-led-refuses-before-any-exec",
+          r11.returncode == 1 and "empty/whitespace" in r11.stderr
+          and "export LED_ACTOR" not in r11.stdout,
+          f"exit={r11.returncode} stderr={r11.stderr.strip()!r}")
+
+    # R12: POST-FIX CODE -- malformed shell quoting in `--led` is a named, teaching refusal,
+    # never an uncaught ValueError traceback.
+    r12 = run_preamble_with_led(POST_FIX_DISPATCH_PRINCIPAL, CLEAN_NAME, 'unterminated "quote', "clean-registered")
+    check("R12-post-fix-malformed-led-quoting-is-a-named-refusal-not-a-traceback",
+          r12.returncode == 1 and "malformed shell quoting" in r12.stderr
+          and "Traceback" not in r12.stderr,
+          f"exit={r12.returncode} stderr={r12.stderr.strip()!r}")
 
     if FAILURES:
         print(f"dispatch-principal-charset-guard: {len(FAILURES)} case(s) FAILED: {FAILURES}")
