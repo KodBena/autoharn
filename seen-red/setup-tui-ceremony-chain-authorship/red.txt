@@ -1,0 +1,117 @@
+seen-red/setup-tui-ceremony-chain-authorship -- banked RED/GREEN evidence (both-polarity proof, fixture-census)
+
+Work item tui-ceremony-chain-authorship (ledger rows 1390/1391): tools/setup_tui/
+principals_authority.py's register_principal_act/grant_competence_act/relate_act used to force
+`LED_ACTOR=commissioner` on every founding "Principals & authority" ceremony write.
+'commissioner' is registered BY 'author' (the scaffold's own genesis-chained connection
+principal) for a narrow, different purpose (FULL-mode commission signing) and never asserts an
+acts-for edge of its own -- so it does not chain-reach genesis. kernel/lineage/
+s60-entitlement-enforcement.sql (merged) already classifies `principal_registered` as
+authority-bearing (register_principal_act was ALREADY broken on any s60+ world, a hazard broader
+than ledger row 1390's own framing); kernel/lineage/s62-delegation-lifecycle-gating.sql (branch
+worktree-agent-a9b3bd5031b11cd5a, commit 680e6e2 -- the s62 branch's round-3-reviewed HEAD (round
+1, commit 4b425b3, closed a critical supersession-classification bypass a fresh-context review
+found in the first cut, f099ed0; round 2, row 1403, generalized that fix to a general
+target-class supersession gate; round 3's fresh-context review CLEARS; NOT yet on main, but
+becomes main-reachable at the coupled merge) additionally
+classifies the acts-for relate as authority-bearing (delegation_lifecycle). THE FIX: all three
+acts now leave LED_ACTOR unset, letting the served connection's own declared-default actor
+resolve (bound to 'author' at birth) -- charter_register_act already had this shape and needed
+no change. INFORMATIONAL: that declared-default resolution holds absent ambient LED_ACTOR
+contamination in the operator's own environment (env=None passthrough, the same shape as the
+pre-existing charter_register_act) -- not an unconditional guarantee, and no new machinery is
+proposed here.
+
+Real captured stdout, 2026-07-26, a live re-run against this build's working tree, re-pinned to
+the literal SHA 680e6e2 (the s62 branch's round-3-reviewed HEAD, ledger rows 1404/1408 --
+this fixture's own S62_SRC_COMMIT previously pinned round-1's fix, 4b425b3; round 2, row 1403,
+generalized the supersession-classification fix from one candidate kind to a general
+target-class supersession gate -- a new entitlement_act_class_of_target function plus an
+entitlement_enforce_class helper gating BOTH the candidate's own class and, when superseding, the
+TARGET's class -- and restructured validate_entitlement's RAISE EXCEPTION text to name the
+source (candidate/target) conjunct that fired and cite row 1403's fix rule; round 3's
+fresh-context review CLEARS with no further text change). CONSEQUENCE FOR THIS FIXTURE: the
+WORLD-S60 legs (s60 only, no s62 SQL loaded) are BYTE-IDENTICAL to the prior banked run, since
+s60's own conjunct-a text is untouched by round 2. The WORLD-S62 conjunct-b refusal text DID
+change -- this ceremony's own relate_act write is a fresh assertion (not a supersession), so its
+disposition is unaffected (still refused pre-fix, still accepted post-fix), but round 2 rewrote
+validate_entitlement's conjunct-b RAISE EXCEPTION string unconditionally for every caller,
+candidate-source and target-source alike, so the MESSAGE BODY captured below differs from the
+prior banked run: was `entitlement refused (s60/s62, factored acceptance predicate conjunct b) —
+act class 'delegation_lifecycle' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-
+SPEC.md §1.1b, delegation_lifecycle per the 2026-07-26 amendment, row 1385);`, now
+`entitlement refused (s60/s62/round-2 row 1403, factored acceptance predicate conjunct b, this
+row's own act class) — act class 'delegation_lifecycle' is authority-bearing (design/FABLE-
+ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b, delegation_lifecycle per the 2026-07-26 amendment, row
+1385; the TARGET-class conjunct per row 1403's round-2 fix rule -- "severance is an act against
+the TARGET's class");` -- EXPECTED AND DISCLOSED, not a disposition flip: every leg below still
+resolves ok=False/ok=True identically to the prior banked run (real Postgres, real `<dest>/led`
+served CLI, real boundary_service spawned via ensure-running, s62 SQL cherry-picked from 680e6e2
+into kernel/lineage/ at fixture start and removed again at fixture end -- working-tree only,
+never committed by this fixture or this build):
+
+$ python3 seen-red/setup-tui-ceremony-chain-authorship/run_fixtures.py
+-- cherry-picked s62 SQL from 680e6e2 into kernel/lineage/s62-delegation-lifecycle-gating.sql (working tree only, NEVER committed by this fixture or this build) --
+== scaffolding classic world cauths60 (chain ends s60-entitlement-enforcement.sql) ==
+$ <dest>/led register-principal orchestrator subagent --purpose 'orchestrator connection principal'
+led: boundary at http://127.0.0.1:19420 was unreachable -- spawned it (pid ...); proceeding.
+led: REFUSED by the kernel write boundary (SQLSTATE P0001; journaled as write_refused row 14 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  Ledger policy: entitlement refused (s60, factored acceptance predicate conjunct a) — act class 'principal_registered' requires an in-force role binding named 'authority' (this world's configured entitlement map, see entitlement_class_roles); actor 3 holds no such binding. Remedy: a principal who ALREADY holds the 'authority' role (or genesis-chain authority) binds it to you: ./led principal bind-role <your-principal-name> "authority" (kernel/lineage/s41-principal-bindings-and-relations.sql), then retry this act. See design/USER-RECIPES-FAQ.md's entitlement-enforcement recipe for the worked example (kernel/lineage/s60-entitlement-enforcement.sql).
+=== WORLD-S60-RED-old-code-register-refused ===
+  [ok] OLD principals_authority.py (LED_ACTOR=commissioner) drives register-principal 'orchestrator' on an s60 (no s62) world -- ok=False, refused on conjunct a (commissioner holds no 'authority' role binding) -- reproducing the PRE-EXISTING, broader hazard (this defect predates s62 and is already live under s60 alone)
+
+$ <dest>/led register-principal orchestrator subagent --purpose 'orchestrator connection principal'
+led: row 15 written.
+=== WORLD-S60-GREEN-fixed-code-register-accepted ===
+  [ok] CURRENT (fixed) principals_authority.py, identical call -- ok=True, accepted
+
+=== WORLD-S60-GREEN-authored-by-author ===
+  [ok] 'orchestrator' registered with actor=author's own id -- the declared-default actor resolution, not a self-asserted or fabricated attribution
+
+== scaffolding classic world cauths62 (chain ends s62-delegation-lifecycle-gating.sql) ==
+$ <dest>/led principal relate orchestrator acts-for author
+led: REFUSED by the kernel write boundary (SQLSTATE P0001; journaled as write_refused row 15 -- the refusal itself is now a committed, hash-chained ledger record, s43):
+  Ledger policy: entitlement refused (s60/s62/round-2 row 1403, factored acceptance predicate conjunct b, this row's own act class) — act class 'delegation_lifecycle' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b, delegation_lifecycle per the 2026-07-26 amendment, row 1385; the TARGET-class conjunct per row 1403's round-2 fix rule -- "severance is an act against the TARGET's class"); actor 3's authority chain (transitive reachability over in-force acts-for relations, kernel/lineage/s41-principal-bindings-and-relations.sql) does not reach this world's genesis principal. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you (...) — or have a severed link repaired (...).
+=== WORLD-S62-RED-old-code-relate-refused ===
+  [ok] OLD principals_authority.py (LED_ACTOR=commissioner) drives 'orchestrator acts-for author' on the s62 world -- ok=False, refused on conjunct b (delegation_lifecycle) -- reproducing THE ledger-row-1390 hazard specifically, s62's own header note
+
+$ <dest>/led principal relate orchestrator acts-for author
+led: row 16 written.
+=== WORLD-S62-GREEN-fixed-code-relate-accepted ===
+  [ok] CURRENT (fixed) principals_authority.py, identical relation -- ok=True, accepted
+
+=== WORLD-S62-GREEN-edge-lands-in-view ===
+  [ok] principal_relations carries 1 'orchestrator acts-for author' row(s) (expect 1)
+
+=== WORLD-S62-GREEN-subsequent-act-passes-conjunct-b ===
+  [ok] a SUBSEQUENT authority-bearing act run AS 'orchestrator' (fresh <dest>/led call, no TUI) -- exit=0, 'led: row 18 written.' -- conjunct b now passes through the newly-written chain
+
+$ <dest>/led register-principal scout subagent --purpose 'second fixture principal, full ceremony in one call'
+led: row 19 written.
+$ <dest>/led principal relate scout acts-for author
+led: row 20 written.
+=== WORLD-S62-GREEN-FULL-CEREMONY-completes ===
+  [ok] CURRENT code, register + relate together in ONE submit() call for a fresh principal 'scout' -- both entries ok=True
+
+=== WORLD-S62-GREEN-FULL-CEREMONY-scout-subsequent-act ===
+  [ok] 'scout' (registered + related in the SAME ceremony call) passes a subsequent authority-bearing act too -- exit=0
+
+== scaffolding classic world cauthpre (chain ends s59-missive-views.sql, no entitlement family -- 'born before s62') ==
+$ <dest>/led register-principal orchestrator subagent --purpose 'orchestrator connection principal'
+led: row 7 written.
+$ <dest>/led principal relate orchestrator acts-for author
+led: row 8 written.
+=== WORLD-PRE-ZERO-FRICTION-fixed-code-still-completes ===
+  [ok] CURRENT (fixed) code, full ceremony, on a world born BEFORE s60/s62 (no entitlement family present at all) -- must complete exactly as it always did: both entries ok=True
+
+-- removed the working-tree-only s62 cherry-pick at kernel/lineage/s62-delegation-lifecycle-gating.sql (never committed) --
+
+ALL CASES OK -- work item tui-ceremony-chain-authorship: the founding ceremony's three
+commissioner-authored acts now leave LED_ACTOR unset (declared-default -> 'author',
+genesis-chained), fixing BOTH the pre-existing s60-only register_principal_act hazard and the
+s62-surfaced relate_act hazard, zero-friction on worlds born before either kernel delta.
+
+(Full untruncated stdout, including real scratch tmpdir paths / spawned pids / full refusal
+message bodies, is reproducible byte-for-byte by re-running the command above; abridged here
+for legibility only -- every `[ok]`/`ALL CASES OK` line above is verbatim from a real run,
+nothing paraphrased.)
