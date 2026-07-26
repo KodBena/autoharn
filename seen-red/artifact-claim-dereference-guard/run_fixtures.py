@@ -159,8 +159,9 @@ def _run_led(dest: Path, *args: str, env: dict | None = None) -> tuple[int, str,
     if env:
         full_env = os.environ.copy()
         full_env.update(env)
-    cp = subprocess.run([str(dest / "led"), *args], cwd=str(dest), capture_output=True, text=True,
-                         env=full_env)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    cp = subprocess.run([str(dest / "autoharn"), "led", *args], cwd=str(dest),
+                         capture_output=True, text=True, env=full_env)
     return cp.returncode, cp.stdout, cp.stderr
 
 

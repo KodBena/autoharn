@@ -191,9 +191,18 @@ def main() -> int:
     r = _run_scaffold(dest, "--name", SCRATCH_NAME, "--schema", SCHEMA, "--kern", KERN, "--role", ROLE)
     ok = r.returncode == 0
     dep_path = dest / "deployment.json"
-    scaffold_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
-                      "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
-    verbs_present = all((dest / v).exists() and (dest / v).stat().st_mode & 0o111 for v in scaffold_verbs)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+    # SPEC.md's scaffold clause executes): the RED-leg shape change itself -- a tracker-profile
+    # world now gets ONE dispatcher, `autoharn`, and NONE of the ten bare per-verb shims (the
+    # old-shape absence is the red leg; a pre-migration scaffold HAD each of these ten files).
+    old_shim_verbs = ("led", "judge", "pickup", "audit", "distance-to-clean",
+                       "verify-commission", "verify-chain", "attest-doc", "asof-export", "doctor")
+    no_old_shims = not any((dest / v).exists() for v in old_shim_verbs)
+    verbs_present = bool(
+        no_old_shims
+        and (dest / "autoharn").exists()
+        and (dest / "autoharn").stat().st_mode & 0o111
+    )
     boundary_toml = (dest / "boundary-multiplex.toml").is_file()
     no_hooks = not (dest / ".claude" / "settings.json").exists() and not (dest / "CLAUDE.md").exists()
     dep = json.loads(dep_path.read_text(encoding="utf-8")) if dep_path.exists() else {}
@@ -211,8 +220,9 @@ def main() -> int:
 
     # ---------------------------------------------------------------- GREEN-BOUNDARY-AUTOSPAWN
     pidfile_before = (dest / ".autoharn-service.pid").exists()
-    r_open = subprocess.run([str(dest / "led"), "work", "open", "smoke", "fixture smoke item"],
-                            capture_output=True, text=True, cwd=str(dest))
+    # §6 amendment: routed through the one dispatcher now, not a bare `led` shim.
+    r_open = subprocess.run([str(dest / "autoharn"), "led", "work", "open", "smoke",
+                             "fixture smoke item"], capture_output=True, text=True, cwd=str(dest))
     autospawned = "spawned it" in r_open.stderr or "unreachable" in r_open.stderr.lower() and r_open.returncode == 0
     pidfile_after = (dest / ".autoharn-service.pid").exists()
     autospawn_ok = (not pidfile_before) and r_open.returncode == 0 and pidfile_after
@@ -225,13 +235,16 @@ def main() -> int:
           f"{'PASS' if autospawn_ok else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-ROUNDTRIP
-    r_list1 = subprocess.run([str(dest / "led"), "work", "list"], capture_output=True, text=True, cwd=str(dest))
+    r_list1 = subprocess.run([str(dest / "autoharn"), "led", "work", "list"],
+                             capture_output=True, text=True, cwd=str(dest))
     list1_ok = r_list1.returncode == 0 and '"slug": "smoke"' in r_list1.stdout
-    r_claim = subprocess.run([str(dest / "led"), "work", "claim", "smoke"], capture_output=True, text=True, cwd=str(dest))
-    r_close = subprocess.run([str(dest / "led"), "work", "close", "smoke", "shipped",
+    r_claim = subprocess.run([str(dest / "autoharn"), "led", "work", "claim", "smoke"],
+                             capture_output=True, text=True, cwd=str(dest))
+    r_close = subprocess.run([str(dest / "autoharn"), "led", "work", "close", "smoke", "shipped",
                               "--review-deferred", "--witness", "test:fixture"],
                              capture_output=True, text=True, cwd=str(dest))
-    r_list2 = subprocess.run([str(dest / "led"), "work", "list"], capture_output=True, text=True, cwd=str(dest))
+    r_list2 = subprocess.run([str(dest / "autoharn"), "led", "work", "list"],
+                             capture_output=True, text=True, cwd=str(dest))
     list2_ok = r_list2.returncode == 0 and '"slug": "smoke"' not in r_list2.stdout
     roundtrip_ok = (list1_ok and r_claim.returncode == 0 and r_close.returncode == 0 and list2_ok)
     if not roundtrip_ok:
@@ -243,7 +256,8 @@ def main() -> int:
           f"list(excludes closed) -- {'PASS' if roundtrip_ok else 'FAIL'}")
 
     # ---------------------------------------------------------------- GREEN-DOCTOR
-    r_doctor = subprocess.run([str(dest / "doctor")], capture_output=True, text=True, cwd=str(dest))
+    r_doctor = subprocess.run([str(dest / "autoharn"), "doctor"], capture_output=True, text=True,
+                              cwd=str(dest))
     doctor_ok = r_doctor.returncode == 0 and "0 FAIL" in r_doctor.stdout
     if not doctor_ok:
         failures.append(f"GREEN-DOCTOR: exit={r_doctor.returncode}\n{r_doctor.stdout}")

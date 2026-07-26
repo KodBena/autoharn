@@ -275,17 +275,24 @@ def main() -> int:
         orig_cwd = os.getcwd()
         os.chdir(str(world_dir))
         try:
+            # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer
+            # has a bare `./led` shim -- role_charter.py's own `--led` now shlex-splits its value
+            # into an argv prefix, so the served default here is "./autoharn led" (two tokens,
+            # space-joined), not "./led". `./legacy/led` (the C-site retirement stub) is
+            # UNCHANGED and deliberately untouched -- its own teaching text now says "Use
+            # ./autoharn led instead." (new-project.sh's own stub, updated in the same migration),
+            # so the assertion below is repointed to match, not the invocation.
             print("== W1: RED -- check_charter() against ./legacy/led (the pre-fix hardcoded value) ==")
             rc, out = check_charter("./legacy/led", "author")
             check("w1-red-exit-1", rc == 1, f"rc={rc}", failures)
-            check("w1-red-teaches-retirement", "RETIRED" in out and "Use ./led instead" in out,
-                  f"out={out!r}", failures)
+            check("w1-red-teaches-retirement",
+                  "RETIRED" in out and "Use ./autoharn led instead" in out, f"out={out!r}", failures)
 
             print("== registering a real charter for 'author' via tools/role_charter.py's own flow ==")
             charter_md = world_dir / "roles" / "author-CHARTER.md"
             charter_md.write_text("# fixture charter for author\n")
             cp = sh([sys.executable, str(ROLE_CHARTER_PY), "register", "author",
-                    "roles/author-CHARTER.md", "--led", "./led"],
+                    "roles/author-CHARTER.md", "--led", "./autoharn led"],
                    cwd=str(world_dir), env={**os.environ, "LED_ACTOR": "author"})
             check("register-charter-ok", cp.returncode == 0,
                   f"exit={cp.returncode} {cp.stdout!r} {cp.stderr!r}", failures)
@@ -297,10 +304,11 @@ def main() -> int:
             rc, out = check_charter("./legacy/led", "author")
             check("w1b-red-still-exit-1-after-real-charter", rc == 1, f"rc={rc}", failures)
             check("w1b-red-still-teaches-retirement",
-                  "RETIRED" in out and "Use ./led instead" in out, f"out={out!r}", failures)
+                  "RETIRED" in out and "Use ./autoharn led instead" in out, f"out={out!r}", failures)
 
-            print("== W2: GREEN -- check_charter() against ./led (the post-fix served default) ==")
-            rc, out = check_charter("./led", "author")
+            print("== W2: GREEN -- check_charter() against ./autoharn led (the post-fix served "
+                  "default) ==")
+            rc, out = check_charter("./autoharn led", "author")
             check("w2-green-exit-0", rc == 0, f"rc={rc}", failures)
             check("w2-green-in-force", "IN-FORCE charter registration" in out, f"out={out!r}", failures)
             check("w2-green-no-drift", "DRIFT" not in out, f"out={out!r}", failures)

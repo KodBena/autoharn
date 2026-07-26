@@ -151,9 +151,16 @@ def main() -> int:
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "pickup"):
-            (world_dir / verb).chmod(0o755)
-        rl = sh(["bash", str(world_dir / "led"), "decision", "row one, via led"], cwd=str(world_dir))
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has
+        # bare `led`/`pickup` shim files -- one dispatcher, `autoharn`, chmod'd already by
+        # new-project.sh itself; this chmod is now a defensive no-op, kept for symmetry with the
+        # sibling families that guard it with `.exists()`.
+        for verb in ("autoharn",):
+            p = world_dir / verb
+            if p.exists():
+                p.chmod(0o755)
+        rl = sh(["bash", str(world_dir / "autoharn"), "led", "decision", "row one, via led"],
+                cwd=str(world_dir))
         if rl.returncode != 0:
             print("led write FAILED:", rl.stdout, rl.stderr)
             return 1

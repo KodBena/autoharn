@@ -228,11 +228,17 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
             "--schema", schema, "--kern", kern, "--role", role])
     if r.returncode != 0:
         raise RuntimeError(f"CLASSIC SCAFFOLD FAILED ({world}): {r.stdout[-2000:]} {r.stderr[-1500:]}")
-    for verb_dir in (world_dir, world_dir / "legacy"):
-        for verb in ("led", "judge", "pickup"):
-            p = verb_dir / verb
-            if p.exists():
-                p.chmod(0o755)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): world_dir gets ONE dispatcher now,
+    # not three per-verb shims -- legacy/ (a separate, deliberately-unmigrated mechanism) is
+    # unchanged.
+    for verb in ("autoharn",):
+        p = world_dir / verb
+        if p.exists():
+            p.chmod(0o755)
+    for verb in ("led", "judge", "pickup"):
+        p = world_dir / "legacy" / verb
+        if p.exists():
+            p.chmod(0o755)
     args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
             "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
     for name in chain:

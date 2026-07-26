@@ -249,7 +249,9 @@ def main() -> int:
                 "--db", DB, "--host", HOST, "--schema", schema4, "--kern", kern4, "--role", role4,
                 "--name", f"dpf{STAMP}g4", "--governed", "*.py", "--pin", "submodule"], cwd=worktree)
         autoharn_dir = dest4 / ".autoharn"
-        led_shim = dest4 / "led"
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): one dispatcher, `dest4/autoharn`,
+        # replaces the ten per-verb shims -- same "resolves into the pin" assertion, one file now.
+        led_shim = dest4 / "autoharn"
         shim_ok = led_shim.exists() and str(autoharn_dir) in led_shim.read_text()
         settings_ok = (dest4 / ".claude" / "settings.json").exists() and \
             str(worktree) not in (dest4 / ".claude" / "settings.json").read_text() and \
@@ -265,8 +267,9 @@ def main() -> int:
         if akr.returncode != 0:
             check("GREEN 4c: kernel apply for smoke test", False, akr.stdout + akr.stderr)
         else:
-            smoke = _sh([str(dest4 / "led"), "decision", "pinning-fixture smoke test (new-deployment path)"], cwd=dest4)
-            recent = _sh([str(dest4 / "led"), "--recent", "1"], cwd=dest4)
+            smoke = _sh([str(dest4 / "autoharn"), "led", "decision",
+                         "pinning-fixture smoke test (new-deployment path)"], cwd=dest4)
+            recent = _sh([str(dest4 / "autoharn"), "led", "--recent", "1"], cwd=dest4)
             check("GREEN 4c (real ./led decision + --recent round-trip through the pin, real postgres)",
                   smoke.returncode == 0 and recent.returncode == 0 and "pinning-fixture smoke test" in recent.stdout,
                   f"smoke: {smoke.stdout}{smoke.stderr}\nrecent: {recent.stdout}{recent.stderr}")
@@ -277,13 +280,14 @@ def main() -> int:
         r = _sh(["bash", str(worktree / "bootstrap" / "new-project.sh"), str(dest5),
                 "--db", DB, "--host", HOST, "--schema", schema5, "--kern", kern5, "--role", role5,
                 "--name", f"dpf{STAMP}g5", "--governed", "*.py"], cwd=worktree)
-        classic_led = (dest5 / "led").read_text() if (dest5 / "led").exists() else ""
+        # §6 amendment: reads the one dispatcher's content, not a per-verb shim's.
+        classic_led = (dest5 / "autoharn").read_text() if (dest5 / "autoharn").exists() else ""
         check("SETUP: classic (live-exec) deployment scaffolded for the conversion cases",
               r.returncode == 0 and str(worktree) in classic_led, r.stdout + r.stderr)
 
         rc = _sh(["bash", str(CONVERT), str(dest5), "--yes"], cwd=REPO)
         settings_text = (dest5 / ".claude" / "settings.json").read_text() if (dest5 / ".claude" / "settings.json").exists() else ""
-        led_text = (dest5 / "led").read_text() if (dest5 / "led").exists() else ""
+        led_text = (dest5 / "autoharn").read_text() if (dest5 / "autoharn").exists() else ""
         pin_sha5 = _git(dest5 / ".autoharn", "rev-parse", "HEAD").stdout.strip() if (dest5 / ".autoharn").is_dir() else ""
         no_leftover = str(worktree) not in settings_text and str(worktree) not in led_text
         check("GREEN 5a (convert-to-submodule.sh: classic deployment converts, pinned to the commit it was actually running)",
@@ -294,8 +298,9 @@ def main() -> int:
         if akr5.returncode != 0:
             check("GREEN 5b: kernel apply for smoke test", False, akr5.stdout + akr5.stderr)
         else:
-            smoke5 = _sh([str(dest5 / "led"), "decision", "pinning-fixture smoke test (conversion path)"], cwd=dest5)
-            recent5 = _sh([str(dest5 / "led"), "--recent", "1"], cwd=dest5)
+            smoke5 = _sh([str(dest5 / "autoharn"), "led", "decision",
+                          "pinning-fixture smoke test (conversion path)"], cwd=dest5)
+            recent5 = _sh([str(dest5 / "autoharn"), "led", "--recent", "1"], cwd=dest5)
             check("GREEN 5b (real ./led round-trip through the converted pin, real postgres)",
                   smoke5.returncode == 0 and recent5.returncode == 0 and "conversion path" in recent5.stdout,
                   f"smoke: {smoke5.stdout}{smoke5.stderr}\nrecent: {recent5.stdout}{recent5.stderr}")
@@ -406,7 +411,7 @@ def main() -> int:
         check("GREEN 13 (upgrade-submodule.sh does NOT refuse a bystander process, lists it as not-blocking, and upgrades)",
               r8.returncode == 0 and "not blocking" in r8.stdout and f"pid={proc4.pid}" in r8.stdout,
               r8.stdout + r8.stderr)
-        smoke8 = _sh([str(dest5 / "led"), "--recent", "1"], cwd=dest5)
+        smoke8 = _sh([str(dest5 / "autoharn"), "led", "--recent", "1"], cwd=dest5)
         check("GREEN 8b (real ./led round-trip through the UPGRADED pin, real postgres)",
               smoke8.returncode == 0 and "conversion path" in smoke8.stdout,
               smoke8.stdout + smoke8.stderr)

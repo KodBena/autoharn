@@ -173,7 +173,8 @@ def teardown_all() -> None:
 
 
 def led(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir))
 
 
 def psql_tuples(sql: str) -> subprocess.CompletedProcess[str]:
@@ -203,7 +204,7 @@ def scaffold(world: str) -> tuple[Path, dict, subprocess.Popen]:
             "--db", PGDB, "--host", PGHOST])
     if r.returncode != 0:
         raise RuntimeError(f"SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
-    for verb in ("led", "judge", "pickup"):
+    for verb in ("autoharn",):
         p = world_dir / verb
         if p.exists():
             p.chmod(0o755)

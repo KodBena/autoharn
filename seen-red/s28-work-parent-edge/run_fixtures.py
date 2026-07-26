@@ -137,7 +137,9 @@ def teardown_all() -> None:
 
 
 def led(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir))
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has a
+    # bare `world_dir/led` shim file -- routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir))
 
 
 def psql_tuples(sql: str) -> subprocess.CompletedProcess[str]:
@@ -159,7 +161,7 @@ def main() -> int:
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:])
             return 1
-        for verb in ("led", "judge", "pickup"):
+        for verb in ("autoharn",):
             p = world_dir / verb
             if p.exists():
                 p.chmod(0o755)

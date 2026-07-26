@@ -110,7 +110,8 @@ def led(world_dir: Path, *args: str, env: dict | None = None) -> subprocess.Comp
     e = dict(os.environ)
     if env:
         e.update(env)
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir), env=e)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir), env=e)
 
 
 def led_stamped(world_dir: Path, *args: str, session: str | None = None,
@@ -132,7 +133,8 @@ def led_stamped(world_dir: Path, *args: str, session: str | None = None,
         pgopts.append(f"-c app.vendor_invocation={invocation}")
     if pgopts:
         e["PGOPTIONS"] = " ".join(pgopts)
-    return sh(["bash", str(world_dir / "led"), *args], cwd=str(world_dir), env=e)
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the one dispatcher now.
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], cwd=str(world_dir), env=e)
 
 
 def psql_tuples(sql: str) -> str:
@@ -461,10 +463,18 @@ def world_f7_check(failures: list[str], tmps: list[Path]) -> None:
     export_path = wdir.parent / "export.jsonl"
     write_export(export_path, records)
 
-    real_led = wdir / "led"
-    real_led_moved = wdir / "led.real"
-    shutil.move(str(real_led), str(real_led_moved))
-    wrapper = wdir / "led"
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has a
+    # bare `wdir/led` shim to move-and-wrap -- the ONE dispatcher `wdir/autoharn` is moved
+    # instead. The wrapper's own interception logic (scan argv for a literal "finding" token)
+    # is UNCHANGED -- it still works with "led" now present as argv[0] ahead of the led-specific
+    # args, since the scan is a membership check, not a positional one -- and the non-
+    # intercepted forward path (`exec "$real_dispatcher_moved" "$@"`) is exactly correct too:
+    # `led_stamped`/`led` above now call `bash wdir/autoharn led <args...>`, so `"$@"` here is
+    # `("led", <args...>)`, precisely what the real (moved) dispatcher itself expects as argv.
+    real_dispatcher = wdir / "autoharn"
+    real_dispatcher_moved = wdir / "autoharn.real"
+    shutil.move(str(real_dispatcher), str(real_dispatcher_moved))
+    wrapper = wdir / "autoharn"
     wrapper.write_text(
         "#!/bin/bash\n"
         "for a in \"$@\"; do\n"
@@ -473,7 +483,7 @@ def world_f7_check(failures: list[str], tmps: list[Path]) -> None:
         "    exit 1\n"
         "  fi\n"
         "done\n"
-        f"exec \"{real_led_moved}\" \"$@\"\n",
+        f"exec \"{real_dispatcher_moved}\" \"$@\"\n",
         encoding="utf-8")
     wrapper.chmod(0o755)
 
