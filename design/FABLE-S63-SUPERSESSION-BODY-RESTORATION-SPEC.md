@@ -5,8 +5,9 @@ the routing question in §5; the delta is built and scratch-witnessed on a branc
 not enter the birth chain until that answer. Removal condition: superseded by the merge
 record of the s63 delta. -->
 
-- **Status:** AUTHORED. The delta may be built and scratch-witnessed immediately; MERGE to
-  `kernel/lineage/` waits on the maintainer's §5 answer.
+- **Status:** ROUTING RESOLVED (§5, 2026-07-26): s63 rides the fail-safe-additive class.
+  The merge is unblocked once the build lands witnessed both polarities with AGREE and
+  passes its strengthened-tier fresh-context review.
 - **Basis:** ledger row 1430 (the witnessed finding), row 1429 (the sweep that surfaced
   it via `belief-substrate-v2` `NEG-cross-principal-supersession-refused`), and the
   investigation transcript (scratch world `s61probe1`, bisect-by-function-swap closing on
@@ -84,16 +85,23 @@ refusal still fires (its block survived the union); the `belief-substrate-v2` fi
 family goes GREEN end-to-end; a full newborn witness through the generated chain
 s20..s63 births clean. SQL/ASP differential in AGREE via `./judge`.
 
-## 5. Routing question for the maintainer (the one yes/no this spec needs)
+## 5. Routing — RESOLVED 2026-07-26 (maintainer delegated the call to Fable's recommendation)
 
-The delta strictly ADDS refusals relative to current head — read literally, it rides the
-class-ratified fail-safe-additive family and enters the birth chain without a per-delta
-question. But the refusals it adds were DROPPED by an unratified accident, and the class
-ruling says doubt about which side a delta falls on IS the routing. Question: **may s63
-enter the birth chain under the fail-safe-additive class (yes), or does restoration of
-accidentally-dropped semantics need your per-delta ratification (no → ratify this spec
-explicitly)?** Either answer unblocks the merge; the build and witness happen before the
-answer either way.
+The fail-safe-additive class is the maintainer ruling of 2026-07-09 in
+[CLAUDE.md](../CLAUDE.md) ("Class-ratified fail-safe deltas"): a kernel lineage delta
+that only ADDS refusals, vocabulary, or derived views — nothing existing relaxed, no
+existing semantics changed — witnessed on a scratch schema on both polarities with the
+SQL/ASP differential in AGREE, is pre-ratified as a class and enters the birth chain
+without a per-delta question; doubt about which side a delta falls on IS the routing.
+
+The doubt here: s63 strictly adds refusals relative to head (letter satisfied), but
+those refusals exist because s61 dropped them by an unratified accident — a
+correction-of-accident shape the 2026-07-09 ruling never contemplated. Asked; the
+maintainer delegated the call. **Resolution: s63 rides the class**, on the reasoning
+that it permits nothing new (it returns the kernel to what s53/s58 already ratified)
+and the class reserves maintainer attention for new permissions. Precedent cabined:
+restoration rides the class only when the drop itself is on the record as an accident
+(here, row 1430); a contested drop's "restoration" does not inherit this path.
 
 ## 6. Closure statement
 
