@@ -54,6 +54,20 @@ FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2) proving the s41 binding-grade 
                                         themself (./led principal bind-key), then the SAME good
                                         signature re-verifies at BINDING-VERIFIED grade -- the s41
                                         binding upgrade, witnessed live.
+  h-multi-signature-attest-refused  -- FIX-ROUND ADDITION (kernel review, s61 tip c3d773a): a
+                                        SECOND throwaway key independently signs the SAME
+                                        statement; both detached signatures are concatenated into
+                                        ONE `.claude/commission-<id>.asc` (real gpg, both
+                                        signatures genuinely verify) -- `verify-commission --attest
+                                        --id <id> --json` REFUSES, MULTIPLE-VALID-SIGNATURES, exit
+                                        4, naming BOTH fingerprints. Prior to this case, ONLY
+                                        seen-red/s61-signature-symmetry-and-key-binding/
+                                        run_fixtures_cli.py's case j exercised this refusal, and
+                                        only through led.tmpl's attest-possession leg -- this
+                                        verb's OWN catch (main()'s `except
+                                        gpg_trust.MultipleValidSignatures` block) had zero shipped
+                                        fixture coverage, proven only by an ad hoc reviewer probe
+                                        (never a shipped case) until now.
 
 Usage: python3 seen-red/verify-commission/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
@@ -167,7 +181,7 @@ def gen_key(gnupghome: Path, name: str, email: str) -> str:
 
 
 def run_verify_commission(world_dir: Path, path_override: str | None = None,
-                           commission_id: int = 1) -> subprocess.CompletedProcess[str]:
+                           commission_id: int = 1, attest: bool = False) -> subprocess.CompletedProcess[str]:
     # AUTOHARN is always the real repo now -- verify-commission.tmpl only uses it to import
     # filing/deployment_record.py + filing/gpg_trust.py (generic modules, unaffected by this
     # refactor); the key-residence axis under test is world_dir/keys/, not AUTOHARN.
@@ -176,7 +190,14 @@ def run_verify_commission(world_dir: Path, path_override: str | None = None,
     env["PICKUP_DEPLOYMENT"] = str(world_dir / "deployment.json")
     if path_override is not None:
         env["PATH"] = path_override
-    return sh(["python3", str(VERIFY_COMMISSION_TMPL), "--id", str(commission_id), "--json"], env=env)
+    args = ["python3", str(VERIFY_COMMISSION_TMPL), "--id", str(commission_id), "--json"]
+    if attest:  # h-multi-signature-attest-refused: mirrors the reviewer's own probe invocation,
+        args.insert(2, "--attest")  # ("--attest --id <n> --json") -- not load-bearing for the
+        # MULTIPLE-VALID-SIGNATURES catch itself (verify() computes sig_fp unconditionally,
+        # before do_attest is even consulted -- see verify-commission.tmpl's own verify()), but
+        # matched here so this case exercises the SAME invocation shape the reviewer's ad hoc
+        # probe (vc_multisig_probe.py) actually witnessed, not merely an equivalent one.
+    return sh(args, env=env)
 
 
 def main() -> int:
@@ -351,6 +372,36 @@ def main() -> int:
         check("e-gpg-absent-typed-refusal", ok_e,
               f"exit={re_.returncode} stderr={(re_.stdout + re_.stderr).strip()[:200]!r}", failures)
 
+        # --- h: FIX-ROUND ADDITION (kernel review, s61 tip c3d773a) -- a SECOND throwaway key
+        # independently signs the SAME statement; the two detached signatures (each individually
+        # genuine, gpg verifies BOTH) are concatenated into ONE `.claude/commission-<id>.asc` --
+        # this verb's OWN MULTIPLE-VALID-SIGNATURES catch (main()'s `except
+        # gpg_trust.MultipleValidSignatures` block) had zero shipped fixture coverage before this
+        # case: run_fixtures_cli.py's case j only exercises led.tmpl's attest-possession leg,
+        # never this verb's. Mirrors the reviewer's own ad hoc probe (never shipped) --
+        # gen_key/gpg_env technique already established by case b above, reused rather than
+        # re-derived.
+        test_fpr2 = gen_key(gnupghome, "AUTOHARN TEST KEY 2 -- THROWAWAY -- SEEN-RED FIXTURE",
+                             "verify-commission-seenred-test-2@example.invalid")
+        sig1_asc = tmp / "h-sig1.asc"
+        sig2_asc = tmp / "h-sig2.asc"
+        rsign1 = sh(["gpg", "--homedir", str(gnupghome), "-u", test_fpr, "--batch", "--yes",
+                     "--detach-sign", "--armor", "-o", str(sig1_asc), "-"], input=statement, env=gpg_env)
+        rsign2 = sh(["gpg", "--homedir", str(gnupghome), "-u", test_fpr2, "--batch", "--yes",
+                     "--detach-sign", "--armor", "-o", str(sig2_asc), "-"], input=statement, env=gpg_env)
+        asc_path.write_text(sig1_asc.read_text(encoding="utf-8") + sig2_asc.read_text(encoding="utf-8"),
+                             encoding="utf-8")
+        r_export2 = sh(["gpg", "--homedir", str(gnupghome), "--armor", "--export", test_fpr2])
+        (keys_dir / "test-key-2.asc").write_text(r_export2.stdout, encoding="utf-8")
+        rh = run_verify_commission(world_dir, commission_id=commission_id, attest=True)
+        body_h = json.loads(rh.stdout) if rh.stdout.strip() else {}
+        ok_h = (rsign1.returncode == 0 and rsign2.returncode == 0 and rh.returncode == 4
+                and body_h.get("refusal") == "MULTIPLE-VALID-SIGNATURES"
+                and test_fpr in body_h.get("detail", "") and test_fpr2 in body_h.get("detail", ""))
+        check("h-multi-signature-attest-refused", ok_h,
+              f"sign1_exit={rsign1.returncode} sign2_exit={rsign2.returncode} exit={rh.returncode} "
+              f"refusal={body_h.get('refusal')} detail={body_h.get('detail', '')[:250]!r}", failures)
+
     finally:
         try:
             bs_fixtures.stop_server(proc)
@@ -363,7 +414,8 @@ def main() -> int:
         print("FAILURES:", failures)
         return 1
     print("ALL CASES OK -- verify-commission both-polarity proof (UNSIGNED / VERIFIED / "
-          "FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal), zero residue.")
+          "FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal / "
+          "MULTIPLE-VALID-SIGNATURES-refusal), zero residue.")
     return 0
 
 

@@ -240,10 +240,10 @@ _VERIFY_COMMISSION_JOURNAL = "verify_commission.jsonl"
 # vocabulary CHECK belongs to preamble_ordering.lp's own `#show`n atoms, not this EDB layer).
 _STOP_OUTCOMES = frozenset({"clean_allow", "observed_would_block", "breaker_fail_open", "blocked"})
 # E6's closed verdict vocabulary (bootstrap/templates/verify-commission.tmpl's own
-# `_journal_verify_commission` call sites) -- named for the same reason. Widened by the s61 fix
-# round (kernel review, tip c3d773a) to include MULTIPLE-VALID-SIGNATURES, that file's fourth
-# typed refusal (filing/gpg_trust.py's signing_key_fingerprint now refuses a multi-signature
-# .asc rather than silently reporting its first VALIDSIG).
+# `_journal_verify_commission` call sites) -- named for the same reason. Widened (s61 fix round,
+# kernel review tip c3d773a) to include MULTIPLE-VALID-SIGNATURES. FRAMING CORRECTION
+# (2026-07-26): unread outside this line (E6's loop checks verdict/ts truthiness only;
+# preamble_ordering.lp's F2 wildcards Verdict) -- declared, fail-safe/additive, not a hazard catch.
 _VERIFY_COMMISSION_VERDICTS = frozenset(
     {"VERIFIED", "UNSIGNED", "FORGED-OR-CORRUPT", "GPG-UNAVAILABLE", "NO-COMMITTED-KEY",
      "MULTIPLE-VALID-SIGNATURES"})
