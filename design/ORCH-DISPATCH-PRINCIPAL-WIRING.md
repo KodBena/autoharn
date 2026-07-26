@@ -10,7 +10,13 @@ writer) has a real distinct actor to check against?
 
 **Status: Sonnet-built 2026-07-26, work item `dispatch-principal-wiring` (ledger row 1356
 claim). Investigate-then-build item; no kernel/lineage, law/, or serving-layer change made or
-needed — this note plus `tools/dispatch_principal.py` are the whole deliverable.**
+needed — this note plus `tools/dispatch_principal.py` are the whole deliverable. Amended
+2026-07-26 by a documented FIX ROUND: an independent code review of the first version of this
+note and `tools/dispatch_principal.py` reported a **BLOCKS-MERGE verdict** — this repository's
+label for a review finding severe enough that the change may not be merged until every finding
+is addressed — with four fixable findings and one process note; every occurrence of "this fix
+round" below refers to the revisions made in direct response to that review, and each is tied
+to the specific finding number that motivated it.**
 
 ## The commission, restated
 
@@ -101,10 +107,17 @@ establishes is for exactly that case.
 `--led PATH`, its sole read surface, no raw SQL, same idiom as `tools/role_charter.py`) and
 exposes two subcommands:
 
-- `preamble <name>` — registered: prints `export LED_ACTOR=<name>`, exit 0. Not registered:
-  REFUSED with the exact registration command, exit 1.
-- `check <name>` — same test, machine-readable `REGISTERED:`/`NOT-REGISTERED:` output, for a
-  batch preflight over several builder names before a wave of dispatches.
+- `preamble <name>` — registered: prints `export LED_ACTOR=<name>` (shell-quoted via
+  `shlex.quote`, belt-and-suspenders), exit 0. Not registered: REFUSED with the exact
+  registration command, exit 1. Both subcommands first REFUSE any `<name>` outside
+  `[A-Za-z0-9_-]+` (fix round finding 1, this document's own attestation history: an unquoted
+  paste line built from an unconstrained name was a shell-injection hazard, e.g.
+  `builder$(touch PWNED)`) before doing anything else, including talking to `led` at all.
+- `check <name>` — same test, machine-readable `REGISTERED:`/`NOT-REGISTERED:` output by
+  default (using Python `repr()` for the name, not hand-rolled quotes — fix round finding 4)
+  or, with `--json`, one `{"name": ..., "registered": true|false}` object — for a batch
+  preflight over several builder names before a wave of dispatches, or a brief-generator that
+  wants to parse the result.
 
 ## Witnesses (scratch world, both polarities; see this fix round's ledger writeup for the full
 transcript)
@@ -138,20 +151,47 @@ The parked `obligation-actor-type-system` item
 (`design/FABLE-OBLIGATION-DEPENDENT-TYPING-SPEC.md` sec-3, "the typed-actor question... a later
 amendment to the node predicate") is the natural next step once dispatched builders carry
 distinct registered principals: a future Fable-authored kernel delta could type WHICH
-principal/class may discharge WHICH obligation (the "NRC-certified-signer analogy" that spec's
-own reviewer pass — labeled "SCOUT" in that document's own text — flagged as an open question).
+principal/class may discharge WHICH obligation — the "NRC-certified-signer analogy": the idea,
+by loose analogy to the US Nuclear Regulatory Commission's rule that only a specifically
+certified individual may sign off on certain regulated actions, that only a principal of the
+right TYPE should be able to discharge a given obligation, rather than any registered
+principal at all. That spec's own reviewer pass — labeled "SCOUT" in that document's own
+text — flagged the analogy as an open question, not yet a decided design.
 This work item is what gives that future amendment real per-builder
 identities to type against — it does not attempt the typing itself, which is kernel-touching
 and stays Fable-spec/maintainer-ratified.
 
 ## Honest limits
 
-- `tools/dispatch_principal.py` tests REGISTRATION only, the same test `led`'s own
-  `_resolve_actor` performs — it does not duplicate the kernel's live suspended/revoked
-  standing check (`law/adr/0012-compositional-and-structural-hygiene.md`'s principle P1,
+- `tools/dispatch_principal.py` tests REGISTRATION only — an ANALOGOUS, BOUNDED APPROXIMATION
+  of the test `led`'s own `_resolve_actor` performs server-side (corrected this fix round,
+  review finding 3: an earlier draft of this note overclaimed "the SAME test"). `_resolve_actor`
+  answers "does a `principal_registered` event for this name exist" against
+  `GET /standing/principals`, a served, indexed, UNBOUNDED view; `tools/dispatch_principal.py`
+  answers the identical QUESTION by scanning at most the most recent `--scan-limit` (default
+  100000) rows of `led current N` client-side. The two views diverge exactly at scale: on a
+  ledger with more than `scan_limit` rows, a registration event older than the scan window
+  reads NOT-REGISTERED here while `led`'s own indexed lookup still finds it — a false-refusal
+  on this preflight only, never a false-pass, and never load-bearing for correctness (the real
+  write still resolves correctly either way; see `tools/dispatch_principal.py`'s own
+  `principal_is_registered` docstring for the full statement). It does not duplicate the
+  kernel's live suspended/revoked standing check
+  (`law/adr/0012-compositional-and-structural-hygiene.md`'s principle P1,
   "single source of truth": one home for that fact, and it is the kernel's `set_actor`
   trigger). A name registered now and suspended later still passes this preflight and then
   correctly refuses at the real write.
+- **Per-builder principal ACCUMULATION, undocumented until this fix round (review finding 2).**
+  Every successful `./led register-principal builder-<slug> subagent` this convention drives
+  is an append-only ledger write, forever — there is no retirement/supersession step in this
+  convention or in `tools/dispatch_principal.py`, and neither invents one. The registry grows
+  by one principal per dispatched builder, unconditionally; nothing here ever revisits or
+  prunes it. When a builder's work item is done and an orchestrator wants that principal off
+  its own routine attention, the SEAM is the standing-lifecycle machinery already shipped for
+  every other principal: `kernel/lineage/s45-standing-lifecycle.sql`'s typed standing events,
+  driven by `./led principal suspend builder-<slug> "<reason>"`. That is the existing event an
+  orchestrator uses — not a new mechanism minted by this item, and not automated by
+  `tools/dispatch_principal.py`, which never calls it on the caller's behalf (same posture as
+  registration itself: a real ledger write stays the orchestrator's own deliberate act).
 - This note documents a convention, not a kernel kind — a hand-typed `LED_ACTOR` that skips
   the preflight is caught by `led`'s own refusal regardless, so nothing here is load-bearing
   for correctness; the preflight only saves a wasted dispatch turn.
@@ -160,3 +200,28 @@ and stays Fable-spec/maintainer-ratified.
   under. `hooks/pretooluse_delegation_observer.py` still journals every dispatch's `tool_use_id`
   but does not itself check or inject `LED_ACTOR` — that would be a hooks/ change and is out of
   scope for this item (and hooks/ is never touched during a live session per CLAUDE.md).
+
+## Attestation note (added this fix round, review finding 5 — no code change, honesty only)
+
+Every maintainer-facing document in this repository is required to pass a **fresh-context
+audit loop** before it counts as finished
+([law/adr/0017-the-zero-context-reader.md](../law/adr/0017-the-zero-context-reader.md), "the
+A:B:C loop" it defines): **A** is whoever wrote the document; **B** is a separately forked
+reviewer given only the document and that ADR, never A's own conversation, whose job is to
+check that a reader with none of A's context can actually parse it; **C** repairs whatever B
+found, and — when B still finds something after two rounds — **adjudicates** the escalation,
+which the ADR's own design assumes is someone other than A, for the same reason A cannot judge
+their own document's legibility.
+
+The escalated round of this document's own A:B:C loop
+(`attestations/doc-legibility-attestations.jsonl`, the record for this file's pre-fix-round
+content hash) was adjudicated by "row-1356 builder (Sonnet, acting as C in the absence of a
+separate orchestrator mid-task)" — i.e. self-adjudicated by the same builder who authored the
+document, not by an independent maintainer/orchestrator recipient. The BLOCKS-MERGE review this
+fix round responds to flagged that as a real gap in the escalation discipline (the A:B:C loop
+assumes C is someone other than the author for exactly this reason): the disposition applied
+was mechanical (unglossed cross-references given file-path citations, one sentence's grammar
+fixed, no content claims changed), so the risk this particular instance carried was low, but the
+PROCESS gap — author and adjudicator being the same actor — stands as reviewed and is recorded
+here rather than left silent. No code change follows from it; a future escalation on this
+document should route to an actual second party where one is available.

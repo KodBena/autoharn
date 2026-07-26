@@ -32,7 +32,10 @@ deriving one.
 
 Usage:
     python3 tools/dispatch_principal.py preamble <name> [--led PATH] [--scan-limit N]
-    python3 tools/dispatch_principal.py check <name>    [--led PATH] [--scan-limit N]
+    python3 tools/dispatch_principal.py check <name>    [--led PATH] [--scan-limit N] [--json]
+
+Both subcommands REFUSE first, before touching `led` at all, on any `<name>` containing a
+character outside `[A-Za-z0-9_-]` -- see `validate_name_charset`'s docstring.
 
 `preamble <name>`: if `<name>` is a registered, non-suspended-looking principal (see "Honest
 limits" below), prints the ready-to-paste `export LED_ACTOR=<name>` line for the dispatch
@@ -43,17 +46,36 @@ to run first -- exit 1. This mirrors (and is a thin preflight in front of) `led`
 IDENTICAL refusal at write time, never a laxer or stricter one (defense in depth, not a second
 authority).
 
-`check <name>`: same registration test, machine-readable (`REGISTERED`/`NOT-REGISTERED` on
-stdout), exit 0/1 -- for a caller that wants the fact without the formatted preamble line (e.g.
-a batch pre-flight over several builder names before a wave of dispatches).
+`check <name>`: same registration test, machine-readable (`REGISTERED`/`NOT-REGISTERED: repr(name)`
+on stdout by default, or one `{"name": ..., "registered": true|false}` JSON object with `--json`
+-- see `cmd_check`'s own docstring for the quoting rule, finding 4 this fix round), exit 0/1 --
+for a caller that wants the fact without the formatted preamble line (e.g. a batch pre-flight
+over several builder names before a wave of dispatches, or a brief-generator parsing `--json`).
 
 Honest limits: this tool tests REGISTRATION only (a `principal_registered` event exists for
-`<name>`), the exact same test `led`'s own `_resolve_actor` performs -- it does NOT check
-suspended/revoked standing (that is a live kernel fact `led`'s `set_actor` trigger enforces at
-write time regardless of what this preflight says; a name that was registered and later
-suspended still passes THIS check and then correctly refuses at the real write -- this tool never
-duplicates that live-standing computation, per ADR-0012 P1, one home for that fact and it is the
-kernel's).
+`<name>`) -- an ANALOGOUS, BOUNDED APPROXIMATION of the test `led`'s own `_resolve_actor`
+performs server-side, not the identical test (finding 3, this fix round's review; see
+`principal_is_registered`'s own docstring below for exactly where and at what scale the two can
+diverge). It does NOT check suspended/revoked standing (that is a live kernel fact `led`'s
+`set_actor` trigger enforces at write time regardless of what this preflight says; a name that
+was registered and later suspended still passes THIS check and then correctly refuses at the
+real write -- this tool never duplicates that live-standing computation, per ADR-0012 P1, one
+home for that fact and it is the kernel's).
+
+NAME CHARSET (finding 1, this fix round's review): `preamble`/`check` both refuse, loudly, any
+`<name>` containing a character outside `[A-Za-z0-9_-]` BEFORE doing anything else -- see
+`_validate_name_charset`'s own docstring for why refusal, not only quoting, is the fix.
+
+PER-BUILDER PRINCIPAL ACCUMULATION (finding 2, this fix round's review): every successful
+`./led register-principal builder-<slug> subagent` this convention drives is an append-only
+ledger write, forever -- there is no retirement/supersession step in this convention or this
+tool, and this tool never invents one. When a dispatched builder's work item is done and an
+orchestrator wants that principal off its own routine attention, the SEAM is the standing
+lifecycle machinery `kernel/lineage/s45-standing-lifecycle.sql` already ships:
+`./led principal suspend builder-<slug> "<reason>"` -- the same typed standing event that
+retires any other principal, not a new mechanism minted here. This tool does not call it,
+automatically or otherwise; registering AND suspending both stay the orchestrator's own
+deliberate acts.
 
 COMPOSES-WITH, NAMED NOT BUILT: the parked `obligation-actor-type-system` item (design/
 FABLE-OBLIGATION-DEPENDENT-TYPING-SPEC.md sec-3, "the typed-actor question... a later amendment
@@ -70,7 +92,9 @@ uses for its own `principal_registered` scan.
 """
 from __future__ import annotations
 
+import json
 import re
+import shlex
 import subprocess
 import sys
 
@@ -86,9 +110,47 @@ PRINCIPAL_REGISTERED_KIND = "principal_registered"
 # could quietly drift from that one).
 PRINCIPAL_REGISTERED_RE = re.compile(r"^principal '([^']+)' registered")
 
+# finding 1, this fix round's review: every naming convention this project actually uses for a
+# principal (`builder-<work-item-slug>`, `author`, `reviewer`, `commissioner`) already fits this
+# charset. A name that needs anything outside it to survive a shell round-trip is, in every
+# observed case, an accident -- a typo, a pasted work-item title with a space in it, or a
+# shell-injection attempt (`builder$(touch PWNED)`) riding an unquoted `export LED_ACTOR=<name>`
+# preamble line straight into whatever shell pastes and evals it. Refusing here closes the
+# mistake CLASS at its source, at the one point every caller of this tool passes through, rather
+# than trusting every future caller to quote correctly.
+NAME_CHARSET_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 
 class DispatchPrincipalError(Exception):
     """Raised with a message explaining exactly why this tool refused."""
+
+
+def validate_name_charset(name: str) -> None:
+    """REFUSE loudly, before anything else runs, on any `name` containing a character outside
+    `[A-Za-z0-9_-]` (finding 1, this fix round's review: `cmd_preamble` used to print
+    `export LED_ACTOR={name}` UNQUOTED, and `led register-principal` applies zero charset
+    validation of its own -- so a name like `builder$(touch PWNED)` produced a paste-line that
+    executed the embedded command the instant a caller pasted and eval'd it).
+
+    CHOICE MADE, STATED (the review asked for it explicitly): refusing on charset is the actual
+    class-closer here, not `shlex.quote` alone. `shlex.quote` makes an arbitrary string SAFE to
+    paste into a shell; it does not make it a SENSIBLE principal name, and a name that needs
+    quoting to survive a shell round-trip is, in every naming convention this project actually
+    uses, already a mistake -- so refusing teaches the caller to fix the real problem (a typo, a
+    pasted title with a space, an injection attempt) instead of silently shipping a quoted but
+    still-wrong name into the ledger. `cmd_preamble` below ALSO calls `shlex.quote` on top of
+    this refusal, belt-and-suspenders: defense in depth, not a substitute -- if some future
+    caller of `principal_is_registered`/`cmd_preamble` were ever reached without going through
+    this check first, the printed line would still be safe to eval, just refused-on-purpose
+    first here for every path that goes through `preamble`/`check` as documented."""
+    if not NAME_CHARSET_RE.match(name):
+        raise DispatchPrincipalError(
+            f"{name!r} is not a valid principal name -- only letters, digits, '_', and '-' are "
+            f"accepted (this fix round's review, finding 1: an unconstrained name that reaches "
+            f"an `export LED_ACTOR=<name>` paste line is a shell-injection hazard even when "
+            f"quoted, and is almost always an accident besides). Pick a name matching "
+            f"[A-Za-z0-9_-]+, e.g. builder-<work-item-slug>."
+        )
 
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
@@ -104,13 +166,23 @@ def parse_current_line(led_cmd_label: str, line: str) -> tuple[int, str, str]:
 
 
 def principal_is_registered(led: str, name: str, scan_limit: int) -> bool:
-    """Same test `led`'s own `_resolve_actor` performs server-side (a `principal_registered`
-    event naming `name` exists) -- here client-side and read-only, over the SAME `led current N`
-    scan `tools/role_charter.py`'s own `principal_is_registered` already uses (identical shape,
-    duplicated per-file rather than factored into `served_shapes.py`: the two tools' scan targets
-    differ, `role -> principal` here vs `role -> role` there, on the SAME served text shape --
-    factoring the one-line loop out would trade a real duplication for an indirection with no
-    remaining shared logic to protect against drift)."""
+    """An ANALOGOUS, BOUNDED APPROXIMATION of the test `led`'s own `_resolve_actor` performs
+    server-side (finding 3, this fix round's review corrected the module docstring's earlier
+    overclaim that this was "the SAME test") -- both ask "does a `principal_registered` event
+    naming `name` exist", but `_resolve_actor` answers it against `GET /standing/principals`, a
+    served, indexed, UNBOUNDED view of the registry, while this function answers it by scanning
+    at most the most recent `scan_limit` (default 100000) rows of `led current N` client-side
+    and regex-matching each `principal_registered` statement's own printed text -- the same
+    bounded-scan idiom `tools/role_charter.py`'s own `principal_is_registered` already uses.
+    The two views can diverge exactly at scale: a registration event older than the scan window
+    on a ledger with more than `scan_limit` rows would read NOT-REGISTERED here while `led`'s
+    own indexed lookup still finds it and writes correctly -- a false-refusal on this preflight,
+    never a false-pass, and never load-bearing for correctness (the real write at `led` still
+    gets the right answer either way; see this module's own docstring, "Honest limits"). Not
+    factored into `served_shapes.py` alongside role_charter's sibling copy: the two tools' scan
+    TARGETS differ (`role -> principal` here vs `role -> role` there) on the same served text
+    shape, and factoring the one-line loop out would trade a real, small duplication for an
+    indirection protecting no remaining shared logic."""
     led_cmd_label = f"{led} current {scan_limit}"
     rc, out, err = run_led(led, ["current", str(scan_limit)])
     if rc != 0:
@@ -126,6 +198,7 @@ def principal_is_registered(led: str, name: str, scan_limit: int) -> bool:
 
 
 def cmd_preamble(name: str, led: str, scan_limit: int) -> int:
+    validate_name_charset(name)
     if not principal_is_registered(led, name, scan_limit):
         raise DispatchPrincipalError(
             f"'{name}' is not a registered `led` principal -- a dispatch preamble cannot export "
@@ -134,16 +207,33 @@ def cmd_preamble(name: str, led: str, scan_limit: int) -> int:
             f"spent on it). Register it first:\n"
             f"  {led} register-principal {name} subagent --purpose \"<why this builder gets its own identity>\""
         )
-    print(f"export LED_ACTOR={name}")
+    # finding 1, belt-and-suspenders: `validate_name_charset` above already refused anything
+    # outside [A-Za-z0-9_-], so `shlex.quote` is a no-op on every name that reaches this line --
+    # kept anyway so this printed line is independently safe to eval even if that refusal is
+    # ever loosened or bypassed by a future caller of this function.
+    print(f"export LED_ACTOR={shlex.quote(name)}")
     return 0
 
 
-def cmd_check(name: str, led: str, scan_limit: int) -> int:
-    if principal_is_registered(led, name, scan_limit):
-        print(f"REGISTERED: '{name}'")
-        return 0
-    print(f"NOT-REGISTERED: '{name}'")
-    return 1
+def cmd_check(name: str, led: str, scan_limit: int, json_output: bool) -> int:
+    """MACHINE-READABLE QUOTING RULE (finding 4, this fix round's review): the plain-text mode's
+    old `'{name}'` interpolation had no quoting rule at all -- a name containing a literal `'`
+    would break any parser splitting on it. Two rules now apply, and a caller gets to pick:
+    `--json` emits one JSON object (`json.dumps`, which escapes correctly by construction --
+    the rigorous choice for a brief-generator or any other real parser); the default plain-text
+    mode uses Python `repr()` instead of hand-rolled quotes, which is unambiguous and
+    round-trips through `ast.literal_eval` for a caller that insists on text. Either way, `name`
+    itself is charset-validated before either code path runs, so in practice neither ever sees
+    a quote character -- both are kept rigorous anyway rather than resting on that as the only
+    protection (defense in depth, same posture as the shlex.quote() in cmd_preamble)."""
+    validate_name_charset(name)
+    registered = principal_is_registered(led, name, scan_limit)
+    if json_output:
+        print(json.dumps({"name": name, "registered": registered}))
+    else:
+        status = "REGISTERED" if registered else "NOT-REGISTERED"
+        print(f"{status}: {name!r}")
+    return 0 if registered else 1
 
 
 def usage(msg: str | None = None) -> int:
@@ -151,7 +241,7 @@ def usage(msg: str | None = None) -> int:
         print(f"dispatch_principal: {msg}", file=sys.stderr)
     print(
         "usage: python3 tools/dispatch_principal.py preamble <name> [--led PATH] [--scan-limit N]\n"
-        "       python3 tools/dispatch_principal.py check <name>    [--led PATH] [--scan-limit N]",
+        "       python3 tools/dispatch_principal.py check <name>    [--led PATH] [--scan-limit N] [--json]",
         file=sys.stderr,
     )
     return 2
@@ -164,6 +254,7 @@ def main(argv: list[str]) -> int:
     rest = argv[1:]
     led = DEFAULT_LED
     scan_limit = DEFAULT_SCAN_LIMIT
+    json_output = False
     positional: list[str] = []
     i = 0
     while i < len(rest):
@@ -181,9 +272,15 @@ def main(argv: list[str]) -> int:
             except ValueError:
                 return usage(f"--scan-limit value '{rest[i + 1]}' is not an integer")
             i += 2
+        elif a == "--json":
+            json_output = True
+            i += 1
         else:
             positional.append(a)
             i += 1
+
+    if json_output and sub != "check":
+        return usage("--json is only meaningful for 'check'")
 
     try:
         if sub == "preamble":
@@ -193,7 +290,7 @@ def main(argv: list[str]) -> int:
         elif sub == "check":
             if len(positional) != 1:
                 return usage("'check' takes exactly <name>")
-            return cmd_check(positional[0], led, scan_limit)
+            return cmd_check(positional[0], led, scan_limit, json_output)
         else:
             return usage(f"unrecognized subcommand '{sub}'")
     except DispatchPrincipalError as exc:
