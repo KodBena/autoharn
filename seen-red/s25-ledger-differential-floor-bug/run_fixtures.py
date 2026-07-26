@@ -78,6 +78,7 @@ ENGINE = REPO / "engine"
 
 sys.path.insert(0, str(ENGINE))
 import ledger_floor  # noqa: E402 -- the module under test, imported directly (no subprocess)
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"  # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1 (merge-completion of the dc91755 sweep: this family postdates its base)
 
 PGHOST, PGDB = fixture_pghost(), "toy"
 SCHEMA25, KERN25, ROLE25 = "s25ldfbfxprobe", "s25ldfbfxprobe_kernel", "s25ldfbfxprobe_rw"

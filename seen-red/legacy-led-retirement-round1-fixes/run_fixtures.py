@@ -81,6 +81,11 @@ from pghost_resolve import resolve_pghost  # noqa: E402
 import deployment_record  # noqa: E402
 import boundary_cli_client as bcc  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PGHOST, PGDB = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
 CHAIN_S57 = [

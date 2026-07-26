@@ -32,6 +32,12 @@ GATE = REPO / "gates" / "kind_shape_manifest_gate.py"
 sys.path.insert(0, str(REPO / "gates"))
 import kind_shape_manifest_gate as kbmg  # noqa: E402
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PGHOST, PGDB = kbmg.PGHOST, kbmg.PGDB
 
 

@@ -70,6 +70,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 CHECKER = REPO / "tools" / "watchdog_liveness.py"

@@ -155,6 +155,11 @@ import audit_served  # noqa: E402  (compare_row_sets -- the negative-control com
 import boundary_service  # noqa: E402  (W12 -- the in-process app.routes closure witness, and MAX_WRITE_BODY_BYTES/PSQL_CONNECT_TIMEOUT_S -- W9/W14 reuse the module's OWN bounds, never a second literal)
 import boundary_multiplex_config  # noqa: E402  (route-shape migration, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2/§3 -- the server now takes --config, not --deployment)
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
 CHAIN_COMMON = [

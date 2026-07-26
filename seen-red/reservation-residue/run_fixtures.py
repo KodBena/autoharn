@@ -55,6 +55,11 @@ from pghost_resolve import resolve_pghost  # noqa: E402
 import ledger_differential  # noqa: E402
 import deployment_record  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # legacy-led-retirement inventory pass (ledger row 1149), part 2(b): this fixture used to drive
 # its work-item/review acts through `world_dir/legacy/led` (the scaffolded direct-psql shim) --
 # migrated onto the served path per seen-red/boundary-cli-rebase's own precedent, reusing its

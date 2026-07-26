@@ -32,6 +32,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "bootstrap" / "rehearse-from-origin.sh"
 REPO_URL = "https://github.com/KodBena/autoharn.git"

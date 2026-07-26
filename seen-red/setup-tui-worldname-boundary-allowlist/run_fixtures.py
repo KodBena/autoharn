@@ -69,6 +69,11 @@ from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.idtypes import WorldName, WorldNameError  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PRE_FIX_COMMIT = "73874cc62f27e2ab04791da0bfe26c30667fff1b"  # this build's own base commit (see
 # STEP 0 / the build report) -- the last commit before idtypes.py's WorldName contract was
 # strengthened to the boundary-slug intersection.

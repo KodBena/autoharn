@@ -363,6 +363,18 @@ BASELINE: dict[str, int] = {
     # elsewhere in the same file. Written plain, no golfing; witnessed growth of a previously-
     # under-ceiling file, crossing the ceiling only as a merge artifact.
     "tools/setup_tui/runner.py":                        405,
+    # NEW to BASELINE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md build, ledger
+    # rows 1237-1248/1315/1316/1325): was 375 lines, under ceiling, before this build. Gains one
+    # new documented breach kind (§4's additive marker check, docstring item 5 plus its ~15-line
+    # implementation in main()) and one new REGISTRY row for this build's own witness fixture
+    # (fixture-sandbox-runtime-foreclosure) -- genuinely new decision surface (a census gate
+    # keeping a NEW mechanical sweep honest), not padding. Written plain, no golfing (ADR-0007's
+    # no-go clause).
+    # Reconciled 404 -> 418 at the sandbox merge itself (2026-07-26): both parents grew the
+    # census independently (main: worldname/manifest/config-seam/trio registry rows; branch:
+    # the marker check + its own registry row); the union is 418. Third witnessed merge-union
+    # ratchet crossing today -- the commit-phase contention class, again.
+    "gates/fixture_census.py":                          418,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -386,6 +398,10 @@ BASELINE: dict[str, int] = {
     # route-through) plus this entry, and this comment, for the exact same self-measuring-census
     # cost paid a third time. Exact count below measured AFTER every edit in this file is in
     # place, not guessed.
+    # Reconciled 477 -> 495 at the SANDBOX MERGE (2026-07-26, the fourth and last of the
+    # session-gap merges): the union carried the sandbox branch's own baseline additions and
+    # this merge's census reconciliation note; duplicate self-entry blocks consolidated once
+    # more. Measured post-consolidation. The ratchet forbids growth from here.
     # Reconciled again, 2026-07-26, at the CENSUS MERGE itself (main x staged-read branch):
     # both parents carried their own self-entry (main's 413 from the 9a2c672 merge-union
     # unblock; this branch's 457 above), git's union kept BOTH duplicate dict keys and both
@@ -394,7 +410,7 @@ BASELINE: dict[str, int] = {
     # here), this note added, and the count below is the measured post-consolidation total.
     # Fourth payment of the self-measuring cost; second witnessed merge-union crossing on
     # this same file (the concurrent-builders commit-phase contention class, 2026-07-21).
-    "gates/max_lines.py":                                477,
+    "gates/max_lines.py":                                499,
 }
 
 

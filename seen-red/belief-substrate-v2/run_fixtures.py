@@ -64,6 +64,11 @@ import ledger_differential  # noqa: E402
 import pghost_resolve  # noqa: E402
 import deployment_record  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # legacy-led-retirement migration (closing-batch build, ledger rows 1176/1178): reuses seen-red/
 # boundary-service/run_fixtures.py's own scratch-server-standing helpers (ADR-0012 P1) rather
 # than re-deriving them -- the SAME reuse belief-substrate-v1/run_fixtures.py's own sibling

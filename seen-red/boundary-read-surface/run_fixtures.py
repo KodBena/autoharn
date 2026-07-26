@@ -52,6 +52,12 @@ import deployment_record  # noqa: E402  (boundary_service's own import chain exp
 import boundary_service  # noqa: E402  (VIEW_REGISTRY -- the ONE enumeration authority, never re-typed here)
 import migrate_core  # noqa: E402  (bootstrap/migrate_core.py -- the SAME manifest _lineage_head reuses, for WR4's ground truth)
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The sibling module is loaded by FILE PATH (hyphenated directory names are not valid Python
 # package components), under its own distinct module name -- the same trick seen-red/
 # boundary-multiplex/run_fixtures.py already uses for the identical reason.

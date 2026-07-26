@@ -68,6 +68,11 @@ from tools.configtree import CommitSpec, SectionResult, SectionSpec  # noqa: E40
 import tools.configtree.app as ct_app_module  # noqa: E402
 from tools.configtree.app import ConfigTreeApp  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The last commit before this fix (parent of the commit that introduces the worker) -- pinned by
 # SHA, never HEAD, so this fixture stays reproducible regardless of what lands on top of it.
 PRE_FIX_COMMIT = "3cc769d"

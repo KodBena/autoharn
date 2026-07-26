@@ -239,6 +239,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"  # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1 (merge-completion of the dc91755 sweep: this family postdates its base)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]

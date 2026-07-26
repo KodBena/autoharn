@@ -74,6 +74,7 @@ sys.path.insert(0, GATES)
 import doc_shapes as doc_shapes_gate  # noqa: E402
 import setup_tui_purity_gate as purity_gate  # noqa: E402
 import _staged_read as staged_read  # noqa: E402  (case 7's own subject: the shared primitive)
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"  # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1 (merge-completion of the dc91755 sweep: this family postdates its base)
 
 
 def _init_repo(repo_dir: str) -> None:

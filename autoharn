@@ -79,10 +79,36 @@ fi
 
 VERB="$1"; shift
 
+# FIXTURE SANDBOX FORECLOSURE helper (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md
+# §2, ledger rows 1237-1248/1315/1316/1325): called ONLY once we know VERB names something this
+# dispatcher is actually about to exec ('service', or a real libexec/autoharn/<verb> file) --
+# never for an unrecognized verb, which refuses on its own account regardless of the marker (that
+# refusal is not "doing anything" with a repo-root verb either). See
+# filing/fixture_sandbox_preamble.sh's own header for why this, plus the identical
+# check sourced at the top of each libexec/autoharn/<verb> file (a direct, ./autoharn-skipping
+# invocation), is the whole mechanism -- no cwd/env discriminator needed, because a scratch
+# world's own verbs never execute this code path at all.
+#
+# EXEMPTION, narrow and precedented: a bare `<verb> --help`/`-h` (the ONLY remaining arg) is
+# already established (seen-red/umbrella-cli-dispatch-parity, this file's own header row 1159) as
+# read-only and side-effect-free for every verb -- each verb's own template intercepts --help/-h
+# before any DB/network code runs. This is a fixed, two-token shape check (not an argv-grammar
+# enumeration of the kind that sank the demoted pin-guard census), so it does not reopen the class
+# this build forecloses: it never inspects WHAT a fixture passes as a repo-verb argument, only
+# whether the CURRENT invocation is the single already-proven-harmless one.
+_fixture_sandbox_gate() {
+    if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+        return 0
+    fi
+    _FSB_WHAT="autoharn $VERB $*"
+    . "$HERE/filing/fixture_sandbox_preamble.sh"
+}
+
 # 'service' is handled by this dispatcher directly (ensure-running control plane, spec §2) --
 # not a libexec/autoharn/<verb> file, since it manages the boundary process THIS repo's verbs
 # talk to rather than being one more thin CLI shim over bootstrap/templates/*.tmpl.
 if [ "$VERB" = "service" ]; then
+    _fixture_sandbox_gate "$@"
     exec "$HERE/libexec/autoharn-service" "$@"
 fi
 
@@ -95,6 +121,8 @@ if [ ! -x "$LIBEXEC/$VERB" ]; then
     echo "Run 'autoharn --help' for the full generated roster. Nothing was touched." >&2
     exit 2
 fi
+
+_fixture_sandbox_gate "$@"
 
 # Shared env resolution (spec §1): AUTOHARN names this checkout for any relocated verb that
 # wants it (bootstrap/templates/doctor.tmpl already reads this exact variable) -- computed once,

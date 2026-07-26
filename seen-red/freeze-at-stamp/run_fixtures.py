@@ -66,6 +66,11 @@ SCRIPT = REPO / "bootstrap" / "freeze-at-stamp.sh"
 sys.path.insert(0, str(REPO / "filing"))
 import deployment_record as _dr  # noqa: E402 -- must follow sys.path insert; top-of-file, not lazy
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # Source db/host/schema are read LIVE from this checkout's own deployment.json -- the SAME single
 # home freeze-at-stamp.sh itself resolves them from (its header: "never hardcoded 'autoharn'/
 # 'autoharn_kernel' literal", ADR-0012 P1). A prior version of this fixture hardcoded
@@ -191,11 +196,34 @@ def main() -> int:
                 later_absent = later.stdout.strip() == "0"
                 details.append(f"row_id=1 present:{early_present} rows>200 present:{not later_absent}")
 
-                vc = sh(["./verify-chain"], cwd=str(dest_f))  # fixture-scratch-pinning-guard-waiver: dest_f = tmp / "full-snapshot" (line 177), a tempfile.mkdtemp()-derived scratch snapshot, never this checkout's own root -- row 1249 fix-round 4 finding 4 (bare verb literal argv[0])
+                # AUTOHARN_FIXTURE_SANDBOX_WAIVER (design/FABLE-FIXTURE-SANDBOX-RUNTIME-
+                # FORECLOSURE-SPEC.md §3): these are the spec's own named "two known specimens".
+                # dest_f/verify-chain and dest_f/led are, by construction (bootstrap/
+                # freeze-at-stamp.sh's own shim-rewrite loop, SHIM_VERBS_ALL, after the git-archive
+                # copy), rewritten to exec dest_f's OWN bootstrap/templates/*.tmpl directly against
+                # dest_f's OWN deployment.json (autoharn_test, a disposable frozen snapshot) --
+                # never this repo's ./autoharn dispatcher or libexec/autoharn/*, so today they do
+                # not actually reach the checked code path at all (same structural exemption as any
+                # scratch-world shim). The waiver is applied anyway, mechanically, per the spec's
+                # explicit instruction and as a defensive belt-and-suspenders: if a future edit to
+                # freeze-at-stamp.sh's SHIM_VERBS_ALL roster or shim-rewrite ordering ever changed
+                # (e.g. verify-chain/led dropped from that list, or the rewrite happened before the
+                # archive instead of after), these two calls would then hit the git-archived
+                # ./autoharn-based shim and need exactly this waiver -- see the build report's own
+                # "surfaced divergence" note for the full reasoning.
+                fsb_env = {**os.environ,
+                           "AUTOHARN_FIXTURE_SANDBOX_WAIVER":
+                               "freeze-at-stamp dest_f is a frozen, disposable snapshot copy "
+                               "(bootstrap/freeze-at-stamp.sh) pointed at its own autoharn_test "
+                               "schema, never this repo's live deployment.json -- reviewed "
+                               "exception, design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-"
+                               "SPEC.md §3's own named specimen"}
+
+                vc = sh(["./verify-chain"], cwd=str(dest_f), env=fsb_env)  # fixture-scratch-pinning-guard-waiver: dest_f = tmp / "full-snapshot" (line 177), a tempfile.mkdtemp()-derived scratch snapshot, never this checkout's own root -- row 1249 fix-round 4 finding 4 (bare verb literal argv[0])
                 vc_ok = vc.returncode == 0 and ("INTACT" in vc.stdout or "UNAVAILABLE" in vc.stdout)
                 details.append(f"verify-chain exit={vc.returncode} stdout_tail={vc.stdout.strip()[-160:]!r}")
 
-                write_attempt = sh(["./led", "decision", "should be refused by grant"], cwd=str(dest_f))  # fixture-scratch-pinning-guard-waiver: same dest_f scratch snapshot as above, not this checkout's own root
+                write_attempt = sh(["./led", "decision", "should be refused by grant"], cwd=str(dest_f), env=fsb_env)  # fixture-scratch-pinning-guard-waiver: same dest_f scratch snapshot as above, not this checkout's own root
                 write_refused = write_attempt.returncode != 0
                 details.append(f"write-attempt exit={write_attempt.returncode} "
                                 f"stderr_tail={(write_attempt.stdout + write_attempt.stderr).strip()[-160:]!r}")

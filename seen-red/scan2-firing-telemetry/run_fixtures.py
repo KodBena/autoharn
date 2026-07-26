@@ -32,6 +32,12 @@ sys.path.insert(0, str(REPO / "gates"))
 import scan2_firings as sf  # noqa: E402
 import scan2_firing_schema as gate  # noqa: E402
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def main() -> int:
     ok = True

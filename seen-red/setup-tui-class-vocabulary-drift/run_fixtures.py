@@ -41,6 +41,12 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 from tools.setup_tui import principals_authority as pa  # noqa: E402
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def main() -> int:
     # --- case 1: GREEN leg -- the real CHOICES lists agree with the real kernel CHECKs ---

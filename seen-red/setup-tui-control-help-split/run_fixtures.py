@@ -70,6 +70,11 @@ from tools.configtree.app import ConfigTreeApp  # noqa: E402
 from tools.configtree.layout_split import WIDE_LAYOUT_MIN_WIDTH  # noqa: E402
 from tools.setup_tui import tui_app, steps  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The commit immediately before this fix -- pinned by SHA, never HEAD.
 PRE_FIX_COMMIT = "1e6fb5f"
 

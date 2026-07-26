@@ -63,6 +63,11 @@ sys.path.insert(0, str(REPO))
 
 from tools.setup_tui import runner  # noqa: E402 -- the REAL, fixed implementation under test
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The last commit before ledger row 1810's atomicity fix -- pinned by SHA (not HEAD, not a
 # branch) so this fixture stays reproducible forever regardless of what lands on top of it.
 PRE_FIX_COMMIT = "7b893f0"

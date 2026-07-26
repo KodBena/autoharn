@@ -4,5 +4,17 @@
 # (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
 # Relocated under libexec/autoharn/ by the umbrella-CLI build (ledger rows 1151-1183): semantics
 # unchanged, HERE now climbs two directories to the repo root.
+# FIXTURE SANDBOX FORECLOSURE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §2):
+# checked here too, not only in ./autoharn -- a fixture invoking this file directly, skipping
+# ./autoharn's own dispatch, refuses identically. See filing/fixture_sandbox_preamble.sh's own header.
+LIBHERE="$(cd "$(dirname "$0")" && pwd)"
+FILING="$(cd "$LIBHERE/../../filing" && pwd)"
+if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    :
+else
+    _FSB_WHAT="libexec/autoharn/pickup (direct invocation) $*"
+    . "$FILING/fixture_sandbox_preamble.sh"
+fi
+
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-pickup.tmpl" "$@"

@@ -49,6 +49,12 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "gates"))
 import adr_bare_p_label as g  # noqa: E402
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 GATE = REPO / "gates" / "adr_bare_p_label.py"
 
 CASE1_BAD = """# ADR-9995: fixture (bare P-label)

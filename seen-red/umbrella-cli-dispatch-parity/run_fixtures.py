@@ -123,6 +123,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # Every real invocation of AUTOHARN in this fixture is either --help/-h/"service"/an
 # unrecognized-verb probe (statically safe, see gates/fixture_deployment_pin_guard.py's own
 # `dispatcher_invocation_is_safe` -- the dispatcher's own source returns/execs into an

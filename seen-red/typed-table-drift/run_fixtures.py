@@ -32,6 +32,12 @@ sys.path.insert(0, str(REPO / "tools" / "experiments"))
 import doc_table_generation as dtg  # noqa: E402
 import typed_table_drift as gate  # noqa: E402
 from typed_table import Table  # noqa: E402 — lazy imports are banned (CLAUDE.md 2026-07-02);
+
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 # hoisted here rather than inside _scratch_builder()/main(), same fix as gates/doc_tables.py's
 # own module-top sys.path-then-import shape.
 

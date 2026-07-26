@@ -18,6 +18,16 @@ both-polarity-proves the gate/close-line). It goes RED on:
      the fixture read PRESENT-ON-DISK and the census read GREEN on a commit that, on a clean
      checkout, was actually RED. Presence-on-disk and committed-to-git are two different facts;
      this gate quantifies over the one that survives a clean checkout).
+  5. a registered `seen-red/<dir>/run_fixtures.py` that does not set
+     `AUTOHARN_FIXTURE_SANDBOX` in its own environment (design/FABLE-FIXTURE-SANDBOX-RUNTIME-
+     FORECLOSURE-SPEC.md §4/§1, ledger rows 1237-1248/1315/1316/1325) — additive, mechanical:
+     this gate already IS the registry of every such entry point, so it is the natural place to
+     keep the marker sweep honest against drift (a new fixture added without the one-line
+     marker, or an existing one edited to remove it, both fail here). Scoped to files literally
+     named `run_fixtures.py` under `seen-red/` — the shape the spec itself names; a registry
+     target that is a directory (`engine/tests`), a differently-named script (`red-specimen.py`,
+     `drive/arm.sh`), or a gate file exercising itself (`layout-census`/`fixture-census`) is not
+     a fixture ENTRY POINT in the spec's sense and is not checked here.
 
 SCOPE (declared, ADR-0011 Rule 1): this gate checks red-evidence PRESENCE-AND-TRACKED + fixture
 EXISTENCE-AND-TRACKED statically — cheap enough for every commit. Actually RE-EXECUTING each
@@ -269,6 +279,11 @@ REGISTRY: dict[str, str] = {
     # s25-ledger-differential-floor-bug (ledger row 1247): engine/ledger_floor.py's
     # work_review_floor_atoms column-gating fix for pre-s28/s29 chains.
     "s25-ledger-differential-floor-bug": "seen-red/s25-ledger-differential-floor-bug/run_fixtures.py",
+    # fixture-sandbox-runtime-foreclosure (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-
+    # SPEC.md, ledger rows 1237-1248/1315/1316/1325): the runtime foreclosure mechanism itself --
+    # the marker sweep, the ./autoharn + libexec/autoharn/* refusal, the waiver, and this same
+    # gate's own additive marker check (§4) -- both-polarity proved live, red first (red.txt).
+    "fixture-sandbox-runtime-foreclosure": "seen-red/fixture-sandbox-runtime-foreclosure/run_fixtures.py",
     # cycle-4 audit finding 1 fix round (ledger rows 1124/1133/1138): the mid-section
     # cancellation-token fix (rehearsal's own subprocess layer) and the control/help split
     # layout fix (ledger row 1138's reopened-loop major).
@@ -373,6 +388,21 @@ def main() -> int:
                 breaches.append(f"FIXTURE UNTRACKED: seen-red/{d}/ -> {fx} exists on disk but "
                                 f"is not git-tracked (`git ls-files`) — the proof runs from an "
                                 f"uncommitted file, invisible on a clean checkout (row 1502)")
+            # (5) fixture-sandbox marker present (design/FABLE-FIXTURE-SANDBOX-RUNTIME-
+            # FORECLOSURE-SPEC.md §4) -- scoped to exactly the shape the spec names: a registry
+            # target literally named run_fixtures.py under seen-red/. Checked only once the
+            # existence/tracked checks above have already passed (no point reading a file that
+            # doesn't exist).
+            elif fx.startswith("seen-red/") and os.path.basename(fx) == "run_fixtures.py" \
+                    and os.path.exists(fx_abs) and os.path.isfile(fx_abs):
+                with open(fx_abs, encoding="utf-8") as _f:
+                    if "AUTOHARN_FIXTURE_SANDBOX" not in _f.read():
+                        breaches.append(
+                            f"MARKER MISSING: seen-red/{d}/ -> {fx} is a registered fixture "
+                            f"entry point but never sets AUTOHARN_FIXTURE_SANDBOX in its own "
+                            f"environment (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-"
+                            f"SPEC.md §1/§4) — add the one-line marker near the top of the "
+                            f"module, before any subprocess is spawned")
 
     if breaches:
         print(f"fixture-census: {len(breaches)} breach(es) — the seen-red corpus is not intact:\n")

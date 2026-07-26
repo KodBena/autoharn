@@ -69,6 +69,12 @@ PRE_SHOW_FIX_COMMIT = "cc12b46"
 sys.path.insert(0, str(REPO / "tools"))
 import served_shapes
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # Shared with mock_led.py's own SHOW_ROWS["7"] `show_longkey` line -- the exact byte shape
 # cmd_show emits for a real, currently-schema'd >=28-char column, UNPADDED (see mock_led.py's
 # own LONGKEY_LINE for the citation). Duplicated here as a literal (not imported from mock_led,

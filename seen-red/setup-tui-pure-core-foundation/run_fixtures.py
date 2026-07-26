@@ -83,6 +83,11 @@ from tools.setup_tui import commit_executor as CE  # noqa: E402
 from tools.setup_tui import plan as P  # noqa: E402
 from tools.setup_tui import runner  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 FAILURES: list[str] = []
 
 

@@ -68,6 +68,11 @@ from tools.setup_tui import checklist as ck  # noqa: E402
 from tools.setup_tui.runner import run_command  # noqa: E402
 import tools.setup_tui.steps_rehearsal_birth as srb  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The commit immediately before this fix -- pinned by SHA, never HEAD.
 PRE_FIX_COMMIT = "1e6fb5f"
 
