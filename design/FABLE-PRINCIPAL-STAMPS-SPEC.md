@@ -104,6 +104,40 @@ report itself is a ledger write.
   is a Claude Code behavior, not something this project controls. The kernel-side
   refusals hold regardless (an unstamped session simply has no authority); what degrades
   without propagation is only the hooks-side spawn gating.
+
+### 4.1 Harness facts as of Claude Code 2.1.220 (raw-changelog witnessed 2026-07-26; ledger row 1441)
+
+Nested agent spawning is now harness-native, and the harness grew primitives this spec's
+mechanisms can stand on. Verbatim-sourced from the changelog (raw fetch, not a rendered
+summary), stated here because they change the rank of the assumption above:
+
+- **Nesting is on by default at depth 3** (2.1.219: "Subagents can now spawn nested
+  subagents up to depth 3 by default (was 1); set CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1
+  to disable nesting"; 2.1.217 had briefly defaulted it off). Class 2 (ungated
+  re-delegation) is therefore a first-class harness capability, not a one-hop accident:
+  this spec's depth caveats are load-bearing from day one.
+- **Depth is a tracked harness concept** (2.1.187: resumed subagents restore original
+  spawn depth; forked subagents count toward the cap) — a depth-N caveat has a harness
+  fact to check against, not just our own bookkeeping.
+- **Spawn gating has harness-native hooks BESIDE PreToolUse:** permission rules can deny
+  by agent type and by tool parameter (2.1.186: "Agent(type) deny rules ... enforced for
+  named subagent spawns"; 2.1.178: "Tool(param:value) syntax ... e.g. Agent(model:opus)"),
+  and the spawn-depth env var is a blunt per-session-tree depth-0/1 enforcement. §3
+  item 2 remains the per-edge mechanism (caveats differ per dispatch); these are
+  defense-in-depth beneath it.
+- **Hook events carry agent identity** (2.1.69: `agent_id`/`agent_type` on hook events;
+  2.1.139: `x-claude-code-agent-id`/`parent-agent-id` request headers; SubagentStart/
+  SubagentStop events exist) — the stamp the §3 hook needs to key on has a documented
+  carrier.
+- **The harness itself now asserts the class-3 boundary** (2.1.198: "Subagents now treat
+  messages from the agent that launched them as normal task direction; an agent's
+  message is still never treated as the user's approval"; 2.1.166: relayed SendMessage
+  carries no user authority) — convergent with, not a substitute for, §2.5's
+  ledger-side witness identity.
+- **What stays UNWITNESSED until §5 runs:** that PreToolUse fires inside nested child
+  sessions at depth 2+, and that a dispatch-injected environment stamp survives into a
+  grandchild. The changelog documents the carriers; documented is not witnessed
+  (house rule), so the §5 plan now includes the depth witness explicitly.
 - **Out-of-band channels** (filesystem, environment, scrollback) are outside every
   mechanism here — workspace isolation is the only answer there, and it is not this
   spec's surface.
@@ -123,6 +157,13 @@ skips re-hydration acts on the stale brief → the finalize-time re-read catches
 GREEN — the ordinary solo world unchanged (zero-friction leg); a two-hop dispatch chain
 performing granted acts end-to-end; an attestation B round proceeding under a
 no-redelegate leaf stamp via the carve-out class. SQL/ASP differential AGREE throughout.
+DEPTH WITNESS (added 2026-07-26, §4.1): on the installed harness, witness whether
+PreToolUse fires inside a depth-2 and depth-3 child session and whether a
+dispatch-injected environment stamp survives into a grandchild — both polarities: a
+leaf-stamped depth-2 session's spawn attempt refused if the hook fires there, and the
+observed degradation mode documented honestly if it does not (kernel refusals still
+hold; the spawn gate then covers hop 1 only, and §4.1's env-var depth cap becomes the
+mandatory backstop in every leaf brief).
 
 ## 6. Closure statement
 
