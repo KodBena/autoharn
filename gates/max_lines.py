@@ -437,7 +437,7 @@ BASELINE: dict[str, int] = {
     # self-measuring cost this table's own history already names as a recurring, honest cost of
     # ratcheting the gate that ratchets itself, including this entry's own line count of itself.
     # Genuinely new reconciliation content, not padding.
-    # bumped 518 -> 526 (s60-entitlement-enforcement.sql: four ratchet bumps in this same
+    # bumped 518 -> 528 (s60-entitlement-enforcement.sql: four ratchet bumps in this same
     # file, each row's own comment naming its reason).
     "gates/max_lines.py":                                528,
 }
