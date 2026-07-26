@@ -35,6 +35,26 @@ WITNESSES:
       parseable JSON (`json.loads` round-trips it) carrying the right `registered` boolean --
       finding 4's machine-readable quoting rule, exercised for real rather than only described.
 
+  A confirming review round on this same tool found four further issues; R6-R8 witness the
+  moderate one and the length-cap half of the two minors closed by the same charset tightening
+  (the other two minors -- the tool's own arg parser colliding with its own flag names, and the
+  `--scan-limit` docstring's fetch-cost overclaim -- are documentation-only, named in the module
+  and function docstrings rather than fixture-witnessed, since neither changes any code path):
+  R6  RED-FIRST, PRE-FIX CODE (git 81a7268, this branch's own tip immediately before the
+      moderate finding's fix): a leading-hyphen name (`-foo`) passes 81a7268's own charset
+      pattern and reaches the registration check, which REFUSES (unregistered) and teaches a
+      `led register-principal -foo subagent --purpose "..."` remediation. That EXACT taught
+      command, extracted from the refusal's own printed text and actually run through
+      `register_principal_argparse_witness.py` (the identical argparse shape `led.tmpl` itself
+      uses for this verb), FAILS to parse -- the moderate finding reproduced end to end: the
+      pre-fix tool's own teaching is non-actionable for exactly the names its charset let
+      through.
+  R7  POST-FIX CODE, GREEN counterpart to R6: the same leading-hyphen name now refuses on
+      CHARSET before ever reaching the registration check, so no register-principal command is
+      taught at all -- nothing left to be non-actionable.
+  R8  POST-FIX CODE, the length-cap boundary: a 65-character name refuses on charset before any
+      `led` call; a 64-character name is charset-legal and reaches the registration check.
+
 Usage: python3 seen-red/dispatch-principal-charset-guard/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned; stdlib only.
 """
@@ -42,6 +62,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -57,9 +78,16 @@ REPO = HERE.parents[1]
 MOCK_LED = HERE / "mock_led.py"
 POST_FIX_DISPATCH_PRINCIPAL = REPO / "tools" / "dispatch_principal.py"
 PRE_FIX_COMMIT = "b4bb250"
+# confirming review round's own pre-fix tip: this branch's HEAD immediately before the
+# leading-hyphen/length-cap fix (R6 below) -- distinct from PRE_FIX_COMMIT above, which is the
+# tip immediately before the ORIGINAL charset-injection fix (R1). Both are real commits on this
+# branch's own history, not synthetic.
+PRE_FIX_COMMIT_HYPHEN = "81a7268"
+REGISTER_PRINCIPAL_ARGPARSE_WITNESS = HERE / "register_principal_argparse_witness.py"
 
 HOSTILE_NAME = "builder$(touch PWNED)"
 CLEAN_NAME = "builder-ok"
+HYPHEN_NAME = "-foo"
 
 FAILURES: list[str] = []
 
@@ -114,6 +142,19 @@ def eval_in_scratch_shell(printed_stdout: str) -> tuple[bool, str]:
         return created, echo.stdout
 
 
+def materialize_git_blob(commit: str, relpath: str, suffix: str) -> Path:
+    """Check out `<commit>:<relpath>` verbatim into a real temp file and return its path --
+    the shared helper R1 and R6 both use so every "pre-fix" run below is a real subprocess
+    executing the actual historical bytes, never a re-derivation or a monkeypatch."""
+    src = subprocess.run(
+        ["git", "-C", str(REPO), "show", f"{commit}:{relpath}"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as f:
+        f.write(src)
+        return Path(f.name)
+
+
 def main() -> int:
     print("=== dispatch-principal-charset-guard: seen-red witness ===\n")
 
@@ -121,14 +162,8 @@ def main() -> int:
     # before this fix round) -- checked out into a real temp file, run as a real subprocess,
     # never imported/monkeypatched, so the eval-witness below evals text the actual pre-fix
     # binary actually printed.
-    pre_fix_src = subprocess.run(
-        ["git", "-C", str(REPO), "show", f"{PRE_FIX_COMMIT}:tools/dispatch_principal.py"],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    with tempfile.NamedTemporaryFile("w", suffix="_dispatch_principal_pre_fix.py",
-                                      delete=False) as f:
-        f.write(pre_fix_src)
-        pre_fix_path = Path(f.name)
+    pre_fix_path = materialize_git_blob(PRE_FIX_COMMIT, "tools/dispatch_principal.py",
+                                         "_dispatch_principal_pre_fix.py")
     try:
         r1 = run_preamble(pre_fix_path, HOSTILE_NAME, "hostile-registered")
         r1_printed_unquoted = r1.stdout.strip() == f"export LED_ACTOR={HOSTILE_NAME}"
@@ -204,6 +239,87 @@ def main() -> int:
         r5_ok = False
         r5_detail = f"JSON parse failed: {exc}; stdout(reg)={r5_reg.stdout!r} stdout(unreg)={r5_unreg.stdout!r}"
     check("R5-post-fix-check-json-round-trips", r5_ok, r5_detail)
+
+    # R6: RED-FIRST, PRE-FIX CODE (81a7268, this branch's own tip immediately before the
+    # moderate finding's fix -- distinct commit from R1's b4bb250, the tip before the ORIGINAL
+    # charset-injection fix) -- a leading-hyphen name (`-foo`) is charset-LEGAL under 81a7268's
+    # own `^[A-Za-z0-9_-]+$` pattern, so `preamble` reaches the registration check, finds it
+    # unregistered (mock scenario "empty"), and REFUSES teaching a `led register-principal -foo
+    # subagent --purpose "..."` remediation. The moderate finding: that taught command is
+    # non-actionable -- `led register-principal`'s own argparse treats a leading-`-` positional
+    # as an unrecognized flag. Witnessed here by taking the EXACT teaching line 81a7268 printed,
+    # extracting its own arguments, and actually running them through
+    # register_principal_argparse_witness.py (the identical argparse shape `led.tmpl` itself
+    # uses for this verb) -- one subprocess call, the real failure a caller pasting this taught
+    # command would hit, not a re-derivation of "this looks like it wouldn't work."
+    pre_fix_hyphen_path = materialize_git_blob(PRE_FIX_COMMIT_HYPHEN, "tools/dispatch_principal.py",
+                                                "_dispatch_principal_pre_fix_hyphen.py")
+    try:
+        r6 = run_preamble(pre_fix_hyphen_path, HYPHEN_NAME, "empty")
+        r6_charset_accepted = "not a valid principal name" not in r6.stderr
+        taught_line = None
+        for line in r6.stderr.splitlines():
+            if "register-principal" in line and HYPHEN_NAME in line:
+                taught_line = line.strip()
+                break
+        if taught_line is None:
+            check("R6-pre-fix-leading-hyphen-accepted-teaches-unusable-command", False,
+                  f"no register-principal teaching line found in stderr={r6.stderr!r}")
+        else:
+            # taught_line looks like: "<led> register-principal -foo subagent --purpose \"...\""
+            taught_argv = shlex.split(taught_line)
+            idx = taught_argv.index("register-principal")
+            argparse_argv = taught_argv[idx + 1:]  # ['-foo', 'subagent', '--purpose', '<why...>']
+            witness = subprocess.run(
+                [sys.executable, str(REGISTER_PRINCIPAL_ARGPARSE_WITNESS)] + argparse_argv,
+                capture_output=True, text=True,
+            )
+            r6_taught_command_fails = witness.returncode == 4
+            check("R6-pre-fix-leading-hyphen-accepted-teaches-unusable-command",
+                  r6.returncode == 1 and r6_charset_accepted and r6_taught_command_fails,
+                  f"preamble-exit={r6.returncode} charset-accepted-the-name={r6_charset_accepted} "
+                  f"taught-line={taught_line!r} taught-command-argparse-exit={witness.returncode} "
+                  f"(4 == led.tmpl's own parse-failure exit) taught-command-stderr="
+                  f"{witness.stderr.strip()!r} -- the moderate finding reproduced end to end: "
+                  f"the pre-fix refusal's own remediation command does not parse")
+    finally:
+        pre_fix_hyphen_path.unlink(missing_ok=True)
+
+    # R7: POST-FIX CODE, GREEN counterpart to R6 -- the same leading-hyphen name now refuses on
+    # CHARSET before ever reaching the registration check or teaching any register-principal
+    # command at all (nothing left to be non-actionable).
+    r7 = run_preamble(POST_FIX_DISPATCH_PRINCIPAL, HYPHEN_NAME, "empty")
+    r7_refused_charset = ("not a valid principal name" in r7.stderr
+                           and "start with a letter, digit, or '_'" in r7.stderr)
+    # the refusal text is allowed to MENTION `led register-principal` descriptively (it does,
+    # explaining WHY a leading hyphen is unregistrable) -- what R6 proved must be gone is an
+    # actual TAUGHT command line naming this specific hyphen name as an argument to it.
+    r7_no_teaching = f"register-principal {HYPHEN_NAME} subagent" not in r7.stderr
+    check("R7-post-fix-leading-hyphen-refused-on-charset-before-any-teaching",
+          r7.returncode == 1 and r7_refused_charset and r7_no_teaching,
+          f"exit={r7.returncode} refused-on-charset={r7_refused_charset} "
+          f"no-register-principal-teaching={r7_no_teaching}\n  stderr={r7.stderr.strip()!r}")
+
+    # R8: POST-FIX CODE, length-cap boundary (minor finding, confirming review round) -- a
+    # 65-character name refuses on charset before any `led` call; a 64-character name is
+    # charset-LEGAL (passes through to the registration check, which the "empty" scenario then
+    # answers NOT-REGISTERED for, distinguishing "refused on charset" from "refused as
+    # unregistered" by message content, same technique R3 uses).
+    name_64 = "a" * 64
+    name_65 = "a" * 65
+    r8_65 = run_check("empty", name_65, json_flag=False)
+    r8_65_refused_charset = ("not a valid principal name" in r8_65.stderr
+                              and "at most 64" in r8_65.stderr)
+    r8_64 = run_check("empty", name_64, json_flag=False)
+    r8_64_passed_charset = ("not a valid principal name" not in r8_64.stderr
+                             and "NOT-REGISTERED" in r8_64.stdout)
+    check("R8-post-fix-length-cap-boundary-65-refused-64-accepted",
+          r8_65.returncode == 1 and r8_65_refused_charset
+          and r8_64.returncode == 1 and r8_64_passed_charset,
+          f"65-char: exit={r8_65.returncode} refused-on-charset={r8_65_refused_charset} "
+          f"stderr={r8_65.stderr.strip()!r}\n"
+          f"  64-char: exit={r8_64.returncode} passed-charset-reached-registration-check="
+          f"{r8_64_passed_charset} stdout={r8_64.stdout.strip()!r}")
 
     if FAILURES:
         print(f"dispatch-principal-charset-guard: {len(FAILURES)} case(s) FAILED: {FAILURES}")

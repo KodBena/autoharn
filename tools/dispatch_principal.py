@@ -62,9 +62,32 @@ was registered and later suspended still passes THIS check and then correctly re
 real write -- this tool never duplicates that live-standing computation, per ADR-0012 P1, one
 home for that fact and it is the kernel's).
 
-NAME CHARSET (finding 1, this fix round's review): `preamble`/`check` both refuse, loudly, any
-`<name>` containing a character outside `[A-Za-z0-9_-]` BEFORE doing anything else -- see
-`_validate_name_charset`'s own docstring for why refusal, not only quoting, is the fix.
+NAME CHARSET (finding 1, dispatch-principal-wiring's original fix round; TIGHTENED by a
+confirming review round): `preamble`/`check` both refuse, loudly, any `<name>` not matching
+`^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$` BEFORE doing anything else -- first character alphanumeric
+or `_` (a leading `-` is charset-adjacent but `led register-principal`'s own argparse parses it
+as a flag, not a name, so the confirming review's MODERATE finding was that such a name passed
+this tool's own gate yet could never actually be registered by the command this tool teaches;
+excluding it at the source keeps the taught remediation always actionable), capped at 64
+characters total (the worldname contract's own intersection cap, `tools/setup_tui/idtypes.py`
+row 1317 -- no naming convention this project uses needs more, and no prior identifier contract
+here that bothered to state a cap picked a different number). See `validate_name_charset`'s own
+docstring for the full reasoning, including why refusal, not only quoting, is the fix.
+
+NAMES COLLIDING WITH THIS TOOL'S OWN FLAGS (minor, confirming review round, NAMED not fixed):
+this tool's own hand-rolled argument loop in `main()` (not argparse) treats any token equal to
+`--led`, `--json`, or `--scan-limit` as a FLAG regardless of position -- no `--` separator is
+recognized to force the remainder positional -- so a principal name spelled exactly one of
+those three strings cannot be passed on this tool's own command line; it is consumed as the
+flag instead, either erroring as a malformed invocation or silently reconfiguring the tool
+rather than naming a principal. This fails SAFELY (never a silent wrong-principal dispatch) but
+was previously unflagged. It is also now moot in practice: all three strings begin with `-`,
+and the tightened charset above (`^[A-Za-z0-9_]...`) already refuses any name with a leading
+hyphen before this tool's argument loop ever runs -- so the only names this collision could
+still apply to are exactly `--led`, `--json`, and `--scan-limit`, all charset-illegal on their
+own. Named here rather than reworked: adding a `--` separator to a hand-rolled parser to admit
+three specific charset-illegal strings is not worth the parser complexity for a name space no
+real convention in this project produces.
 
 PER-BUILDER PRINCIPAL ACCUMULATION (finding 2, this fix round's review): every successful
 `./led register-principal builder-<slug> subagent` this convention drives is an append-only
@@ -118,7 +141,23 @@ PRINCIPAL_REGISTERED_RE = re.compile(r"^principal '([^']+)' registered")
 # preamble line straight into whatever shell pastes and evals it. Refusing here closes the
 # mistake CLASS at its source, at the one point every caller of this tool passes through, rather
 # than trusting every future caller to quote correctly.
-NAME_CHARSET_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+#
+# TIGHTENED, confirming review round on this same fix (moderate finding): the original
+# `^[A-Za-z0-9_-]+$` accepted a LEADING hyphen (`-foo`) -- charset-legal here, but
+# `led register-principal`'s own argparse (`bootstrap/templates/led.tmpl`, `p.add_argument
+# ("name")`, a bare positional) parses any token starting with `-` as an unrecognized OPTION,
+# not a name, and fails before `cmd_register_principal` ever runs. So `preamble`'s own taught
+# remediation command -- `led register-principal -foo subagent --purpose "..."` -- was
+# non-actionable for exactly the names this charset let through: printed with a straight face,
+# refused a second time the instant the caller pasted it. First-character now excludes `-`
+# (`[A-Za-z0-9_]` to open), closing that dead end at the same point the shell-injection class
+# was closed -- refuse here, not two commands later. Length is capped at 64 (`{0,63}` after the
+# required first character): the same cap and the same reasoning as the worldname contract's
+# own intersection allowlist (`tools/setup_tui/idtypes.py`'s `_CONTRACT_RE = re.compile(r"^[a-z
+# 0-9]{1,64}$")`, row 1317) -- an unbounded name is accepted by no naming convention this
+# project actually uses, costs unbounded storage/render width for zero benefit, and every other
+# identifier contract in this codebase that has bothered to state a cap has stated this one.
+NAME_CHARSET_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
 
 
 class DispatchPrincipalError(Exception):
@@ -126,11 +165,12 @@ class DispatchPrincipalError(Exception):
 
 
 def validate_name_charset(name: str) -> None:
-    """REFUSE loudly, before anything else runs, on any `name` containing a character outside
-    `[A-Za-z0-9_-]` (finding 1, this fix round's review: `cmd_preamble` used to print
-    `export LED_ACTOR={name}` UNQUOTED, and `led register-principal` applies zero charset
-    validation of its own -- so a name like `builder$(touch PWNED)` produced a paste-line that
-    executed the embedded command the instant a caller pasted and eval'd it).
+    """REFUSE loudly, before anything else runs, on any `name` not matching
+    `^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$` (finding 1, dispatch-principal-wiring's original fix
+    round: `cmd_preamble` used to print `export LED_ACTOR={name}` UNQUOTED, and
+    `led register-principal` applies zero charset validation of its own -- so a name like
+    `builder$(touch PWNED)` produced a paste-line that executed the embedded command the
+    instant a caller pasted and eval'd it).
 
     CHOICE MADE, STATED (the review asked for it explicitly): refusing on charset is the actual
     class-closer here, not `shlex.quote` alone. `shlex.quote` makes an arbitrary string SAFE to
@@ -142,14 +182,28 @@ def validate_name_charset(name: str) -> None:
     this refusal, belt-and-suspenders: defense in depth, not a substitute -- if some future
     caller of `principal_is_registered`/`cmd_preamble` were ever reached without going through
     this check first, the printed line would still be safe to eval, just refused-on-purpose
-    first here for every path that goes through `preamble`/`check` as documented."""
+    first here for every path that goes through `preamble`/`check` as documented.
+
+    TIGHTENED (moderate finding, confirming review round): the first-round pattern
+    (`^[A-Za-z0-9_-]+$`, no length bound) let a LEADING hyphen through -- charset-legal, but
+    `led register-principal`'s own argparse parses a leading-`-` token as an unrecognized flag,
+    not a name, so this tool's own taught remediation command was non-actionable for exactly
+    those names (printed as the fix, refused a second time on paste). The pattern now requires
+    an alphanumeric-or-underscore FIRST character and caps total length at 64, matching the
+    worldname contract's own intersection cap (`tools/setup_tui/idtypes.py`'s
+    `_CONTRACT_RE = re.compile(r"^[a-z0-9]{1,64}$")`, row 1317) -- this refusal message states
+    the full rule so a caller taught by it lands on a name that is both charset-legal AND
+    actually registrable, not merely charset-legal."""
     if not NAME_CHARSET_RE.match(name):
         raise DispatchPrincipalError(
-            f"{name!r} is not a valid principal name -- only letters, digits, '_', and '-' are "
-            f"accepted (this fix round's review, finding 1: an unconstrained name that reaches "
-            f"an `export LED_ACTOR=<name>` paste line is a shell-injection hazard even when "
-            f"quoted, and is almost always an accident besides). Pick a name matching "
-            f"[A-Za-z0-9_-]+, e.g. builder-<work-item-slug>."
+            f"{name!r} is not a valid principal name -- names must start with a letter, digit, "
+            f"or '_', contain only letters, digits, '_', and '-' after that, and be at most 64 "
+            f"characters long (^[A-Za-z0-9_][A-Za-z0-9_-]{{0,63}}$). This fix round's review: a "
+            f"leading '-' is charset-adjacent but unregistrable (`led register-principal` "
+            f"parses it as a flag, not a name), and an unbounded name matches no naming "
+            f"convention this project uses (same cap as the worldname contract's own "
+            f"intersection allowlist, tools/setup_tui/idtypes.py). Pick a name matching "
+            f"^[A-Za-z0-9_][A-Za-z0-9_-]{{0,63}}$, e.g. builder-<work-item-slug>."
         )
 
 
@@ -174,7 +228,17 @@ def principal_is_registered(led: str, name: str, scan_limit: int) -> bool:
     at most the most recent `scan_limit` (default 100000) rows of `led current N` client-side
     and regex-matching each `principal_registered` statement's own printed text -- the same
     bounded-scan idiom `tools/role_charter.py`'s own `principal_is_registered` already uses.
-    The two views can diverge exactly at scale: a registration event older than the scan window
+    HONEST SCOPE OF THAT BOUND (minor finding, confirming review round: the module docstring's
+    `--scan-limit` description used to read as though `scan_limit` bounded the FETCH cost of
+    `led current N` itself; it does not): `scan_limit` bounds this function's own parse/inspect
+    cost -- how many of `led current`'s printed lines get regex-matched here -- not the
+    underlying `led current N` call's fetch cost. `led`'s own `cmd_recent`
+    (`bootstrap/templates/led.tmpl`) implements `N` by calling `bcc.get_all_rows(cfg.base,
+    "/rows/current", ...)` -- fetching the ENTIRE current-rows view over the wire every time --
+    then truncating to the most recent `N` client-side; `N` never reaches the served query as a
+    limit. This is pre-existing `led` serving behavior, not something this tool introduces or
+    can fix from here; `scan_limit` narrows what THIS function inspects after the unbounded
+    fetch has already happened, no more. The two views can diverge exactly at scale: a registration event older than the scan window
     on a ledger with more than `scan_limit` rows would read NOT-REGISTERED here while `led`'s
     own indexed lookup still finds it and writes correctly -- a false-refusal on this preflight,
     never a false-pass, and never load-bearing for correctness (the real write at `led` still
