@@ -6,7 +6,11 @@ recommendation" — demote the static gate to a detector, commission this as the
 Awaiting his yes/no. Removal condition: superseded by the build's completion record or
 declined. -->
 
-- **Status:** Fable-authored 2026-07-26, awaiting maintainer yes/no.
+- **Status:** Fable-authored 2026-07-26. RATIFIED via the maintainer's acceptance of the
+  row-1316 recommendation, confirmed same day ("make a decision on your own") — no separate
+  yes/no owed; the orchestrator queuing one anyway was excess ceremony, corrected on the
+  record (row 1325). Build proceeds; scheduled serially behind the deploy-feature-manifest
+  merge because both sweep `seen-red/*/run_fixtures.py`.
 - **The class (rows 1237–1248):** a fixture invokes this repo's own root verbs, or mutates
   `PICKUP_DEPLOYMENT`, and test garbage lands in the real ledger.
 - **Why static detection cannot close it (rows 1315/1316, witnessed five times):** a
