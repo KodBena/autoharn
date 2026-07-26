@@ -46,3 +46,82 @@ relying on the original 6 to notice).
 Reverting `_ROW_PROMPT_RE` to its shipped, fully-anchored form (`^/row\s+\d+(\s+\d+)*\s*$`) and
 re-running: `run_fixtures: all 7 case(s) passed.` — the fix, and the suite that now actually
 proves it, both witnessed live in the same session.
+
+---
+
+APPENDIX 2026-07-26 -- a SECOND, real (not mutation-injected) finding in this same shipped hook,
+from a CLEARED-BUT-MODERATE-SILENT review of `hooks/userpromptsubmit_row_resolve.py` at fe7d461
+(the commit this whole seen-red family is built against, unmodified this time -- no deliberate
+mutation needed, the bug was already there).
+
+FINDING: `_ROW_PROMPT_RE = re.compile(r"^/row\s+\d+(\s+\d+)*\s*$")` uses `\s`, which matches
+`\n` as well as space/tab. Python's `re.match` (no `re.MULTILINE`) additionally lets a plain
+`$` anchor at either end-of-string OR immediately before a trailing `\n`. Combined, an ordinary
+TWO-LINE prompt whose second line happens to be pure digits -- e.g. the literal prompt
+"/row 5\n6" (a user typing "/row 5" on one line and something starting with "6" on the next,
+with no intent to invoke this hook at all) -- matched the "whole prompt" anchor and was silently
+BLOCKED and replaced with a row dump, exactly the "hook that mangles an ordinary prompt is worse
+than no hook" hazard design constraint 2 names (and the same class of bug g-mixed-request-not-
+matched already proves for the single-line case: an anchor gap letting real user text through
+the /row net uninvited).
+
+Direct demonstration (real hook at fe7d461, unmodified, no mock CLI needed to see the wrong
+classification -- the deployment.json refusal text itself proves the prompt was captured),
+stdin:
+
+    {"hook_event_name":"UserPromptSubmit","session_id":"fixture","cwd":"/tmp","prompt":"/row 5\n6"}
+
+stdout (verbatim, the actual red output, fe7d461):
+
+    {"decision": "block", "reason": "/row resolved locally via `.../autoharn led show <id>`
+    -- no model turn spent.\n\nrow 5: led: deployment record not found at
+    .../deployment.json -- a project with no deployment record is refused, never silently
+    un-resolved. ...\nrow 6: led: deployment record not found at .../deployment.json ..."}
+
+The user's real second line ("6") was consumed as a second row id and never reached the model
+at all -- the exact zero-cost-guarantee inversion the module docstring's own LATENCY HAZARD
+section worries about for a different mechanism (hook timeout), now shown for the matcher
+itself.
+
+run_fixtures.py's own suite against the unmodified fe7d461 hook, with two new cases added to
+chase this down (h-two-line-not-matched: "/row 5\n6"; j-blank-second-line-not-matched:
+"/row 5\n\n", a second, blank-but-real line):
+
+    === h-two-line-not-matched ===
+    exit=0 (expect 0)
+      [FAIL] -decision
+      [FAIL] -block
+      stdout: {"decision": "block", "reason": "/row resolved locally via `.../autoharn led
+      show <id>` -- no model turn spent.\n\nrow 5: led: deployment record not found at
+      .../deploy...
+
+    === j-blank-second-line-not-matched ===
+    exit=0 (expect 0)
+      [FAIL] -decision
+      [FAIL] -block
+      stdout: {"decision": "block", "reason": "/row resolved locally via `.../autoharn led
+      show <id>` -- no model turn spent.\n\nrow 5: led: deployment record not found at
+      .../deploy...
+
+    run_fixtures: 2 FAILURE(S): h-two-line-not-matched, j-blank-second-line-not-matched
+
+(the other 8 cases, including i-trailing-newline-matched below, stayed green against the
+unmodified fe7d461 hook -- a bare trailing newline with nothing after it happened to already be
+accepted by the old pattern too, via the same `$`-before-trailing-`\n` behavior; it is case h's
+and j's SECOND, real line of content that the old matcher wrongly swallowed.)
+
+FIX: `extract_row_ids` now rejects any EMBEDDED newline before the anchored regex ever runs
+(prompt body has at most one trailing `\n` stripped first, then any remaining `\n` anywhere is
+an immediate pass-through) -- `/row` commands are strictly single-line. The `_ROW_PROMPT_RE`
+pattern text itself is left unchanged (module docstring's MATCHING section quotes it verbatim),
+so the fix lives at the guard, not hidden inside the regex.
+
+TRAILING-NEWLINE RULING: a prompt that is otherwise a pure `/row <id> [...]` command plus
+exactly ONE trailing newline and nothing after it (case i-trailing-newline-matched,
+"/row 5\n" -- the shape a terminal/editor's own auto-appended newline on submission would
+produce) carries no additional content past the command: judged still a match, and resolved
+same as "/row 5". Only a genuine second line -- digits (h) or blank (j) -- is pass-through.
+
+Re-running the full suite against the FIXED hook: `run_fixtures: all 10 case(s) passed.` --
+fix and the now-adequate suite (10 cases: the original 7 plus h/i/j) both witnessed live in the
+same session, same branch (worktree-agent-a4709d721aa5a9095, base fe7d461).

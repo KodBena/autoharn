@@ -142,12 +142,39 @@ def _first(d, *keys, default=None):
 
 def extract_row_ids(prompt: str) -> list[str] | None:
     """Returns the ordered list of id strings if `prompt` is EXACTLY the `/row <id> [...]`
-    shape (anchored, module docstring MATCHING section), else None — the pass-through case."""
+    shape (anchored, module docstring MATCHING section), else None — the pass-through case.
+
+    NEWLINE HAZARD, found and fixed 2026-07-26 (CLAUDE.md engineering-responsibility standard
+    — a hazard met in passing while reviewing this hook, fixed rather than routed around):
+    `\\s` inside `_ROW_PROMPT_RE` matches `\\n` as well as space/tab, and `re.match` with `$`
+    (no `re.MULTILINE`) anchors `$` at end-of-string OR just before a trailing `\\n` — so an
+    ordinary two-line prompt whose second line happens to be pure digits, e.g. literally
+    "/row 5\\n6", was wrongly recognized as the `/row 5 6` shape and silently blocked/resolved,
+    which is exactly the "hook that mangles an ordinary prompt" hazard design constraint 2
+    exists to rule out (see this hook's own `g-mixed-request-not-matched` fixture for the
+    single-line analogue of this same class of bug). Fixed here by rejecting any EMBEDDED
+    newline before the anchored regex ever runs, so a `/row` command is strictly single-line —
+    the regex itself is left as `\\s`-based (module docstring's MATCHING text quotes the
+    pattern verbatim) rather than narrowed to `[ \\t]`, so the fix is visible at the guard, not
+    hidden inside the pattern text the docstring already commits to.
+
+    TRAILING-NEWLINE RULING (same finding, decided 2026-07-26): a prompt that is otherwise a
+    pure `/row <id> [...]` command plus exactly ONE trailing newline and nothing after it
+    (e.g. "/row 5\\n", the shape a terminal/editor's own auto-appended newline on submission
+    would produce) carries no additional content past the command — there is no "second line"
+    for the hook to have silently swallowed, unlike the embedded-newline case above. Judged
+    still a match: exactly one trailing `\\n` is stripped before the newline-embedded check and
+    the anchored match, so "/row 5\\n" resolves row 5 same as "/row 5", while "/row 5\\n6" and
+    "/row 5\\n\\n" (a second, blank-but-real line) are both rejected as pass-through.
+    """
     if not isinstance(prompt, str):
         return None
-    if not _ROW_PROMPT_RE.match(prompt):
+    body = prompt[:-1] if prompt.endswith("\n") else prompt
+    if "\n" in body:
         return None
-    return re.findall(r"\d+", prompt)
+    if not _ROW_PROMPT_RE.match(body):
+        return None
+    return re.findall(r"\d+", body)
 
 
 def _resolve_one(row_id: str, timeout: float) -> str:
