@@ -1,14 +1,41 @@
 # PANEL-GXP-SURFACE-KICKSTART — autoharn's user-facing surface for the autoharn-panel project
 
-<!-- doc-attest-exempt: agent-authored survey report, filed verbatim by the orchestrator
-2026-07-26 (maintainer commission, ledger row 1449; Opus exception maintainer-granted).
-Claims carry the surveyor's own witness classes; the maintainer has not yet read it.
-Removal condition: superseded by a ratified autoharn-panel spec that cites it. -->
+<!-- Waiver removed 2026-07-26: the doc now carries a real ADR-0017 attestation record
+(maintainer-requested loop, two rounds, escalated-and-adjudicated); future edits go
+through the loop like any attested doc. Filed under maintainer commission, ledger row
+1449; Opus exception maintainer-granted; the maintainer has not yet read it in full. -->
 
 **Provenance:** produced by the commissioned surface documenter (Opus, commission file
 carried the maintainer's words verbatim; both repos read-only except the one disclosed
-incident in its §0, ledger finding row references it). Filed VERBATIM below the rule —
-nothing edited, including its own boundary-breach disclosure and its errors.
+incident in its §0, ledger finding row references it). Filed verbatim at commit c68b251;
+the text below now carries LEGIBILITY REPAIRS from a maintainer-requested ADR-0017 loop
+(2026-07-26) — wording grounded and citations linked, no factual claim altered; the
+as-delivered original is the c68b251 version.
+
+**Vocabulary and citation conventions (added for the zero-context reader):**
+- **GxP** — the family of "Good x Practice" life-science regulations (GMP manufacturing,
+  GLP laboratory, GCP clinical, …) whose computerized-systems expectations (audit trails,
+  attributable records, electronic signatures) frame §2. Used here as a reference frame
+  only, never a compliance claim.
+- **sNN** (s15, s43, s61, …) — the Nth numbered kernel migration delta, one file each
+  under [`kernel/lineage/`](../kernel/lineage/); a world is born by applying them in
+  order. "s43 R6" style pointers mean rule/requirement 6 of that delta's own header
+  comment, readable at the top of the named file.
+- Plain code-formatted paths (`serving/boundary_service.py:65-73`) resolve from this
+  repository's root. Paths belonging to the panel repository (`DIRECTIVE_FROM_AUTOHARN.md`,
+  `AUTOHARN_BACKFLOW.md`, `frontend/…`, `panel.toml`) resolve from the sibling checkout
+  `~/w/vdc/1/experience/autoharn-panel/` — a separate repository this one does not link
+  into.
+- **SoD** — segregation of duties. **RLS** — Postgres row-level security. **SPA** —
+  single-page application (the panel's frontend). **ALCOA+** — the data-integrity
+  acronym behind §2's expectation column: attributable, legible, contemporaneous,
+  original, accurate, plus complete, consistent, enduring, available.
+- **Witness classes**, the evidentiary tags every claim below carries: **WITNESSED** —
+  the surveyor ran the command/probe and shows the observed output; **DOC-SOURCED** —
+  quoted from a named file at a cited location, not executed; **GAP** — the absence
+  itself is the claim; **UNVERIFIED** — asserted by neither method, with the concrete
+  blocker (or deliberate choice) stated. "Documented is not witnessed" is the house
+  rule these tags carry.
 
 **Coordinator's errata (2026-07-26, verified against source before filing):**
 - Its "What remains open" item 4 ("a fresh world ends at s57") rests on a stale
@@ -31,7 +58,7 @@ I need to open with a disclosure before the deliverable.
 
 ## 0. DISCLOSURE — a hard boundary of this commission was breached, once, by me
 
-The commission forbade "any command that writes a ledger row." While witnessing `led`'s unknown-kind refusal I ran `./autoharn led xyzzy "test"`. I expected a client-side usage refusal. It is not: `led` sends the write to the kernel, the kernel refuses on `ledger_kind_check`, **and s43 commits the refusal itself as a durable ledger row**. Observed output:
+The commission forbade "any command that writes a ledger row." While witnessing `led`'s unknown-kind refusal I ran `./autoharn led xyzzy "test"`. I expected a client-side usage refusal. It is not: `led` sends the write to the kernel, the kernel refuses on `ledger_kind_check`, **and s43 — the typed-verdict write-boundary delta, [`kernel/lineage/s43-typed-verdict-write-boundary.sql`](../kernel/lineage/s43-typed-verdict-write-boundary.sql) — commits the refusal itself as a durable ledger row**. Observed output:
 
 ```
 led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 1452 --
@@ -39,7 +66,7 @@ led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_re
   new row for relation "ledger" violates check constraint "ledger_kind_check"
 ```
 
-Row 1452 exists in `autoharn2`, `kind=write_refused`, `refusal_attempted_actor=1`, `refusal_attempted_role=bork`, `row_hash=62a4c6cf…`. It is **unretractable by construction** (s43 ratified R6 refuses superseding a `write_refused` row), so I neither can nor should attempt to remove it, and I made no attempt. `./autoharn verify-chain` afterwards reports `INTACT … head id=1452` and `REFUSAL-ORACLE-CONFIRMED -- 3 journaled write_refused row(s) == sequence count 3`, so the chain and the completeness oracle are consistent; nothing is broken, but the ledger now carries one row caused by this documentation task.
+Row 1452 exists in `autoharn2`, `kind=write_refused`, `refusal_attempted_actor=1`, `refusal_attempted_role=bork`, `row_hash=62a4c6cf…`. It is **unretractable by construction** (s43's ratified requirement R6 — rule 6 in that delta file's own header — refuses superseding a `write_refused` row), so I neither can nor should attempt to remove it, and I made no attempt. `./autoharn verify-chain` afterwards reports `INTACT … head id=1452` and `REFUSAL-ORACLE-CONFIRMED -- 3 journaled write_refused row(s) == sequence count 3`, so the chain and the completeness oracle are consistent; nothing is broken, but the ledger now carries one row caused by this documentation task.
 
 No other write occurred. Everything else below is reads, `--help` output, and file reading. **This is itself a finding worth keeping**: on this system there is no read-only way to witness a kernel-level refusal text — probing a refusal *is* a write. That property belongs in §2 and §4, and it is the single most important thing a panel must understand before it puts a "try it" affordance in front of a user.
 
@@ -97,7 +124,7 @@ Refusal WITNESSED for a bare `led work`: `REFUSED -- not a recognized 'led work'
 
 **Artifacts:** `led artifact put <path> [--media-type] | get <hash> [--out] | stat <hash>` (WITNESSED refusal text). **JSON ingest:** `led --json <ledger|review|registration|obligation> <file|->`.
 
-`led` is no longer psql — every read is a GET, every write a POST, against the boundary service (DOC-SOURCED, `led --help` TRANSPORT paragraph; `design/LED-BOUNDARY-REBASE-COVERAGE.md:24-27`).
+`led` is no longer psql — every read is a GET, every write a POST, against the boundary service (DOC-SOURCED, `led --help` TRANSPORT paragraph; [`design/LED-BOUNDARY-REBASE-COVERAGE.md:24-27`](LED-BOUNDARY-REBASE-COVERAGE.md)).
 
 ### 1.3 The served HTTP boundary — the panel's actual API
 
@@ -113,7 +140,7 @@ DOC-SOURCED, `/home/bork/w/vdc/1/autoharn/serving/boundary_service.py`. One Fast
 
 Teach-texts, DOC-SOURCED verbatim: unknown deployment 404 names the whole known set; unknown view 404 says *"no view named '…' is served by this boundary … the {view} discriminator is a closed, spec-enumerated allowlist; known views: […]"*; `capability_absent` says *"POST /write/{surface} refuses entirely rather than falling back to a raw INSERT"*; non-loopback bind is refused unless `--i-understand-this-exposes-the-ledger`.
 
-**Deliberately absent:** no server-side filter/sort/facet grammar at all (a client pages everything and filters locally, `LED-BOUNDARY-REBASE-COVERAGE.md:24-27`); no SSE/push/poll route; no CORS headers on any response; **no authentication layer** — *"no authentication layer beyond today's trust model (localhost bind, OS-user trust — unchanged, and its absence stays a named property, not an oversight)"* (`design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md:27-29`). The service does not inject an actor; the kernel's `set_actor` resolves it from the connecting DB role (`serving/README.md:361-384`, which calls the missing dedicated `boundary-service` principal *"a spec defect worth the maintainer's attention"*).
+**Deliberately absent:** no server-side filter/sort/facet grammar at all (a client pages everything and filters locally, [`LED-BOUNDARY-REBASE-COVERAGE.md:24-27`](LED-BOUNDARY-REBASE-COVERAGE.md)); no SSE/push/poll route; no CORS headers on any response; **no authentication layer** — *"no authentication layer beyond today's trust model (localhost bind, OS-user trust — unchanged, and its absence stays a named property, not an oversight)"* ([`design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md:27-29`](FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md)). The service does not inject an actor; the kernel's `set_actor` resolves it from the connecting DB role ([`serving/README.md:361-384`](../serving/README.md), which calls the missing dedicated `boundary-service` principal *"a spec defect worth the maintainer's attention"*).
 
 ### 1.4 Artifact classes a user reads
 
@@ -138,7 +165,7 @@ DOC-SOURCED, `kernel/lineage/*.sql`, all with file:line witnesses from the sweep
 - **Electronic signature**: s61 adds `commission_signature_verified` and `principal_key_possession_verified`, written only by their verbs' real gpg checks. A signature attests a `kind='commission'` row and nothing else (`s61:508`). Key binding requires prior proof of possession (`led principal attest-possession … --asc`, cited by `--possession-ref`, `s61:667-675`). **Signature symmetry**: a row whose force rests on a verified signature can only be superseded by an equally signed act (`s61:607`). Verdicts a user sees from `verify-commission`: `VERIFIED`, `UNSIGNED`, `FORGED-OR-CORRUPT`, `NO-COMMITTED-KEY`, `GPG-UNAVAILABLE`, `MULTIPLE-VALID-SIGNATURES`.
 - **Trail integrity**: s26 row-hash chain, s27 `chain_high_water` (catches tail deletion, which s26 alone cannot), s42 full-column hash coverage, s43 typed write boundary + `kernel.refusal_seq` completeness oracle (`count > sequence` fails, detecting forged refusal rows).
 - **Contemporaneity**: s24 `event_declared_ts` — writer-supplied, unverified, distinct from insert `ts`. A late row that declared its true time is `LATE_DECLARED` (benign, disclosed); the same gap undeclared is `BACKFILL_SUSPECT` (exit 1).
-- **Access control actually enforced in-DB**: only s60's `validate_entitlement()`, and only for the act classes its configuration names — a role conjunct plus, for authority-bearing acts, a fresh transitive `acts-for` chain to the world's genesis principal (`s60:441-594`). s41 role bindings and delegations upstream of s60 are *recorded facts with no write-time check* (`s60:47-51` says so in its own WHY section). **And s60/s61/s62 are not in the birth chain**: *"authored and scratch-witnessed but NOT YET wired into bootstrap/new-project.sh's LINEAGE_CHAIN — a fresh --new-world scaffold today ends at s57"* (`user-guide/USER-ACCESS-CONTROL-GUIDE.md:36-38`).
+- **Access control actually enforced in-DB**: only s60's `validate_entitlement()`, and only for the act classes its configuration names — a role conjunct plus, for authority-bearing acts, a fresh transitive `acts-for` chain to the world's genesis principal (`s60:441-594`). s41 role bindings and delegations upstream of s60 are *recorded facts with no write-time check* (`s60:47-51` says so in its own WHY section). **And s60/s61/s62 are not in the birth chain**: *"authored and scratch-witnessed but NOT YET wired into bootstrap/new-project.sh's LINEAGE_CHAIN — a fresh --new-world scaffold today ends at s57"* ([`user-guide/USER-ACCESS-CONTROL-GUIDE.md:36-38`](../user-guide/USER-ACCESS-CONTROL-GUIDE.md)).
 
 ### 1.6 Scaffolding surface (how a world comes to exist)
 
@@ -160,11 +187,11 @@ Framing per the commission: 21 CFR Part 11 / EU Annex 11 are **reference frames*
 | **Complete** | s43 `write_refused` rows + `refusal_seq` oracle; `/rows/{id}/history`; `asof-export` | **Refusals are records, not errors.** A refusals view is missing from the 25-name allowlist and should be first-class in the panel. Render the full supersession chain from `/rows/{id}/history`. | There is no `led` verb that lists refusals; a user must know to filter `kind='write_refused'` by hand. |
 | **Consistent** | Uniform supersession (s31); `ledger_current` as the single current-truth reader | Never show a superseded row without its superseder; never show current truth and history in the same undifferentiated list. | `led --recent` mixes kinds; distinguishing current from retracted requires knowing what `ledger_current` does. |
 | **Enduring** | Postgres + append-only + hash chain + `chain_high_water` | Surface `verify-chain`'s three lines (INTACT / TAIL-COVERAGE / REFUSAL-ORACLE) as three separate assurances, because they detect three different attacks. | Conflating them is the natural non-expert error; the CLI at least prints them separately. |
-| **Available** | `/rows/asof/{ts}`; `asof-export export` → txt + json + sha256 manifest | This is the panel's inspection-copy button: pick a timestamp, get the three-file bundle. The one existing mechanism aimed squarely at "render the record for a human at a point in time". | Requires composing `--asof` and `--out`, and `asof-export`/`doctor` have no CAPABILITIES witness item (documented gap, `ORCH-OPERATING-CARD.md:179-185`). |
+| **Available** | `/rows/asof/{ts}`; `asof-export export` → txt + json + sha256 manifest | This is the panel's inspection-copy button: pick a timestamp, get the three-file bundle. The one existing mechanism aimed squarely at "render the record for a human at a point in time". | Requires composing `--asof` and `--out`, and `asof-export`/`doctor` have no CAPABILITIES witness item (documented gap, [`user-guide/ORCH-OPERATING-CARD.md:179-185`](../user-guide/ORCH-OPERATING-CARD.md)). |
 | **Audit-trail REVIEW** (the panel's reason to exist) | `review_gap`, `work_review_gap`, `review_verdicts`, `reservations_outstanding`, `countersign_obligation`, `question_status`, `distance-to-clean` | Queue-shaped, not table-shaped: "18 items awaiting review" with a one-click path to the row, its antecedent, and the countersign form. `review_verdicts` is the legibility view — it shows *every* review including superseded ones. | `distance-to-clean` prints `TOTAL debt: 25` with 18 deferred-review slugs on one line. That is a to-do list rendered as a log line. |
-| **Access control / SoD** | `s15` author-may-not-countersign refusal; s17/s21/s55 independence; s60 entitlement (unwired); RLS recipes | Show *why* a countersign button is disabled — "you authored this row" — rather than letting the user hit the refusal. Render the independence value as a labelled claim with its meaning. | The refusal is only discoverable by triggering it, and triggering it writes a `write_refused` row (see §0). |
+| **Access control / SoD (segregation of duties)** | `s15` author-may-not-countersign refusal; s17/s21/s55 independence; s60 entitlement (unwired); RLS (row-level security) recipes | Show *why* a countersign button is disabled — "you authored this row" — rather than letting the user hit the refusal. Render the independence value as a labelled claim with its meaning. | The refusal is only discoverable by triggering it, and triggering it writes a `write_refused` row (see §0). |
 | **Electronic signature** | s61 signature kinds; `attest-possession` → `bind-key`; `verify-commission` verdicts; `verify-chain --head` signed-head ceremony; `attest-tags` | A ceremony surface: show signature state per commission (six verdicts), key bindings per principal, and the chain-head signing flow. `verify-chain --head` refuses to emit unless the chain and both witnesses are clean — surface that refusal as a precondition, not an error. | Multi-step gpg ceremonies documented across a 600+ line FAQ. This is the least approachable surface in the system. |
-| **Human-readable rendering** | `asof-export`, `led show`, GLOSSARY | Every closed vocabulary in the system (kinds, judge verdicts, audit verdicts, commission verdicts, independence values, chain verdicts) needs a rendered label + tooltip sourced from GLOSSARY.md. | The vocabularies are spread across GLOSSARY.md, JUDGE-READING.md and the GPG FAQ. |
+| **Human-readable rendering** | `asof-export`, `led show`, GLOSSARY | Every closed vocabulary in the system (kinds, judge verdicts, audit verdicts, commission verdicts, independence values, chain verdicts) needs a rendered label + tooltip sourced from [GLOSSARY.md](../GLOSSARY.md). | The vocabularies are spread across GLOSSARY.md, JUDGE-READING.md and the GPG FAQ. |
 
 **The write-path rule, stated once and unambiguously.** Every write the panel offers must go through autoharn's own refusal-enforcing surface — `POST /d/{d}/write/<surface>`, whose refusals are the kernel's own `write_verdict` passed byte-verbatim — and never around it via psql or a private backend. This is not merely good practice here; the maintainer's own directive says so: *"After migration, every tool that circumvents the one and only FastAPI ACL layer into autoharn should be DELETED"* (DIRECTIVE_FROM_AUTOHARN.md §5, maintainer verbatim). The panel already complied by deleting its Python backend.
 
@@ -238,7 +265,7 @@ Gaps stated as gaps; shape hints are one line each and non-binding.
 | Five of six write surfaces (`ledger`, `registration`, `obligation`, `obligation_revoke`, `missive_dispose`) — only `write/review` is wired | GAP | |
 | `led work` verbs entirely — no boundary route for open/claim/depends/close | GAP + the panel's own filed finding | The eleven sub-verbs are served through `led`'s HTTP client, but `/work/items` is the only work-related *route*. |
 | Verb-level reports with no HTTP surface at all: `judge`, `audit`, `doctor`, `verify-chain`, `attest-tags`, `distance-to-clean`, `pickup`, `fixture-sweep`, `courier` | GAP | These are the assurance strip of §2; **none** are reachable over HTTP. This is the largest single gap in the system. |
-| SQL views defined in the kernel but absent from `VIEW_REGISTRY`: `countersigned_in_force`, `work_item_descendants`, `work_edge_blocks_close`, `work_edge_obligation`, `discharging_attest`, `work_edge_blocks_start`, `work_violation_history`, `work_bookkeeping_closes`, `belief_current`, `contested_beliefs`, `credited_beliefs`, `corroboration`, `shared_premise`, `principal_role`, `entitlement_class_roles`, `signed_commissions` | GAP | Unservable by any route — the obligation-tree and signature tabs the SPEC calls P0 need several of these. |
+| SQL views defined in the kernel but absent from `VIEW_REGISTRY`: `countersigned_in_force`, `work_item_descendants`, `work_edge_blocks_close`, `work_edge_obligation`, `discharging_attest`, `work_edge_blocks_start`, `work_violation_history`, `work_bookkeeping_closes`, `belief_current`, `contested_beliefs`, `credited_beliefs`, `corroboration`, `shared_premise`, `principal_role`, `entitlement_class_roles`, `signed_commissions` | GAP | Unservable by any route — the obligation-tree and signature tabs the panel repo's own `SPEC.md` marks P0 (its highest priority tier, §§2.1-2.4 there) need several of these. |
 
 ### 4.2 Surface the panel assumes but autoharn no longer provides
 
@@ -258,7 +285,7 @@ Gaps stated as gaps; shape hints are one line each and non-binding.
 | Expectation | State | Shape hint |
 |---|---|---|
 | **Any caller identity on reads** | The boundary is unauthenticated; anything reaching loopback reads everything. Named as a property, not an oversight; the directive says whether it stays is an open maintainer decision (audit D4). | A single-operator panel inherits this exactly. It is a decision, not a bug to fix unilaterally. |
-| **Per-end-user attribution on writes** | RESERVED. `serving/README.md:361-384` calls the missing dedicated service principal *"a spec defect worth the maintainer's attention."* | Blocks any multi-user panel outright. |
+| **Per-end-user attribution on writes** | RESERVED. [`serving/README.md:361-384`](../serving/README.md) calls the missing dedicated service principal *"a spec defect worth the maintainer's attention."* | Blocks any multi-user panel outright. |
 | **A refusals read surface** | `write_refused` rows are durable, typed and hash-chained, but no view, no route, and no `led` verb lists them. | One `/views/refusals` entry would make the completeness oracle legible. |
 | **Signature ceremony visibility** | Nothing renders signature state, key bindings, possession proofs, or `verify-commission` verdicts. `signed_commissions` exists in SQL and is not servable. | |
 | **Refusal legibility as a UI concept** | The panel currently discovers refusals by receiving them. There is no way to *preview* what would be refused — and probing writes them permanently (§0). | Mirror the closed vocabularies client-side; disable-with-reason rather than submit-and-refuse. |
