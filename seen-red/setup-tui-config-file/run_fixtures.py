@@ -40,7 +40,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, REPO)
 
-from tools.setup_tui import config_file, config_seam, destination  # noqa: E402
+from tools.setup_tui import config_file, config_seam, destination, steps  # noqa: E402
+from tools.setup_tui import steps_principals_authority  # noqa: E402
 
 PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
 PGDB = "toy"
@@ -280,11 +281,82 @@ def _kill_boundary(world: str) -> None:
         subprocess.run(["kill", pid], capture_output=True, timeout=5)
 
 
+def case_plan_key_capture(scratch: str) -> None:
+    """config-seam-plan-key-silent-loss (ledger rows 1330/1331): `capture_resolved_config`
+    used to read `state.get("plan")` -- every `steps_*.py` module's own real state key is
+    `state["_plan"]` (`app.py`/`steps.py`'s own `initial_state`, `steps_principals_authority.
+    submit` and its siblings all agree) -- so `principals_authority.register`/`.competences`/
+    `.relations` always captured as `[]` in world-config.toml's self-save, a SILENT loss on
+    every wizard run since fbbe7b547d ("loadable config files"), exit 0, nothing to catch it.
+    This case drives the REAL wizard step (`steps_principals_authority.submit`, no mock, the
+    same function `screens.py` calls for a live keystroke) to queue one register/competence/
+    relation row, then captures + renders `world-config.toml` through the real `config_seam`/
+    `config_file` path, and asserts the rows actually reached the rendered file -- the exact
+    round-trip an operator relies on."""
+    dest = os.path.join(scratch, "vii-plan-key")
+    os.makedirs(dest, exist_ok=True)
+    state = steps.initial_state(dry_run=True)
+    state["dest"] = dest
+    # post-birth dry-run shape (the same convention steps_rehearsal_birth.py's own dry-run leg
+    # uses): principals-authority is reachable once a destination is recorded, real filesystem
+    # birth not required to prove the CAPTURE path this case targets.
+    state["dest_would_exist"] = True
+    answers = {
+        "register": [{"name": "fixtureprincipal", "agent_class": "model",
+                       "purpose": "plan-key witness"}],
+        "competences": [{"name": "fixtureprincipal", "activity": "witness",
+                          "band": "b1", "basis": "fixture"}],
+        "relations": [{"subject": "fixtureprincipal", "relation": "acts-for",
+                        "object": "maintainer"}],
+        "charters": [],
+    }
+    result = steps_principals_authority.submit(state, answers)
+    assert result.ok, f"case vii setup: principals-authority submit refused: {result.errors}"
+    state.update(result.state_updates)
+
+    resolved = config_seam.capture_resolved_config(state)
+    rendered = config_file.render_toml(
+        resolved, produced_by="fixture", source="fixture (case vii, plan-key witness)")
+
+    assert resolved.get("principals_authority.register"), (
+        "case vii RED: principals_authority.register captured empty -- the plan-key silent "
+        f"loss is back (resolved={resolved.get('principals_authority.register')!r})")
+    assert resolved.get("principals_authority.competences"), (
+        "case vii RED: principals_authority.competences captured empty -- the plan-key silent "
+        f"loss is back (resolved={resolved.get('principals_authority.competences')!r})")
+    assert resolved.get("principals_authority.relations"), (
+        "case vii RED: principals_authority.relations captured empty -- the plan-key silent "
+        f"loss is back (resolved={resolved.get('principals_authority.relations')!r})")
+    assert "fixtureprincipal" in rendered, (
+        "case vii RED: the registered principal's own name is absent from the rendered "
+        f"world-config.toml -- silent loss:\n{rendered}")
+
+    # THE NET (row 1330's own postmortem question, ADR-0000 (b)): a state dict missing the
+    # '_plan' infrastructure key entirely is malformed, not "no plan yet" -- capture_resolved_
+    # config must fail LOUDLY on it, never silently degrade to an empty plan (that silent
+    # degrade is the exact shape of the bug this whole case exists to catch).
+    broken_state = dict(state)
+    del broken_state["_plan"]
+    try:
+        config_seam.capture_resolved_config(broken_state)
+        raise AssertionError(
+            "case vii (net) RED: capture_resolved_config silently accepted a state dict with "
+            "no '_plan' key instead of failing loudly -- the net the plan-key postmortem "
+            "asked for is not actually there")
+    except KeyError as exc:
+        assert "_plan" in str(exc), f"case vii (net): KeyError did not name '_plan': {exc}"
+
+    print("case vii ok: capture_resolved_config reads the wizard's real '_plan' state key -- a "
+          "registered principal's register/competences/relations rows survive into the "
+          "rendered world-config.toml (plan-key silent-loss regression guard, ledger row 1330)")
+
+
 def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-config-file-")
     try:
         case_missing_key()
         case_unknown_key()
+        case_plan_key_capture(scratch)
         if PGHOST:
             case_world_exists_schema_leg(scratch)
         else:

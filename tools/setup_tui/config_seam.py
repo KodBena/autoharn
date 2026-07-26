@@ -323,10 +323,10 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
     `state`/the plan already carry (no new bookkeeping added to `screens.py` beyond the two
     narrow `*_engaged` flags `screen_observability`/`screen_hydration` set) -- a field this
     function cannot recover honestly (dedicated-substrate subnets; a role-charter's own file
-    path) is simply omitted, never guessed (ADR-0002 rule 2)."""
-    plan = state.get("plan")
-    entries = plan.entries if plan else []
-    daemons = plan.daemons if plan else []
+    path) is simply omitted, never guessed (ADR-0002 rule 2). NET (row 1330): `_plan` is INFRASTRUCTURE no valid state lacks -- guarded loudly, unlike DECISION keys below."""
+    if "_plan" not in state:
+        raise KeyError("capture_resolved_config: state has no '_plan' key (row 1330)")
+    plan = state["_plan"]; entries, daemons = plan.entries, plan.daemons
     out: dict[str, object] = {}
 
     out.update(steps_features.config_seam_capture(state.get("features_manifest")))
