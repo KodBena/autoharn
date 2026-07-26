@@ -3,9 +3,10 @@ doc_attestation_presence --record: REFUSED — malformed record for v2sample.md:
 doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
-    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not living prose a touch should re-trigger legibility review for
 doc_attestation_presence (gate mode): 1 finding(s):
-  sample.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 ae943f6e9a3c...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+  sample.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 ae943f6e9a3c...) — run the A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
 CASE RED-NO-ATTESTATION: exit=1
 CASE RED-MALFORMED (umbrella DEFECT, no findings): 1 issue(s)
 CASE RED-MALFORMED (CLEAN missing a Rule-1 clause): 1 issue(s)
@@ -14,20 +15,23 @@ CASE GREEN (well-shaped CLEAN record): 0 issue(s)
 doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
-    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not living prose a touch should re-trigger legibility review for
 doc_attestation_presence (gate mode): clean — 1 doc(s) in scope, 0 findings
 CASE GREEN (gate mode after recording): exit=0
 doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 0 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
-    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not living prose a touch should re-trigger legibility review for
 doc_attestation_presence (gate mode): 1 finding(s):
-  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
 CASE WAIVER-NOT-PROSE (token mentioned in prose, not an HTML comment): exit=1
 doc_attestation_presence: 1 doc(s) in scope, 0 excluded, 1 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
-    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not living prose a touch should re-trigger legibility review for
   waived by inline '<!-- doc-attest-exempt: ... -->' marker:
     real_waiver.md
 doc_attestation_presence (gate mode): clean — 1 doc(s) in scope, 0 findings
@@ -51,11 +55,12 @@ CASE V2 --record escalated-with-adjudication: exit=0 (want 0, appended as /2)
 doc_attestation_presence: 3 doc(s) in scope, 0 excluded, 1 waived.
   excluded (principled, printed per ADR-0017 Rule 2(b) convention):
     BACKLOG.md  — point-in-time dated entries (ADR-0017 Exceptions)
-    judgment/** — declared history (ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    judgment/** — declared history (user-guide/ORCH-OPERATING-CARD.md), same status gates/link_integrity.py already grants it
+    vestigial_documentation/** — declared-history archive (2026-07-12 vestigial-doc-sweep, VESTIGIAL-INDEX.md), same status as judgment/**: content-preserving moves, not living prose a touch should re-trigger legibility review for
   waived by inline '<!-- doc-attest-exempt: ... -->' marker:
     real_waiver.md
 doc_attestation_presence (report mode): 1 finding(s):
-  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (design/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
+  mentions_token.md: NO-ATTESTATION no fresh-context attestation record in attestations/doc-legibility-attestations.jsonl matches this file's current content (sha256 31829465255f...) — run the A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) and record it with 'gates/doc_attestation_presence.py --record', or waive with '<!-- doc-attest-exempt: <reason> -->' if this is a point-in-time record or quoted-defect specimen the wholesale exclusions do not already cover
 doc_attestation_presence: report mode never fails — the back-catalog migrates on touch (ADR-0017 Rule 4), not by sweep
 CASE REPORT-NEVER-FAILS: exit=0
 CASE PARAM-RED (--doc-root/--ledger, no attestation): exit=1
