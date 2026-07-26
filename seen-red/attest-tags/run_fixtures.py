@@ -79,6 +79,23 @@ def _attest(scratch_repo: Path, keys_dir: Path) -> subprocess.CompletedProcess[s
     """The ONE real ATTEST_TAGS use site (round-2 review fix: five near-duplicate call sites
     used to each need their own copy-pasted waiver comment or share one blanket binding-line
     waiver -- neither is honest; one wrapper, one waiver, five callers)."""
+    # AUTOHARN_FIXTURE_SANDBOX_WAIVER (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md
+    # §2/§3, ledger rows 1332/1354's own precedent for this same class): this process sets
+    # AUTOHARN_FIXTURE_SANDBOX=1 on itself near the top of this file, inherited by every
+    # subprocess it spawns -- including this one, which invokes the real ATTEST_TAGS (libexec/
+    # autoharn/attest-tags) directly. attest-tags is a repo-specific verb that takes --repo/
+    # --keys-dir as EXPLICIT CLI flags (both passed on every call below) and never reads
+    # PICKUP_DEPLOYMENT or resolves any deployment.json at all -- the same reasoning already
+    # given at ATTEST_TAGS's own binding above for why the pin-guard waiver was granted here.
+    # Scoped to this one use site's own env, not a blanket marker-line waiver (round-2 review
+    # fix, finding 1, same reasoning as the pin-guard waiver comment directly below).
+    waiver_env = {
+        **os.environ,
+        "AUTOHARN_FIXTURE_SANDBOX_WAIVER":
+            "attest-tags takes --repo/--keys-dir as explicit CLI flags and never reads "
+            "PICKUP_DEPLOYMENT or resolves any deployment.json -- same reviewed exception "
+            "already granted this call site by the fixture-scratch-pinning-guard-waiver above",
+    }
     return sh([
         sys.executable, str(ATTEST_TAGS),
         # fixture-scratch-pinning-guard-waiver: see the comment block above ATTEST_TAGS's own
@@ -87,7 +104,7 @@ def _attest(scratch_repo: Path, keys_dir: Path) -> subprocess.CompletedProcess[s
         # not on the binding above -- round-2 review fix, finding 1: a binding-line waiver used
         # to blanket every use.)
         "--repo", str(scratch_repo), "--keys-dir", str(keys_dir), "--json",
-    ])
+    ], env=waiver_env)
 
 
 def check(name: str, ok: bool, detail: str, failures: list[str]) -> None:
