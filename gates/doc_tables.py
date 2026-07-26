@@ -33,6 +33,14 @@ this gate rides the same judgment about what "live" documentation means):
 MODES, mirroring gates/doc_shapes.py:
   - `python3 gates/doc_tables.py FILE [FILE...]` — GATE mode: exit 1 listing every borked table
     found in the named files (after the two exclusions), exit 0 clean.
+  - `python3 gates/doc_tables.py --gate [FILE...]` — same GATE mode, explicit: `--gate` (the
+    convention `gates/interpreter_boundary_lint.py` already established for this repo) forces
+    gate mode regardless of how many FILE arguments follow, including zero (a vacuous scan:
+    no files, no violations, exit 0) — fixed 2026-07-26 (ledger row 1313): before this fix
+    `--gate` fell through to `cmd_gate`'s own file loop as an ordinary positional and was
+    opened as a literal path named `--gate`, failing with a confusing IO-error line instead of
+    parsing as the flag it is. argparse (not manual `sys.argv` slicing) now owns all of this,
+    so an unrecognized flag gets a proper usage refusal (exit 2) rather than a mis-scan.
   - `python3 gates/doc_tables.py` — REPORT mode over every tracked `*.md`: prints findings
     (including the two excluded prefixes, clearly labeled), ALWAYS exits 0.
 
@@ -41,6 +49,7 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at mod
 """
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -131,9 +140,18 @@ def cmd_report() -> int:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if not argv:
-        return cmd_report()
-    return cmd_gate(argv)
+    ap = argparse.ArgumentParser(
+        prog="doc_tables.py",
+        description="GFM table-shape gate/report (see module docstring for the two modes).")
+    ap.add_argument("--gate", action="store_true",
+                     help="force GATE mode, even over zero FILE arguments (vacuously clean).")
+    ap.add_argument("files", nargs="*", metavar="FILE",
+                     help="files to scan in GATE mode; omit entirely (and omit --gate) for "
+                          "REPORT mode over the whole tracked *.md corpus.")
+    ns = ap.parse_args(argv)
+    if ns.gate or ns.files:
+        return cmd_gate(ns.files)
+    return cmd_report()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,14 @@ subprocess runs of the real gate:
   EXCLUDED-NOT-GATED — a file path under judgment/ carrying the same defect is reported by the
           gate as excluded, not gated (exit 0), matching the gate's own declared exclusions;
   REPORT-NEVER-FAILS — report mode (no args) exits 0 regardless of standing findings.
+  GATE-FLAG-PARSES — the `--gate` flag (ledger row 1313, fixed 2026-07-26: before this fix
+          `--gate` fell through to the file loop as an ordinary positional and was opened as a
+          literal path named `--gate`, failing with a confusing IO-error line -- banked pre-fix
+          output, for the record: "doc-tables: 1 borked table(s):\n\n  !! IO ERROR reading
+          --gate: [Errno 2] No such file or directory: '--gate'", exit=1) now parses as a real
+          flag: `--gate` alone (zero FILE args) forces gate mode vacuously (exit 0, no files to
+          find violations in), and an actually-unknown flag gets a proper argparse usage
+          refusal (exit 2), never a mis-scan.
 
 No network, no DB, no cost: pure-stdlib gate, temp files only.
 """
@@ -90,12 +98,39 @@ def main() -> int:
         if report.returncode != 0:
             failures.append("report mode must always exit 0")
 
+        # CASE 5 (ledger row 1313): --gate alone (zero FILE args) must parse as the flag it is
+        # -- forced gate mode over an empty file list, vacuously clean -- never mis-scanned as a
+        # literal filename named "--gate" (the pre-fix behavior: an IO-error line and exit 1,
+        # banked above in this module's own docstring).
+        gate_flag = run("--gate")
+        print(f"CASE 5 (--gate alone, no FILE args): exit={gate_flag.returncode}")
+        print(gate_flag.stdout.rstrip())
+        if gate_flag.returncode != 0:
+            failures.append("expected --gate alone to parse as the flag (exit 0, vacuous scan), "
+                             f"got exit={gate_flag.returncode}: {gate_flag.stdout!r}")
+        if "IO ERROR" in gate_flag.stdout:
+            failures.append("--gate was mis-scanned as a literal filename (the pre-fix bug)")
+
+        # CASE 6: --gate combined with an actual FILE argument still gates that file.
+        gate_flag_file = run("--gate", str(good))
+        print(f"CASE 6 (--gate + a real file): exit={gate_flag_file.returncode}")
+        if gate_flag_file.returncode != 0:
+            failures.append("expected --gate plus a clean file to exit 0")
+
+        # CASE 7: a genuinely unknown flag gets a proper usage refusal (exit 2), not a mis-scan.
+        bogus_flag = run("--not-a-real-flag")
+        print(f"CASE 7 (unrecognized flag): exit={bogus_flag.returncode}")
+        if bogus_flag.returncode != 2:
+            failures.append(f"expected an unrecognized flag to exit 2 (argparse usage error), "
+                             f"got exit={bogus_flag.returncode}")
+
     if failures:
         print("doc-tables red-specimen: FAILED —", "; ".join(failures))
         return 1
-    print("doc-tables red-specimen: all four cases behaved as designed — red on the "
+    print("doc-tables red-specimen: all seven cases behaved as designed — red on the "
           "em-dash-separator doc naming the reason, green on the canonical-separator doc, "
-          "the excluded prefix reported but not gated, report mode never failing.")
+          "the excluded prefix reported but not gated, report mode never failing, and --gate "
+          "(alone, with a file, and rejecting an unknown flag) parsing correctly (row 1313).")
     return 0
 
 
