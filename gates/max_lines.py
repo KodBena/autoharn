@@ -264,7 +264,12 @@ BASELINE: dict[str, int] = {
     # Reconciled +4 to 806 (kernel/lineage/s62-delegation-lifecycle-gating.sql, row 1385):
     # a three-line docstring note on export_entitlement() recording that s62's seventh act
     # class needs no exporter change. Written plain, no golfing.
-    "engine/ledger_edb.py":                             806,
+    # Reconciled +67 to 873 (kernel/lineage/s64-principal-stamps-delegation-conditions.sql,
+    # design/FABLE-PRINCIPAL-STAMPS-SPEC.md §3 item 4): export_entitlement() gains three
+    # purely-additive EDB fact families (act_class/1, edge_scope_class/3, edge_unscoped/2,
+    # plus delegation_edge/2) for the scoped-closure ASP twin's own AGREE leg. Written plain,
+    # no golfing.
+    "engine/ledger_edb.py":                             873,
     # Reconciled +61 to 733 (2026-07-26, row 1307/1308 follow-up): resolve_repo_root() +
     # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
     # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
@@ -446,7 +451,14 @@ BASELINE: dict[str, int] = {
     # at 430) and this branch's fixture-sweep row both grew the census independently; the union
     # is the measured merged file. Same merge-union ratchet-crossing class as every
     # reconciliation above.
-    "gates/fixture_census.py":                     431,
+    # bumped 430 -> 431 (one new REGISTRY row: s64-principal-stamps-delegation-conditions,
+    # design/FABLE-PRINCIPAL-STAMPS-SPEC.md §3 item 1).
+    # Reconciled at the s64 merge (2026-07-26): both parents' bump comments kept verbatim
+    # above (main: fixture-sweep row; branch: s64 row); the union carries both registry rows
+    # and is re-measured on the merged file. Same merge-union ratchet-crossing class -- and
+    # the commit-phase contention class the standing memory predicts -- as every
+    # reconciliation above.
+    "gates/fixture_census.py":                     432,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -517,7 +529,15 @@ BASELINE: dict[str, int] = {
     # at 595) and this branch's own three-line bump both grew the file independently; the union
     # is the measured merged file, including the two-line fixture_census.py reconciliation added
     # directly above. Same merge-union ratchet-crossing class as every reconciliation above.
-    "gates/max_lines.py":                          606,
+    # bumped 595 -> 604 (this gate's own BASELINE growing to carry the s64 ratchet bumps for
+    # engine/ledger_edb.py and gates/fixture_census.py -- self-referential, checked here too;
+    # the two-line difference between this comment's first commit and its own final value is
+    # itself this ratchet's own self-reference settling to a fixpoint, verified by re-staging).
+    # Reconciled at the s64 merge (2026-07-26): both parents' bump comments kept verbatim
+    # above; the union is re-measured on the merged file, this reconciliation comment and
+    # its sibling above included (the usual self-referential fixpoint, settled by
+    # re-measuring after writing).
+    "gates/max_lines.py":                          626,
 }
 
 
