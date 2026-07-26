@@ -67,6 +67,37 @@ MODEL + SUBAGENT_TYPE ATTRIBUTION (work item `model-attribution-tracking`), two 
                          journal line carries `model: null`, never a guessed or coerced value --
                          the honest DECLARED-BY-DISPATCHER default.
 
+WORKFLOW-TOOL COVERAGE (work item `delegation-observer-workflow-tool-coverage`, ledger row 1355,
+ent-observatory cycle-004 -- see also `seen-red/delegation-observer/red.txt`'s own WORKFLOW-TOOL
+COVERAGE RED section for the live pre-fix reproduction), five more cases:
+
+  n-workflow-no-open-item -- dispatch tool_name="Workflow", tool_input={script, description}, with
+                         NO open+claimed work item -> journal gets a line carrying `description`
+                         verbatim, `script_sha256`/`script_excerpt` (NOT `prompt_sha256`/
+                         `prompt_excerpt` -- module docstring, WORKFLOW'S TOOL_INPUT SHAPE), no
+                         `model`/`subagent_type` keys at all; AND the SAME permit-to-work WARNING
+                         Task/Agent gets (the check does not distinguish by tool name).
+  o-workflow-open-claimed -- same schema now has an open+claimed item -> journal gets a line, but
+                         SILENT (proves the warning gate, not just the journal, is tool-agnostic).
+  p-workflow-scriptpath-resume -- dispatch tool_input={scriptPath, resumeFromRunId} (the
+                         iterate/resume shape, NO inline `script` at all) -> journal line carries
+                         `script_path` + `resume_from_run_id` verbatim, and NEITHER
+                         `script_sha256` NOR `script_excerpt` is present (never a fabricated hash
+                         of a script this event never carried).
+  q-workflow-return-leg -- a PostToolUse event with tool_name="Workflow" carrying `tool_use_id` +
+                         `duration_ms` -> `_handle_return`'s existing generic-over-tool logic
+                         covers Workflow with NO code change, proven directly.
+  r-non-spawn-tool-untouched (OBSERVE-ONLY / pass-through leg) -- a PreToolUse event for a
+                         non-spawn tool ("Bash") -> exit 0, no journal line, no warning: this hook
+                         never widens its own matcher past the three named delegation tools.
+
+MALFORMED-EVENT LEG (bonus, inline, not its own case dir) -- unparseable stdin (`not valid json`)
+                         and a syntactically-valid-but-wrong-shaped payload (a JSON array, not an
+                         object) are both sent straight at the hook -> exit 0 either way, no
+                         traceback, no journal line: an observer must never break the tool call it
+                         is attached to, even on garbage input (module docstring's own posture for
+                         every `except Exception` guard in this file).
+
 Usage: python3 seen-red/delegation-observer/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
@@ -148,6 +179,32 @@ def run_hook_leg(tool_name: str, description: str, prompt: str, session_id: str,
     env = dict(os.environ)
     env.update(env_extra)
     return subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
+                          capture_output=True, text=True, env=env)
+
+
+def run_workflow_leg(tool_input: dict, session_id: str,
+                      env_extra: dict[str, str],
+                      tool_use_id: str | None = None) -> subprocess.CompletedProcess[str]:
+    """WORKFLOW-TOOL COVERAGE -- unlike `run_hook_leg`, `tool_input` is passed through verbatim
+    (no forced `description`/`prompt`/`subagent_type` keys) so a case can send exactly one of the
+    five real observed Workflow key-sets (module docstring, WORKFLOW'S TOOL_INPUT SHAPE)."""
+    payload = {
+        "hook_event_name": "PreToolUse", "tool_name": "Workflow",
+        "tool_input": tool_input, "session_id": session_id, "cwd": str(PROBE_DIR),
+    }
+    if tool_use_id is not None:
+        payload["tool_use_id"] = tool_use_id
+    env = dict(os.environ)
+    env.update(env_extra)
+    return subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
+                          capture_output=True, text=True, env=env)
+
+
+def run_raw_leg(raw_stdin: str, env_extra: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """MALFORMED-EVENT LEG -- sends `raw_stdin` verbatim, no JSON validity assumed."""
+    env = dict(os.environ)
+    env.update(env_extra)
+    return subprocess.run([sys.executable, str(HOOK)], input=raw_stdin,
                           capture_output=True, text=True, env=env)
 
 
@@ -464,6 +521,125 @@ def main() -> int:
         if not ok_k:
             failures.append("k-model-absent")
 
+        # n) WORKFLOW-TOOL COVERAGE, no open item: dispatch tool_name="Workflow" with a real
+        # {script, description} tool_input -> journal line carries `description` verbatim,
+        # `script_sha256`/`script_excerpt` (NOT prompt_*), no `model`/`subagent_type` keys, AND
+        # the SAME warning Task/Agent gets (schema A still has no open+claimed item here).
+        script_n = "export const meta = {name: 'probe-wf-n', phases: []};"
+        r = run_workflow_leg({"script": script_n, "description": "workflow probe n"}, "sess-n", env)
+        print("=== n-workflow-no-open-item ===")
+        lines_after_n = journal_lines()
+        warned_n = "additionalContext" in (r.stdout + r.stderr)
+        ok_n = (r.returncode == 0 and len(lines_after_n) == 15 and warned_n
+                and lines_after_n[14].get("tool") == "Workflow"
+                and lines_after_n[14].get("description") == "workflow probe n"
+                and lines_after_n[14].get("script_sha256")
+                    == hashlib.sha256(script_n.encode("utf-8")).hexdigest()
+                and lines_after_n[14].get("script_excerpt") == script_n[:200]
+                and "model" not in lines_after_n[14]
+                and "subagent_type" not in lines_after_n[14]
+                and "prompt_sha256" not in lines_after_n[14])
+        print(f"  [{'ok' if ok_n else 'FAIL'}] exit={r.returncode} warned={warned_n} (expect True) "
+              f"journal line: {lines_after_n[14] if len(lines_after_n) == 15 else None}")
+        print()
+        if not ok_n:
+            failures.append("n-workflow-no-open-item")
+
+        # o) WORKFLOW-TOOL COVERAGE, open+claimed: a work item is now open+claimed -> journal gets
+        # a line, but SILENT (proves the warning gate is tool-agnostic, not just the journal).
+        led_sql(SCHEMA, KERN, ROLE,
+                "INSERT INTO ledger(kind, work_slug, work_title, statement) VALUES "
+                "('work_opened','delegprobe-wf-item','delegation probe wf item','work_opened: "
+                "delegprobe-wf-item -- item');"
+                "INSERT INTO ledger(kind, work_slug, statement) VALUES "
+                "('work_claimed','delegprobe-wf-item','work_claimed: delegprobe-wf-item by "
+                "author');")
+        r = run_workflow_leg({"script": "export const meta = {name: 'probe-wf-o'};"},
+                              "sess-o", env)
+        print("=== o-workflow-open-claimed ===")
+        lines_after_o = journal_lines()
+        warned_o = "additionalContext" in (r.stdout + r.stderr)
+        ok_o = (r.returncode == 0 and len(lines_after_o) == 16 and not warned_o
+                and lines_after_o[15].get("tool") == "Workflow"
+                and lines_after_o[15].get("description") == "")
+        print(f"  [{'ok' if ok_o else 'FAIL'}] exit={r.returncode} warned={warned_o} (expect "
+              f"False) journal line: {lines_after_o[15] if len(lines_after_o) == 16 else None}")
+        print()
+        if not ok_o:
+            failures.append("o-workflow-open-claimed")
+        led_sql(SCHEMA, KERN, ROLE,
+                "INSERT INTO ledger(kind, work_slug, work_resolution, statement) VALUES "
+                "('work_closed','delegprobe-wf-item','dropped','work_closed: delegprobe-wf-item "
+                "(dropped)');")
+
+        # p) WORKFLOW-TOOL COVERAGE, scriptPath/resume shape: NO inline `script` at all -> journal
+        # line carries `script_path` + `resume_from_run_id` verbatim, and NEITHER `script_sha256`
+        # NOR `script_excerpt` is present (never a fabricated hash of an absent script).
+        r = run_workflow_leg({"scriptPath": "/tmp/probe-workflow-p.js",
+                               "resumeFromRunId": "wf_probe_p"}, "sess-p", env)
+        print("=== p-workflow-scriptpath-resume ===")
+        lines_after_p = journal_lines()
+        ok_p = (r.returncode == 0 and len(lines_after_p) == 17
+                and lines_after_p[16].get("tool") == "Workflow"
+                and lines_after_p[16].get("script_path") == "/tmp/probe-workflow-p.js"
+                and lines_after_p[16].get("resume_from_run_id") == "wf_probe_p"
+                and "script_sha256" not in lines_after_p[16]
+                and "script_excerpt" not in lines_after_p[16])
+        print(f"  [{'ok' if ok_p else 'FAIL'}] exit={r.returncode} journal line: "
+              f"{lines_after_p[16] if len(lines_after_p) == 17 else None}")
+        print()
+        if not ok_p:
+            failures.append("p-workflow-scriptpath-resume")
+
+        # q) WORKFLOW-TOOL COVERAGE, return leg: `_handle_return` is already generic over `tool`
+        # (module docstring) -- adding "Workflow" to `_DELEGATION_TOOLS` is sufficient, proven
+        # directly with no hook code specific to the return leg's Workflow handling.
+        r = run_return_leg("Workflow", "unused for the return leg", "sess-q", env,
+                            tool_use_id="tu-q", duration_ms=42)
+        print("=== q-workflow-return-leg ===")
+        lines_after_q = journal_lines()
+        ok_q = (r.returncode == 0 and len(lines_after_q) == 18
+                and lines_after_q[17].get("kind") == "return"
+                and lines_after_q[17].get("tool") == "Workflow"
+                and lines_after_q[17].get("tool_use_id") == "tu-q"
+                and lines_after_q[17].get("duration_ms") == 42)
+        print(f"  [{'ok' if ok_q else 'FAIL'}] exit={r.returncode} return line: "
+              f"{lines_after_q[17] if len(lines_after_q) == 18 else None}")
+        print()
+        if not ok_q:
+            failures.append("q-workflow-return-leg")
+
+        # r) OBSERVE-ONLY / PASS-THROUGH LEG: a non-spawn tool ("Bash") -> exit 0, no journal
+        # line, no warning -- the matcher is never widened past the three named delegation tools.
+        before_r = len(journal_lines())
+        r = run_hook_leg("Bash", "unused", "unused", "sess-r", env)
+        after_r = len(journal_lines())
+        ok_r = (r.returncode == 0 and after_r == before_r
+                and "additionalContext" not in (r.stdout + r.stderr))
+        print("=== r-non-spawn-tool-untouched ===")
+        print(f"  [{'ok' if ok_r else 'FAIL'}] journal unchanged ({before_r} -> {after_r}), "
+              f"no warning, exit={r.returncode}")
+        print()
+        if not ok_r:
+            failures.append("r-non-spawn-tool-untouched")
+
+        # (bonus) MALFORMED-EVENT LEG: unparseable stdin, and a syntactically-valid-but-wrong-
+        # shaped payload (a JSON array, not an object) -> exit 0 either way, no traceback, no
+        # journal growth (an observer must never break the tool call it is attached to).
+        print("=== (bonus) malformed-event leg ===")
+        before_mal = len(journal_lines())
+        r_unparseable = run_raw_leg("not valid json", env)
+        r_wrong_shape = run_raw_leg("[1, 2, 3]", env)
+        after_mal = len(journal_lines())
+        ok_mal = (r_unparseable.returncode == 0 and r_wrong_shape.returncode == 0
+                  and after_mal == before_mal
+                  and not r_unparseable.stderr and not r_wrong_shape.stderr)
+        print(f"  [{'ok' if ok_mal else 'FAIL'}] exit={r_unparseable.returncode}/"
+              f"{r_wrong_shape.returncode} journal unchanged ({before_mal} -> {after_mal})")
+        print()
+        if not ok_mal:
+            failures.append("malformed-event-leg")
+
     finally:
         print("-- teardown (post) --")
         teardown()
@@ -475,7 +651,9 @@ def main() -> int:
           "silences with no work item; a different session with neither remedy still warns) + "
           "1 bonus cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback, "
           "concurrent-identical-prompt disambiguation) + 2 model-attribution cases (declared, "
-          "absent) passed.")
+          "absent) + 5 Workflow-tool-coverage cases (no-open-item warns+journals, open-claimed "
+          "silent, scriptPath/resume shape never fabricates a script hash, return leg generic-"
+          "over-tool, non-spawn tool untouched) + 1 bonus malformed-event leg passed.")
     return 0
 
 

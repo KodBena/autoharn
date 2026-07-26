@@ -77,3 +77,72 @@ observer union'd with model/subagent_type attribution; j/k re-run against the RE
 `run_fixtures: all 5 dispatch-leg cases + 1 bonus cross-check + 3 return-leg cases
 (tool_use_id-keyed, no-identity fallback, concurrent-identical-prompt disambiguation) + 2
 model-attribution cases (declared, absent) passed.`
+
+
+WORKFLOW-TOOL COVERAGE RED (2026-07-26, work item `delegation-observer-workflow-tool-coverage`,
+ledger row 1355, ent-observatory cycle-004 finding: "hooks/pretooluse_delegation_observer.py
+matches only the Task/Agent tool, so Workflow-tool dispatches ... are invisible to the action
+stream"). BEFORE this fix, `_DELEGATION_TOOLS = ("Task", "Agent")` -- a WIRED invocation (real
+`GATE_SUBJECT_ROOT`, an existing dir, no work-item-layer probe reached because the tool is
+filtered out before any DB call) given a real `Workflow` dispatch produces ZERO signal, live,
+reproduced against the pre-fix code:
+
+  stdin: {"hook_event_name":"PreToolUse","tool_name":"Workflow","tool_input":{"script":
+    "export const meta = {name: \"probe-wf\"};","description":"red-probe workflow dispatch"},
+    "session_id":"redcap-workflow","cwd":"<wired-probe-dir>"}
+  run: GATE_SUBJECT_ROOT=<wired-probe-dir> python3 hooks/pretooluse_delegation_observer.py < stdin
+
+  exit: 0
+  stdout: (empty)
+  stderr: (empty)
+  -- `<wired-probe-dir>/.claude/logs/` was never even CREATED (checked with `ls -la`, directory
+     absent) -- the SAME invisibility finding 3's own Bash/Explore-dispatch red demonstrated for
+     an unwired Task/Agent hook above, now demonstrated for a WIRED hook given the one tool name
+     it does not yet recognize.
+
+WORKFLOW-TOOL COVERAGE GREEN: `_DELEGATION_TOOLS` now also matches `"Workflow"` (enumerated from
+this project's OWN `instruments/act_stream/claude_code_adapter.py`, `if name in ("Task", "Agent",
+"Workflow")`, plus five real captured `Workflow` `tool_input` key-sets grepped from this
+operator's own `~/.claude/projects/*/*.jsonl` transcripts -- `{script}`, `{script, description}`,
+`{script, run_in_background}`, `{scriptPath}`, `{scriptPath, resumeFromRunId}`; no `prompt`,
+`model`, or `subagent_type` key was ever observed on a Workflow dispatch). The SAME stdin as the
+red reproduction above, re-run against the FIXED hook, now produces a real journal line:
+
+  {"ts": "2026-07-26T03:25:06.603Z", "session_id": "redcap-workflow", "tool": "Workflow",
+   "description": "red-probe workflow dispatch", "script_sha256":
+   "79aa58040a8abfda3ce580bd6a9e0503d9d4b3a94cad4fcf34f14c95189d1267", "script_excerpt":
+   "export const meta = {name: \"probe-wf\"};"}
+
+-- `description` verbatim, `script_sha256`+`script_excerpt` in place of `prompt_sha256`/
+`prompt_excerpt` (a script is not a prompt -- module docstring, WORKFLOW'S TOOL_INPUT SHAPE), no
+`model`/`subagent_type` keys (this hook's own captured evidence shows Workflow never carries
+them, so they are omitted rather than forced to an always-`null`/always-`""` column).
+
+GREEN / full 22-case run (the original 17 cases above, byte-unchanged in behavior and reproven,
+PLUS five Workflow-tool-coverage cases -- no-open-item warns+journals exactly like Task/Agent,
+open-claimed is silent, the scriptPath/resume shape journals `script_path`+`resume_from_run_id`
+and NEVER fabricates a `script_sha256` for a script the event never carried, the return leg
+covers Workflow with NO hook-code change (`_handle_return` was already generic over `tool`), a
+non-spawn tool ("Bash") is untouched -- PLUS one bonus malformed-event leg (unparseable stdin, a
+JSON array instead of an object) proving the hook never breaks the tool call it is attached to):
+
+  python3 seen-red/delegation-observer/run_fixtures.py
+
+WITNESSED 2026-07-26: `run_fixtures: all 5 dispatch-leg cases + 2 honest-text-fix cases (decision
+row silences with no work item; a different session with neither remedy still warns) + 1 bonus
+cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback, concurrent-identical-
+prompt disambiguation) + 2 model-attribution cases (declared, absent) + 5 Workflow-tool-coverage
+cases (no-open-item warns+journals, open-claimed silent, scriptPath/resume shape never fabricates
+a script hash, return leg generic-over-tool, non-spawn tool untouched) + 1 bonus malformed-event
+leg passed.`
+
+INTEGRATION-BOUNDARY CAUTION, STATED HONESTLY (not swept past): every case above, RED and GREEN,
+drives `hooks/pretooluse_delegation_observer.py` directly via synthetic stdin -- it proves the
+HOOK's own logic, not that Claude Code's real hook dispatcher actually invokes this file for a
+real `Workflow` tool call. That wiring lives in `bootstrap/templates/settings.json.tmpl`'s
+`"matcher": "Task|Agent"` stanzas (PreToolUse AND PostToolUse), which this work item's own
+instruction says NOT to touch -- see the work item's report for the exact stanza diff and the
+one live witness (a real Workflow dispatch appearing in `.claude/logs/delegation_observer.journal
+.jsonl`) the maintainer owes post-merge, once that template is updated and a fresh world is
+scaffolded (or an existing world's `.claude/settings.json` is hand-updated at a session gap --
+runs-are-linear means this repo's own dogfood world is not itself amenable to a live-patch).

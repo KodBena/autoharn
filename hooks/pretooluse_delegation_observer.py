@@ -162,6 +162,12 @@ diagnostic-grade, exactly like duration/tokens, per the 2026-07-11 evidentiary-b
 (user-guide/USER-RETROSPECTIVE-RECIPE.md's own "Actuals" section states the identical grade boundary
 for token/duration figures) -- never evidentiary, never a policing input.
 
+WORKFLOW-TOOL COVERAGE (work item `delegation-observer-workflow-tool-coverage`, row 1355; full
+rationale in `seen-red/delegation-observer/red.txt`'s WORKFLOW-TOOL COVERAGE sections -- max-
+lines ratchet). `_DELEGATION_TOOLS` also matches `"Workflow"`; see `main()`'s own
+`if tool == "Workflow":` branch for its normalized, never-fabricated fields. Settings-level
+matcher wiring is a SEPARATE, untouched-here gate (`bootstrap/templates/settings.json.tmpl`).
+
 Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
 """
 from __future__ import annotations
@@ -191,7 +197,7 @@ WIRED = False
 MODE = "observe"
 
 _VALID_MODES = ("off", "observe", "enforce")
-_DELEGATION_TOOLS = ("Task", "Agent")  # module docstring TOOL NAME section
+_DELEGATION_TOOLS = ("Task", "Agent", "Workflow")  # module docstring, WORKFLOW-TOOL COVERAGE
 
 
 def _first(d, *keys: str, default=None):
@@ -469,36 +475,34 @@ def main() -> int:
     inp = _first(data, "tool_input", "toolInput", "input", default={})
     if not isinstance(inp, dict):
         inp = {}
-    description = str(inp.get("description", ""))
-    prompt = str(inp.get("prompt", ""))
     session_id = str(data.get("session_id") or "")
-    prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     tool_use_id = data.get("tool_use_id")
-    # MODEL + SUBAGENT_TYPE ATTRIBUTION (module docstring) -- verbatim from tool_input, DECLARED-
-    # BY-DISPATCHER grade. `model` is absent from most dispatches (None, not coerced to a string,
-    # so a reader can distinguish "not set" from an empty string); `subagent_type` defaults to ""
-    # the same way `description`/`prompt` already do above.
-    model = inp.get("model")
-    subagent_type = str(inp.get("subagent_type", ""))
-
-    # 1. JOURNAL every dispatch, unconditionally (module docstring) -- before any DB work, so a
-    # DB hiccup below never costs the journal record. `tool_use_id` (read defensively, same
-    # posture as hooks/stamp_intercept.py) is the identity the return leg now keys on (module
-    # docstring, CORRELATION FIELD) -- `prompt_sha256`/`prompt_excerpt` remain, as event facts
-    # for a human/consumer to recognize the dispatch by, no longer as a correlation key.
     rec = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "session_id": session_id,
         "tool": tool,
-        "description": description,
-        "prompt_sha256": prompt_sha256,
-        "prompt_excerpt": prompt[:200],
-        "model": model,
-        "subagent_type": subagent_type,
     }
     if tool_use_id:
         rec["tool_use_id"] = str(tool_use_id)
-    _journal(rec)
+    if tool == "Workflow":  # WORKFLOW-TOOL COVERAGE (module docstring) -- fields never fabricated.
+        rec["description"] = str(inp["description"]) if inp.get("description") is not None else ""
+        if inp.get("script") is not None:
+            script = str(inp["script"])
+            rec["script_sha256"] = hashlib.sha256(script.encode("utf-8")).hexdigest()
+            rec["script_excerpt"] = script[:200]
+        if inp.get("scriptPath"): rec["script_path"] = str(inp["scriptPath"])
+        if inp.get("resumeFromRunId"): rec["resume_from_run_id"] = str(inp["resumeFromRunId"])
+        if inp.get("run_in_background") is not None:
+            rec["run_in_background"] = bool(inp["run_in_background"])
+    else:  # Task/Agent -- THE EXISTING DISPATCH LINE'S SHAPE IS UNCHANGED (module docstring).
+        prompt = str(inp.get("prompt", ""))
+        rec["description"] = str(inp.get("description", ""))
+        rec["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        rec["prompt_excerpt"] = prompt[:200]
+        rec["model"] = inp.get("model")
+        rec["subagent_type"] = str(inp.get("subagent_type", ""))
+    warn_description = rec.get("description", "")
+    _journal(rec)  # 1. JOURNAL every dispatch, unconditionally, before any DB work below.
 
     # 2. WARN only when the work-item layer exists, no item is open+claimed, AND this session has
     # filed no `decision` row (HONEST-TEXT FIX, work item `delegation-observer-honest-teachtext`
@@ -509,7 +513,7 @@ def main() -> int:
     try:
         if (has_work_item_layer() and not has_open_claimed_work_item()
                 and not has_session_decision_row(session_id)):
-            _emit_warning(description)
+            _emit_warning(warn_description)
     except Exception:  # noqa: BLE001
         pass
     return 0
