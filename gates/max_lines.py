@@ -263,7 +263,19 @@ BASELINE: dict[str, int] = {
     "engine/tests/test_ledger_marriage.py":             533,
     "hooks/posttooluse_error_recurrence.py":            530,
     "engine/ledger_differential.py":                    529,
-    "hooks/pretooluse_delegation_observer.py":          525,
+    "hooks/pretooluse_delegation_observer.py":          588,
+    # Reconciled +63 to 588 (2026-07-26, delegation-observer Workflow-coverage review, moderate/
+    # SILENT surrogate-hazard fix round): a lone UTF-16 surrogate in a journaled `script`/`prompt`
+    # raised uncaught UnicodeEncodeError at two `.encode("utf-8")` hash call sites AND, previously
+    # undiagnosed, at `_journal()`'s own file-write encode -- fixed class-wide with
+    # `errors="replace"` applied uniformly (module docstring's own new SURROGATE HAZARD FIX
+    # section states the surrogatepass-vs-replace reasoning and the json.dumps/print verification
+    # in full, including a CAUTION paragraph on why every surrogate example in that section is
+    # written double-backslashed -- a single-backslash escape in this non-raw docstring is decoded
+    # at COMPILE time into an actual surrogate code point, making the module itself uncompilable;
+    # hit live while drafting this fix, the worst instance of the class, self-inflicted). Genuinely
+    # new hazard-class documentation plus the fix's own inline comments, not padding. Written
+    # plain, no golfing.
     # Reconciled +12 to 525 (design/FABLE-RESERVATION-RESIDUE-SPEC.md build, kernel/lineage/
     # s56-reservation-residue.sql): CHAIN += s56, and one new ALLOWLIST entry (review_verdicts,
     # a DECLARED raw/history reader by design -- the general review-legibility surface must show
@@ -410,7 +422,14 @@ BASELINE: dict[str, int] = {
     # here), this note added, and the count below is the measured post-consolidation total.
     # Fourth payment of the self-measuring cost; second witnessed merge-union crossing on
     # this same file (the concurrent-builders commit-phase contention class, 2026-07-21).
-    "gates/max_lines.py":                                499,
+    # Reconciled +19 to 518 (2026-07-26, delegation-observer Workflow-coverage review, moderate/
+    # SILENT surrogate-hazard fix round): this gate's OWN BASELINE entry for
+    # hooks/pretooluse_delegation_observer.py grew by +63 lines and its dated reconciliation
+    # comment, which itself is measured content of THIS file -- the fifth payment of the
+    # self-measuring cost this table's own history already names as a recurring, honest cost of
+    # ratcheting the gate that ratchets itself, including this entry's own line count of itself.
+    # Genuinely new reconciliation content, not padding.
+    "gates/max_lines.py":                                518,
 }
 
 

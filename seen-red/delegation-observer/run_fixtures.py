@@ -91,6 +91,20 @@ COVERAGE RED section for the live pre-fix reproduction), five more cases:
                          non-spawn tool ("Bash") -> exit 0, no journal line, no warning: this hook
                          never widens its own matcher past the three named delegation tools.
 
+SURROGATE HAZARD FIX (moderate/SILENT finding, delegation-observer Workflow-coverage review,
+2026-07-26; see also `seen-red/delegation-observer/red.txt`'s own SURROGATE HAZARD RED section
+for the live pre-fix reproduction), two more cases:
+
+  s-surrogate-task-agent-prompt -- dispatch tool_name="Agent" with a `prompt` carrying a lone
+                         UTF-16 surrogate -> exit 0 (not the pre-fix UnicodeEncodeError/exit 1), a
+                         real journal line whose `prompt_sha256` matches a fresh local hash
+                         computed the SAME `errors="replace"` way the hook now does, and whose
+                         `prompt_excerpt` carries the surrogate substituted with a literal `?`
+                         (the hook's own `_journal()` write-time replace, never a raw surrogate
+                         landing in the on-disk `.jsonl` line).
+  t-surrogate-workflow-script -- the SAME class fix proven independently on the Workflow path's
+                         own `.encode("utf-8")` call site (a `script` carrying a lone surrogate).
+
 MALFORMED-EVENT LEG (bonus, inline, not its own case dir) -- unparseable stdin (`not valid json`)
                          and a syntactically-valid-but-wrong-shaped payload (a JSON array, not an
                          object) are both sent straight at the hook -> exit 0 either way, no
@@ -198,6 +212,35 @@ def run_workflow_leg(tool_input: dict, session_id: str,
     env.update(env_extra)
     return subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
                           capture_output=True, text=True, env=env)
+
+
+def run_surrogate_leg(tool_input: dict, tool_name: str, session_id: str,
+                       env_extra: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """SURROGATE HAZARD FIX cases -- `tool_input` carries a field with a lone UTF-16 surrogate
+    (e.g. `"bad \\ud800 surrogate"`, python-string-escaped here the same double-backslash way the
+    hook's own module docstring is, for the identical reason: this is an ordinary string literal,
+    not raw). `errors="surrogatepass"` on THIS harness's own subprocess call is a SEPARATE,
+    test-plumbing-only concern from the hook's own `errors="replace"` choice -- plain
+    `subprocess.run(text=True)` (the default `run_hook_leg`/`run_workflow_leg` use) fails to even
+    DELIVER a lone surrogate to the hook's stdin (`'utf-8' codec can't encode ... surrogates not
+    allowed`, verified directly), so the harness must carry the real byte-for-byte surrogate
+    across the pipe uncorrupted for this to be a genuine test of the HOOK's own handling, not the
+    harness's. `errors="surrogatepass"` alone is not enough EITHER: it only governs how THIS
+    process encodes its own `input=` string to bytes -- the CHILD hook process decodes its own
+    `sys.stdin.read()` with ITS OWN default (strict) codec unless told otherwise, so
+    `PYTHONIOENCODING=utf-8:surrogatepass` is also set in the child's env (verified directly: the
+    same payload sent without it produced `UnicodeDecodeError` at the hook's own
+    `sys.stdin.read()` -- a DIFFERENT failure than the one this fixture targets, harness-side,
+    not hook-side)."""
+    payload = {
+        "hook_event_name": "PreToolUse", "tool_name": tool_name,
+        "tool_input": tool_input, "session_id": session_id, "cwd": str(PROBE_DIR),
+    }
+    env = dict(os.environ)
+    env.update(env_extra)
+    env["PYTHONIOENCODING"] = "utf-8:surrogatepass"
+    return subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload, ensure_ascii=False),
+                          capture_output=True, text=True, errors="surrogatepass", env=env)
 
 
 def run_raw_leg(raw_stdin: str, env_extra: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -623,6 +666,56 @@ def main() -> int:
         if not ok_r:
             failures.append("r-non-spawn-tool-untouched")
 
+        # s) SURROGATE HAZARD FIX, Task/Agent: `prompt` carries a lone UTF-16 surrogate (the
+        # exact `"bad \ud800 surrogate"` shape the moderate/SILENT finding reproduced RED against
+        # cdb90be) -> exit 0 (not the pre-fix UnicodeEncodeError/exit 1), a real journal line with
+        # a well-formed record: `prompt_sha256` matches a fresh LOCAL hash computed the SAME way
+        # the hook now does (`errors="replace"`), and `prompt_excerpt` carries the surrogate
+        # substituted with a literal `?` (the hook's own `_journal()` write-time replace), never a
+        # raw surrogate landing in the on-disk `.jsonl` line.
+        prompt_s = "bad \ud800 surrogate"
+        r = run_surrogate_leg({"description": "surrogate probe s", "prompt": prompt_s,
+                                "subagent_type": "general-purpose"}, "Agent", "sess-s", env)
+        print("=== s-surrogate-task-agent-prompt ===")
+        lines_after_s = journal_lines()
+        warned_s = "additionalContext" in (r.stdout + r.stderr)
+        expected_sha_s = hashlib.sha256(prompt_s.encode("utf-8", errors="replace")).hexdigest()
+        ok_s = (r.returncode == 0 and len(lines_after_s) == 19 and warned_s
+                and lines_after_s[18].get("session_id") == "sess-s"
+                and lines_after_s[18].get("tool") == "Agent"
+                and lines_after_s[18].get("prompt_sha256") == expected_sha_s
+                and lines_after_s[18].get("prompt_excerpt") == "bad ? surrogate")
+        print(f"  [{'ok' if ok_s else 'FAIL'}] exit={r.returncode} warned={warned_s} (expect True) "
+              f"stderr={r.stderr.strip()[:200]!r} journal line: "
+              f"{lines_after_s[18] if len(lines_after_s) == 19 else None}")
+        print()
+        if not ok_s:
+            failures.append("s-surrogate-task-agent-prompt")
+
+        # t) SURROGATE HAZARD FIX, Workflow: `script` carries a lone UTF-16 surrogate -> the SAME
+        # class fix on the Workflow path's own `.encode("utf-8")` call site, proven independently
+        # of case s (the two are separate call sites in the hook, module docstring's own SURROGATE
+        # HAZARD FIX section).
+        script_t = "export const x = \"bad \ud800 surrogate\";"
+        r = run_surrogate_leg({"description": "surrogate probe t", "script": script_t},
+                               "Workflow", "sess-t", env)
+        print("=== t-surrogate-workflow-script ===")
+        lines_after_t = journal_lines()
+        warned_t = "additionalContext" in (r.stdout + r.stderr)
+        expected_sha_t = hashlib.sha256(script_t.encode("utf-8", errors="replace")).hexdigest()
+        expected_excerpt_t = "export const x = \"bad ? surrogate\";"
+        ok_t = (r.returncode == 0 and len(lines_after_t) == 20 and warned_t
+                and lines_after_t[19].get("session_id") == "sess-t"
+                and lines_after_t[19].get("tool") == "Workflow"
+                and lines_after_t[19].get("script_sha256") == expected_sha_t
+                and lines_after_t[19].get("script_excerpt") == expected_excerpt_t)
+        print(f"  [{'ok' if ok_t else 'FAIL'}] exit={r.returncode} warned={warned_t} (expect True) "
+              f"stderr={r.stderr.strip()[:200]!r} journal line: "
+              f"{lines_after_t[19] if len(lines_after_t) == 20 else None}")
+        print()
+        if not ok_t:
+            failures.append("t-surrogate-workflow-script")
+
         # (bonus) MALFORMED-EVENT LEG: unparseable stdin, and a syntactically-valid-but-wrong-
         # shaped payload (a JSON array, not an object) -> exit 0 either way, no traceback, no
         # journal growth (an observer must never break the tool call it is attached to).
@@ -653,7 +746,8 @@ def main() -> int:
           "concurrent-identical-prompt disambiguation) + 2 model-attribution cases (declared, "
           "absent) + 5 Workflow-tool-coverage cases (no-open-item warns+journals, open-claimed "
           "silent, scriptPath/resume shape never fabricates a script hash, return leg generic-"
-          "over-tool, non-spawn tool untouched) + 1 bonus malformed-event leg passed.")
+          "over-tool, non-spawn tool untouched) + 2 surrogate-hazard-fix cases (Task/Agent prompt, "
+          "Workflow script) + 1 bonus malformed-event leg passed.")
     return 0
 
 

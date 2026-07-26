@@ -136,6 +136,84 @@ cases (no-open-item warns+journals, open-claimed silent, scriptPath/resume shape
 a script hash, return leg generic-over-tool, non-spawn tool untouched) + 1 bonus malformed-event
 leg passed.`
 
+SURROGATE HAZARD RED (2026-07-26, delegation-observer Workflow-coverage review, moderate/SILENT
+finding: "a script (or prompt) string containing a lone UTF-16 surrogate ... raises uncaught
+UnicodeEncodeError at hooks/pretooluse_delegation_observer.py:491 (`hashlib.sha256(script.encode
+("utf-8"))`) ... the SAME pattern pre-exists on the Task/Agent prompt path (prompt.encode at
+~475)"). Reproduced live, against cdb90be (pre-fix), a WIRED invocation (real `GATE_SUBJECT_ROOT`,
+an existing dir) given a real `Agent` dispatch whose `prompt` carries one JSON-legal unpaired
+surrogate escape:
+
+  stdin: {"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":
+    "surrogate red","prompt":"bad \ud800 surrogate"},"session_id":"redcap-surrogate",
+    "cwd":"/tmp/delegobs-red-wired"}
+  run: GATE_SUBJECT_ROOT=/tmp/delegobs-red-wired python3 hooks/pretooluse_delegation_observer.py
+       < stdin
+
+  exit: 1
+  stderr:
+    Traceback (most recent call last):
+      File ".../hooks/pretooluse_delegation_observer.py", line 523, in <module>
+        sys.exit(main())
+      File ".../hooks/pretooluse_delegation_observer.py", line 500, in main
+        rec["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 4: surrogates
+    not allowed
+
+The SAME reproduction against the SAME pre-fix code, tool_name="Workflow", `tool_input.script`
+carrying the identical surrogate, crashes at the OTHER named call site instead:
+
+  exit: 1
+  stderr: ... line 491, in main / rec["script_sha256"] = hashlib.sha256(script.encode("utf-8")
+    ).hexdigest() / UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in
+    position 18: surrogates not allowed
+
+Both are a raw traceback + exit 1 into the operator's transcript -- not blocking per Claude
+Code's exit-2-only contract, but a clean violation of this file's own "an observer must never
+break the tool call it is attached to" invariant, live and reproducible, not merely theoretical.
+
+FIX (module docstring's own new SURROGATE HAZARD FIX section states the full reasoning):
+`errors="replace"` applied uniformly to both `.encode("utf-8")` hash calls AND to `_journal()`'s
+own file-write encode (a THIRD, previously-undiagnosed instance of the identical class -- the
+journaled `*_excerpt` field carries the raw surrogate straight through `json.dumps` into a write
+that ALSO raises `UnicodeEncodeError`, independently of the hash calls, verified directly before
+choosing the fix). Re-run against the FIXED hook, same two stdins:
+
+  exit: 0 (both)
+  journal line (Task/Agent case): {"ts": "...", "session_id": "redcap-surrogate", "tool": "Agent",
+    "description": "surrogate red", "prompt_sha256": "3959d617228fe50ceb4ce3a75675a21cb3928178977
+    f97cd57eefc9a760bc860", "prompt_excerpt": "bad ? surrogate", "model": null, "subagent_type": ""}
+  journal line (Workflow case): {"ts": "...", "session_id": "redcap-surrogate-wf", "tool":
+    "Workflow", "description": "surrogate red wf", "script_sha256": "6ff88acb2cf52ff36ebaa873a5cc
+    348fc38a613842655cda1423cafbdc104d70", "script_excerpt": "export const x = \"?\";"}
+
+-- exit 0, a real journal line, well-formed JSON on disk (the surrogate substituted with a
+literal `?` at write time, never a raw surrogate landing in the `.jsonl` file), and a hash that is
+a genuine fingerprint of the same `errors="replace"`-encoded bytes, deterministic and reproducible.
+
+GREEN, mechanized (two new fixture cases, s/t, added to the SAME stateful sequence):
+
+  python3 seen-red/delegation-observer/run_fixtures.py
+
+WITNESSED 2026-07-26: `run_fixtures: all 5 dispatch-leg cases + 2 honest-text-fix cases (decision
+row silences with no work item; a different session with neither remedy still warns) + 1 bonus
+cross-check + 3 return-leg cases (tool_use_id-keyed, no-identity fallback, concurrent-identical-
+prompt disambiguation) + 2 model-attribution cases (declared, absent) + 5 Workflow-tool-coverage
+cases (no-open-item warns+journals, open-claimed silent, scriptPath/resume shape never fabricates
+a script hash, return leg generic-over-tool, non-spawn tool untouched) + 2 surrogate-hazard-fix
+cases (Task/Agent prompt, Workflow script) + 1 bonus malformed-event leg passed.`
+
+SELF-INFLICTED INSTANCE OF THE SAME CLASS, CAUGHT WHILE DRAFTING THIS FIX (stated honestly, not
+swept past): the first draft of this fix's own docstring prose wrote the illustrative surrogate
+example as a bare single-backslash `\ud800` inside the hook's own (non-raw) module docstring --
+Python's tokenizer decodes that at COMPILE time into an actual lone-surrogate code point landing
+in the module's own `__doc__` constant, which made the module itself fail to import
+(`runpy`'s `_get_code_from_file` raised the identical `UnicodeEncodeError`, merely from importing
+the file, before any hook logic ran) -- the worst possible instance of the class. Caught by
+running `python3 -m py_compile` and an `ast`-based docstring-surrogate check before calling the
+fix done; every surrogate example in the shipped docstring is double-backslashed so it reaches
+`__doc__` as inert text.
+
 INTEGRATION-BOUNDARY CAUTION, STATED HONESTLY (not swept past): every case above, RED and GREEN,
 drives `hooks/pretooluse_delegation_observer.py` directly via synthetic stdin -- it proves the
 HOOK's own logic, not that Claude Code's real hook dispatcher actually invokes this file for a

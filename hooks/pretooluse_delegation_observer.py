@@ -168,7 +168,61 @@ lines ratchet). `_DELEGATION_TOOLS` also matches `"Workflow"`; see `main()`'s ow
 `if tool == "Workflow":` branch for its normalized, never-fabricated fields. Settings-level
 matcher wiring is a SEPARATE, untouched-here gate (`bootstrap/templates/settings.json.tmpl`).
 
-Stdlib only, top-of-file imports (the lazy-import gate, gates/no_lazy_imports.py, applies).
+SURROGATE HAZARD FIX (moderate/SILENT finding, delegation-observer Workflow-coverage review,
+2026-07-26): a `script` or `prompt` string containing a lone UTF-16 surrogate (a JSON escape
+`\\ud800` with no matching low surrogate -- written double-backslashed here on purpose, see
+CAUTION below -- arriving legally via `json.loads`; Python's json module accepts an unpaired
+surrogate escape even though strict JSON/Unicode forbids one as a scalar value) raised uncaught
+`UnicodeEncodeError` at the bare `.encode("utf-8")` calls that fingerprint `script`/`prompt` for
+the journal, on BOTH the Task/Agent path and the Workflow path -- an unhandled exception past
+every `except Exception` guard in this file (they wrap DB/config/journal-I/O work, not the
+dispatch-line construction itself), breaking this file's own "an observer must never break a
+tool call" invariant with a raw traceback and exit 1 into the operator's transcript. Reproduced
+live, RED-first, banked in `seen-red/delegation-observer/red.txt`'s own SURROGATE HAZARD RED
+section.
+
+CAUTION FOR THE NEXT EDITOR OF THIS SECTION: this docstring is an ordinary (non-raw) triple-
+quoted string, so a single-backslash escape like a bare `u`+`d800` sequence written directly here
+is NOT inert prose -- Python's own tokenizer decodes it at COMPILE time into an actual lone
+surrogate CODE POINT landing in this module's own `__doc__` constant, which then makes THIS FILE
+itself uncompilable/uninspectable the exact same way the finding describes (hit live while
+drafting this very fix: `runpy`'s `_get_code_from_file` raised the identical `UnicodeEncodeError`
+merely from importing this module, before any hook logic ran at all -- the worst-possible
+instance of the class, self-inflicted). Every surrogate example above and below is therefore
+double-backslashed on purpose so it reaches the compiled `__doc__` as inert literal text.
+
+CHOICE: `errors="replace"`, not `errors="surrogatepass"`, applied UNIFORMLY to every
+payload-derived `.encode("utf-8")` in this file AND to `_journal()`'s own file-write encode
+(verified, not assumed, per the finding's own instruction -- see next paragraph). `surrogatepass`
+would hash and write the exact bytes-as-sent (CESU-8-shaped, three bytes `ed a0 80` for
+`\\ud800`) and is therefore more information-preserving for the hash alone, but those bytes are
+NOT valid UTF-8: a plain `open(..., encoding="utf-8")` reader (the shape every consumer of this
+`.jsonl` file uses, including `journal_lines()` in this file's own fixture harness) fails to
+decode a surrogatepass-written line back. `replace` loses the exact surrogate identity
+(substituted with a literal `?`, verified by direct test -- Python's utf-8 "replace" encode
+handler emits ASCII `?`, not U+FFFD, which is itself only used on the DECODE side) but guarantees
+every byte this file ever writes is valid UTF-8, matching the `.jsonl` file's own implicit
+contract better than a fingerprint no ordinary reader can open. A malformed/adversarial payload
+degrading to a slightly less specific hash is an acceptable loss; a malformed payload making the
+journal file itself unreadable, or crashing the hook outright, is not.
+
+VERIFIED, NOT ASSUMED: `json.dumps` of a one-character string holding a lone surrogate does NOT
+raise, at either `ensure_ascii` setting -- with `ensure_ascii=False` it returns the raw surrogate
+code point embedded unescaped in the resulting Python `str`; with the default `ensure_ascii=True`
+it returns the same six-character ASCII escape text the JSON came in as -- so the crash was never
+in `json.dumps` itself (already safe, both settings) or in `_emit_warning`'s own
+`print(json.dumps(...))` (default `ensure_ascii=True` keeps the surrogate as plain ASCII escape
+text before it ever reaches stdout -- already safe, unchanged here). The crash was ONLY at the
+two explicit `.encode("utf-8")` hash calls, PLUS a second, previously-undiagnosed hazard on the
+SAME class this finding's own scope covers (ADR-0000: fix the class, not the two named call
+sites) -- `_journal()`'s `open(JOURNAL, "a", encoding="utf-8")` write of that
+`json.dumps(..., ensure_ascii=False)` line ALSO raises `UnicodeEncodeError` on a lone surrogate,
+independently of the hash calls, because the surrogate code point survives un-escaped into
+`script_excerpt`/`prompt_excerpt` and gets written verbatim. Fixing only the two named hash call
+sites would have left the journal WRITE itself as an unfixed instance of the identical class one
+field over -- `_journal()`'s own `open()` call now carries the same `errors="replace"` uniformly,
+closing both instances of the class in the one place this file funnels every journal write
+through.
 """
 from __future__ import annotations
 
@@ -373,11 +427,18 @@ def has_session_decision_row(session_id: str) -> bool:
 
 
 def _journal(rec: dict) -> None:
+    """SURROGATE HAZARD FIX (moderate/SILENT finding, delegation-observer Workflow-coverage
+    review, 2026-07-26): `errors="replace"` on the write, matching the SAME choice made for the
+    `.encode("utf-8")` hash calls below (module docstring, SURROGATE HAZARD FIX) -- see that
+    section for the full "why replace, not surrogatepass" reasoning. This is the single choke
+    point EVERY journaled field passes through (dispatch line, return line, and any future field
+    this file adds), so hardening it here closes the class regardless of which field carries the
+    lone surrogate."""
     if not JOURNAL:
         return
     try:
         os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
-        with open(JOURNAL, "a", encoding="utf-8") as f:
+        with open(JOURNAL, "a", encoding="utf-8", errors="replace") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:  # noqa: BLE001 -- an observer must never break a tool call over log I/O
         pass
@@ -488,7 +549,9 @@ def main() -> int:
         rec["description"] = str(inp["description"]) if inp.get("description") is not None else ""
         if inp.get("script") is not None:
             script = str(inp["script"])
-            rec["script_sha256"] = hashlib.sha256(script.encode("utf-8")).hexdigest()
+            # SURROGATE HAZARD FIX (module docstring) -- errors="replace", not the bare default.
+            rec["script_sha256"] = hashlib.sha256(
+                script.encode("utf-8", errors="replace")).hexdigest()
             rec["script_excerpt"] = script[:200]
         if inp.get("scriptPath"): rec["script_path"] = str(inp["scriptPath"])
         if inp.get("resumeFromRunId"): rec["resume_from_run_id"] = str(inp["resumeFromRunId"])
@@ -497,7 +560,9 @@ def main() -> int:
     else:  # Task/Agent -- THE EXISTING DISPATCH LINE'S SHAPE IS UNCHANGED (module docstring).
         prompt = str(inp.get("prompt", ""))
         rec["description"] = str(inp.get("description", ""))
-        rec["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        # SURROGATE HAZARD FIX (module docstring) -- errors="replace", not the bare default.
+        rec["prompt_sha256"] = hashlib.sha256(
+            prompt.encode("utf-8", errors="replace")).hexdigest()
         rec["prompt_excerpt"] = prompt[:200]
         rec["model"] = inp.get("model")
         rec["subagent_type"] = str(inp.get("subagent_type", ""))

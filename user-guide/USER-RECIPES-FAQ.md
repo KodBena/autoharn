@@ -2755,7 +2755,9 @@ Claude Code itself reads at session start to learn which hooks fire on which too
 its own source (`bootstrap/templates/settings.json.tmpl`) rather than a description of it: it
 wires nine hook attachments across five lifecycle points — `PreToolUse` (the change gate, stamp
 interception, the SQL-write block, and the doc-shapes gate, matched to `Write`/`Edit`/`Bash`/
-`AskUserQuestion`/`Read`/`Task|Agent` respectively), `PostToolUse` (the mutation observer twice,
+`AskUserQuestion`/`Read`/`Task|Agent|Workflow` respectively -- widened from `Task|Agent` by the
+Workflow-tool-coverage work item, ledger row 1355; this sentence's own matcher text was stale,
+corrected 2026-07-26 doc sweep), `PostToolUse` (the mutation observer twice,
 bash completion, the apparatus-flip journal, the delegation observer), a single `Stop` entry
 (the stop-gate plus demurral detection), and a `SessionStart` entry scoped to `compact|resume`
 (durable-decision replay). Every hook is invoked as `env <VARS> python3
