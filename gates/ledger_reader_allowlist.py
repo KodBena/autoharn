@@ -86,6 +86,7 @@ CHAIN = [
     "s59-missive-views.sql",
     "s60-entitlement-enforcement.sql",
     "s61-signature-symmetry-and-key-binding.sql",
+    "s62-delegation-lifecycle-gating.sql",
 ]
 # s60 (kernel/lineage/s60-entitlement-enforcement.sql, design/FABLE-ENTITLEMENT-ENFORCEMENT-
 # SPEC.md §1) extends this SAME gate's scratch CHAIN and ships THREE declared raw-`ledger`
@@ -98,6 +99,9 @@ CHAIN = [
 # "cannot read a view excluding the inserting row" reason as every other write-boundary
 # trigger already on this allowlist). entitlement_class_roles is NOT listed -- it factors
 # through ledger_current exclusively, classifies clean with no allowlist entry.
+# s62 (kernel/lineage/s62-delegation-lifecycle-gating.sql, row 1385) extends this CHAIN. It
+# CREATE-OR-REPLACEs entitlement_act_class_of/validate_entitlement -- the SAME two functions
+# the s60 entry above already allowlists by name -- so it registers no new allowlist entry.
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row
 # 1263, AS AMENDED by AMENDMENT 1 2026-07-25) extends this SAME gate's scratch CHAIN. It ships
 # FOUR new raw-`ledger` readers by design (validate_missive_dedup, validate_missive_courier_scope,

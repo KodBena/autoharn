@@ -6,6 +6,20 @@
 % principal_authority_chain_reaches_genesis(pid) -- ./judge holds the SQL/ASP differential in
 % AGREE on this delta's fixture (seen-red/s60-entitlement-enforcement/).
 %
+% s62 EXTENSION (kernel/lineage/s62-delegation-lifecycle-gating.sql, design/
+% FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1 AMENDMENT, row 1385): s62 adds a SEVENTH SQL-side
+% authority-bearing act class (delegation_lifecycle -- principal_relation_asserted/'acts-for'
+% rows themselves now require the WRITER's chain to reach genesis) but requires NO new predicate
+% here. reaches_genesis/1 was never act-class-specific -- it is the chain closure over
+% acts_for_edge/2 for ANY principal, consulted identically regardless of which act class asked
+% "does this actor's chain reach genesis". s62's SQL side calls the SAME
+% principal_authority_chain_reaches_genesis(pid) this program already twins; no new EDB family,
+% no new rule. ./judge continues to hold AGREE on seen-red/s62-delegation-lifecycle-gating/'s own
+% fixture, including the attack scenario itself (a chainless principal's self-asserted acts-for
+% edge is refused before it is ever written, so it never enters either side's EDB -- AGREE here
+% is a statement about the chain the exporter reads, unaffected by which candidate writes the
+% SQL trigger refused before they became rows).
+%
 % LOAD ORDER: loaded ON TOP OF ledger_tnow.lp -- the chain closure below is stratified BESIDE
 % in_force/1, never into it (spec §1 item 2, verbatim: "the chain closure in the ledger_defeat.lp
 % stratification shape, beside in_force/1, never into it" -- the SAME stratification discipline

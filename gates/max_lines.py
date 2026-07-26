@@ -201,7 +201,12 @@ BASELINE: dict[str, int] = {
     # (signature_attests_row, signature_grade, key_binding_possession_ref, plus
     # signature_symmetry_witness's own CORE_COLUMNS entry) + one widened row
     # (principal_key_fingerprint, now three kinds) + CHAIN += s61).
-    "gates/kind_shape_manifest_gate.py":              1444,
+    # Reconciled +4 to 1408 (s62-delegation-lifecycle-gating.sql, row 1385): CHAIN += s62 +
+    # a short comment noting s62 adds no MANIFEST row of its own.
+    # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
+    # comments kept verbatim above; the union is the measured merged file. Same
+    # merge-union ratchet-crossing class as the reconciliations above.
+    "gates/kind_shape_manifest_gate.py":           1448,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -256,7 +261,10 @@ BASELINE: dict[str, int] = {
     # against the (also-widened) SQL floor. Written plain, no golfing.
     # bumped 734 -> 802 (export_entitlement(): the entitlement-layer EDB exporter for the
     # s60 ASP twin, engine/lp/ledger_entitlement.lp -- same shape as export_defeat()).
-    "engine/ledger_edb.py":                             802,
+    # Reconciled +4 to 806 (kernel/lineage/s62-delegation-lifecycle-gating.sql, row 1385):
+    # a three-line docstring note on export_entitlement() recording that s62's seventh act
+    # class needs no exporter change. Written plain, no golfing.
+    "engine/ledger_edb.py":                             806,
     # Reconciled +61 to 733 (2026-07-26, row 1307/1308 follow-up): resolve_repo_root() +
     # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
     # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
@@ -304,7 +312,12 @@ BASELINE: dict[str, int] = {
     # bumped 610 -> 632 (s61-signature-symmetry-and-key-binding.sql: CHAIN += s61, two new
     # declared raw-ledger reader entries (validate_principal_binding, validate_signature_witness)
     # + one widened entry's reason text (validate_supersession_target)).
-    "gates/ledger_reader_allowlist.py":                 632,
+    # Reconciled +4 to 614 (s62-delegation-lifecycle-gating.sql, row 1385): CHAIN += s62 + a
+    # short comment noting it registers no NEW allowlist entry (re-issues two s60-named readers).
+    # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
+    # comments kept verbatim above; the union is the measured merged file. Same
+    # merge-union ratchet-crossing class as the reconciliations above.
+    "gates/ledger_reader_allowlist.py":            636,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -418,7 +431,11 @@ BASELINE: dict[str, int] = {
     # the census independently (main: the s61 registry row; branch: the TUI-ceremony row +
     # provenance comment); the union measures 429. Fourth witnessed merge-union ratchet
     # crossing in two days -- the commit-phase contention class, again.
-    "gates/fixture_census.py":                          429,
+    # bumped 419 -> 420 (one new REGISTRY row: s62-delegation-lifecycle-gating, row 1385).
+    # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
+    # comments kept verbatim above; the union is the measured merged file. Same
+    # merge-union ratchet-crossing class as the reconciliations above.
+    "gates/fixture_census.py":                     430,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -473,7 +490,12 @@ BASELINE: dict[str, int] = {
     # Reconciled 539/544 -> measured at the s62+TUI coupled merge (2026-07-26): both parents'
     # bump comments kept verbatim above, plus this reconciliation note -- the self-measuring
     # union, same class as the fixture_census row's crossing directly above.
-    "gates/max_lines.py":                                562,
+    # bumped 528 -> 538 (s62-delegation-lifecycle-gating.sql, row 1385: four more ratchet
+    # bumps in this same file, same self-measuring cost, including this entry itself).
+    # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
+    # comments kept verbatim above; the union is the measured merged file. Same
+    # merge-union ratchet-crossing class as the reconciliations above.
+    "gates/max_lines.py":                          584,
 }
 
 

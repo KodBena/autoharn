@@ -193,6 +193,7 @@ REGISTRY: dict[str, str] = {
     "s57-obligation-revocation-event": "seen-red/s57-obligation-revocation-event/run_fixtures.py",
     "s60-entitlement-enforcement":     "seen-red/s60-entitlement-enforcement/run_fixtures.py",
     "s61-signature-symmetry-and-key-binding": "seen-red/s61-signature-symmetry-and-key-binding/run_fixtures.py",
+    "s62-delegation-lifecycle-gating": "seen-red/s62-delegation-lifecycle-gating/run_fixtures.py",
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "legacy-led-retirement-round1-fixes": "seen-red/legacy-led-retirement-round1-fixes/run_fixtures.py",
     "workflow-drive-dead-legacy-led-default": "seen-red/workflow-drive-dead-legacy-led-default/run_fixtures.py",
