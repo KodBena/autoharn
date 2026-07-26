@@ -479,6 +479,18 @@ Repo-root executable **`courier`** (Python, top-of-file imports only, the standi
 edict), per the self-application rule: never prose steps. Configuration: a
 `courier.toml` beside `boundary-multiplex.toml` —
 
+*(Dated amendment, 2026-07-26, work item courier-umbrella-rebase, autoharn ledger rows
+1369/1370 — ADR-0005 Rule 8, appended rather than a silent rewrite of the sentence above: this
+section's own text predates the umbrella-CLI migration and its "Repo-root executable" framing
+was a deliberate, disclosed construction choice at the time (see the courier script's own
+former module docstring), not an oversight. That deferred pass has now happened: `courier` is
+rebased into `libexec/autoharn/courier`, wired into `./autoharn`'s dispatch table and the
+seen-red/umbrella-cli-dispatch-parity fixture, the same way led/pickup/judge were before it.
+Configuration is unchanged — `courier.toml` still lives beside `boundary-multiplex.toml` at the
+repo root, never under `libexec/`. Reach it via `autoharn courier` (or
+`libexec/autoharn/courier` directly); no root alias survives this move, since the
+deprecation-window alias pattern itself was retired ahead of this rebase, ledger row 1357.)*
+
 ```toml
 authn = "single-operator"          # the NAMED EMPTY SLOT (row 1162): any other value is
                                    # refused at load with teach-text naming the slot; a
@@ -671,6 +683,13 @@ substrates, or whose meaning depends on the reader's perspective.*
   `MAX_AFTER_SLUG_BYTES`'s stated rationale, cited not invented).
 
 ## 11. Witness plan (scratch, TOY db, both polarities per leg, red first)
+
+*(Dated note, 2026-07-26, work item courier-umbrella-rebase, ledger rows 1369/1370 — ADR-0005
+Rule 8, appended rather than a silent rewrite of the plan's own `./courier` spellings below in
+steps 4 and 10: those steps' text is kept verbatim as the planning-time record. Wherever this
+section says `./courier`, the current invocation is `./autoharn courier` (or
+`libexec/autoharn/courier` directly) — courier has been rebased into `libexec/autoharn/courier`
+and wired into `./autoharn`'s dispatch table, no root alias.)*
 
 Setup: two scratch schema pairs (`s58val_a`/`s58val_b` + kernels + roles) in the toy db,
 each applied s15..s57 + s58 + s59 explicitly (the s57 VALIDATE idiom); genesis seed;

@@ -170,3 +170,32 @@ g-help-sweep-never-writes: PASS (git status --porcelain byte-identical before/af
 top-level + service + per-verb --help sweep -- zero filesystem trace)
 
 ALL CASES PASS
+
+================================================================================
+DATED RETIREMENT NOTE + FRESH RE-RUN, 2026-07-26 (courier-umbrella-rebase, ledger
+rows 1369/1370; appended per the family precedent set by fixture-sandbox-runtime-
+foreclosure/red.txt's case-2d retirement — a deleted case leaves a note and a fresh
+transcript, never a stale banked PASS)
+
+Case c (`c-alias-shim-still-works`, banked PASS above, 2026-07-23 run) NO LONGER
+EXISTS: the ten root alias shims it witnessed were deleted outright by work item
+root-shim-pruning (ledger row 1357 — the deprecation-window pattern itself retired,
+pruning made a 2.0.0 precondition), so the property it proved is intentionally
+un-provable. After the deletion and before this note, the case CRASHED on every run
+(uncaught FileNotFoundError on ./led) — main was red on this family from merge
+4839b62 until commit 167aedb removed the case. What still guards the surface:
+case a/f prove real dispatch reaches each libexec verb; gates/layout_census.py
+mechanically flags any UNREGISTERED top-level file, so a reintroduced root shim
+fails the census (verified in the 167aedb review). Roster at this run: eleven verbs
+including the newly rebased courier.
+
+Fresh full-family transcript (this workspace, post-167aedb):
+
+a-libexec-roster-matches-dispatch-table: PASS
+b-help-mentions-every-verb: PASS
+d-unknown-verb-refuses: PASS (RED case: exit 2, named refusal, roster taught)
+e-service-is-handled-directly: PASS
+f-real-invocation-reaches-libexec: PASS (every verb's real libexec/autoharn/<verb> reached via `./autoharn <verb> --help`, never a broken-exec shell diagnostic, each verb's own self-identifying usage marker is present, and none of them fall through to the shared deployment/PGHOST refusal boilerplate -- no wrong-target dispatch, no shared-boilerplate collision)
+g-help-sweep-never-writes: PASS (git status --porcelain byte-identical before/after the full top-level + service + per-verb --help sweep -- zero filesystem trace)
+
+ALL CASES PASS

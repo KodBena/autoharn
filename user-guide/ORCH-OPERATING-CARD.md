@@ -94,8 +94,12 @@ Condensed for quick reference; full definitions (the SSOT) live in
 > planned in the spec above; that original schedule text stands as the planning-time record,
 > corrected by this dated amendment rather than silently rewritten. Semantics, refusals and exit
 > codes are unchanged from before the pruning — only the invocation spelling moved, now with no
-> bare-shim fallback at this repo's own root. (`courier`, `extract-context`, `orchlog`,
-> `otel-attest`, `otel-watch` were never part of this shim family and are untouched.)
+> bare-shim fallback at this repo's own root. (`extract-context`, `orchlog`, `otel-attest`,
+> `otel-watch` were never part of this shim family and are untouched. `courier` was also never
+> part of this deprecation-*alias* shim family, but a DATED amendment, not a silent rewrite:
+> work item courier-umbrella-rebase, ledger rows 1369/1370, 2026-07-26 — courier has since been
+> rebased into `libexec/autoharn/courier` and wired into `./autoharn`'s own dispatch table, the
+> same way led/pickup/judge were; reach it via `autoharn courier`, never a bare `./courier`.)
 > **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN world actually gets — is NOT
 > yet updated to this build's shape**: a freshly scaffolded world still receives the ten bare
 > per-verb shims this card describes below, not `./autoharn` + `libexec/`. That migration is a

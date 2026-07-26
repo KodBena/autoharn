@@ -14,11 +14,12 @@ fixture's call shape -- it depends on the called thing (this repo's own root ver
 whenever AUTOHARN_FIXTURE_SANDBOX is set in its own environment. Environment inheritance
 propagates the marker through any process tree a fixture starts, however indirectly spawned.
 
-SCOPE: this module is imported ONLY by libexec/autoharn/attest-tags and libexec/autoharn-service
--- never by anything under bootstrap/templates/ (spec §5: "not a change to any world's verbs").
-A scratch world's own shim execs a *.tmpl file directly and never imports this module at all, so
-it structurally cannot refuse under the marker -- the same choke-point argument the sh preamble's
-own header makes.
+SCOPE: this module is imported by libexec/autoharn/attest-tags, libexec/autoharn-service, and
+(added 2026-07-26, work item courier-umbrella-rebase, ledger rows 1369/1370 -- ADR-0005 Rule 8,
+appended rather than rewritten) libexec/autoharn/courier -- never by anything under
+bootstrap/templates/ (spec §5: "not a change to any world's verbs"). A scratch world's own shim
+execs a *.tmpl file directly and never imports this module at all, so it structurally cannot
+refuse under the marker -- the same choke-point argument the sh preamble's own header makes.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
 """

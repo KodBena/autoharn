@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """run_fixtures.py -- both-polarity proof for design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §1/§7:
-the generated `autoharn --help` roster cannot drift from what actually runs, the ten relocated
-verbs are reachable BOTH via `./autoharn <verb>` and via their deprecated `./<verb>` alias
-shims, and an unrecognized verb refuses loudly teaching the same roster.
+the generated `autoharn --help` roster cannot drift from what actually runs, every relocated verb
+is reachable via `./autoharn <verb>` and dispatches to the real `libexec/autoharn/<verb>` file
+(not a wrong-target swap), and an unrecognized verb refuses loudly teaching the same roster.
+
+(Dated note, 2026-07-26, work item courier-umbrella-rebase, ledger rows 1369/1370 -- ADR-0005
+Rule 8, corrected in place rather than appended since this is the file's own live summary, not a
+frozen spec: this sentence used to also claim "and via their deprecated `./<verb>` alias shims" --
+those ten aliases were deleted outright by root-shim-pruning, ledger row 1357, and this file's own
+case c, which drove them, is REMOVED below rather than left describing a surface that no longer
+exists. The roster is now eleven verbs (courier added this item, wired the same way as the other
+ten but with NO alias -- the alias pattern itself is retired, not merely descoped).)
 
 Cases:
   a-libexec-roster-matches-dispatch-table -- every file under libexec/autoharn/ has an entry in
@@ -10,19 +18,29 @@ Cases:
                                  side has an entry the other lacks).
   b-help-mentions-every-verb -- `autoharn --help`'s stdout names every libexec/autoharn/ verb
                                  (mechanical grep, not hand-maintained).
-  c-alias-shim-still-works -- each deprecated `./<verb>` alias execs successfully (--help exits
-                                 0, or its own pre-existing --help behavior, both proving the
-                                 relocation did not break dispatch) AND prints its one-line
-                                 deprecation notice to stderr AND (round-3 review fix, see case
-                                 f's own note below for the shared `_USAGE_MARKERS` this reuses)
-                                 shows that verb's own usage marker on stdout -- the deprecation
-                                 notice alone is printed unconditionally by the alias shim BEFORE
-                                 its own `exec ./autoharn <verb> "$@"` line ever runs, so a shim
-                                 rewritten to exec the WRONG verb (the round-3 reviewer's second
-                                 attack: `./led` rewritten to `exec ./autoharn judge "$@"`) still
-                                 printed led's own hardcoded deprecation text while silently
-                                 serving judge's usage underneath -- reproduced red, then fixed,
-                                 this round.
+  c-alias-shim-still-works -- REMOVED 2026-07-26 (work item courier-umbrella-rebase, ledger rows
+                                 1369/1370; ADR-0005 Rule 8, dated note rather than a silent
+                                 rewrite of this docstring's history above -- the case's own
+                                 description above is kept verbatim). root-shim-pruning (ledger
+                                 row 1357) deleted the ten `./<verb>` deprecation alias shims this
+                                 case drove -- the alias-shim pattern is RETIRED, not merely this
+                                 build's out-of-scope follow-on -- but that deletion never touched
+                                 this fixture, leaving case c calling a nonexistent path
+                                 (`REPO_ROOT / verb`) for every verb and crashing with an
+                                 uncaught `FileNotFoundError` before any later case could even
+                                 run: a hazard found in reach of THIS build's own required touch
+                                 to this exact file (extending it to cover courier per the work
+                                 item's own instructions), fixed here per CLAUDE.md's
+                                 hazard-flagging duty rather than routed around. There is nothing
+                                 left for this case to drive -- no alias survives for any verb,
+                                 and the umbrella build's own policy (row 1357) is that no future
+                                 verb gets one either (courier, wired into this same dispatch
+                                 table by this same work item, gets NO root alias, per that
+                                 policy) -- so the case is deleted outright, not stubbed to a
+                                 vacuous pass; the remaining cases (a/b/d/e/f/g, function names
+                                 kept as-is rather than renumbered) already independently prove
+                                 dispatch integrity without ever touching the retired alias
+                                 surface.
   d-unknown-verb-refuses -- `autoharn frobnicate-not-a-verb` exits 2, refuses without touching
                                  anything, and its stderr names the known roster.
   e-service-is-handled-directly -- `autoharn service --help` exits 0 without going through
@@ -149,6 +167,12 @@ LIBEXEC = REPO_ROOT / "libexec" / "autoharn"
 _EXPECTED_VERBS = {
     "led", "judge", "pickup", "distance-to-clean", "attest-tags", "audit", "doctor",
     "migrate", "asof-export", "verify-chain",
+    # courier -- added 2026-07-26 by work item courier-umbrella-rebase (ledger rows 1369/1370):
+    # rebased from an unregistered root file into libexec/autoharn/courier, wired into
+    # ./autoharn's dispatch table, same as the ten verbs above. Unlike those ten, courier gets
+    # NO `./<verb>` alias (the deprecation-shim pattern is retired, row 1357) -- it was never
+    # covered by the now-removed case c and needs no exemption there.
+    "courier",
 }
 
 # Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
@@ -184,6 +208,9 @@ _USAGE_MARKERS = {
     "migrate": "usage: migrate <deployment-dir> [--dry-run]",
     "asof-export": "usage: asof-export [-h] {read,export} ...",
     "verify-chain": "usage: verify-chain [--head]",
+    # courier -- verified by hand (2026-07-26) against its real --help output; argparse's own
+    # generated usage line, distinctive (no other verb is named "courier").
+    "courier": "usage: courier [-h] [--courier-toml COURIER_TOML]",
 }
 
 # Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates
@@ -316,44 +343,12 @@ def case_b_help_mentions_every_verb() -> bool:
     return True
 
 
-def case_c_alias_shim_still_works() -> bool:
-    """Round-3 review fix: extended to assert VERB IDENTITY through the ALIAS path too, not
-    merely the deprecation notice -- the reviewer's second attack (`./led` rewritten to exec
-    `autoharn judge` instead of `autoharn led`) satisfied the OLD version of this case
-    completely: the deprecation line is printed unconditionally by the alias shim itself,
-    BEFORE its own `exec ./autoharn <verb> "$@"` line ever runs, so a shim pointed at the WRONG
-    verb still printed "led: DEPRECATED spelling -- use 'autoharn led' instead" (the shim's own
-    hardcoded verb name), then silently served judge's own usage text underneath with nothing
-    here to notice. This case now additionally asserts the SAME per-verb `_USAGE_MARKERS` marker
-    (module-level, shared with case f) appears in the alias invocation's own stdout -- proving
-    the alias's `exec` actually reached the real verb, not merely that its hardcoded deprecation
-    string named the right verb."""
-    ok = True
-    for verb in sorted(_EXPECTED_VERBS):
-        r = _run([str(REPO_ROOT / verb), "--help"])
-        if f"DEPRECATED spelling -- use 'autoharn {verb}'" not in r.stderr:
-            print(f"c-alias-shim-still-works: FAIL -- ./{verb} --help printed no deprecation notice")
-            ok = False
-        marker = _USAGE_MARKERS[verb]
-        if marker not in r.stdout:
-            print(f"c-alias-shim-still-works: FAIL -- ./{verb} --help via the alias never shows "
-                  f"{verb}'s own usage marker ({marker!r}) -- looks like the alias execs the "
-                  f"WRONG verb underneath (its deprecation line named {verb!r} but the served "
-                  f"content did not). stdout: {r.stdout!r}")
-            ok = False
-            continue
-        boilerplate_fail = _assert_no_shared_boilerplate(verb, r.stdout + r.stderr)
-        if boilerplate_fail:
-            print(f"c-alias-shim-still-works: FAIL -- {boilerplate_fail}")
-            ok = False
-        sibling_fail = _assert_sibling_pair_identity(verb, r.stdout + r.stderr)
-        if sibling_fail:
-            print(f"c-alias-shim-still-works: FAIL -- {sibling_fail}")
-            ok = False
-    if ok:
-        print("c-alias-shim-still-works: PASS (all ten alias shims print their deprecation "
-              "notice AND serve their own verb's real usage content -- no wrong-target alias)")
-    return ok
+# case_c_alias_shim_still_works REMOVED 2026-07-26 (work item courier-umbrella-rebase, ledger
+# rows 1369/1370) -- see the module docstring's dated note at case c's own entry above for the
+# reproduction (root-shim-pruning, row 1357, deleted the ten alias shims this case drove but
+# never touched this file, leaving it crashing with an uncaught FileNotFoundError) and the
+# reasoning for deletion rather than a stub (the alias pattern is retired, not merely
+# out-of-scope; courier gets no alias either, per that same retirement).
 
 
 def case_d_unknown_verb_refuses() -> bool:
@@ -499,7 +494,7 @@ def main() -> int:
     results = [
         case_a_libexec_roster_matches_dispatch_table(),
         case_b_help_mentions_every_verb(),
-        case_c_alias_shim_still_works(),
+        # case c (alias shim) REMOVED 2026-07-26 -- see module docstring's dated note.
         case_d_unknown_verb_refuses(),
         case_e_service_is_handled_directly(),
         case_f_real_invocation_reaches_libexec(),
