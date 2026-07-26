@@ -67,6 +67,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # noqa: E402
 
 # Deployment names are operator LABELS (spec §2): [a-z0-9-]{1,64}, refused at load otherwise.
+# CROSS-REFERENCE (work item setup-tui-worldname-boundary-allowlist, row 1317 arc): this pattern
+# is one leg of an intersection two OTHER call sites independently derive and enforce upstream of
+# ever reaching this file -- tools/setup_tui/idtypes.py's `WorldName` (the TUI's Birth screen
+# entry gate) and bootstrap/new-project.sh's `--profile tracker` `--name` check (its own inline
+# comment cites this same pattern). If this regex ever changes, both of those homes' own copies
+# need the same change -- there is no shared importable home across the Python/shell boundary.
 _DEPLOYMENT_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 
 # The five keys a `[deployments.NAME]` table may carry -- named ONCE (ADR-0012 P1), not

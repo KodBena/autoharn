@@ -80,6 +80,14 @@ def submit(state: dict, answers: dict) -> SectionResult:
         world_name = WorldName.parse(state.get("world", ""))
     except WorldNameError as exc:
         return SectionResult(ok=False, errors={"": f"world name (set in Birth): {exc}"})
+    # `WorldName.__post_init__` (tools/setup_tui/idtypes.py, work item
+    # setup-tui-worldname-boundary-allowlist) now enforces the INTERSECTION of the shell/SQL
+    # identifier allowlist AND the boundary service's own deployment-slug allowlist -- so `world`
+    # below is already safe to splice into `[deployments.{world}]` (this step's own TOML table
+    # key) by construction, not by convention. Birth's own entry gate re-parses through this SAME
+    # constructor, so a bad name never even reaches this step; the re-parse here is this step's
+    # own defense against being driven with a state dict that skipped Birth (e.g. a test harness),
+    # not a second copy of the allowlist.
     world = str(world_name)
     host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
     db = answers["db"].strip() or state.get("db", "toy")

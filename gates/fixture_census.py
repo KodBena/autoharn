@@ -245,6 +245,11 @@ REGISTRY: dict[str, str] = {
     "setup-tui-multichoice-filter":     "seen-red/setup-tui-multichoice-filter/run_fixtures.py",
     "setup-tui-seeded-value-visibility": "seen-red/setup-tui-seeded-value-visibility/run_fixtures.py",
     "setup-tui-adr-synopsis-drift":     "seen-red/setup-tui-adr-synopsis-drift/run_fixtures.py",
+    # work item setup-tui-worldname-boundary-allowlist (row 1317 arc): WorldName's contract
+    # strengthened to the shell/SQL-identifier x boundary-deployment-slug INTERSECTION
+    # ([a-z0-9]{1,64}) -- both-polarity proof against pinned pre-fix idtypes.py + the real
+    # steps_boundary.submit() + the real serving.boundary_multiplex_config loader.
+    "setup-tui-worldname-boundary-allowlist": "seen-red/setup-tui-worldname-boundary-allowlist/run_fixtures.py",
     "strip-provenance-banners":         "seen-red/strip-provenance-banners/run_fixtures.py",
     # cycle-4 audit finding 1 fix round (ledger rows 1124/1133/1138): the mid-section
     # cancellation-token fix (rehearsal's own subprocess layer) and the control/help split
