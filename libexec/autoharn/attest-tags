@@ -65,6 +65,9 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "filing"))
 import gpg_trust  # noqa: E402  (filing/gpg_trust.py, the ONE home for the scratch-keyring mechanics)
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, design/FABLE-FIXTURE-SANDBOX-
+# RUNTIME-FORECLOSURE-SPEC.md §2 -- the Python-side twin of libexec/autoharn/
+# _fixture_sandbox_preamble.sh; attest-tags is one of the two Python repo-root verb entry points)
 
 RATIFICATION_CLAIM_RE = re.compile(r"\bRATIFIED\b", re.IGNORECASE)
 
@@ -123,6 +126,11 @@ def claiming_commits(repo: Path) -> list[tuple[str, str]]:
 
 
 def main(argv: list[str]) -> int:
+    # EXEMPTION, narrow and precedented (see ./autoharn's own _fixture_sandbox_gate comment): a
+    # bare --help/-h never touches a repo/keys-dir/network, so it is exempt from the marker check
+    # exactly like every other repo-root verb's own --help.
+    if argv not in (["--help"], ["-h"]):
+        fixture_sandbox.check("libexec/autoharn/attest-tags " + " ".join(argv))
     repo = _repo_root_guess()
     keys_dir = repo / "law" / "keys"
     as_json = False

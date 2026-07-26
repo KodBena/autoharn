@@ -314,7 +314,11 @@ BASELINE: dict[str, int] = {
     # (the reconciliation that unblocks main must count itself) -- rather than golfed under;
     # the ratchet forbids growth from here. Same cross-branch same-file contention class as
     # the concurrent-builders ruling (2026-07-21), now witnessed on the gate's own file.
-    "gates/max_lines.py":                               413,
+    # BUMPED 413 -> 425 (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md build): this
+    # file's own ratchet must count its own baseline-bump comment for gates/fixture_census.py
+    # just below (the same self-referential shape row 1944's own 404->413 entry, right above,
+    # already names) -- the entry that unblocks another file's growth must itself be counted.
+    "gates/max_lines.py":                               425,
     # NEW to BASELINE 2026-07-23 (integration merge, TUI-rebuild line x retirement line):
     # 406 lines -- both sides' own docstrings (the rebuild's P10 CONTENT SPLIT note, the
     # retirement's SCREEN POSITION AND VERB CHOICE re-sequencing note) are genuinely independent
@@ -330,6 +334,14 @@ BASELINE: dict[str, int] = {
     # elsewhere in the same file. Written plain, no golfing; witnessed growth of a previously-
     # under-ceiling file, crossing the ceiling only as a merge artifact.
     "tools/setup_tui/runner.py":                        405,
+    # NEW to BASELINE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md build, ledger
+    # rows 1237-1248/1315/1316/1325): was 375 lines, under ceiling, before this build. Gains one
+    # new documented breach kind (§4's additive marker check, docstring item 5 plus its ~15-line
+    # implementation in main()) and one new REGISTRY row for this build's own witness fixture
+    # (fixture-sandbox-runtime-foreclosure) -- genuinely new decision surface (a census gate
+    # keeping a NEW mechanical sweep honest), not padding. Written plain, no golfing (ADR-0007's
+    # no-go clause).
+    "gates/fixture_census.py":                          404,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
 }

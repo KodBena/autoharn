@@ -77,6 +77,11 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(AUTOHARN_ROOT / "
 # (BoundaryUnreachable/BoundaryRefusal/ProtocolVersionMismatch); ensure_running.py imports it.
 sys.path.insert(0, str(AUTOHARN_ROOT))
 from serving import ensure_running as er  # noqa: E402
+sys.path.insert(0, str(AUTOHARN_ROOT / "filing"))
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, design/FABLE-FIXTURE-SANDBOX-
+# RUNTIME-FORECLOSURE-SPEC.md §2 -- checked here too, defense-in-depth against a fixture that
+# invokes this file directly instead of `autoharn service ...`, which ./autoharn's own dispatcher
+# already checks before ever reaching this file)
 
 
 def _load_deployment() -> dict:
@@ -255,6 +260,7 @@ def main(argv: list[str]) -> int:
               "           (tracked via a pidfile, and re-checked against /proc at stop time);\n"
               "           refuses, never guesses, otherwise")
         return 0
+    fixture_sandbox.check("autoharn service " + " ".join(argv))
     verb = argv[0]
     if verb not in _SUBCOMMANDS:
         print(f"autoharn service: REFUSED -- unrecognized subcommand '{verb}' (known: "
