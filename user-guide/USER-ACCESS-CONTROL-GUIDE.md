@@ -18,7 +18,9 @@ both rather than re-teaching them.
 **Correction folded in (maintainer, row 1412, supersedes an earlier reading of row 1410):** the
 maintainer's actual ask is narrower and more demanding than "ship four worked examples" — every
 encoding below uses *only* generic, adopter-reachable harness primitives (typed ledger rows,
-free-text role/act-class configuration — the s36 graded-token idiom, roles and `acts-for` chains,
+free-text role/act-class configuration — the [`s36`](../kernel/lineage/s36-decision-grade.sql)
+graded-token idiom (a free-text, no-enum column where the kernel stores a word and deployment
+policy decides which words matter), roles and `acts-for` chains,
 the s61 signature verbs, and the ordinary Postgres GRANT/role/row-security substrate). Nothing
 here is a taint-specific or license-specific feature this repository ships — every mechanism an
 adopter could not write themselves, against their own world, from documentation alone, is instead
@@ -101,9 +103,12 @@ downstream authority, never the delegate about themselves — to already chain-r
 also generalizes severance: `validate_entitlement` now checks **both** the candidate write's own
 class **and**, when the write supersedes another row, the *target* row's class — "severance is an
 act against the target's class," so sabotaging someone else's delegation edge via a differently-
-typed candidate row (a `work_depends_on` row superseding a live `acts-for` edge, the round-2 attack
-this delta's own fixture drills) is caught too. This is a small, concrete instance of CLAUDE.md's
-hazard-in-reach corollary happening inside this project's own kernel: the fix rewrote not just the
+typed candidate row (a `work_depends_on` row superseding a live `acts-for` edge — a second,
+independent attack shape this delta's own fixture drills alongside the self-service bypass above)
+is caught too. This is a small, concrete instance of
+[CLAUDE.md](../CLAUDE.md)'s hazard-in-reach corollary (an in-reach defect gets fixed or flagged
+loudly, not routed around because it wasn't the assigned task) happening inside this project's own
+kernel: the fix rewrote not just the
 logic but the refusal's own *teach-text*, because the old text taught the exploit.
 
 ### Worked example — witnessed live, this session, on a throwaway scratch world
@@ -219,6 +224,10 @@ Everything below is standard Postgres plus the s61 signature kind already shippe
    database layer — the same layer `s18`'s reviewer roles already use for column-level carving
    (this is the row-level generalization of that idiom, not a different mechanism).
 2. A **free-text labeling convention** on `statement` (`COMPARTMENT: ...`) — no schema change.
+   **This label must be correct on the row's first write.** RLS narrows on raw `statement` text,
+   with no regard for supersession — a mislabeled compartment row is a permanent leak, not a
+   correctable mistake; §4 below states this once, in full, as the authoritative rule for every
+   label-based gate on this page (this one included), with a live-witnessed negative example.
 3. The **`s61` `commission_signature_verified` kind and `signed_commissions` view**, already
    shipped, unmodified.
 
@@ -244,6 +253,14 @@ the table owner, who — as owner — bypasses RLS by construction) that reads t
 and returns a boolean; the policy calls the function instead of the view chain. This is an
 ordinary SQL authoring technique, not autoharn machinery, and any Postgres-literate adopter can
 write it themselves — named here as a documented gotcha, not an expressiveness gap.
+
+**A second, more dangerous pitfall, because it fails silently rather than refusing loudly:** any
+adopter-authored view over `ledger` — not just `signed_commissions`, *any* `CREATE VIEW ... AS
+SELECT ... FROM ledger` an operator writes later, for a purpose that has nothing to do with taint
+— runs with its owner's privileges by default and bypasses every RLS policy above entirely unless
+that view sets `security_invoker = true`. §4 below states this as a mandate, with a live-witnessed
+bypass and fix, once for the whole page; it applies here identically — this compartment filter is
+exactly as bypassable through an innocent later view as §4's embargo filter is.
 
 ### Worked example — witnessed live
 
@@ -326,7 +343,7 @@ per-agent-tool-restriction pattern the
 consult names for web-touching vs. kernel-writing vs. review agents) to close. Naming this boundary
 plainly, not papering over it, is the point.
 
-**The reserved kernel seat.**
+A reserved kernel seat covers what is not yet built here.
 [`design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md`](../design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md)
 §4 names a **taint
 conjunct** as a later, its-own-ratified addition to the same factored acceptance predicate `s60`
@@ -459,6 +476,20 @@ license_gate: clean -- 5 labeled row(s) checked, 0 violations.
 
 ### Honest limits
 
+**This subsection explains why supersession is the right fix here, and why that does not
+generalize.** The correction above
+rewrites a *compatibility judgment* — GPL-3.0-or-proprietary is checkable and re-checkable from the
+label alone, and nothing about who may read the row is at stake, so a fresh row that supersedes the
+wrong one is a complete, honest fix: the gate re-reads `ledger_current`, sees the correction, and
+the old verdict is retired the same way every other correction in this kernel retires. **This
+pattern does NOT carry over to a label that controls read confinement** (§2's compartment prefix,
+§4's `CONSULT-EMBARGO:` prefix) — there, supersession fixes which row is authoritative but never
+un-shows a row a confined role already had standing access to see, because the RLS policy narrows
+on raw `statement` text with no regard for supersession. §4 states this distinction once, in full,
+with a live-witnessed negative example; a license mislabel and a confidentiality mislabel look like
+the same kind of typo but have opposite consequences, and this page is careful not to let the one
+worked example here be read as license for the other.
+
 The label is a **text convention**, not a structural type — nothing stops a writer with ordinary
 INSERT access from mislabeling a derivation, and the gate can only see what the convention was
 applied to. This is the same residual §5 names as an expressiveness gap: there is no first-class,
@@ -557,6 +588,153 @@ Both roles read through the *exact same view* (`ledger_current`) — the differe
 the row-security layer beneath it, per-role, enforced by Postgres on every access path (the base
 table too, as shown above), never by which view happened to be queried.
 
+### Embargo-first: the label must be right on the first write (the authoritative statement)
+
+**Supersession corrects FORCE, never VISIBILITY.** Every RLS policy in this page (§2's and this
+section's alike) is a `USING` predicate over the *raw* `statement` text of *every row the table
+holds* — it has no idea, and does not ask, whether a row is currently in force or has been
+superseded ten times over. `ledger_current`/`ledger` quantify over history, not over "what's true
+now"; superseding a mislabeled row changes which row a *reader who resolves supersession* treats
+as authoritative, but the mislabeled row itself never stops existing, never stops being a row the
+confined role's grant can see, and never becomes retroactively embargoed. **A label mistake made
+on the first write is therefore not a bug to fix later — it is a permanent leak**, because this
+kernel has no `UPDATE` path for a governed table at all (line-item in §6 below) and no "please
+also embargo my past self" operation. The maintainer's own framing for this (row 1418, on the
+motivating case): building an isolated worktree to hide comments from a reviewer "wouldn't do if
+we'd written the commission with a typo in the first, then superseded the typo'd entry — the
+reviewer could then work out where the comment-ful source is."
+
+**Witnessed live, same scratch mechanics as every other example on this page, a fresh scratch
+world (`fixacgw0060`, torn down after, zero residue verified — the original `probeworldacg` world
+this page's other examples were run against no longer exists; runs are linear, this is a fresh
+witness of the same mechanism, not a continuation).** An orchestrator writes the exact ADR-0018
+embargo content from this page's own §4 example — but forgets the `CONSULT-EMBARGO:` prefix, an
+ordinary labeling typo:
+```
+$ psql -d toy -c "select fixacgw0060_kernel.ledger_write(
+    '{\"kind\":\"decision\",\"statement\":\"candidate fix list and suspect ordering for the s60
+      audit -- ADR-0018 forbids handing a consult reviewer this content\",
+      \"confidence\":\"medium\"}'::jsonb);"
+ledger_write | (accepted,7,,,)
+```
+
+The same RLS policy this section teaches (`... USING (statement NOT LIKE 'CONSULT-EMBARGO:%' ...
+)`) is already in force. Because row 7 carries no `CONSULT-EMBARGO:` prefix, it is not narrowed —
+**the confined reviewer reads it in full, first try, no bypass needed:**
+```
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from fixacgw0060.ledger
+  where id=7;"
+ id |                                                       statement
+----+-----------------------------------------------------------------------------------------------------------------------
+  7 | candidate fix list and suspect ordering for the s60 audit -- ADR-0018 forbids handing a consult reviewer this content
+(1 row)
+```
+
+The mistake is caught and corrected the idiomatic way — a fresh, correctly-labeled row superseding
+the bad one, exactly the pattern §3's license correction uses:
+```
+$ psql -d toy -c "select fixacgw0060_kernel.ledger_write(
+    '{\"kind\":\"decision\",\"statement\":\"CONSULT-EMBARGO: candidate fix list and suspect
+      ordering for the s60 audit -- ADR-0018 forbids handing a consult reviewer this
+      content\",\"confidence\":\"medium\",\"supersedes\":7}'::jsonb);"
+ledger_write | (accepted,8,,,)
+```
+
+**The new row is correctly embargoed — the policy narrows it exactly as designed:**
+```
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from fixacgw0060.ledger
+  where id=8;"
+ id | statement
+----+-----------
+(0 rows)
+```
+
+**But row 7 — the mislabeled corpse, now superseded — is still fully readable to the confined
+role, on the raw table and through `ledger_current` alike, forever:**
+```
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from fixacgw0060.ledger
+  where id=7;"
+ id |                                                       statement
+----+-----------------------------------------------------------------------------------------------------------------------
+  7 | candidate fix list and suspect ordering for the s60 audit -- ADR-0018 forbids handing a consult reviewer this content
+(1 row)
+
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from
+  fixacgw0060.ledger_current where id in (7,8);"
+ id |                                                       statement
+----+-----------------------------------------------------------------------------------------------------------------------
+  7 | candidate fix list and suspect ordering for the s60 audit -- ADR-0018 forbids handing a consult reviewer this content
+(1 row)
+```
+
+**The moral, stated plainly rather than left to be inferred:** supersession is the correct fix for
+*being wrong* (§3's license case — a compatibility judgment, checkable and re-checkable, no read
+boundary at stake). It is never the fix for *mislabeling a zoning/embargo boundary* — that mistake
+is realized the instant the write commits, and the only remedies are a carve (an exceptional,
+superuser-level operation on the row outside every ordinary kernel write path — and one that
+breaks the tamper-evident hash-chain invariant this kernel otherwise holds, so it is a last resort
+named here rather than a workflow step) or never-write (get the label right on the first write,
+which is the only remedy that costs nothing and the only one this page recommends). Treat every
+zoning label the way `s43`'s write boundary treats every act: checked before the write commits,
+never patched after.
+
+### The view-authorship trap — an adopter view over `ledger` bypasses RLS by default, witnessed
+
+RLS above governs the *table*. Postgres views do not inherit that confinement automatically: a
+view's `SELECT` runs with the *view owner's* privileges unless the view opts out
+(`security_invoker`, default `false`) — so a completely innocent-looking view, written by an
+exempt owner with no compartment/embargo awareness at all, silently reopens every boundary above.
+
+**The schema owner (`bork` in this scratch world, the same disclosed exempt bound named throughout
+this page — §2's actor override, §6's tradeoffs paragraph) writes an ordinary summary view, no
+special privilege requested, granted to the confined role:**
+```
+$ psql -d toy -c "create view fixacgw0060.decisions_summary as select id, kind, statement from
+  fixacgw0060.ledger where kind = 'decision'; grant select on fixacgw0060.decisions_summary to
+  consult_reviewer_role_fixacgw0060;"
+CREATE VIEW
+GRANT
+```
+
+**The confined reviewer reads the embargoed row straight through it — full bypass, the RLS policy
+never fires, because the view runs as its owner, not as the querying role:**
+```
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from
+  fixacgw0060.decisions_summary where id=8;"
+ id |                                                               statement
+----+----------------------------------------------------------------------------------------------------------------------------------------
+  8 | CONSULT-EMBARGO: candidate fix list and suspect ordering for the s60 audit -- ADR-0018 forbids handing a consult reviewer this content
+(1 row)
+```
+
+**`security_invoker = true` on the same view, same GRANT, nothing else changed, closes it — the
+confined role's read through the view now narrows exactly like the base table:**
+```
+$ psql -d toy -c "alter view fixacgw0060.decisions_summary set (security_invoker = true);"
+ALTER VIEW
+
+$ psql -U consult_reviewer_role_fixacgw0060 -d toy -c "select id, statement from
+  fixacgw0060.decisions_summary where id=8;"
+ id | statement
+----+-----------
+(0 rows)
+```
+
+(The unlabeled corpse, row 7, still leaks through this now-fixed view too — consistent with the
+embargo-first finding above: `security_invoker` makes the view respect the table's RLS policy, it
+does not retroactively fix a mislabeled row the policy itself never narrowed.)
+
+**Mandate, stated plainly, not left for an adopter to discover the hard way:** every
+adopter-authored view over a governed, RLS-carrying table (`ledger`, `ledger_current`, or any view
+built on either) in this recipe family MUST be created — or altered — with `security_invoker =
+true` (Postgres 15+; every worked example on this page ran on Postgres 18). Where the deployment
+target predates Postgres 15, or `security_invoker` is unavailable for some other reason, the
+zoning predicate itself must be repeated inside the view's own `WHERE` clause — a second place to
+keep in sync with the table policy, strictly worse than the one-line flag, but the only remaining
+structural option. A view that does neither is not a weaker version of this recipe; it is a
+silent, total bypass of it, indistinguishable at read time from a correctly-narrowed one until
+someone thinks to check `pg_views.security_invoker`.
+
 ### Honest limits (named, not glossed over)
 
 **The served GET surface is unauthenticated today.**
@@ -581,7 +759,7 @@ Per the maintainer's correction (row 1412): every point below is a generic-subst
 generically, never as "add a taint/license feature." Each was hit while trying to encode the four
 recipes above from primitives a zero-context adopter already has.
 
-1. **No structural, kernel-typed classification/label column on `ledger` rows.** Both the taint
+1. **The kernel has no structural, kernel-typed classification/label column on `ledger` rows.** Both the taint
    compartment convention (§2) and the license label convention (§3), and the ADR-0018 embargo
    convention (§4), had to be encoded as a `statement`-text prefix matched by `LIKE`, because no
    generic, free-text (s36-idiom) column exists for "what class of thing is this row" the way
@@ -592,7 +770,14 @@ recipes above from primitives a zero-context adopter already has.
    §4 would close this if
    built as a *generic* labeled column (graded-token idiom, no enum) rather than a
    taint-or-license-specific field — a single generic label surface would serve all three recipes
-   above identically.
+   above identically. **The consequence, stated rather than left implicit:** because the
+   convention is text parsed by `LIKE`/regex rather than a type the write boundary itself could
+   validate, a labeling mistake at write time is invisible until someone reads the row through the
+   wrong role's connection — and for the confidentiality-carrying labels (§2, §4) that mistake is
+   permanent the instant it commits, per §4's embargo-first discipline and its live-witnessed
+   negative example. A structural column would not just be tidier; it would let the write boundary
+   itself refuse a malformed or missing zone label before the row exists at all, closing the exact
+   window this fragility leaves open today.
 2. **`refs` is unstructured text, parsed by regex here.** It works (§3), but every adopter who
    wants a derivation graph re-implements the same `row:<id>` token convention and the same
    fragile regex. A generic, structured multi-value reference column (or a documented, canonical
@@ -605,7 +790,7 @@ recipes above from primitives a zero-context adopter already has.
    it is exactly the kind of "private knowledge a zero-context adopter would not have" the
    correction asks to surface — but it did not block the encoding (§2 above carries the fix), so it
    is not filed as a blocking gap, only flagged.
-4. **No served-boundary equivalent of RLS.** §4's honest-limits paragraph names this: the DB-level
+4. **There is no served-boundary equivalent of RLS.** §4's honest-limits paragraph names this: the DB-level
    confinement in this page has no counterpart on the served GET surface, which authenticates no
    caller at all today. Building the domain/zone conjunct without also arming the served surface
    would leave exactly the gap [`s51`](../kernel/lineage/s51-artifact-store.sql)'s airlock
@@ -626,24 +811,35 @@ the harness's actual claim to usefulness: a **generic** substrate carries all fo
 needing a feature per pattern, which is the point the maintainer's correction was making. Stated
 plainly, with the tradeoffs that go with each:
 
-- **Append-only, nothing edited, only superseded.** Every correction above (the revoked delegation,
-  the corrected license row) is a fresh row naming what it supersedes — there is no `UPDATE` path
-  for a governed table at all. A mistaken write cannot be quietly fixed in place; it can only be
-  outlived by a row that says so, which is also the audit trail.
-- **One typed write boundary.** `s43`'s five `SECURITY DEFINER` functions are the *only* way a
+- **Nothing is edited in place — every row is append-only, corrected only by supersession — and
+  this is an integrity virtue AND a confidentiality hazard, both true at once, stated plainly
+  rather than only the flattering half.** Every
+  correction above (the revoked delegation, the corrected license row) is a fresh row naming what
+  it supersedes — there is no `UPDATE` path for a governed table at all. For integrity this is
+  unambiguously good: a mistaken write cannot be quietly fixed in place, only outlived by a row
+  that says so, which is also the audit trail nothing can retroactively edit out from under a
+  reader. **The same property cuts the other way for confidentiality**: a row that should never
+  have been readable by some role also cannot be quietly fixed in place — supersession changes
+  which row is authoritative, never which rows a standing grant can already see (§4's embargo-first
+  discipline, with a live-witnessed negative example: a mislabeled row, once superseded by a
+  correctly-labeled one, still leaks the original to a confined reviewer forever). The discipline
+  this buys — an unforgeable history — is the same discipline that makes a labeling mistake
+  permanent. Both halves are the point; naming only the first would be a marketing claim, not an
+  honest one.
+- **Every write funnels through one typed boundary.** `s43`'s five `SECURITY DEFINER` functions are the *only* way a
   granted role's writes reach a governed table — the granted role holds no direct `INSERT`
   privilege at all. Every refusal in this page came from inside that one boundary, in the same
   shape (`disposition`, `message`, `sqlstate`, `refusal_id`), which is why a new conjunct (§1's
   chain check, §2's signature symmetry) is a few lines inside an existing trigger chain rather than
   a new enforcement surface to keep in sync with the old one.
-- **In-force truth computed at read, from one projection.** `ledger_current` is the *only* place
+- **In-force truth is computed at read, from one projection.** `ledger_current` is the *only* place
   "what is true right now" is computed, everywhere in this kernel — there is no cached
   "current role" table, no materialized "who is entitled" snapshot to go stale. The chain-to-genesis
   check in §1, the RLS policies in §2 and §4, and the license graph in §3 all read live off the same
   append-only history, which is why revocation in §1 took effect on the *very next* read with no
   separate invalidation step.
-- **Entitlement evaluated fresh, at act time, from the same rows the write itself is about to join.**
-  Nothing about who may act is decided ahead of time and cached — `principal_authority_chain_
+- **Entitlement is evaluated fresh, at act time, from the same rows the write itself is about to
+  join.** Nothing about who may act is decided ahead of time and cached — `principal_authority_chain_
   reaches_genesis` is a `STABLE` function re-walked on every call, which is exactly why suspending a
   delegate changed the *next* act's outcome without anyone touching the delegate's past rows.
 - **Connection identity attributes every row — never a name typed into a payload.** `s40`'s
@@ -652,7 +848,8 @@ plainly, with the tradeoffs that go with each:
   client-supplied field (the one exception exercised in this page — an explicit `actor` override —
   worked only because the connecting role was the schema owner, a disclosed bound named at the
   point it was used in §2, not a general escape hatch).
-- **The SQL/ASP twin and red-first banked fixtures.** Every kernel delta this page relies on ships
+- **Every kernel delta this page relies on ships its refusal logic as an SQL/ASP twin, proven
+  against a red-first banked fixture before its green is credited.** Every such delta ships
   its refusal logic in both SQL (what actually runs) and a parallel ASP encoding, differential-
   tested to agreement (`judge`), and every fixture is required to have been *seen red* — demonstrated
   failing on the exact defect shape it guards — before its green is credited. This is why the
@@ -660,18 +857,31 @@ plainly, with the tradeoffs that go with each:
   [`seen-red/s62-delegation-lifecycle-gating/red.txt`](../seen-red/s62-delegation-lifecycle-gating/red.txt)
   matches this session's own fresh run byte-for-byte: it is the same mechanism, not a coincidentally
   similar one.
-- **Gates as mechanical recurrence-stoppers, not prose reminders.**
+- **Gates stop a defect from recurring mechanically, rather than relying on a prose reminder.**
   [`gates/staging_guard.py`](../gates/staging_guard.py)'s
   `CLAUDE_COMMIT_PATHS` discipline (used to commit this very page, below) is the house pattern the
   license and taint gates in §2/§3 imitate: a small, readable, adopter-owned script that trips
   loudly on a real violation and passes cleanly on a real fix, checked in CI rather than remembered.
+
+**Naming this section's own title honestly: "structural" has a boundary, and it runs through view
+authorship.** RLS is structural for *direct* table access — no client-side filter to route around,
+enforced by Postgres itself on every connection, exactly as claimed above. It is NOT structural
+against a later `CREATE VIEW`: an adopter-authored view over a governed table runs with its
+*owner's* privileges by default and silently bypasses every policy this page teaches unless that
+view sets `security_invoker = true` (§2's and §4's mandate, with a live-witnessed bypass-then-fix
+in §4). Once RLS is in play, **view authorship joins the trusted computing base** the same way the
+schema-owner/superuser bound already does below — a single ordinary-looking `CREATE VIEW`, written
+by someone with no idea a compartment or embargo policy exists, undoes the whole recipe. This page
+does not get to claim "structural, full stop" without naming that one mandatory rule the claim now
+depends on.
 
 **The tradeoffs, stated rather than left implicit.** A database superuser or schema owner bypasses
 every trigger, every RLS policy, and every grant here — that bound is unchanged by anything in this
 page and is named at every point it was actually exercised (§2's actor override). The signature
 machinery in §1/§2 buys **falsifiability**, not cryptographic impossibility, against a
 directly-privileged writer who skips `gpg` entirely and forges a `commission_signature_verified`
-row by hand — the same disclosed grade as the HMAC stamp and the hash chain elsewhere in this
-kernel. And every label-based convention in §2–§4 is exactly as strong as the discipline applying
+row by hand — the same disclosed grade as the [session HMAC
+stamp](../kernel/lineage/s17-stamp-mechanism.sql) (a per-session tamper-evidence tag distinct from
+a writer's own claim of who they are) and the hash chain elsewhere in this kernel. And every label-based convention in §2–§4 is exactly as strong as the discipline applying
 it consistently — §5's gaps are the honest list of where a structural column would replace that
 discipline with a type, and are not yet built.
