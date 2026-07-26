@@ -1,1 +1,6 @@
-{"hook_event_name":"UserPromptSubmit","session_id":"fixture","cwd":"/tmp","prompt":"/row 5\n6"}
+{
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "fixture",
+  "cwd": "/tmp",
+  "prompt": "row 5\n6"
+}

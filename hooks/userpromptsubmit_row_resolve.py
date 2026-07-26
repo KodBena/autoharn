@@ -113,7 +113,16 @@ _REPO_ROOT = os.path.dirname(_HERE)  # hooks/ -> repo root
 
 # The exact matcher (design constraint 2, verbatim): anchored on the WHOLE prompt, one or more
 # whitespace-separated digit groups after "/row ". Nothing else is this hook's business.
-_ROW_PROMPT_RE = re.compile(r"^/row\s+\d+(\s+\d+)*\s*$")
+# TRIGGER CHANGED 2026-07-26, witnessed live by the maintainer in a real session: a
+# `/`-prefixed prompt NEVER REACHES UserPromptSubmit — Claude Code's own slash-command
+# parser intercepts it client-side first ("Unknown command: /row"), so the original
+# `/row ...` trigger was unreachable by construction. Every prior witness drove the hook
+# with synthetic stdin JSON and so never caught it: an integration gap at the one boundary
+# no fixture crossed (the real UI's input parsing). Bare `row <id> [...]`/`rows <id> [...]`
+# is an ordinary prompt, which this hook demonstrably receives. The anchored whole-prompt
+# match keeps ordinary prose safe: only a prompt that IS the command shape, alone on a
+# single line, matches.
+_ROW_PROMPT_RE = re.compile(r"^rows?\s+\d+(\s+\d+)*\s*$")
 
 # Belt-and-suspenders cap on how many ids one prompt can request (LATENCY HAZARD note above) —
 # a pathological `/row 1 2 ... 500` is still a syntactic match for the regex above.
@@ -230,7 +239,7 @@ def build_reason(row_ids: list[str]) -> str:
     if truncated:
         notes.append(f"(only the first {_MAX_IDS} of {len(row_ids)} requested rows were "
                       f"resolved -- one /row prompt is capped at {_MAX_IDS})")
-    header = f"/row resolved locally via `{_AUTOHARN_BIN} led show <id>` -- no model turn spent."
+    header = f"row-prompt resolved locally via `{_AUTOHARN_BIN} led show <id>` -- no model turn spent."
     parts = [header, ""] + blocks
     if notes:
         parts += [""] + notes
