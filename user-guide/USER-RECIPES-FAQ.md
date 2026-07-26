@@ -21,6 +21,7 @@ question-and-recipe entries.
 - [Getting started: the guided setup TUI (`python3 -m tools.setup_tui`)](#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)
 - [Declaring things on the ledger](#declaring-things-on-the-ledger)
 - [Granting and revoking a principal's authority (s40/s41)](#granting-and-revoking-a-principals-authority-s40s41)
+- [Entitlement enforcement and work gating (s60): who may act, and when a claim may start](#entitlement-enforcement-and-work-gating-s60-who-may-act-and-when-a-claim-may-start)
 - [Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)](#recording-verdicts-and-refusals-as-typed-queryable-ledger-entries-s42s43)
 - [Suspending, reviving, and revoking a principal's standing (s45)](#suspending-reviving-and-revoking-a-principals-standing-s45)
 - [Model identity: watchdog, attestation, defeat](#model-identity-watchdog-attestation-defeat)
@@ -732,6 +733,145 @@ invocation wrote this row"; the key slot answers a different, narrower question 
 fingerprint belong to"), and answers it only once someone actually signs something and a
 verifier checks that signature — which nothing in this project does yet for a role or a
 principal binding. Signature-*verified* acts are a future rung, not this one.
+
+## Entitlement enforcement and work gating (s60): who may act, and when a claim may start
+
+**Prominent caveat, matching the s40/s41 entry above:** these mechanisms exist only in a world
+whose birth chain carries `kernel/lineage/s60-entitlement-enforcement.sql` (and, for work gating
+proper, `s39-blocks-start.sql`, already carried by every current birth chain). At the time this
+recipe was written `s60` is authored and scratch-witnessed
+(`seen-red/s60-entitlement-enforcement/red.txt`) but not yet wired into
+`bootstrap/new-project.sh`'s `LINEAGE_CHAIN` — check with `./autoharn migrate <deployment-dir>
+--dry-run` (see the s40/s41 entry above for exactly how to read its output) before assuming a
+given world has it.
+
+### What entitlement enforcement adds
+
+Before s60, s41 could *record* that a principal held a role, or that one principal acted for
+another — but nothing *checked* either fact at write time. Any active principal could register a
+new principal, bind a role, suspend/revoke someone, or supersede a milestone's closure or a
+gate edge. s60 closes exactly that gap with a **factored acceptance predicate**, evaluated inside
+the same write boundary every other kernel refusal already goes through (s43) — no second
+refusal surface, no new CLI ceremony beyond the existing `led principal` verbs:
+
+- **Conjunct (a) — role binding.** For an act class this world's configuration names (a small,
+  deployment-policy map — see below), the actor must hold an in-force `principal_role_bound`
+  binding naming the configured role. An act class nobody has configured is not gated by this
+  conjunct at all (vacuously satisfied).
+- **Conjunct (b) — authority chain to genesis.** For the *authority-bearing* act set —
+  registering a principal, binding a role, the standing lifecycle (declare/suspend/revoke),
+  closing or superseding a **milestone's** closure (a work item something else's claim
+  `blocks-start`-depends on), and superseding a `blocks-start` gate edge — the actor's authority
+  must trace, through zero or more `acts-for` relations, back to the world's genesis principal
+  (the very first principal ever registered — normally `author`). This conjunct applies whether
+  or not conjunct (a) is even configured for that class; it is what actually forecloses "any
+  active principal may register a new principal."
+
+Both conjuncts are evaluated **fresh, every time** — nothing is cached, and nothing about a
+principal's *past* accepted acts changes when their standing later changes. If a delegate in the
+middle of a chain is suspended, every chain that ran *through* them stops working for *future*
+acts; nothing they already wrote is retroactively touched (the same "chain death is prospective,
+credited acts stay credited" asymmetry `s45`'s standing lifecycle already establishes one layer
+down).
+
+**The birth-sequence default.** A newly-scaffolded solo world discharges this for you: `author`
+(this world's genesis principal) is bound to role `authority`, and the five default act classes
+above are each configured to require that same role — so a solo operator's *own* acts are
+unaffected (author already holds the role, and trivially reaches genesis by being genesis).
+Nothing changes for an ordinary `./led decision "..."` or `./led work open ...` — entitlement
+gates only the six act classes named above, never anything else.
+
+### Worked example: a delegate with no chain gets refused, a suspended link severs it prospectively
+
+Witnessed live against a real scratch database (`seen-red/s60-entitlement-enforcement/red.txt`,
+full transcript; every verdict below is quoted verbatim from that run, not paraphrased). Three
+principals: `author` (genesis, role `authority`), `D1` (`acts-for author`, role `authority`),
+`D2` (`acts-for D1`, role `authority`) — so D2's authority derives transitively through D1.
+
+D2 performs an authority-bearing act (registering a fourth principal) while the chain is intact —
+**accepted**:
+```
+verdict={'row_id': 24, 'message': None, 'sqlstate': None, 'refusal_id': None,
+         'disposition': 'accepted'}
+```
+`author` then suspends D1 (an authority-bearing act itself, which `author` may do trivially —
+being genesis). D2's chain to genesis now runs through a suspended principal. D2 attempts a
+*second* registration — **refused**, conjunct (b), even though D2's own standing was never
+touched:
+```
+Ledger policy: entitlement refused (s60, factored acceptance predicate conjunct b) — act
+class 'principal_registered' is authority-bearing ...; actor 8's authority chain
+(transitive reachability over in-force acts-for relations, kernel/lineage/
+s41-principal-bindings-and-relations.sql) does not reach this world's genesis principal.
+Remedy: an in-force acts-for relation ... or have a severed link repaired (suspension/
+revocation severs a chain PROSPECTIVELY only; past accepted acts through that link stay
+credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).
+```
+D2's *first* act (row 24) is unaffected — still present in `ledger_current` after the chain
+severed (the credited-views witness of the I5 asymmetry, not merely asserted):
+```
+=== RED-3-I5-past-act-credited ===
+  [ok] D2's FIRST act (row 24), written before D1's suspension, is still present in
+       ledger_current after the chain severed -- count=1
+```
+The remedy in every refusal's own text: `./led principal relate <name> acts-for <delegator>` to
+extend or repair a chain, `./led principal bind-role <name> "<role>"` to satisfy conjunct (a).
+
+### Work gating: milestone dependencies as an authority-checked switch (s39, over s60)
+
+Zero new kernel surface here — the mechanism is `s39`'s `blocks-start` edge type, already built;
+what s60 adds is that **flipping the switch is now an authority-checked act** (closing or
+re-editing the gated milestone), closing the loophole where anyone could quietly unbolt a gate.
+The construction, worked end to end (verbs and refusal text from `s39-blocks-start.sql` and
+`led.tmpl`'s own source — read-from-DDL where not independently re-witnessed in this pass):
+
+```sh
+./led work open v2-release   --title "v2.0.0 ships"        # the milestone
+./led work open spa-polish   --title "SPA polish pass"
+./led work depends spa-polish v2-release --type blocks-start   # judgment, spent once
+
+./led work claim spa-polish
+  → REFUSED (write_refused row journaled, s43):
+    "Ledger policy: claim of work item 'spa-polish' refused — its blocks-start
+     antecedent(s) are not yet resolved: v2-release (item is not yet closed).
+     Claim and finish each named antecedent first (./led work claim <antecedent>,
+     then ./led work close <antecedent> <resolution> ...), or -- if the dependency
+     itself is wrong -- correct the record (see this section's own supersession
+     recipe, 'Correcting the record' above) ..."
+
+# ... months later, v2 ships. The flip, at whichever grade the act warrants:
+./led work claim v2-release
+./led work close v2-release shipped --witness "tag v2.0.0"
+#   under s60: v2-release carries an INBOUND blocks-start edge (spa-polish depends on
+#   it), so its close is entitlement-gated -- accepted only from an actor whose
+#   in-force role binding covers milestone closure (conjunct a) and whose authority
+#   chain reaches genesis (conjunct b); optionally commissioned SIGNED for
+#   non-repudiation (a future rung, not yet built -- see the note below).
+
+./led work startable         # spa-polish now listed (work_startable, s39 Element 5)
+./led work claim spa-polish  # accepted; work proceeds
+```
+
+**What counts as a "milestone" for entitlement purposes.** Only a work item that itself carries
+at least one in-force *inbound* `blocks-start` edge (something else depends on its closure) is
+entitlement-gated on close — an ordinary work item's close is never gated (a deliberate, narrower
+reading, marked provisional in `s60`'s own header: attention point 2). Wrong-gate repair stays
+first-class: superseding the mistaken `work_depends_on` row (and re-issuing a corrected one) is
+itself entitlement-gated as "gate-edge supersession" — the same authority check that protects the
+milestone's own close also protects the edge that makes it a milestone at all.
+
+**Composition with discharge probes (postponed, named for completeness).** A probe (registry
+code, read-only, best-effort) may *recommend* the flip; the milestone act *is* the flip; the s39
+edge *enforces* it. Probes never gate directly — a gate that probed would hang a fail-safe
+refusal on a best-effort observation, and a probe that gated would violate its own best-effort
+posture. This composition is unchanged by s60; only who may perform the flip is new.
+
+**What this recipe does not cover.** Reconfiguring the default act-class map (which role each of
+the five classes requires), and the human-grade SIGNED-commission symmetry for supersession of a
+signed act, are both named follow-ons (`design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md` §2, a
+*separate* delta from `s60` — not built by this pass). Reconfiguration today is a direct
+`entitlement_class_configured` write through the boundary (`kernel/lineage/
+s60-entitlement-enforcement.sql` Element 1/4) — no dedicated `led` verb exists for it yet.
 
 ## Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)
 

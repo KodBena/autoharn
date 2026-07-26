@@ -195,7 +195,9 @@ BASELINE: dict[str, int] = {
     # Reconciled +221 to 1373 (row 1263): two new kind-shape idioms (MANDATORY-ON-KIND,
     # KIND-OR-VALUE-PERMITTED). +17 to 1390 (AMENDMENT 1): drops the conflicted (regards,
     # missive_disposed) row, adds missive_regards' own row -- genuinely new, not padding.
-    "gates/kind_shape_manifest_gate.py":              1390,
+    # bumped 1390 -> 1404 (s60-entitlement-enforcement.sql: one new MANIFEST row
+    # (entitlement_act_class) + one widened row (principal_role_name) + CHAIN += s60).
+    "gates/kind_shape_manifest_gate.py":              1404,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -248,7 +250,9 @@ BASELINE: dict[str, int] = {
     # to verdict IN ('attest','attest_with_reservations') -- the EDB-side twin of the same
     # discharge-semantics widening, feeding the ASP program that ./judge's differential compares
     # against the (also-widened) SQL floor. Written plain, no golfing.
-    "engine/ledger_edb.py":                             734,
+    # bumped 734 -> 802 (export_entitlement(): the entitlement-layer EDB exporter for the
+    # s60 ASP twin, engine/lp/ledger_entitlement.lp -- same shape as export_defeat()).
+    "engine/ledger_edb.py":                             802,
     # Reconciled +61 to 733 (2026-07-26, row 1307/1308 follow-up): resolve_repo_root() +
     # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
     # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
@@ -290,7 +294,10 @@ BASELINE: dict[str, int] = {
     # validate_supersession_target's widened reason text -- genuinely new, not padding.
     # Reconciled +6 to 565 (AMENDMENT 1), +14 to 579 (AMENDMENT 2): one more ALLOWLIST entry each
     # (validate_missive_regards; missive_outbound).
-    "gates/ledger_reader_allowlist.py":                 579,
+    # bumped 579 -> 610 (s60-entitlement-enforcement.sql: CHAIN += s60, three new declared
+    # raw-ledger reader entries: validate_entitlement, entitlement_genesis_principal,
+    # entitlement_act_class_of).
+    "gates/ledger_reader_allowlist.py":                 610,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -386,7 +393,8 @@ BASELINE: dict[str, int] = {
     # census independently (main: worldname/manifest/config-seam/trio registry rows; branch:
     # the marker check + its own registry row); the union is 418. Third witnessed merge-union
     # ratchet crossing today -- the commit-phase contention class, again.
-    "gates/fixture_census.py":                          418,
+    # bumped 418 -> 419 (one new REGISTRY row: s60-entitlement-enforcement).
+    "gates/fixture_census.py":                          419,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -429,7 +437,9 @@ BASELINE: dict[str, int] = {
     # self-measuring cost this table's own history already names as a recurring, honest cost of
     # ratcheting the gate that ratchets itself, including this entry's own line count of itself.
     # Genuinely new reconciliation content, not padding.
-    "gates/max_lines.py":                                518,
+    # bumped 518 -> 528 (s60-entitlement-enforcement.sql: four ratchet bumps in this same
+    # file, each row's own comment naming its reason).
+    "gates/max_lines.py":                                528,
 }
 
 

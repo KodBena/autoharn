@@ -84,7 +84,19 @@ CHAIN = [
     "s57-obligation-revocation-event.sql",
     "s58-missive-substrate.sql",
     "s59-missive-views.sql",
+    "s60-entitlement-enforcement.sql",
 ]
+# s60 (kernel/lineage/s60-entitlement-enforcement.sql, design/FABLE-ENTITLEMENT-ENFORCEMENT-
+# SPEC.md §1) extends this SAME gate's scratch CHAIN and ships THREE declared raw-`ledger`
+# readers, each with a load-bearing reason named in the kernel file's own Element 5/7 headers:
+# entitlement_genesis_principal (genesis identity must be an immutable historical fact, not a
+# current-truth read s45's own disclosed principal_registered-supersession gap could
+# destabilize), entitlement_act_class_of (a row-addressed read of a supersession TARGET's
+# edge_type, mirroring validate_supersession_target's own established row-addressed-read
+# pattern one column over), and validate_entitlement (the BEFORE INSERT trigger itself -- same
+# "cannot read a view excluding the inserting row" reason as every other write-boundary
+# trigger already on this allowlist). entitlement_class_roles is NOT listed -- it factors
+# through ledger_current exclusively, classifies clean with no allowlist entry.
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row
 # 1263, AS AMENDED by AMENDMENT 1 2026-07-25) extends this SAME gate's scratch CHAIN. It ships
 # FOUR new raw-`ledger` readers by design (validate_missive_dedup, validate_missive_courier_scope,
@@ -298,6 +310,25 @@ ALLOWLIST: dict[str, str] = {
     "validate_answers": "write-boundary BEFORE INSERT trigger — same reason.",
     "validate_work_item": "write-boundary BEFORE INSERT trigger; its identity checks (slug ever opened, "
                           "would-cycle against history) are deliberately history-typed (slug burned, spec §3).",
+    "validate_entitlement": "write-boundary BEFORE INSERT trigger (kernel/lineage/"
+                            "s60-entitlement-enforcement.sql) — same 'cannot read a view "
+                            "excluding the inserting row' reason as every other write-boundary "
+                            "trigger on this allowlist.",
+    "entitlement_genesis_principal": "declared history reader (s60): genesis identity must be an "
+                                     "immutable historical fact (the FIRST-EVER "
+                                     "principal_registered row's subject, by insertion order), "
+                                     "never a current-truth read — s45's own LIMITS name "
+                                     "principal_registered targets as OUTSIDE its supersession "
+                                     "discipline, so reading ledger_current here could let a "
+                                     "later, unprotected supersession of the genesis principal's "
+                                     "own registration event silently shift WHO genesis is.",
+    "entitlement_act_class_of": "declared history reader (s60): a row-addressed read of a "
+                                "work_depends_on supersession TARGET's edge_type — the same "
+                                "row-addressed-read pattern validate_supersession_target already "
+                                "uses one column over (s43/s45), needed to detect gate-edge "
+                                "supersession (the target must be inspected regardless of its "
+                                "own current-truth status, matching the trigger-time semantics "
+                                "of every other row-addressed supersession-target read).",
     # -- s35 (kernel/lineage/s35-validation-decomposition.sql): validate_work_item() decomposed
     #    into a thin dispatcher (already listed above, unchanged reason) + four LEAF functions,
     #    called from inside the SAME BEFORE INSERT trigger's call graph -- each leaf inherits the
