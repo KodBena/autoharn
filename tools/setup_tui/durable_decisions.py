@@ -95,7 +95,7 @@ class DurableDecision:
 # Initial catalog -- 7 to 15 entries, DISTILLED from the prior art of BOTH projects (amendment
 # per commission ledger row 1716, superseding this spec's original three-plus-proposals shape;
 # see design/FABLE-SETUP-TUI-FEATURE-FACTS-SPEC.md §3). Mined read-only from two evidence
-# sources: this repo's own ledger (`./led show <id>`) and the autoharn-panel LIVE deployment at
+# sources: this repo's own ledger (`./autoharn led show <id>`) and the autoharn-panel LIVE deployment at
 # /home/bork/w/vdc/1/experience/autoharn-panel (its CLAUDE.md file, and its live Postgres ledger
 # schema `experience`/`experience_kernel` on host 192.168.122.1 db toy, read via plain SELECT --
 # never a write, per the never-touch-a-user-project rule). Every entry (tools/setup_tui/

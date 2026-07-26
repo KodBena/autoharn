@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""migrate_core -- the engine behind `bootstrap/migrate.sh` / the root `./migrate` shim
+"""migrate_core -- the engine behind `bootstrap/migrate.sh` / `./autoharn migrate` (formerly the
+bare root `./migrate` shim, deleted by root-shim-pruning, ledger row 1357 -- same file, same
+semantics, invocation spelling only)
 (tracker item migration-script-stable-interface, 2026-07-14 late commission directive 2:
 "~/ent WILL be migrated, BY THE MAINTAINER HIMSELF, using an idiot-proof FORWARD-COMPATIBLE
 script; ... users should NEVER under any circumstances have to learn anything new about how the
 migration script works, across all future feature migrations").
 
 STABLE USER SURFACE, forever (this is the deliverable -- everything below exists to keep this
-surface unchanged as kernel/lineage/ grows):
+surface unchanged as kernel/lineage/ grows; only the invocation spelling moved, umbrella-CLI
+build, ledger rows 1151-1183):
 
-    ./migrate <deployment-dir>              -- rehearse, ask ONE typed confirmation, apply
-    ./migrate <deployment-dir> --dry-run     -- rehearse and print the evidence; never asks,
-                                                 never touches live
+    ./autoharn migrate <deployment-dir>              -- rehearse, ask ONE typed confirmation, apply
+    ./autoharn migrate <deployment-dir> --dry-run     -- rehearse and print the evidence; never asks,
+                                                          never touches live
 
 No other flag, mode, or argument shape is ever added to this surface -- a future kernel delta
 (s30, s31, ...) changes what gets migrated, never how the operator invokes migration. See "THE

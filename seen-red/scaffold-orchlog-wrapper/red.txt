@@ -39,3 +39,30 @@ Traceback (most recent call last):
     self.pid = os.posix_spawn(executable, args, env, **kwargs)
                ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 FileNotFoundError: [Errno 2] No such file or directory: '/tmp/scaffold-orchlog-wrapper-1njqigzf/deployment/orchlog'
+
+--------------------------------------------------------------------------------------------
+
+Dated note, 2026-07-26 (work item root-shim-pruning, ledger row 1357): this fixture's own
+docstring (line 6-7) says half (a) of the commission -- "./migrate printing the span" -- "belongs
+to ./migrate and is untouched by this fixture and by this build." That premise held when this
+fixture was written; it no longer does. The ten root deprecation shims (`asof-export`,
+`attest-tags`, `audit`, `distance-to-clean`, `doctor`, `judge`, `led`, `migrate`, `pickup`,
+`verify-chain`) were deleted from the repo root as a precondition of the 2.0.0 tag -- migrate
+included. run_fixtures.py's "half-a-untouched" case read `REPO / "migrate"` before and after the
+scaffold run and asserted byte-identity as a mechanical scope-discipline check; with ./migrate
+gone, both reads unconditionally return None, so the equality would report [ok] without checking
+anything -- a vacuous pass, not a proof. This is the same shape of hazard as
+seen-red/fixture-sandbox-runtime-foreclosure/red.txt's case 2d, but here the check doesn't need
+retiring outright (its cases 1-3, the wrapper-written/execs/force-rescaffold proof, are entirely
+unaffected and still real): only the half-a-untouched branch needed to stop silently claiming a
+proof it can no longer make. run_fixtures.py now detects `migrate_before is None and
+migrate_after is None` and prints an explicit "[ok, VACUOUS]" line naming the reason, instead of
+routing through the ordinary check() that would print an indistinguishable "[ok]". Non-failing
+either way (this fixture did not cause and has no way to repoint around the ./migrate deletion --
+that deletion is a different, ratified build's scope), but no longer misleading about what it
+proved. Re-run after the fix:
+
+$ python3 seen-red/scaffold-orchlog-wrapper/run_fixtures.py
+(cases scaffold-ran-clean / wrapper-written / wrapper-execs-and-matches / wrapper-force-rescaffold
+all still green as before; half-a-untouched now prints [ok, VACUOUS] with the reason instead of a
+plain [ok]; exit 0.)
