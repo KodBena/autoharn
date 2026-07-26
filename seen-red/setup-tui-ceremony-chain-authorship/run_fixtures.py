@@ -19,13 +19,19 @@ chain-reach genesis. TWO merged/pending kernel deltas gate on exactly that:
     defect class, CLAUDE.md's hazard-in-reach corollary -- fixed in the same pass, not routed
     around).
   - kernel/lineage/s62-delegation-lifecycle-gating.sql (NOT YET on main -- branch
-    worktree-agent-a9b3bd5031b11cd5a, commit 4b425b3, the FIXED s62 after a same-branch fix round
-    (closing a critical supersession-classification bypass a fresh-context review found in the
-    first cut, f099ed0 -- this fixture pins past that fix, never to the known-bypassed commit);
-    this fixture cherry-picks its SQL text into this worktree's own kernel/lineage/ via
-    `git show 4b425b3:...`, working-tree only, NEVER committed -- the build's own commit carries
-    only the TUI fix + this fixture family; pinned by the literal SHA, never the branch ref, per
-    this family's own convention (see S62_SRC_COMMIT below)): the
+    worktree-agent-a9b3bd5031b11cd5a, commit 680e6e2, the s62 branch's round-3-reviewed HEAD
+    (round 1 closed a critical supersession-classification bypass a fresh-context review found in
+    the first cut, f099ed0; round 2 (row 1403) generalized that fix from one candidate kind to a
+    general target-class supersession gate, via a new entitlement_act_class_of_target function and
+    an entitlement_enforce_class helper applied to BOTH the candidate's own class and (when
+    superseding) the target's class; round 3 is a fresh-context review that CLEARS -- historical
+    pins 4b425b3 (round 1) and any round-2-only SHA are kept only as commit-message/docstring
+    history below, never re-pinned to -- this fixture pins past all three rounds, never to a
+    known-bypassed or since-superseded commit); this fixture cherry-picks its SQL text into this
+    worktree's own kernel/lineage/ via `git show 680e6e2:...`, working-tree only, NEVER committed
+    -- the build's own commit carries only the TUI fix + this fixture family; pinned by the
+    literal SHA, never the branch ref, per this family's own convention (see S62_SRC_COMMIT
+    below)): the
     founding "orchestrator acts-for maintainer" edge (`relate_act`) is `principal_relation_
     asserted`/'acts-for', s62's own SEVENTH authority-bearing act class (delegation_lifecycle).
 
@@ -155,12 +161,13 @@ CHAIN_S59 = [
 CHAIN_S60 = CHAIN_S59 + ["s60-entitlement-enforcement.sql"]
 CHAIN_S62 = CHAIN_S60 + ["s62-delegation-lifecycle-gating.sql"]
 
-S62_SRC_COMMIT = "4b425b3"  # the FIXED s62 (branch worktree-agent-a9b3bd5031b11cd5a's own HEAD
-# after its fix round closed a critical supersession-classification bypass in f099ed0, the first
-# cut) -- not yet on main, but becomes main-reachable at the coupled merge, so this literal SHA
-# pin survives branch deletion; pinned by SHA, never HEAD/a branch ref, per this family's own
-# convention (see module docstring). Cherry-picked into kernel/lineage/ (working tree only) at
-# fixture setup time below.
+S62_SRC_COMMIT = "680e6e2"  # branch worktree-agent-a9b3bd5031b11cd5a's own HEAD after round 3's
+# fresh-context review CLEARS (round 1, commit 4b425b3, closed a critical supersession-
+# classification bypass in f099ed0, the first cut; round 2, row 1403, generalized that fix from
+# one candidate kind to a general target-class supersession gate) -- not yet on main, but becomes
+# main-reachable at the coupled merge, so this literal SHA pin survives branch deletion; pinned by
+# SHA, never HEAD/a branch ref, per this family's own convention (see module docstring).
+# Cherry-picked into kernel/lineage/ (working tree only) at fixture setup time below.
 
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess:
