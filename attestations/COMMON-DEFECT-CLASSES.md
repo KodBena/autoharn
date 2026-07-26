@@ -5,10 +5,22 @@ hand would be overwritten by the next regeneration. Removal condition: promoted 
 ratified recipe or superseded by a typed-findings mechanism. -->
 
 <!-- CONSUMER (named, per the named-consumer test): the A-side PRE-REVIEW of the ADR-0017
-A:B:C loop. Contract, maintainer-directed 2026-07-26: before dispatching any fresh-context
-B round, the dispatching A runs (or delegates to a cheap model) one explicit pass over the
-ranked classes below -- they are the easiest to find, so B's fresh-context tokens go to the
-residual. B itself stays fresh and is NEVER shown this file (it would anchor the sweep). -->
+A:B:C loop. Contract, maintainer-directed 2026-07-26 (amended same day: fix, don't just
+find): before dispatching any fresh-context B round, the dispatching A runs (or delegates
+to a cheap model) one explicit pass over the ranked classes below AND APPLIES THE FIXES --
+a find-only pass would be waste; these classes are the easiest to find and the cheapest to
+repair. Everything after the pre-review is the unchanged A:B:C story. B itself stays fresh
+and is NEVER shown this file (it would anchor the sweep).
+
+TRACKING (the maintainer's efficiency-comparison consumer, named at the same ruling): each
+pre-review appends one JSON line to attestations/pre-review-log.jsonl (created on first
+use; same append-only convention as the attestation ledger beside it):
+  {"doc": <path>, "content_sha256_before": ..., "content_sha256_after": ...,
+   "model": <who swept>, "fixed": {"<class-name>": <count>, ...}, "ts": <ISO-8601>}
+Efficiency then reads as a join, no new machinery: B's subsequent round-1 findings-per-
+class on pre-reviewed docs (already recorded in doc-legibility-attestations.jsonl, keyed
+by doc+hash) versus the corpus baseline percentages in this file -- if the pre-review
+earns its keep, the top classes' share collapses in post-pre-review B rounds. -->
 
 # Common ADR-0017 defect classes (mined from the attestation corpus)
 
