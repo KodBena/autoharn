@@ -16,6 +16,18 @@ conflicted, the operator resolves and re-`git add`s it) must still PASS — the 
 inside the merge diff by construction (a conflict can only happen on a path touched by both
 sides).
 
+RED 3 / GREEN 3 (merge-deletion blind spot, ledger row 1375, staging-guard-merge-deletion-
+blindspot): `_merge_diff_paths` computed the touched-side's expected blob via `_blob_hash`, which
+returns None when the path does not exist at that rev -- exactly what happens when the touched
+side DELETED the path. The old check (`expected is not None and staged == expected`) then always
+skipped a one-sided deletion, so a completely honest merge-inherited deletion never made it into
+`permitted` and was flagged SMUGGLED, forcing the operator to declare it via CLAUDE_COMMIT_PATHS
+just to land an ordinary merge (witnessed live 2026-07-26 at the pruning merge, ten deleted files).
+GREEN 3 reproduces the honest shape (one side deletes a file the other side never touched) and
+must PASS with no manifest declared. RED 3 is the negative control: a deletion smuggled onto a
+path NEITHER side of the merge touched at all must still REFUSE -- the fix must not go blind to
+deletions generally, only recognize the ones git's own merge machinery actually produced.
+
 RED 2 (content-swap smuggle, found while adversarially re-probing this very fix): path-set
 confinement alone has a residual hole — a path already touched on ONE side since divergence (say,
 the mainline committed an unrelated edit to config.yml before this merge started) is a legitimate
@@ -221,11 +233,80 @@ def green_one_sided_path_unmodified() -> None:
         _check("unmodified one-sided-touched path PASSES", rc == 0)
 
 
+def green_one_sided_deletion_inherited_from_merge() -> None:
+    print("# GREEN 3 — a one-sided deletion inherited from the merge (row 1375): MUST PASS, no manifest")
+    _reset_env()
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td)
+        _init_repo(repo)
+        (repo / "keep.txt").write_text("base\n")
+        (repo / "gone.txt").write_text("base\n")
+        _run("git", "add", "keep.txt", "gone.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "base", cwd=repo)
+        main_branch = _current_branch(repo)
+        _run("git", "checkout", "-q", "-b", "feature", cwd=repo)
+        _run("git", "rm", "-q", "gone.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "feature deletes gone.txt", cwd=repo)
+        _run("git", "checkout", "-q", main_branch, cwd=repo)
+        (repo / "keep.txt").write_text("base\nmainline edit (unrelated to the merge)\n")
+        _run("git", "add", "keep.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "mainline touches keep.txt (unrelated to the merge)", cwd=repo)
+        merge = subprocess.run(["git", "merge", "-q", "--no-ff", "--no-commit", "feature"],
+                               cwd=repo, capture_output=True, text=True)
+        _check("merge inherited the one-sided deletion, no conflict",
+               (repo / ".git" / "MERGE_HEAD").exists() and merge.returncode == 0
+               and not (repo / "gone.txt").exists())
+        cwd = os.getcwd()
+        try:
+            os.chdir(repo)
+            rc, text = _run_capturing_stderr()
+        finally:
+            os.chdir(cwd)
+        _check("merge-inherited deletion PASSES with no manifest (not flagged SMUGGLED)", rc == 0)
+        _check("guard did not misname gone.txt as smuggled", "gone.txt" not in text)
+
+
+def red_deletion_smuggled_onto_an_untouched_path() -> None:
+    print("# RED 3 — a deletion smuggled onto a path NEITHER side of the merge touched: MUST REFUSE")
+    _reset_env()
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td)
+        _init_repo(repo)
+        (repo / "untouched.txt").write_text("base\n")
+        _run("git", "add", "untouched.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "base", cwd=repo)
+        main_branch = _current_branch(repo)
+        _run("git", "checkout", "-q", "-b", "feature", cwd=repo)
+        (repo / "feature.txt").write_text("feature\n")
+        _run("git", "add", "feature.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "feature adds feature.txt", cwd=repo)
+        _run("git", "checkout", "-q", main_branch, cwd=repo)
+        (repo / "mainline.txt").write_text("mainline\n")
+        _run("git", "add", "mainline.txt", cwd=repo)
+        _run("git", "commit", "-q", "-m", "mainline adds mainline.txt", cwd=repo)
+        merge = subprocess.run(["git", "merge", "-q", "--no-ff", "--no-commit", "feature"],
+                               cwd=repo, capture_output=True, text=True)
+        _check("merge left MERGE_HEAD staged, no conflict",
+               (repo / ".git" / "MERGE_HEAD").exists() and merge.returncode == 0)
+        # THE SMUGGLE: delete a path neither side of the merge ever touched.
+        _run("git", "rm", "-q", "untouched.txt", cwd=repo)
+        cwd = os.getcwd()
+        try:
+            os.chdir(repo)
+            rc, text = _run_capturing_stderr()
+        finally:
+            os.chdir(cwd)
+        _check("guard REFUSES the smuggled deletion (nonzero exit)", rc != 0)
+        _check("teach-text names the smuggled path", "untouched.txt" in text)
+
+
 def main() -> int:
     red_smuggled_file_rides_the_merge()
     green_genuine_conflict_resolution()
     red_content_swap_on_one_sided_path()
     green_one_sided_path_unmodified()
+    green_one_sided_deletion_inherited_from_merge()
+    red_deletion_smuggled_onto_an_untouched_path()
     _reset_env()
     if FAILURES:
         print(f"\nSPECIMEN INERT — {len(FAILURES)} check(s) failed: {FAILURES}")
@@ -233,7 +314,9 @@ def main() -> int:
     print("\n# merge-diff-confinement: RED reproduces the verifier's smuggle and is refused; "
           "GREEN's genuine conflict-resolution merge still passes; RED 2 reproduces the "
           "content-swap-on-a-one-sided-path residual found while adversarially re-probing this "
-          "fix, also refused; GREEN 2's unmodified one-sided path still passes.")
+          "fix, also refused; GREEN 2's unmodified one-sided path still passes; GREEN 3 (row 1375) "
+          "a merge-inherited one-sided deletion passes with no manifest; RED 3 confirms a deletion "
+          "smuggled onto a path neither side touched is still refused.")
     return 0
 
 
