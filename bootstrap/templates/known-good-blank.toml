@@ -22,6 +22,18 @@ config_format = 1
 produced_by = "setup_tui config-file archaeology (design/FABLE-SETUP-TUI-CONFIG-FILE-SPEC.md §5)"
 source = "/home/bork/w/vdc/1/test/blank (world 'omega', born 2026-07-19T22:43:44Z) -- read-only archaeology, 2026-07-22"
 
+[features]
+# deploy-feature-manifest (ledger row 1274/1322) POSTDATES this world's birth (2026-07-19) --
+# there is no archaeological fact to cite for any key in this section. Values below are the
+# manifest's own DEFAULTS (steps_features.py), i.e. exactly what a --new-world scaffold did
+# UNCONDITIONALLY before this feature existed: portable ADRs on, skills vendored, no panel, no
+# makespan declaration -- the honest "this decision did not exist yet, here is what happened
+# anyway" reading, not a reconstructed operator choice.
+portable_adrs = true
+vendored_skills = true
+panel_extension = false
+makespan_tier = "off"
+
 [substrate]
 run = true    # setup-checklist row: "substrate  existing-db toy@192.168.122.1 reachable  WITNESSED"
 path = "existing"    # same row -- the existing-db path, not dedicated

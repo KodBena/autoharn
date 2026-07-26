@@ -40,7 +40,7 @@ from pathlib import Path
 
 from tools.configtree import FieldName, NodeId, ScopedFieldKey
 from tools.setup_tui import config_file, content, destination, durable_decisions, governed_files, probes
-from tools.setup_tui import runner
+from tools.setup_tui import runner, steps_features
 from tools.setup_tui.plan import CommandAct
 
 # --------------------------------------------------------------------------------------------
@@ -62,6 +62,7 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
 
     out: dict[str, dict] = {
         "preflight": {"run": True},
+        "features": steps_features.config_seam_answers(g),  # unconditional section, no gate
         "substrate": {
             "run": bool(g("substrate.run", False)),
             "path": str(g("substrate.path", "existing")),
@@ -182,6 +183,7 @@ def build_initial_state_overrides(doc: config_file.ConfigDoc) -> dict[str, objec
 # --------------------------------------------------------------------------------------------
 
 _SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
+    "features.portable_adrs": ("features", "portable_adrs"), "features.vendored_skills": ("features", "vendored_skills"), "features.panel_extension": ("features", "panel_extension"), "features.makespan_tier": ("features", "makespan_tier"),
     "substrate.run": ("substrate", "run"),
     "substrate.path": ("substrate", "path"),
     "substrate.host": ("substrate", "host"),
@@ -205,12 +207,12 @@ _SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
     "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
 }
 
-# principals_authority's own repeatable rows -- each seeds the master-detail section's OWN
-# scoped list-field slot directly (dotted config key -> that section's own field name).
-_PRINCIPALS_REPEATABLE_KEYS: dict[str, str] = {
-    "principals_authority.register": "register",
-    "principals_authority.competences": "competences",
-    "principals_authority.relations": "relations",
+# Repeatable-row keys: dotted key -> (owning section, field name) -- master-detail rows + plain lists.
+_REPEATABLE_KEYS: dict[str, tuple[str, str]] = {
+    "principals_authority.register": ("principals-authority", "register"),
+    "principals_authority.competences": ("principals-authority", "competences"),
+    "principals_authority.relations": ("principals-authority", "relations"),
+    "features.principal_set": ("features", "principal_set"),
 }
 
 _PRINCIPALS_ENGAGED_KEYS = (
@@ -248,11 +250,11 @@ def build_live_field_overrides(
         live[ScopedFieldKey(section=NodeId("substrate"), field=FieldName(target))] = db_val
         seeded.append(f"substrate.db -> substrate.{target}")
 
-    for dotted, field_name in _PRINCIPALS_REPEATABLE_KEYS.items():
+    for dotted, (section, field_name) in _REPEATABLE_KEYS.items():
         rows = config_file.get(doc, dotted)
         if rows is None:
             continue
-        live[ScopedFieldKey(section=NodeId("principals-authority"), field=FieldName(field_name))] = list(rows)
+        live[ScopedFieldKey(section=NodeId(section), field=FieldName(field_name))] = list(rows)
         seeded.append(dotted)
 
     unseedable: list[str] = []
@@ -326,6 +328,8 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
     entries = plan.entries if plan else []
     daemons = plan.daemons if plan else []
     out: dict[str, object] = {}
+
+    out.update(steps_features.config_seam_capture(state.get("features_manifest")))
 
     sub_run = "substrate_path" in state
     out["substrate.run"] = sub_run

@@ -3,6 +3,29 @@
 
 header_keys = ["config_format", "produced_by", "source"]
 
+# deploy-feature-manifest (ledger row 1274/1322): the wizard's own --from-config/--initial-config
+# mirror of the SEPARATE features.json manifest new-project.sh itself reads (tools/setup_tui/
+# steps_features.py's own module docstring explains why the two files are not the same file).
+[[key]]
+path = "features.portable_adrs"
+type = "bool"
+
+[[key]]
+path = "features.vendored_skills"
+type = "bool"
+
+[[key]]
+path = "features.panel_extension"
+type = "bool"
+
+[[key]]
+path = "features.makespan_tier"
+type = "str"
+
+[[key]]
+path = "features.principal_set"
+type = "list_table"
+
 [[key]]
 path = "substrate.run"
 type = "bool"
@@ -117,6 +140,10 @@ type = "list_str"
 [[key]]
 path = "hydration.adopt_adrs"
 type = "list_str"
+
+[[section_gate]]
+section = "features"
+gate = ""
 
 [[section_gate]]
 section = "substrate"

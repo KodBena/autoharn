@@ -105,7 +105,14 @@ def load_config_file(path: str | Path) -> ConfigDoc:
 # "boundary.start_now", moves IN here instead, from contextual (checked only when the now-
 # retired gate was on) to unconditionally required, since the section itself is now
 # unconditional too -- "fork_target" has no scalar of its own to add the same way.
+# deploy-feature-manifest (ledger row 1274/1322): "features" is unconditional too (mirrors
+# "boundary"/"fork_target" -- no "*.run" gate of its own), so its four SCALAR decisions move IN
+# here exactly as boundary.start_now's own comment above describes for that section.
+# "features.principal_set" is deliberately NOT required (optional even when the section is
+# unconditionally walked, same posture as "principals_authority.register"/etc. below).
 REQUIRED_GATES = (
+    "features.portable_adrs", "features.vendored_skills", "features.panel_extension",
+    "features.makespan_tier",
     "substrate.run", "rehearsal.run", "birth.run", "principals_authority.run",
     "signed_genesis.run", "boundary.start_now", "observability.run", "hydration.run",
 )
