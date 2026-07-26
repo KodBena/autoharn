@@ -100,20 +100,20 @@ wrote led (shim -> .../bootstrap/templates/led.tmpl)
 **`led` now works out of the box in this profile — no flagged gap.** The boundary is configured
 (a free port, `boundary-multiplex.toml`) but **no daemon is started at scaffold time**:
 `serving/ensure_running.py`'s `ensure_running_or_leave_unreachable` (wired into every served shim
-already) spawns it as a detached child, automatically, on this deployment's first `./led`/
-`./pickup`/etc call — the mechanism that dissolved the old `legacy/led` gap `bootstrap/
+already) spawns it as a detached child, automatically, on this deployment's first `./autoharn led`/
+`./autoharn pickup`/etc call — the mechanism that dissolved the old `legacy/led` gap `bootstrap/
 track-work.sh` used to carry (that script's own no-boundary-by-design rationale no longer holds
 once standing one up requires no operator action at all). WITNESSED live:
 
 ```sh
 cd /path/to/your-project
-./led work open first-item "Describe the first thing to track"
+./autoharn led work open first-item "Describe the first thing to track"
 # led: boundary at http://127.0.0.1:<port> was unreachable -- spawned it (pid <pid>, logs at
 # /path/to/your-project/service.log); proceeding.
 # led: row <n> written.
-./pickup            # live resume brief, including every open work item in full
-./distance-to-clean # composed closure-debt read
-./doctor            # is this deployment set up right? (witnessed lines)
+./autoharn pickup            # live resume brief, including every open work item in full
+./autoharn distance-to-clean # composed closure-debt read
+./autoharn doctor            # is this deployment set up right? (witnessed lines)
 ```
 
 **What landed where:** `deployment.json`, `boundary-multiplex.toml`, `keys/`, `attestations/`,
@@ -124,8 +124,8 @@ no root `CLAUDE.md`, no portable-ADR LAW section** — "a standing project is no
 world," this profile's own scaffold output states this explicitly, in the retired script's own
 words.
 
-Rows written here via `./led` land UNSTAMPED (`stamp_agent`/`stamp_session`/`stamp_hmac` all
-NULL, `stamp_verified=false`) — visible in `./led --recent`, not hidden — until a separate,
+Rows written here via `./autoharn led` land UNSTAMPED (`stamp_agent`/`stamp_session`/`stamp_hmac` all
+NULL, `stamp_verified=false`) — visible in `./autoharn led --recent`, not hidden — until a separate,
 deliberate act wires hooks (copy `new-project.sh`'s own `.claude/` wiring stanzas by hand, or
 re-scaffold with `--new-world` instead).
 
@@ -169,18 +169,18 @@ wrote pickup (shim -> .../bootstrap/templates/pickup.tmpl)
 == done ==
 ```
 
-Running `./judge` right after scaffolding printed `AGREE` in this page's own verification pass —
+Running `./autoharn judge` right after scaffolding printed `AGREE` in this page's own verification pass —
 two independent ways the harness (autoharn's own tooling; this page uses the two names
 interchangeably from here on) computes "what is currently true" (a rule engine and a plain SQL
 query) agreeing on a brand-new, still-empty project. That is the expected result for a fresh
-[world](../GLOSSARY.md#world); [§4](#4-operate-the-verbs) explains what `./judge` checks and
+[world](../GLOSSARY.md#world); [§4](#4-operate-the-verbs) explains what `./autoharn judge` checks and
 what a disagreement would mean.
 
 **What landed where:** everything §3a describes above, plus `.claude/settings.json` (wires the
 hooks that check every edit), a stamp secret, and a `CLAUDE.md` at your project's root that
 Claude Code loads automatically at session start — nothing to paste into your first message.
 Unlike §3a, this scaffold accepts `--boundary-url`/`--boundary-deployment` flags to point the new
-world at an already-running boundary service; omit them and `./led`/`./pickup` refuse with the
+world at an already-running boundary service; omit them and `./autoharn led`/`./autoharn pickup` refuse with the
 same exit-4 message §3a's own boundary-multiplex note shows. **Pass `--boundary-url`/
 `--boundary-deployment` (or use the setup wizard, `python3 -m tools.setup_tui.app`, which stands
 one up for you) rather than omitting them** (legacy-led-retirement, design/FABLE-LEGACY-LED-
@@ -224,18 +224,19 @@ offering's sibling (the work tracker from §3a) for contrast.
 
 ## 4. Operate: the verbs
 
-> **Note on invocation spelling (2026-07-23):** the ten verbs below are what a SCAFFOLDED
-> project (yours, per §3) gets, and that has not changed. Separately, design/
-> FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md introduced `./autoharn <verb>` (`autoharn --help` for the
-> generated, self-updating roster) as the primary invocation form for THIS autoharn checkout's
-> OWN root — not for a project scaffolded from it. A freshly scaffolded project still receives
-> the ten bare per-verb shims this section describes, unchanged, until a follow-on build
-> migrates `bootstrap/new-project.sh`'s own scaffold (see CLAUDE.md's operator-surface sentence,
-> or `ORCH-OPERATING-CARD.md`'s own forward note, for the current, honestly-scoped status).
+> **Note on invocation spelling (2026-07-26, UPDATED — the scaffold clause discharged):** the
+> ten verbs below are what a SCAFFOLDED project (yours, per §3) gets. design/
+> FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md's §6 amendment (ledger rows 1357/1365/1366/1367) means a
+> freshly scaffolded project now gets the SAME `./autoharn <verb>` dispatcher (`autoharn --help`
+> for the generated, self-updating roster) THIS autoharn checkout's own root uses — one
+> dispatcher, no bare per-verb shims. A project scaffolded BEFORE this migration keeps its
+> older ten-bare-shim shape (untouched, runs-are-linear; see CLAUDE.md's operator-surface
+> sentence or `ORCH-OPERATING-CARD.md`'s own forward note for the full account).
 
 Once a project is scaffolded (either §3a or §3b), you interact with it through small commands —
-ten of them, derived from `bootstrap/new-project.sh`'s own shim-writing loop (never hand-counted
-here, so this section cannot fall stale the way an earlier version of it did): `led`, `judge`,
+ten of them, derived from `bootstrap/new-project.sh`'s own dispatcher-writing block (never
+hand-counted here, so this section cannot fall stale the way an earlier version of it did):
+`led`, `judge`,
 `pickup`, `audit`, `distance-to-clean`, `verify-commission`, `verify-chain`, `attest-doc`,
 `asof-export`, `doctor`. All ten run from inside your project directory, once it exists; the
 scaffold itself (`bootstrap/new-project.sh`, `bootstrap/track-work.sh`,
@@ -247,58 +248,58 @@ paragraph-each index — the authoritative detail, including exact output and wh
 means, is [ORCH-OPERATING-CARD.md](ORCH-OPERATING-CARD.md), written for whoever is actually
 running a session; read it once you're past this page.
 
-**`./led`** writes one entry to the record — a decision, a finding, an assumption, a piece of
+**`./autoharn led`** writes one entry to the record — a decision, a finding, an assumption, a piece of
 work opened or claimed or closed — and reads entries back. Every entry is attributed to whoever
-actually connected and wrote it, never to a name you type. `./led work open <slug> "<title>"`
-opens a task; `./led --recent` shows the latest entries. This is the one verb you'll type by hand
+actually connected and wrote it, never to a name you type. `./autoharn led work open <slug> "<title>"`
+opens a task; `./autoharn led --recent` shows the latest entries. This is the one verb you'll type by hand
 most often.
 
-**`./judge`** checks the record for internal consistency, two independent ways at once — a rule
-engine and a plain SQL query both compute "what is currently true," and `./judge` reports whether
+**`./autoharn judge`** checks the record for internal consistency, two independent ways at once — a rule
+engine and a plain SQL query both compute "what is currently true," and `./autoharn judge` reports whether
 they agree. A clean project reports `AGREE`; anything else is a signal to stop and look, not
 something to work around.
 
-**`./pickup`** prints a live summary of where things stand — open work, unanswered questions,
+**`./autoharn pickup`** prints a live summary of where things stand — open work, unanswered questions,
 outstanding reviews, recent changes — recomputed from the record every time it runs, never from a
 stored file that could go stale. It is the right first command in any project you're returning to,
 including one someone else worked on.
 
-**`./audit`** checks *when* things happened against *when they were recorded* — did an entry get
+**`./autoharn audit`** checks *when* things happened against *when they were recorded* — did an entry get
 written at the time of the event it describes, or added later. This is a read-only check; run it
 any time, mid-project or after.
 
-**`./distance-to-clean`** is one composed report of everything still outstanding — open
+**`./autoharn distance-to-clean`** is one composed report of everything still outstanding — open
 questions, pending reviews, unclaimed work — across the record, in one command instead of several.
 
-**`./verify-commission`** checks a signed commission's cryptographic signature against the
+**`./autoharn verify-commission`** checks a signed commission's cryptographic signature against the
 committed public key in your project's own `keys/` directory, reporting one of a closed set of
 verdicts (`VERIFIED`, `UNSIGNED`, `FORGED-OR-CORRUPT`) plus two distinct, honestly-named
 refusals for the cases where none of the three is actually decidable (no `gpg` on `PATH`, or no
 key committed yet to check against). Only relevant if you use the optional signing layer
 ([§5](#5-audit-and-trust)).
 
-**`./verify-chain`** walks your project's tamper-evidence hash chain end to end and reports the
+**`./autoharn verify-chain`** walks your project's tamper-evidence hash chain end to end and reports the
 first row, if any, whose stored hash disagrees with a fresh recomputation — proof that no row
 between genesis and the current head was retroactively altered after the fact.
 
-**`./attest-doc`** is a separate, optional verb for a separate discipline: recording that a
+**`./autoharn attest-doc`** is a separate, optional verb for a separate discipline: recording that a
 markdown document in your project was reviewed by a fresh, unbiased AI reader before you called
 it done (the "A:B:C fresh-context audit loop" this project runs on its own documentation).
-`./attest-doc check` reports which of your documents are attested, stale, or never reviewed;
-`./attest-doc record` files a new review. It costs nothing to run and nothing blocks on it —
+`./autoharn attest-doc check` reports which of your documents are attested, stale, or never reviewed;
+`./autoharn attest-doc record` files a new review. It costs nothing to run and nothing blocks on it —
 [design/USER-DOC-AUDIT-LOOP.md](USER-DOC-AUDIT-LOOP.md) is the full "what you type, what
-you should see" walkthrough, including how to fold its debt into `./distance-to-clean` once you
+you should see" walkthrough, including how to fold its debt into `./autoharn distance-to-clean` once you
 start using it.
 
-**`./asof-export`** reconstructs the whole ledger as it stood at an earlier moment in time
-(`./asof-export read --asof <timestamp>`), or writes that reconstruction out as a three-file
-inspection copy (`./asof-export export --asof <timestamp> --out <dir>`) — a human-readable
+**`./autoharn asof-export`** reconstructs the whole ledger as it stood at an earlier moment in time
+(`./autoharn asof-export read --asof <timestamp>`), or writes that reconstruction out as a three-file
+inspection copy (`./autoharn asof-export export --asof <timestamp> --out <dir>`) — a human-readable
 rendering, a JSON rendering, and a sha256 manifest, for auditing what the record actually said at
 a point in the past.
 
-**`./doctor`** answers one question in a single call — "is this world set up right?" — as a
+**`./autoharn doctor`** answers one question in a single call — "is this world set up right?" — as a
 fixed-column PASS/FAIL/SKIP checklist (deployment record parses, database reachable, schema/kernel
-schema present, lineage applied, `./led` answers a read, boundary service reachable, principals
+schema present, lineage applied, `./autoharn led` answers a read, boundary service reachable, principals
 registered), instead of requiring several separate manual checks. It is read-only and never
 changes anything; a fresh project's first troubleshooting step.
 
@@ -363,7 +364,7 @@ its own mechanism:
   recorded as a new entry that supersedes the old one, and the old one stays exactly as it was.
   [USER-WALKTHROUGH.md's "File a decision, read it back"](USER-WALKTHROUGH.md#2-file-a-decision-read-it-back)
   shows this live, including the refusal you get if you try to `UPDATE` or `DELETE` a row.
-- **Contemporaneity** — the [`./audit`](#4-operate-the-verbs) verb checks every entry for
+- **Contemporaneity** — the [`./autoharn audit`](#4-operate-the-verbs) verb checks every entry for
   whether it was recorded at the time of the event it describes, or added after the fact, and
   reports the honest answer rather than assuming good faith.
 - **The signing layer is** an optional further step where a real person, using a key outside the
@@ -398,11 +399,11 @@ was missing and what to do about it, so the refusal message itself is the instru
 puzzle to go read documentation for. Three refusals you are likely to meet early:
 
 - **"No ledger entry for this edit."** A governed project (§3b) refuses to let you edit a file
-  it's watching until there is a record explaining why — write the `./led decision` or
-  `./led finding` entry first, then make the edit.
+  it's watching until there is a record explaining why — write the `./autoharn led decision` or
+  `./autoharn led finding` entry first, then make the edit.
 - **"No open, claimed work item."** Similarly, a governed project wants an open-and-claimed task
-  behind any edit, not just a record of intent — `./led work open <slug> "<title>"` then
-  `./led work claim <slug>` before touching files.
+  behind any edit, not just a record of intent — `./autoharn led work open <slug> "<title>"` then
+  `./autoharn led work claim <slug>` before touching files.
 - **`NO-COMMITTED-KEY`** (only if you use the signing layer, [§5](#5-audit-and-trust)). This means
   exactly what it says — nothing has been committed yet to check a signature against — and is
   deliberately a different, calmer message than "forged": your project just hasn't had a real

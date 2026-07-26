@@ -33,15 +33,17 @@ autoharn is a governance harness for AI-collaborator work: agents' decisions go 
 an append-only Postgres ledger (the kernel) that refuses forgery, self-review, silent
 mutation, and unwitnessed "done", enforced by Claude Code hooks that refuse-and-teach.
 **The two-cwd model, stated flatly: you orchestrate from `/home/bork/w/vdc/1/autoharn`;
-the operator verbs (`led`, `judge`, `pickup`) do not have their own copies here — each
-world's `./led`/`./judge`/`./pickup` is a 3-line shim that `exec`s
-`bootstrap/templates/*.tmpl` straight out of THIS checkout, every invocation (maintainer
-ruling 2026-07-11, "live verbs" — no longer sed-substituted frozen copies).** Hooks and
-the verbs alike execute FROM this repo on every invocation in every wired world ("wired"
-= scaffolded with this repo's hooks in its `.claude/settings.json`, so a Claude session
-there runs under the governance apparatus): an edit to hooks/ OR bootstrap/templates/
-goes live everywhere instantly, which is why neither is ever edited while any wired
-session (a live Claude session inside a wired world) is running.
+the operator verbs (`led`, `judge`, `pickup`, ...) do not have their own copies here — each
+world gets ONE dispatcher, `./autoharn`, that routes `autoharn <verb> [args...]` to
+`bootstrap/templates/<verb>.tmpl` straight out of THIS checkout, every invocation (§6
+amendment, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, rows 1357/1365/1366/1367 —
+consolidating what used to be ten separate per-verb shim files into one; maintainer ruling
+2026-07-11, "live verbs", still holds underneath — no sed-substituted frozen copies).**
+Hooks and the verbs alike execute FROM this repo on every invocation in every wired world
+("wired" = scaffolded with this repo's hooks in its `.claude/settings.json`, so a Claude
+session there runs under the governance apparatus): an edit to hooks/ OR
+bootstrap/templates/ goes live everywhere instantly, which is why neither is ever edited
+while any wired session (a live Claude session inside a wired world) is running.
 
 ## Vocabulary (the words the docs assume)
 
@@ -84,47 +86,56 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](../GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-> **Forward note (2026-07-26, UPDATED):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md has landed
-> for THIS repository's OWN root deployment: `./autoharn` (`autoharn led …`, `autoharn doctor`,
-> `autoharn --help` for the generated, self-updating roster) is now the ONLY spelling here.
-> The ten one-line `./verb` deprecation-warning alias shims that briefly survived alongside it
-> have since been DELETED from the repo root (work item root-shim-pruning, ledger rows
-> 1357/1358/1359) — per maintainer ruling on ledger row 1357, their removal is a precondition of
-> the 2.0.0 tag rather than something deferred to "the first post-2.0.0 minor" as originally
-> planned in the spec above; that original schedule text stands as the planning-time record,
-> corrected by this dated amendment rather than silently rewritten. Semantics, refusals and exit
-> codes are unchanged from before the pruning — only the invocation spelling moved, now with no
-> bare-shim fallback at this repo's own root. (`courier`, `extract-context`, `orchlog`,
-> `otel-attest`, `otel-watch` were never part of this shim family and are untouched.)
-> **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN world actually gets — is NOT
-> yet updated to this build's shape**: a freshly scaffolded world still receives the ten bare
-> per-verb shims this card describes below, not `./autoharn` + `libexec/`. That migration is a
-> genuinely separate, larger change to a load-bearing 1200+ line script and is deliberately left
-> to a follow-on rather than rushed here (named, not silently skipped). Until it lands, this
-> card's per-verb descriptions below remain the accurate, shipping-current reference for what a
-> scaffolded world actually runs; only the invocation spelling for THIS repo's own operator
-> surface has changed (see CLAUDE.md's operator-surface sentence) — and, as of this pruning,
-> that repo-root surface no longer has a `./verb` fallback at all.
+> **Forward note (2026-07-26, UPDATED — the scaffold clause discharged):** design/
+> FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md has landed for THIS repository's OWN root deployment:
+> `./autoharn` (`autoharn led …`, `autoharn doctor`, `autoharn --help` for the generated,
+> self-updating roster) is the ONLY spelling here. The ten one-line `./verb` deprecation-warning
+> alias shims that briefly survived alongside it have since been DELETED from the repo root
+> (work item root-shim-pruning, ledger rows 1357/1358/1359) — per maintainer ruling on ledger
+> row 1357, their removal is a precondition of the 2.0.0 tag rather than something deferred to
+> "the first post-2.0.0 minor" as originally planned in the spec above; that original schedule
+> text stands as the planning-time record, corrected by this dated amendment rather than
+> silently rewritten. Semantics, refusals and exit codes are unchanged from before the pruning
+> — only the invocation spelling moved, now with no bare-shim fallback at this repo's own root.
+> (`courier`, `extract-context`, `orchlog`, `otel-attest`, `otel-watch` were never part of this
+> shim family and are untouched.)
+> **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN world actually gets — is now
+> the SAME shape** (§6 amendment, ledger rows 1365/1366/1367, work item
+> scaffold-umbrella-migration): the maintainer's own framing, "the precondition's purpose was
+> ONE operator surface everywhere, not this checkout's aesthetics" — the scaffold sentence the
+> spec always contained stopped being a descoped follow-on and became commissioned work. Both
+> `--new-world` and `--profile tracker` (and classic `--schema/--kern/--role` mode) now write
+> ONE world-local `./autoharn` dispatcher, no bare per-verb shims; `bootstrap/freeze-at-stamp.sh`
+> emits the same dispatcher shape for a frozen destination. Existing, already-scaffolded worlds
+> are UNTOUCHED (runs-are-linear — a world is born once, never upgraded); a pre-migration
+> world's ten shims keep working exactly as before, and
+> `bootstrap/convert-to-submodule.sh`/`upgrade-submodule.sh` detect and serve both shapes. This
+> card's per-verb descriptions below are updated to the dispatcher spelling; `./legacy/pickup`
+> etc. (a separate, deliberately-unmigrated direct-psql recovery mechanism) and `./orchlog`
+> (a self-serve harness-changelog wrapper, never deployment-scoped) are untouched by this
+> migration and keep their own bare spelling.
 
 ## The verbs (run inside a world directory)
 
 These are the operator verbs, invoked from inside a scaffolded world directory (see
-[world](../GLOSSARY.md#world) above) — ten of them, derived from
-`bootstrap/new-project.sh`'s own shim-writing loop rather than hand-counted here, so this
-section cannot fall stale the way an earlier version of it did (it read "seven since
-2026-07-12" and named six, missing `verify-commission`, `verify-chain`, `asof-export`, and
-`doctor` entirely). The scaffold itself is listed separately below, after the ten — it runs
-from the autoharn checkout, before a world directory exists, not from inside one.
+[world](../GLOSSARY.md#world) above) as `./autoharn <verb> [args...]` — ten of them, derived
+from `bootstrap/new-project.sh`'s own dispatcher-writing block (SHIM_VERBS_ALL,
+bootstrap/shim-verbs.sh) rather than hand-counted here, so this section cannot fall stale the
+way an earlier version of it did (it read "seven since 2026-07-12" and named six, missing
+`verify-commission`, `verify-chain`, `asof-export`, and `doctor` entirely). Run `./autoharn
+--help` inside a world for the generated, self-updating roster. The scaffold itself is listed
+separately below, after the ten — it runs from the autoharn checkout, before a world directory
+exists, not from inside one.
 
-- `./led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
-  finding, question, verification, and — since s25 — commission). `./led --refs row:<id> ...`
-  cites an antecedent. `./led --event-time <iso-ts> ...` declares a late entry (s24: an act
-  recorded after it happened, declared rather than disguised). `./led work open <slug>
+- `./autoharn led <kind> "<statement>"` — write a ledger row (kinds incl. decision, assumption,
+  finding, question, verification, and — since s25 — commission). `./autoharn led --refs row:<id> ...`
+  cites an antecedent. `./autoharn led --event-time <iso-ts> ...` declares a late entry (s24: an act
+  recorded after it happened, declared rather than disguised). `./autoharn led work open <slug>
   <title>` / `work claim <slug>` / `work close <slug> shipped --witness "<ref>"` — the
-  work-item loop. `./led review-gap`, `question-status`, `work list`, `work violations` —
+  work-item loop. `./autoharn led review-gap`, `question-status`, `work list`, `work violations` —
   the debt views, each usable alone (the disaggregated views are the default; maintainer
   condition, 2026-07-11). Witness: CAPABILITIES items 7–11.
-- `./judge` — the ASP/SQL differential (ASP = Answer Set Programming, the clingo logic
+- `./autoharn judge` — the ASP/SQL differential (ASP = Answer Set Programming, the clingo logic
   engine; every verdict is derived independently in ASP and in SQL and the two must
   agree). Closed verdicts: `AGREE` (green) |
   `DIVERGE_BY_DESIGN` | `DIVERGE_DEFECT` | `QUARANTINED`; non-zero exit iff defect or
@@ -134,38 +145,38 @@ from the autoharn checkout, before a world directory exists, not from inside one
   `engine/ledger_differential.py`'s `DerivationRecord` class is its definition) under
   engine/docs/ledger-marriage/derivations/ as the artifact.
   Diagnosis walkthrough: engine/docs/JUDGE-READING.md. Witness: CAPABILITIES item 12.
-- `./pickup` — live-derived resume brief (six sections incl. IN-FLIGHT work items),
+- `./autoharn pickup` — live-derived resume brief (six sections incl. IN-FLIGHT work items),
   recomputed from the ledger every time, never stored. Witness: CAPABILITIES item 11.
-- `./audit` — the contemporaneity audit: joins every ledger row to the invocation that
+- `./autoharn audit` — the contemporaneity audit: joins every ledger row to the invocation that
   wrote it and the wall-clock journals, reports per-row event-vs-record deltas, closed
   verdicts CONTEMPORANEOUS | BATCHED_DECLARED | LATE_DECLARED | BACKFILL_SUSPECT (exit 1
   only on the last). Read-only; run it mid-run or after. Witness: CAPABILITIES item 24.
-- `./distance-to-clean` — one composed read of all closure-debt dimensions with counts;
+- `./autoharn distance-to-clean` — one composed read of all closure-debt dimensions with counts;
   additive convenience over the debt views above, which remain the default surface.
   Witness: CAPABILITIES item 25.
-- `./attest-doc` — record or check fresh-context documentation attestations against the
+- `./autoharn attest-doc` — record or check fresh-context documentation attestations against the
   deployment's own local attestations ledger (`record`/`check`; the A:B:C loop — one
   agent authors, a second with no shared context audits, a third repairs, per
   [ADR-0017's fresh-context audit loop](../law/adr/0017-the-zero-context-reader.md) —
   offered to deployments, surfaced in `distance-to-clean` behind the `doc_attestation`
   apparatus switch, default off). Witness: CAPABILITIES item 35.
-- `./verify-commission` — checks a SIGNED commission's GPG signature against this
+- `./autoharn verify-commission` — checks a SIGNED commission's GPG signature against this
   deployment's own committed public key, reporting one of the closed verdicts `VERIFIED`
   | `UNSIGNED` | `FORGED-OR-CORRUPT`, plus two distinct honestly-named refusals for the
   cases where none of the three is decidable (no `gpg` on `PATH`; no committed key yet).
   Witness: CAPABILITIES item 29.
-- `./verify-chain` — walks this world's `row_hash` tamper-evidence chain end to end and
+- `./autoharn verify-chain` — walks this world's `row_hash` tamper-evidence chain end to end and
   reports the first row, if any, whose stored hash disagrees with a fresh recomputation;
   `--head` emits the current chain head for out-of-band anchoring. Witness: CAPABILITIES
   item 30.
-- `./asof-export` — reconstructs the whole ledger as it stood at an earlier timestamp
+- `./autoharn asof-export` — reconstructs the whole ledger as it stood at an earlier timestamp
   (`read --asof <ts>`), or writes that reconstruction as a three-file inspection copy
   (`export --asof <ts> --out <dir>`: human-readable rendering, JSON rendering, sha256
   manifest). No dedicated CAPABILITIES item yet — a documentation gap found in reach
   while correcting this section's verb count, not fixed here.
-- `./doctor` — "is this world set up right?", one fixed-column PASS/FAIL/SKIP checklist
+- `./autoharn doctor` — "is this world set up right?", one fixed-column PASS/FAIL/SKIP checklist
   (deployment record, database reachability, schema/kernel-schema presence, lineage
-  high-water, `./led` answering a read, boundary reachability, principals registered);
+  high-water, `./autoharn led` answering a read, boundary reachability, principals registered);
   read-only, exits non-zero iff at least one FAIL. No dedicated CAPABILITIES item yet —
   same disclosed gap as `asof-export` above.
 
@@ -195,7 +206,7 @@ the record before any agent exists — the commission enters through the ledger,
 3. Sign the commission from YOUR terminal, inside the world directory — with the ask in a
    file (say `~/aa`), quoting is handled for you:
    ```
-   LED_ACTOR=commissioner ./led commission "$(cat ~/aa)"
+   LED_ACTOR=commissioner ./autoharn led commission "$(cat ~/aa)"
    ```
    The row lands `actor=commissioner`, unstamped-but-attributed — your bare shell has no
    Claude session to stamp it, and that absence plus the actor is what mechanically
@@ -209,11 +220,11 @@ the record before any agent exists — the commission enters through the ledger,
    vicarious commission:
    ```
    Your commission is already on this world's ledger, signed by the commissioner
-   (row 1, kind=commission). Run ./pickup, read that row in full, and execute it
+   (row 1, kind=commission). Run ./autoharn pickup, read that row in full, and execute it
    per this project's CLAUDE.md preamble. Do not re-transcribe the commission —
    decompose from the signed row, citing it with --refs row:1.
    ```
-   Expect: the agent runs `./pickup`, reads row 1, and writes its decomposition as
+   Expect: the agent runs `./autoharn pickup`, reads row 1, and writes its decomposition as
    decision rows each carrying `refs row:1` — the decomposition citing its source.
 
 Resume (exercised at run 8: the fresh-session mechanics are witnessed, though that run
@@ -223,9 +234,9 @@ hydrated from the ledger — never a reloaded conversation):
 ```
 cd /home/bork/w/vdc/1/<world>
 claude                   # FRESH session — no --continue, no --resume
-# first message: "Run ./pickup and continue the open work it shows."
+# first message: "Run ./autoharn pickup and continue the open work it shows."
 ```
-The ledger IS the resumable state; `./pickup` re-derives it live. If resumption only
+The ledger IS the resumable state; `./autoharn pickup` re-derives it live. If resumption only
 works when the old conversation is reloaded (`claude --continue`), the harness has
 failed its point — context replay is the O(N²)-cost path the ledger exists to replace.
 `--continue` is a diagnostic comparison variant at most, never the mechanism.

@@ -17,14 +17,15 @@ If you have no Postgres database yet, `USER-CONFIGURATION.md`'s ["FAQ: provision
 autoharn"](USER-CONFIGURATION.md#faq-provisioning-postgres-for-autoharn) is a copy-paste
 walkthrough for that first step.
 
-> **Note on invocation spelling (2026-07-23):** every `./led`/`./judge`/etc. command below runs
-> against the disposable SCAFFOLDED demo world §1 stands up at `/tmp/qs-demo` — a separate
-> project directory, not this autoharn checkout's own root. That distinction matters because
-> design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md introduced `./autoharn <verb>` (`autoharn --help`
-> for the roster) as THIS checkout's own root invocation form; it changes nothing this page
-> walks through, since a scaffolded world still gets the ten bare per-verb shims this page uses
-> until a follow-on build migrates the scaffold itself (see CLAUDE.md's operator-surface
-> sentence for the current status).
+> **Note on invocation spelling (2026-07-26, UPDATED — the scaffold clause discharged):** every
+> `./autoharn led`/`./autoharn judge`/etc. command below runs against the disposable SCAFFOLDED
+> demo world §1 stands up at `/tmp/qs-demo` — a separate project directory, not this autoharn
+> checkout's own root. As of the §6 amendment (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger
+> rows 1357/1365/1366/1367), a scaffolded world's own `./autoharn` dispatcher uses the SAME
+> spelling THIS checkout's own root does (`autoharn <verb>`, `autoharn --help` for the roster) --
+> one dispatcher, no bare per-verb shims, in both places. A world scaffolded BEFORE this
+> migration still carries the older ten-bare-shim shape (untouched, runs-are-linear); this page's
+> own walkthrough assumes a fresh scaffold, so the commands below are accurate as written.
 
 ## 0. Bootstrap
 
@@ -81,8 +82,8 @@ The ledger is append-only, and the actor is stamped from the connection identity
 self-declared field:
 
 ```sh
-./led decision "adopt the search-path idiom"
-./led --recent 1
+./autoharn led decision "adopt the search-path idiom"
+./autoharn led --recent 1
 ```
 
 ## 3. Refuse-and-teach — the change gate
