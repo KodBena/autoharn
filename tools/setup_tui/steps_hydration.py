@@ -34,8 +34,8 @@ _SLUG = "hydration"
 DURABLE_DECISION_GROUP_SIZE = 5
 
 
-def _decision_act(led: str, statement: str):
-    return CommandAct(argv=(led, "decision", statement)), f"decision:{hash(statement) & 0xffffffff}"
+def _decision_act(led: tuple[str, ...], statement: str):
+    return CommandAct(argv=(*led, "decision", statement)), f"decision:{hash(statement) & 0xffffffff}"
 
 
 def _durable_decision_groups(catalog: list) -> dict[str, str]:
@@ -120,18 +120,19 @@ def submit(state: dict, answers: dict) -> SectionResult:
         # never a lawful execution target.
         led = served_led_path(dest)
         cl.add("hydration", "led present", ck.DRY_SKIPPED,
-               f"'{led}' queued earlier this run (written by birth+boundary) -- not "
+               f"'{' '.join(led)}' queued earlier this run (written by birth+boundary) -- not "
                f"independently checkable read-only, recorded honestly rather than faked")
     else:
         # An OUT-OF-SEQUENCE entry (an already-existing world, not queued this session) may
         # predate the boundary-mandatory retirement. `resolve_led` no longer prefers legacy/led
-        # (retired with legacy-led.tmpl) -- just the served `./led`, live-checked for existence.
+        # (retired with legacy-led.tmpl) -- just the served dispatcher's `led`, live-checked for
+        # existence (§6 amendment, rows 1357/1365/1366/1367).
         led = resolve_led(dest)
         if led is None:
             cl.add("hydration", "led present", ck.WITNESSED, f"RED: no led under {dest}")
             return SectionResult(ok=False, errors={"": f"no led found under {dest} "
                                                  "(destination set in Fork/target)"})
-        cl.add("hydration", "led present", ck.WITNESSED, led)
+        cl.add("hydration", "led present", ck.WITNESSED, " ".join(led))
 
     plan = state["_plan"]
     selected_fragments: list[str] = []

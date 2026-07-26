@@ -112,65 +112,88 @@ if [ -e "$DEST/.autoharn" ]; then
     exit 1
 fi
 
-# --- 3. discover the CURRENT live-exec AUTOHARN_ROOT from the shims, and confirm agreement ---
-# REQUIRED here is SHIM_VERBS_ORIGINAL_EIGHT only -- the verbs every scaffold has written since
-# before either `asof-export` (added 2026-07-18, commit badc51c) or `doctor` (ledger rows
-# 1147/1148) existed. Both of those are DISCOVERY-OPTIONAL (SHIM_VERBS_OPTIONAL_DISCOVERY,
-# bootstrap/shim-verbs.sh): a deployment scaffolded before either verb existed legitimately has
-# no such shim, and hard-requiring either would refuse conversion for every pre-existing
-# deployment on that one verb's account -- exactly the bug this fix retires (~/ent, scaffolded
-# 2026-07-13, has the original eight and neither newer verb; it is this script's own named
-# motivating case, and used to be refused by the asof-export omission alone). Each optional verb
-# is folded into $VERBS below when its shim is present, so it gets discovered/repointed/committed
-# exactly like the required set; absent, it is silently skipped.
-VERBS="$SHIM_VERBS_ORIGINAL_EIGHT"
-for _opt in $SHIM_VERBS_OPTIONAL_DISCOVERY; do
-    [ -f "$DEST/$_opt" ] && VERBS="$VERBS $_opt"
-done
-DISCOVERED=""
-for v in $VERBS; do
-    shim="$DEST/$v"
-    if [ ! -f "$shim" ]; then
-        echo "convert-to-submodule.sh: $shim not found -- this deployment is missing the" >&2
-        echo "                         operator-verb shim '$v', which is REQUIRED for conversion." >&2
-        echo "                         If this deployment was scaffolded before '$v' existed, add" >&2
-        echo "                         the shim by hand (it is just this 3-line shape, matching" >&2
-        echo "                         every other shim in $DEST):" >&2
-        echo "                           #!/bin/sh" >&2
-        echo "                           HERE=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"" >&2
-        echo "                           exec env PICKUP_DEPLOYMENT=\"\$HERE/deployment.json\" <AUTOHARN_ROOT>/bootstrap/templates/$v.tmpl \"\$@\"" >&2
-        echo "                         (then chmod +x it), or re-run bootstrap/new-project.sh" >&2
-        echo "                         --force against $DEST to have the scaffold write it for" >&2
-        echo "                         you. Nothing touched." >&2
-        exit 1
-    fi
-    # Every shim is `exec env PICKUP_DEPLOYMENT=... <ROOT>/bootstrap/templates/<verb>.tmpl "$@"`
-    # (bootstrap/new-project.sh's own shim-writing loop) -- extract <ROOT>.
-    root="$(sed -n "s|.*exec env PICKUP_DEPLOYMENT=\"[^\"]*\" \(.*\)/bootstrap/templates/$v\.tmpl.*|\1|p" "$shim" | head -1)"
-    if [ -z "$root" ]; then
-        echo "convert-to-submodule.sh: $shim does not match the expected shim shape (exec ...)/" >&2
-        echo "                         bootstrap/templates/$v.tmpl ...) -- refusing to guess." >&2
-        echo "                         Nothing touched." >&2
-        exit 1
-    fi
+# --- 3. discover the CURRENT live-exec AUTOHARN_ROOT, and confirm agreement -------------------
+# §6 amendment (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+# SPEC.md's scaffold clause executes): a deployment scaffolded by TODAY's new-project.sh has ONE
+# dispatcher, `<dest>/autoharn`, not ten per-verb shims -- but "existing worlds untouched"
+# (runs-are-linear) means a deployment scaffolded BEFORE this migration still legitimately has
+# the old ten-shim shape, and this conversion script must serve BOTH: it never assumes which
+# shape a real, already-scaffolded deployment carries.
+if [ -x "$DEST/autoharn" ]; then
+    echo "-- $DEST/autoharn dispatcher found -- new (post-§6) scaffold shape --"
+    DISCOVERED="$(sed -n 's|.*exec env PICKUP_DEPLOYMENT="[^"]*" \(.*\)/bootstrap/templates/"\$VERB"\.tmpl.*|\1|p' "$DEST/autoharn" | head -1)"
     if [ -z "$DISCOVERED" ]; then
-        DISCOVERED="$root"
-    elif [ "$root" != "$DISCOVERED" ]; then
-        echo "convert-to-submodule.sh: the operator-verb shims DISAGREE about which autoharn" >&2
-        echo "                         checkout they exec -- '$v' points at '$root' but an earlier" >&2
-        echo "                         verb pointed at '$DISCOVERED'. This is a pre-existing hazard" >&2
-        echo "                         in $DEST that predates this script; fix it by hand (make" >&2
-        echo "                         every shim agree) before converting. Nothing touched." >&2
+        echo "convert-to-submodule.sh: $DEST/autoharn does not match the expected dispatcher shape" >&2
+        echo "                         (exec ...)/bootstrap/templates/\"\$VERB\".tmpl ...) --" >&2
+        echo "                         refusing to guess. Nothing touched." >&2
         exit 1
     fi
-done
+    VERBS="autoharn"
+else
+    echo "-- no $DEST/autoharn dispatcher -- falling back to the pre-§6 ten-shim discovery --"
+    # REQUIRED here is SHIM_VERBS_ORIGINAL_EIGHT only -- the verbs every scaffold has written
+    # since before either `asof-export` (added 2026-07-18, commit badc51c) or `doctor` (ledger
+    # rows 1147/1148) existed. Both of those are DISCOVERY-OPTIONAL (SHIM_VERBS_OPTIONAL_DISCOVERY,
+    # bootstrap/shim-verbs.sh): a deployment scaffolded before either verb existed legitimately
+    # has no such shim, and hard-requiring either would refuse conversion for every pre-existing
+    # deployment on that one verb's account -- exactly the bug this fix retires (~/ent, scaffolded
+    # 2026-07-13, has the original eight and neither newer verb; it is this script's own named
+    # motivating case, and used to be refused by the asof-export omission alone). Each optional
+    # verb is folded into $VERBS below when its shim is present, so it gets discovered/
+    # repointed/committed exactly like the required set; absent, it is silently skipped.
+    VERBS="$SHIM_VERBS_ORIGINAL_EIGHT"
+    for _opt in $SHIM_VERBS_OPTIONAL_DISCOVERY; do
+        [ -f "$DEST/$_opt" ] && VERBS="$VERBS $_opt"
+    done
+    DISCOVERED=""
+    for v in $VERBS; do
+        shim="$DEST/$v"
+        if [ ! -f "$shim" ]; then
+            echo "convert-to-submodule.sh: $shim not found -- this deployment is missing the" >&2
+            echo "                         operator-verb shim '$v', which is REQUIRED for conversion." >&2
+            echo "                         If this deployment was scaffolded before '$v' existed, add" >&2
+            echo "                         the shim by hand (it is just this 3-line shape, matching" >&2
+            echo "                         every other shim in $DEST):" >&2
+            echo "                           #!/bin/sh" >&2
+            echo "                           HERE=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"" >&2
+            echo "                           exec env PICKUP_DEPLOYMENT=\"\$HERE/deployment.json\" <AUTOHARN_ROOT>/bootstrap/templates/$v.tmpl \"\$@\"" >&2
+            echo "                         (then chmod +x it), or re-run bootstrap/new-project.sh" >&2
+            echo "                         --force against $DEST to have the scaffold write it for" >&2
+            echo "                         you. Nothing touched." >&2
+            exit 1
+        fi
+        # Every shim is `exec env PICKUP_DEPLOYMENT=... <ROOT>/bootstrap/templates/<verb>.tmpl "$@"`
+        # (bootstrap/new-project.sh's own shim-writing loop, pre-§6) -- extract <ROOT>.
+        root="$(sed -n "s|.*exec env PICKUP_DEPLOYMENT=\"[^\"]*\" \(.*\)/bootstrap/templates/$v\.tmpl.*|\1|p" "$shim" | head -1)"
+        if [ -z "$root" ]; then
+            echo "convert-to-submodule.sh: $shim does not match the expected shim shape (exec ...)/" >&2
+            echo "                         bootstrap/templates/$v.tmpl ...) -- refusing to guess." >&2
+            echo "                         Nothing touched." >&2
+            exit 1
+        fi
+        if [ -z "$DISCOVERED" ]; then
+            DISCOVERED="$root"
+        elif [ "$root" != "$DISCOVERED" ]; then
+            echo "convert-to-submodule.sh: the operator-verb shims DISAGREE about which autoharn" >&2
+            echo "                         checkout they exec -- '$v' points at '$root' but an earlier" >&2
+            echo "                         verb pointed at '$DISCOVERED'. This is a pre-existing hazard" >&2
+            echo "                         in $DEST that predates this script; fix it by hand (make" >&2
+            echo "                         every shim agree) before converting. Nothing touched." >&2
+            exit 1
+        fi
+    done
+fi
 if [ ! -d "$DISCOVERED" ]; then
     echo "convert-to-submodule.sh: the discovered autoharn checkout '$DISCOVERED' does not exist" >&2
     echo "                         on this machine -- cannot determine what commit to pin to." >&2
     echo "                         Nothing touched." >&2
     exit 1
 fi
-echo "-- all $(set -- $VERBS; echo $#) operator-verb shims agree: currently exec'ing $DISCOVERED live --"
+if [ "$VERBS" = "autoharn" ]; then
+    echo "-- the dispatcher currently exec's $DISCOVERED live --"
+else
+    echo "-- all $(set -- $VERBS; echo $#) operator-verb shims agree: currently exec'ing $DISCOVERED live --"
+fi
 
 # --- 4. that checkout must be clean, and its commit determinable ------------------------------
 DISCOVERED_SHA="$(cd "$DISCOVERED" && git rev-parse HEAD 2>/dev/null || true)"
@@ -244,17 +267,29 @@ echo "-- adding submodule --"
 (cd "$DEST/.autoharn" && git checkout --quiet "$DISCOVERED_SHA")
 echo "   .autoharn added, pinned to $DISCOVERED_SHA"
 
-echo "-- repointing the operator-verb shims --"
-for v in $VERBS; do
-    shim="$DEST/$v"
-    cat > "$shim" <<SHIM
+if [ "$VERBS" = "autoharn" ]; then
+    # §6 amendment: the ONE dispatcher, repointed IN PLACE -- a blanket string replacement of
+    # the old EXEC_ROOT prefix (every mention in the file, comments included), the exact same
+    # mechanism already used below for .claude/settings.json and .claude/HOOKS.md (ADR-0012 P1:
+    # one mechanism, not a special dispatcher-rewriting parser grown here). Never regenerated
+    # from scratch -- the roster/refusal-text/help logic new-project.sh wrote is untouched,
+    # only the exec-root path changes.
+    echo "-- repointing the ./autoharn dispatcher --"
+    sed -i "s|$DISCOVERED|$DEST/.autoharn|g" "$DEST/autoharn"
+    echo "   autoharn -> $DEST/.autoharn/bootstrap/templates/<verb>.tmpl"
+else
+    echo "-- repointing the operator-verb shims --"
+    for v in $VERBS; do
+        shim="$DEST/$v"
+        cat > "$shim" <<SHIM
 #!/bin/sh
 HERE="\$(cd "\$(dirname "\$0")" && pwd)"
 exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $DEST/.autoharn/bootstrap/templates/$v.tmpl "\$@"
 SHIM
-    chmod +x "$shim"
-    echo "   $v -> $DEST/.autoharn/bootstrap/templates/$v.tmpl"
-done
+        chmod +x "$shim"
+        echo "   $v -> $DEST/.autoharn/bootstrap/templates/$v.tmpl"
+    done
+fi
 
 echo "-- repointing .claude/settings.json hook wiring --"
 if [ -f "$DEST/.claude/settings.json" ]; then
@@ -289,40 +324,68 @@ fi
 # --- 8. verify every verb still answers ---------------------------------------------------------
 echo "-- verifying every operator verb resolves into the pin --"
 FAIL=0
-for v in $VERBS; do
-    target="$(sed -n "s|.*exec env PICKUP_DEPLOYMENT=\"[^\"]*\" \(.*\)/bootstrap/templates/$v\.tmpl.*|\1|p" "$DEST/$v" | head -1)"
+if [ "$VERBS" = "autoharn" ]; then
+    target="$(sed -n 's|.*exec env PICKUP_DEPLOYMENT="[^"]*" \(.*\)/bootstrap/templates/"\$VERB"\.tmpl.*|\1|p' "$DEST/autoharn" | head -1)"
     if [ "$target" != "$DEST/.autoharn" ]; then
-        echo "   !! $v: expected to resolve into $DEST/.autoharn, got '$target'" >&2
+        echo "   !! autoharn: expected to resolve into $DEST/.autoharn, got '$target'" >&2
         FAIL=1
-        continue
-    fi
-    if [ ! -x "$DEST/.autoharn/bootstrap/templates/$v.tmpl" ]; then
-        echo "   !! $v: $DEST/.autoharn/bootstrap/templates/$v.tmpl is missing or not executable" >&2
+    elif [ ! -d "$DEST/.autoharn/bootstrap/templates" ]; then
+        echo "   !! autoharn: $DEST/.autoharn/bootstrap/templates is missing" >&2
         FAIL=1
-        continue
+    else
+        echo "   autoharn: resolves into the pin -- OK"
     fi
-    echo "   $v: resolves into the pin, target executable -- OK"
-done
+else
+    for v in $VERBS; do
+        target="$(sed -n "s|.*exec env PICKUP_DEPLOYMENT=\"[^\"]*\" \(.*\)/bootstrap/templates/$v\.tmpl.*|\1|p" "$DEST/$v" | head -1)"
+        if [ "$target" != "$DEST/.autoharn" ]; then
+            echo "   !! $v: expected to resolve into $DEST/.autoharn, got '$target'" >&2
+            FAIL=1
+            continue
+        fi
+        if [ ! -x "$DEST/.autoharn/bootstrap/templates/$v.tmpl" ]; then
+            echo "   !! $v: $DEST/.autoharn/bootstrap/templates/$v.tmpl is missing or not executable" >&2
+            FAIL=1
+            continue
+        fi
+        echo "   $v: resolves into the pin, target executable -- OK"
+    done
+fi
 if [ "$FAIL" -ne 0 ]; then
     echo "convert-to-submodule.sh: one or more verbs failed verification above -- the conversion" >&2
     echo "                         COMMIT WAS ALREADY MADE (see the git log line above); fix the" >&2
     echo "                         reported verb(s) by hand, or 'git revert' the commit in $DEST." >&2
     exit 1
 fi
-echo "-- smoke test: ./led (read-only, --recent 1) --"
-if (cd "$DEST" && ./led --recent 1); then
-    echo "   ./led answered (see output above) -- the pinned copy is genuinely executing"
+if [ "$VERBS" = "autoharn" ]; then
+    echo "-- smoke test: ./autoharn led (read-only, --recent 1) --"
+    if (cd "$DEST" && ./autoharn led --recent 1); then
+        echo "   ./autoharn led answered (see output above) -- the pinned copy is genuinely executing"
+    else
+        echo "   NOTE: ./autoharn led exited non-zero above -- this is EXPECTED if this deployment's" >&2
+        echo "   DB role/schema is unreachable from here, and is NOT itself evidence the pin is" >&2
+        echo "   wrong (a 'file not found' / 'exec format error' would be; a DB connection error" >&2
+        echo "   is not -- check the error text above)." >&2
+    fi
 else
-    echo "   NOTE: ./led exited non-zero above -- this is EXPECTED if this deployment's DB role/" >&2
-    echo "   schema is unreachable from here, and is NOT itself evidence the pin is wrong (a" >&2
-    echo "   'file not found' / 'exec format error' would be; a DB connection error is not --" >&2
-    echo "   check the error text above)." >&2
+    echo "-- smoke test: ./led (read-only, --recent 1) --"
+    if (cd "$DEST" && ./led --recent 1); then
+        echo "   ./led answered (see output above) -- the pinned copy is genuinely executing"
+    else
+        echo "   NOTE: ./led exited non-zero above -- this is EXPECTED if this deployment's DB role/" >&2
+        echo "   schema is unreachable from here, and is NOT itself evidence the pin is wrong (a" >&2
+        echo "   'file not found' / 'exec format error' would be; a DB connection error is not --" >&2
+        echo "   check the error text above)." >&2
+    fi
 fi
 
 echo "== done =="
 echo "Record this migration in autoharn's OWN ledger (self-application, CLAUDE.md):"
 echo "  cd $SELF_ROOT && ./autoharn led decision \"migrate: $(basename "$DEST") pinned to autoharn@$DISCOVERED_SHA (deployment-live-exec-coupling migration)\""
-if [ -x "$DEST/led" ]; then
+if [ -x "$DEST/autoharn" ]; then
+    echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
+    echo "  cd $DEST && ./autoharn led decision \"migrated: pinned to autoharn@$DISCOVERED_SHA via .autoharn submodule (deployment-live-exec-coupling conversion)\""
+elif [ -x "$DEST/led" ]; then
     echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
     echo "  cd $DEST && ./led decision \"migrated: pinned to autoharn@$DISCOVERED_SHA via .autoharn submodule (deployment-live-exec-coupling conversion)\""
 fi

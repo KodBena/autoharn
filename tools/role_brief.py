@@ -13,8 +13,11 @@ NO RAW SQL, NO DIRECT HTTP: every section is parsed off `led`'s own CLI text -- 
 CLI-side-derivation posture tools/role_charter.py documents (parse_current_line/JC1's
 scan-limit discipline reused here without a cross-import -- two standalone deliverables).
 
-TRANSPORT, AS OF THIS REBUILD (row 1224): `--led` defaults to "./led" (served,
-bootstrap/templates/led.tmpl), matching role_charter.py. Parsers here are written against
+TRANSPORT, AS OF THIS REBUILD (row 1224): `--led` defaults to "./autoharn led" (served,
+bootstrap/templates/led.tmpl, reached through this world's ONE dispatcher -- §6 amendment,
+rows 1357/1365/1366/1367; a bare `./led` shim no longer exists in a scaffolded world), matching
+role_charter.py -- including its shlex-split-into-argv-prefix `run_led` treatment. Parsers here
+are written against
 led.tmpl's ACTUAL served shapes (read in full before this rewrite), never the retired direct-
 psql shapes:
   - `led current <N>`/`--recent <N>`: `f"[{id}] {kind}: {statement}"` -- NO actor field at all
@@ -76,13 +79,15 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 
 from served_shapes import parse_current_line as _parse_current_line
 from served_shapes import parse_served_show as _parse_served_show
 
-DEFAULT_LED = "./led"
+# §6 amendment (rows 1357/1365/1366/1367) -- see role_charter.py's DEFAULT_LED comment.
+DEFAULT_LED = "./autoharn led"
 DEFAULT_SCAN_LIMIT = 100000
 
 SUSPENDED_RE = re.compile(r"^principal '([^']+)' suspended")
@@ -97,8 +102,9 @@ class BriefError(Exception):
 
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
+    """`led` is shlex-split into an argv PREFIX before exec (§6 amendment)."""
     try:
-        proc = subprocess.run([led] + args, capture_output=True, text=True)
+        proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True)
     except OSError as exc:
         # same conversion role_charter.py's own run_led performs -- a wrong --led path is an
         # ordinary, expected-shape failure, never an uncaught traceback.

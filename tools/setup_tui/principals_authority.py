@@ -309,15 +309,13 @@ def lineage_chain_note(dest: str) -> str:
 # -- an unused `produces` binding costs nothing (commit_executor.py records it regardless).
 # ---------------------------------------------------------------------------------------------
 
-def _served_led(dest: str) -> str:
-    """Thin pass-through to `runner.served_led_path` (ADR-0012 P1, the ONE home for this path
-    string). RENAMED from `_legacy_led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
-    completion, ledger row 1158/1159): this module's own acts used to drive `<dest>/legacy/led`
-    because "the boundary service is not configured yet at this point in the flow" (this
-    module's own former docstring, verbatim) -- the re-sequencing (screens.py's `SCREENS` list,
-    "boundary" moved ahead of "principals-authority") means that reason no longer holds by the
-    time these acts actually EXECUTE at commit time; every call site that was named
-    `_legacy_led(dest)` is renamed to `_served_led(dest)` in this same pass."""
+def _served_led(dest: str) -> tuple[str, str]:
+    """Thin pass-through to `runner.served_led_path` (ADR-0012 P1, the ONE home for this argv
+    PREFIX -- see that function's own docstring for the §6-amendment str->2-tuple change).
+    RENAMED from `_legacy_led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C completion,
+    row 1158/1159): the re-sequencing (screens.py's `SCREENS` list, "boundary" moved ahead of
+    "principals-authority") means these acts EXECUTE, at commit time, with the boundary already
+    configured -- every `_legacy_led(dest)` call site is renamed here."""
     return served_led_path(dest)
 
 
@@ -334,25 +332,20 @@ _COMMISSIONER_ENV: tuple[tuple[str, str], ...] = (("LED_ACTOR", "commissioner"),
 
 
 def register_principal_act(dest: str, name: str, agent_class: str, purpose: str,
-                            led: str | None = None) -> tuple[CommandAct, str]:
-    """`LED_ACTOR=commissioner <led> register-principal <name> <class> --purpose "<purpose>"` --
-    the s40 registration ceremony (kernel/lineage/s40-principal-identity-events.sql §3.7), as a
-    plan act. `LED_ACTOR=commissioner` mirrors signed_genesis.py's own choice: at this point in
-    the flow the connection principal has no standing declaration of its own yet, and
-    `commissioner` is one of the three principals the scaffold's own birth sequence already
-    registers and declares standing for. `led` (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part C
-    completion, ledger row 1158/1159): the CALLER resolves which `led` this act drives -- served,
-    always, since this run's own boundary is configured before this screen ever runs (legacy-led-
-    retirement inventory pass, ledger row 1149/1150: boundary configuration has no decline
-    option anymore) -- `None` (unwired callers, e.g. this module's own tests) falls back to
-    `_served_led(dest)`, the ordinary default; there is no other lawful `led` to fall back to."""
+                            led: tuple[str, ...] | None = None) -> tuple[CommandAct, str]:
+    """`LED_ACTOR=commissioner <led...> register-principal <name> <class> --purpose "<purpose>"`
+    -- the s40 registration ceremony, as a plan act. `LED_ACTOR=commissioner` mirrors
+    signed_genesis.py's own choice (no standing declaration yet at this point). `led` (§6
+    amendment, rows 1357/1365/1366/1367, for the argv-PREFIX tuple shape): served, always, since
+    the boundary is configured before this screen runs -- `None` falls back to `_served_led(dest)`,
+    the only lawful default."""
     led = led if led is not None else _served_led(dest)
-    argv = (led, "register-principal", name, agent_class, "--purpose", purpose)
+    argv = (*led, "register-principal", name, agent_class, "--purpose", purpose)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"principal-row:{name}"
 
 
 def grant_competence_act(dest: str, name: str, activity: str, band: str,
-                          basis: str, led: str | None = None) -> tuple[CommandAct, str]:
+                          basis: str, led: tuple[str, ...] | None = None) -> tuple[CommandAct, str]:
     """`led principal grant-competence <name> --activity "<a>" --band "<b>" --basis "<c>"`
     (kernel/lineage/s41-principal-bindings-and-relations.sql D-1a/G13), as a plan act.
 
@@ -364,30 +357,33 @@ def grant_competence_act(dest: str, name: str, activity: str, band: str,
     `legacy_led_path` (legacy-led.tmpl itself is retired by this same pass -- see design/
     FABLE-LEGACY-LED-RETIREMENT-SPEC.md's own retirement act)."""
     led = led if led is not None else _served_led(dest)
-    argv = (led, "principal", "grant-competence", name,
+    argv = (*led, "principal", "grant-competence", name,
             "--activity", activity, "--band", band, "--basis", basis)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"competence-row:{name}:{activity}"
 
 
 def relate_act(dest: str, subject: str, relation: str, obj: str,
-               led: str | None = None) -> tuple[CommandAct, str]:
+               led: tuple[str, ...] | None = None) -> tuple[CommandAct, str]:
     """`led principal relate <subject> <relation> <object>`
     (kernel/lineage/s41-principal-bindings-and-relations.sql D-2), as a plan act -- see
     `grant_competence_act`'s own docstring, same reasoning, same verb family (`principal
     relate`, now among served led.tmpl's rebased verbs, legacy-led-retirement inventory pass)."""
     led = led if led is not None else _served_led(dest)
-    argv = (led, "principal", "relate", subject, relation, obj)
+    argv = (*led, "principal", "relate", subject, relation, obj)
     return CommandAct(argv=argv, extra_env=_COMMISSIONER_ENV), f"relation-row:{subject}:{relation}:{obj}"
 
 
 def charter_register_act(dest: str, role: str, path: str,
-                          led: str | None = None) -> tuple[CommandAct, str]:
-    """`python3 tools/role_charter.py register <role> <path> --led <led>` -- the SAME verb
+                          led: tuple[str, ...] | None = None) -> tuple[CommandAct, str]:
+    """`python3 tools/role_charter.py register <role> <path> --led "<led...>"` -- the SAME verb
     `screen_hydration`'s own role-charter item drives, as a plan act. `led`: see
-    `register_principal_act`'s own docstring -- served, always."""
+    `register_principal_act`'s own docstring -- served, always. role_charter.py's own `--led`
+    flag takes ONE string (shlex-split into an argv prefix on its side, §6 amendment) -- the
+    tuple is joined with a space here, matching the shape its own default ("./autoharn led")
+    already has."""
     led = led if led is not None else _served_led(dest)
     argv = ("python3", str(REPO_ROOT / "tools" / "role_charter.py"), "register",
-            role, path, "--led", led)
+            role, path, "--led", " ".join(led))
     return CommandAct(argv=argv), f"charter-row:{role}"
 
 

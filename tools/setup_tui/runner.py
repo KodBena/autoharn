@@ -71,39 +71,39 @@ def legacy_led_path(dest: str) -> str:
     return os.path.join(dest, "legacy", "led")
 
 
-def served_led_path(dest: str) -> str:
-    """`<dest>/led` -- the rebased, SERVED shim (bootstrap/templates/led.tmpl) that refuses
-    outright without `deployment.json`'s `boundary_url`/`boundary_deployment` keys
-    (serving/boundary_cli_client.py `load_served_config`) -- those keys are written only once
-    `screen_boundary` has actually run. Since legacy-led-retirement (ledger row 1149/1150,
-    boundary now mandatory at every birth), this is the ONLY led execution target this whole
-    package ever resolves."""
-    return os.path.join(dest, "led")
+def served_led_path(dest: str) -> tuple[str, str]:
+    """The argv PREFIX for a served `led` write in `dest` -- `(<dest>/autoharn, "led")`.
+
+    §6 AMENDMENT (rows 1357/1365/1366/1367): a world no longer has a standalone `<dest>/led`
+    shim -- `bootstrap/new-project.sh` writes ONE dispatcher, `<dest>/autoharn`, reached as
+    `autoharn led ...`. RETURN TYPE CHANGED from `str` (a bare path, usable as argv[0] alone) to
+    a 2-tuple argv PREFIX -- every caller that built `(led, "sub", ...)` now builds
+    `(*led, "sub", ...)`; every caller that printed `led` to a human now prints `" ".join(led)`.
+    Still refuses without `deployment.json`'s `boundary_url`/`boundary_deployment` keys
+    (serving/boundary_cli_client.py `load_served_config`), written only once `screen_boundary`
+    has run. Since legacy-led-retirement (row 1149/1150), this is the ONLY led execution target
+    this package ever resolves."""
+    return (os.path.join(dest, "autoharn"), "led")
 
 
-def resolve_led(dest: str) -> str | None:
-    """Resolves the led executable an ALREADY-EXISTING world (real files checked live on disk)
-    should be driven through for an ordinary attributed write.
+def resolve_led(dest: str) -> tuple[str, str] | None:
+    """Resolves the led argv PREFIX an ALREADY-EXISTING world (checked live on disk) should be
+    driven through. Returns `None` if the dispatcher does not exist as an executable file (§6
+    amendment: checks `<dest>/autoharn`, not `<dest>/led` -- `served_led_path`'s own docstring
+    has the full account of the str -> 2-tuple return-type change).
 
-    legacy-led-retirement inventory pass (ledger row 1149/1150): this function used to prefer
-    `legacy_led_path(dest)`, falling back to `served_led_path(dest)` only for an older pre-split
-    scaffold -- mirroring `bootstrap/extract_context.py`'s own (now similarly retired) `_find_led`
-    preference. That preference is GONE: legacy-led.tmpl no longer exists in this repository, the
-    boundary is mandatory at every birth (no decline option, `screens.screen_boundary`'s own
-    docstring), and `legacy_led_path(dest)` resolves to a one-line teaching-refusal stub that
-    would never perform the write a caller here is resolving this path FOR. This now checks only
-    `served_led_path(dest)`, live, exactly as `bootstrap/extract_context.py`'s own retired
-    `_find_led` docstring names it: "no candidate search remains -- there is exactly one lawful
-    `led` per world." Returns `None` if it does not exist as an executable file.
+    legacy-led-retirement (row 1149/1150): no longer prefers `legacy_led_path(dest)` -- that
+    resolves to a one-line teaching-refusal stub, never a working write target -- checks only
+    `served_led_path(dest)`, live: "no candidate search remains, exactly one lawful `led` per
+    world" (`bootstrap/extract_context.py`'s own retired `_find_led` docstring).
 
-    NOT for a `dest` that is still a QUEUED, not-yet-committed plan entry (birth hasn't run yet
-    this session) -- there is nothing on disk yet to check; a caller in that position uses
-    `served_led_path(dest)` directly, exactly as principals_authority.py/signed_genesis.py
-    already do (their own module docstrings) and as `screens.screen_hydration`'s
-    `dest_would_exist` branch now does too."""
-    cand = served_led_path(dest)
+    NOT for a `dest` that is still a QUEUED, not-yet-committed plan entry -- nothing on disk yet
+    to check; that caller uses `served_led_path(dest)` directly (principals_authority.py/
+    signed_genesis.py/screens.screen_hydration's `dest_would_exist` branch, same as before)."""
+    cand_prefix = served_led_path(dest)
+    cand = cand_prefix[0]
     if os.path.isfile(cand) and os.access(cand, os.X_OK):
-        return cand
+        return cand_prefix
     return None
 
 

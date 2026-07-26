@@ -63,11 +63,15 @@ Usage:
     python3 tools/role_charter.py show <role>           [--led PATH] [--scan-limit N]
     python3 tools/role_charter.py amend <role> <path>   [--led PATH] [--scan-limit N]
 
---led defaults to "./led" (the SERVED boundary shim) -- every operation this tool performs
-(`led current`, `led show`, `led decision [--supersedes]`) rides bootstrap/templates/led.tmpl's
-own documented COVERED surface; no work-family verb is needed here, unlike tools/role_brief.py.
-LED_ACTOR (the existing `led` env-var convention) is honored by ordinary subprocess env
-inheritance -- this tool adds no second actor-selection flag.
+--led defaults to "./autoharn led" (the SERVED boundary shim, reached through this world's ONE
+dispatcher -- §6 amendment, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, rows 1357/1365/1366/
+1367; a bare `./led` shim file no longer exists in a scaffolded world) -- every operation this
+tool performs (`led current`, `led show`, `led decision [--supersedes]`) rides bootstrap/
+templates/led.tmpl's own documented COVERED surface; no work-family verb is needed here, unlike
+tools/role_brief.py. `--led`'s VALUE is shlex-split into an argv PREFIX before exec (`run_led`
+below), letting it name either a one-token path or a multi-token dispatcher invocation like the
+new default. LED_ACTOR (the existing `led` env-var convention) is honored by ordinary subprocess
+env inheritance -- this tool adds no second actor-selection flag.
 
 Exit 0 on success. Exit 1 on a REFUSED condition (this tool's own, or `led`'s, relayed
 verbatim). Exit 2 on a local usage error. Lazy imports banned; stdlib only.
@@ -76,6 +80,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -83,7 +88,9 @@ from pathlib import Path
 from served_shapes import parse_current_line as _parse_current_line
 from served_shapes import parse_served_show as _parse_served_show
 
-DEFAULT_LED = "./led"
+# §6 amendment (2026-07-26, rows 1357/1365/1366/1367): no bare `./led` shim -- `./autoharn led`
+# now. `run_led` shlex-splits this into an argv prefix, so a one-token override still works.
+DEFAULT_LED = "./autoharn led"
 DEFAULT_SCAN_LIMIT = 100000
 
 STATEMENT_RE = re.compile(
@@ -106,8 +113,9 @@ def statement_for(role: str, path: str, digest: str) -> str:
 
 
 def run_led(led: str, args: list[str]) -> tuple[int, str, str]:
+    """`led` is shlex-split into an argv PREFIX before exec (§6 amendment, module docstring)."""
     try:
-        proc = subprocess.run([led] + args, capture_output=True, text=True)
+        proc = subprocess.run(shlex.split(led) + args, capture_output=True, text=True)
     except OSError as exc:
         # '{led}' does not exist / is not executable -- an ordinary, expected-shape failure
         # (a wrong --led path), not a crash: converted to the same (rc, out, err) shape every

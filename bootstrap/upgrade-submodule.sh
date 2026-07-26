@@ -153,18 +153,37 @@ if [ "$FAIL" -ne 0 ]; then
     echo "                      commit in $DEST if you need to roll back." >&2
     exit 1
 fi
-echo "-- smoke test: ./led (read-only, --recent 1) --"
-if (cd "$DEST" && ./led --recent 1); then
-    echo "   ./led answered (see output above) -- the new pin is genuinely executing"
+# §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a deployment scaffolded by TODAY's
+# new-project.sh has ONE dispatcher, `<dest>/autoharn`, not a bare `<dest>/led` shim -- but
+# "existing worlds untouched" (runs-are-linear) means a deployment scaffolded BEFORE this
+# migration still legitimately carries the old shape, so this smoke test (and the reminder
+# below) try the new shape first and fall back to the old one, never assuming either.
+if [ -x "$DEST/autoharn" ]; then
+    echo "-- smoke test: ./autoharn led (read-only, --recent 1) --"
+    if (cd "$DEST" && ./autoharn led --recent 1); then
+        echo "   ./autoharn led answered (see output above) -- the new pin is genuinely executing"
+    else
+        echo "   NOTE: ./autoharn led exited non-zero above -- expected if this deployment's DB is" >&2
+        echo "   unreachable from here, not itself evidence the pin is wrong (check the error text" >&2
+        echo "   above)." >&2
+    fi
 else
-    echo "   NOTE: ./led exited non-zero above -- expected if this deployment's DB is unreachable" >&2
-    echo "   from here, not itself evidence the pin is wrong (check the error text above)." >&2
+    echo "-- smoke test: ./led (read-only, --recent 1) --"
+    if (cd "$DEST" && ./led --recent 1); then
+        echo "   ./led answered (see output above) -- the new pin is genuinely executing"
+    else
+        echo "   NOTE: ./led exited non-zero above -- expected if this deployment's DB is unreachable" >&2
+        echo "   from here, not itself evidence the pin is wrong (check the error text above)." >&2
+    fi
 fi
 
 echo "== done =="
 echo "Record this upgrade in autoharn's OWN ledger (self-application, CLAUDE.md):"
 echo "  cd $SELF_ROOT && ./autoharn led decision \"upgrade: $(basename "$DEST") autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""
-if [ -x "$DEST/led" ]; then
+if [ -x "$DEST/autoharn" ]; then
+    echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
+    echo "  cd $DEST && ./autoharn led decision \"upgrade: autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""
+elif [ -x "$DEST/led" ]; then
     echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
     echo "  cd $DEST && ./led decision \"upgrade: autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""
 fi
