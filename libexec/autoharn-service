@@ -58,6 +58,7 @@ import json
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -129,6 +130,49 @@ def _boundary_deployment(dep: dict) -> str:
 
 def _pidfile_path() -> Path:
     return DEPLOYMENT_PATH.parent / ".autoharn-service.pid"
+
+
+# ROW 1332 FIX: stop used to send SIGTERM and remove the pidfile unconditionally, with no wait
+# and no exit confirmation -- a slow-to-die boundary_service was orphaned (still running, still
+# holding the port) while the pidfile's disappearance made the world LOOK stopped. These three
+# constants and _wait_for_pid_exit below give stop a wait-with-timeout-then-escalate posture,
+# mirroring the shape seen-red/setup-tui-config-file/run_fixtures.py's own `_kill_boundary`
+# already adopted for exactly this same class of teardown (rows 1330/1331 arc) -- a graceful
+# SIGTERM first, confirmed via /proc/<pid> liveness polling (this pid is essentially never this
+# process's own child -- stop runs as a separate invocation from whichever start spawned it, so
+# os.waitpid is not available; /proc existence is the only trustworthy, non-blocking liveness
+# signal here), escalating to SIGKILL only if still alive after the grace window, and refusing to
+# remove the pidfile if the process is STILL alive after that (uninterruptible kernel sleep is
+# the only realistic way SIGKILL fails to end a process promptly, but "realistic" is not
+# "impossible" -- reporting success while a live pid is orphaned is exactly the defect this fixes).
+# PID_REUSE, second-signal case (review 2026-07-26): pid identity (pid_is_boundary_service) is
+# verified ONCE, before the first SIGTERM -- it is deliberately NOT re-verified before the SIGKILL
+# escalation, so a pid recycled to an unrelated process inside the 5s grace window would be
+# SIGKILL'd blind. Accepted, matching the row-1340 _kill_boundary precedent's identical posture;
+# the window is seconds and the pid was boundary-shaped at entry. Disclosed, not silently absent.
+_STOP_SIGTERM_TIMEOUT_S = 5.0   # grace period for a clean shutdown; matches _kill_boundary's own
+                                # 5.0s SIGTERM grace window above, chosen there (and here) as
+                                # generous enough for an ordinary ASGI app's shutdown handlers to
+                                # run without making an operator's `stop` feel hung.
+_STOP_SIGKILL_TIMEOUT_S = 2.0   # confirmation window after SIGKILL -- SIGKILL is uncatchable and
+                                # unblockable, so a healthy process ends near-instantly; this is a
+                                # short confirmation poll, not a second grace period.
+_STOP_POLL_INTERVAL_S = 0.1     # poll cadence for both windows above -- frequent enough that the
+                                # common case (process dies well within its window) resolves fast,
+                                # coarse enough not to hammer /proc.
+
+
+def _wait_for_pid_exit(pid: int, timeout_s: float, poll_interval_s: float) -> bool:
+    """Poll /proc/<pid> until it disappears (process exited) or timeout_s elapses. Returns True
+    the moment exit is observed, False if the deadline passes with the pid still present. No
+    os.waitpid anywhere -- see the constants' comment above for why this pid is not treated as
+    this process's own child."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if not os.path.exists(f"/proc/{pid}"):
+            return True
+        time.sleep(poll_interval_s)
+    return not os.path.exists(f"/proc/{pid}")
 
 
 def cmd_status(argv: list[str]) -> int:
@@ -242,9 +286,36 @@ def cmd_stop(argv: list[str]) -> int:
         print(f"autoharn service: REFUSED -- could not signal pid {pid} ({e.__class__.__name__}: "
               f"{e}). Nothing was touched.", file=sys.stderr)
         return 1
-    pidfile.unlink(missing_ok=True)
-    print(f"autoharn service: sent SIGTERM to pid {pid} (was serving {url}); pidfile removed.")
-    return 0
+    if _wait_for_pid_exit(pid, _STOP_SIGTERM_TIMEOUT_S, _STOP_POLL_INTERVAL_S):
+        pidfile.unlink(missing_ok=True)
+        print(f"autoharn service: pid {pid} (was serving {url}) confirmed dead after SIGTERM; "
+              f"pidfile removed.")
+        return 0
+    print(f"autoharn service: pid {pid} (was serving {url}) did NOT exit within "
+          f"{_STOP_SIGTERM_TIMEOUT_S}s of SIGTERM -- ESCALATING to SIGKILL.", file=sys.stderr)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pidfile.unlink(missing_ok=True)
+        print(f"autoharn service: pid {pid} exited between the timeout check and SIGKILL; "
+              f"pidfile removed.")
+        return 0
+    except OSError as e:
+        print(f"autoharn service: REFUSED -- SIGTERM timed out and SIGKILL could not be sent to "
+              f"pid {pid} ({e.__class__.__name__}: {e}). The pidfile was NOT removed -- pid {pid} "
+              f"may still be alive.", file=sys.stderr)
+        return 1
+    if _wait_for_pid_exit(pid, _STOP_SIGKILL_TIMEOUT_S, _STOP_POLL_INTERVAL_S):
+        pidfile.unlink(missing_ok=True)
+        print(f"autoharn service: pid {pid} (was serving {url}) confirmed dead after SIGKILL "
+              f"(SIGTERM alone was not enough within {_STOP_SIGTERM_TIMEOUT_S}s); pidfile "
+              f"removed.")
+        return 0
+    print(f"autoharn service: REFUSED -- pid {pid} is STILL ALIVE {_STOP_SIGKILL_TIMEOUT_S}s "
+          f"after SIGKILL (likely stuck in uninterruptible kernel sleep) -- the pidfile was NOT "
+          f"removed, because removing it now would orphan a demonstrably-live process while "
+          f"reporting success. Investigate pid {pid} by hand.", file=sys.stderr)
+    return 1
 
 
 _SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop}

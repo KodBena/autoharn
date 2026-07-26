@@ -74,19 +74,50 @@ Cases:
                                  own pid) rather than merely warned about and left stale forever --
                                  and 'autoharn service stop' must then work against it.
 
+  l-stop-waits-for-delayed-exit -- ledger rows 1332/1354 (service-stop-no-wait-orphans): a slow-
+                                 shutdown witness. A mock process (a plain Python child whose own
+                                 /proc/<pid>/cmdline is made to match pid_is_boundary_service's
+                                 text check, never a real boundary -- house rule) traps SIGTERM
+                                 and only actually exits ~1.5s later. Pre-fix, `stop` removed the
+                                 pidfile the instant SIGTERM was sent -- the mock was still alive
+                                 for that whole 1.5s, an ORPHAN with the pidfile already gone and
+                                 the world looking stopped. Post-fix, `stop` must poll and WAIT
+                                 for the real exit before touching the pidfile, and report
+                                 "confirmed dead after SIGTERM" (never "ESCALATING", since the
+                                 mock died on its own well inside the grace window).
+  m-stop-escalates-to-sigkill-loud -- a mock that IGNORES SIGTERM outright (SIG_IGN) and only
+                                 dies to SIGKILL. `stop` must wait out the full SIGTERM grace
+                                 window, print a LOUD stderr line disclosing the escalation, send
+                                 SIGKILL, confirm the exit, and only then remove the pidfile.
+  n-stop-refuses-pidfile-removal-while-alive -- white-box case (imports libexec/autoharn-service
+                                 directly and fakes ONLY its `os.kill` to a recording no-op,
+                                 leaving `os.path.exists`/`/proc` real): simulates a pid that
+                                 outlives BOTH SIGTERM and SIGKILL (the uninterruptible-kernel-
+                                 sleep case the reference _kill_boundary posture cannot rule out
+                                 either). `stop` must REFUSE, exit 1, and leave the pidfile in
+                                 place -- removing it here would orphan a demonstrably-live
+                                 process while reporting success, exactly the defect this whole
+                                 item exists to close.
+
 RUN: python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
 (needs a free loopback port; picks one dynamically to avoid colliding with any of this host's
 many concurrent boundary_service test fixtures)
 """
 from __future__ import annotations
 
+import contextlib
+import importlib.machinery
+import importlib.util
+import io
 import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -151,6 +182,24 @@ def _ss_pid_for_port(port: int) -> int | None:
     return None
 
 
+def _spawn_mock_boundary_service(toml_path: Path, py_code: str) -> subprocess.Popen:
+    """Cases l/m/n's shared spawn: a plain `python3 -c <py_code>` child, never a real
+    serving.boundary_service (house rule: test processes are the fixture's own children, plain
+    sleeps or trivial mocks, never a real boundary) -- but its /proc/<pid>/cmdline is made to
+    satisfy pid_is_boundary_service's own text check (mentions `serving.boundary_service` and
+    this exact scratch world's `boundary-multiplex.toml` path) by passing them as trailing,
+    otherwise-unused positional argv after the `-c` script, exactly like case h's existing decoy
+    convention passes a recognizable marker on the process's own command line.
+    A background daemon thread immediately starts `Popen.wait()` on it, reaping it the moment it
+    exits -- mirroring the real world, where the pid `stop` signals is reparented to init (its
+    own spawning invocation already having exited) and reaped by init the instant it dies, never
+    left as a zombie a later poll would misread as 'still alive'."""
+    proc = subprocess.Popen(
+        ["python3", "-c", py_code, "serving.boundary_service", "--config", str(toml_path)])
+    threading.Thread(target=proc.wait, daemon=True).start()
+    return proc
+
+
 def main() -> int:
     port = _free_port()
     scratch = Path("/tmp") / f"umbrella-cli-ensure-running-fixture-{os.getpid()}"
@@ -167,6 +216,20 @@ def main() -> int:
         "pgschema = \"toy\"\npgkern = \"toy_kernel\"\n", encoding="utf-8")
     env = dict(os.environ)
     env["PICKUP_DEPLOYMENT"] = str(dep_path)
+    # filing/fixture_sandbox.py: this fixture's own AUTOHARN_FIXTURE_SANDBOX=1 (set above, at
+    # import time) makes libexec/autoharn-service's own main() refuse EVERY invocation of THIS
+    # repo's real ./autoharn dispatcher outright, with no exception for a scratch
+    # PICKUP_DEPLOYMENT override -- that refusal is unconditional by design (the module's own
+    # docstring: "does not depend on recognizing a fixture's call shape"). This IS exactly the
+    # "REVIEWED, use-site reason to touch a repo-root verb directly" case its own refusal text
+    # names as sanctioned exit 2: every invocation below is driven with PICKUP_DEPLOYMENT pointed
+    # at this function's own scratch deployment.json/boundary-multiplex.toml, never the real one.
+    env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = (
+        "seen-red/umbrella-cli-ensure-running both-polarity-proves design/"
+        "FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md sec2/sec7 (ensure-running) by driving "
+        "libexec/autoharn-service through the real ./autoharn dispatcher against a scratch "
+        "deployment.json this function writes -- PICKUP_DEPLOYMENT is overridden on every call "
+        "below, the real repo deployment.json is never read.")
 
     ok = True
 
@@ -257,11 +320,16 @@ def main() -> int:
               f"{live_pids[0]}, agreeing with ss's port-holder AND the pidfile)")
 
     r = _run([str(AUTOHARN), "service", "stop"], env)
-    if r.returncode != 0 or "sent SIGTERM" not in r.stdout:
+    # ROW 1332 FIX: stop's happy-path wording changed from "sent SIGTERM ... pidfile removed"
+    # (which only proved a signal was SENT, not that the process actually died) to "confirmed
+    # dead after SIGTERM ... pidfile removed" -- stop now waits for and confirms exit before
+    # touching the pidfile. This is the ONLY output-wording delta on the fast-dying/no-marker
+    # path; exit code and pidfile-removed behavior are unchanged.
+    if r.returncode != 0 or "confirmed dead after SIGTERM" not in r.stdout:
         print(f"e-explicit-stop: FAIL -- exit {r.returncode}, stdout={r.stdout!r}")
         ok = False
     else:
-        print("e-explicit-stop: PASS")
+        print("e-explicit-stop: PASS (confirmed-dead wording, not merely sent-signal)")
 
     r = _run([str(AUTOHARN), "service", "stop"], env)
     if r.returncode != 1 or "REFUSED" not in r.stderr or "no pidfile" not in r.stderr:
@@ -531,6 +599,7 @@ def main() -> int:
     }), encoding="utf-8")
     k3_env = dict(os.environ)
     k3_env["PICKUP_DEPLOYMENT"] = str(k3_dep_path)
+    k3_env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"]
     k3_pidfile = k3_scratch / ".autoharn-service.pid"
     _dead = subprocess.Popen([sys.executable, "-c", "pass"])
     _dead.wait(timeout=5)
@@ -541,6 +610,17 @@ def main() -> int:
          "--port", str(k3_port), "--pidfile", str(k3_pidfile)],
         cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         start_new_session=True)
+    # ROW 1332 FIX SIDE EFFECT: this fixture's own main process is service_proc's REAL parent
+    # and stays alive for the rest of this run -- without a prompt reaper, a dead service_proc
+    # sits as a ZOMBIE (its own /proc/<pid> entry persisting) until this function eventually
+    # calls .wait() on it, which `cmd_stop`'s own NEW liveness poll below (row 1332's fix) would
+    # misread as "still alive" even after a genuine SIGKILL death -- exactly the same reason
+    # _spawn_mock_boundary_service (cases l/m) starts a background reaper thread the instant it
+    # spawns its own mock. In the REAL world this never bites: the `start` invocation that
+    # originally spawned a service has already exited by the time a separate `stop` invocation
+    # runs, so init (pid 1) has already reparented and will reap it the instant it dies. This
+    # thread reproduces that same prompt-reap behavior for this fixture's own long-lived process.
+    threading.Thread(target=service_proc.wait, daemon=True).start()
     try:
         deadline = time.monotonic() + 10.0
         up = False
@@ -568,7 +648,7 @@ def main() -> int:
                 ok = False
             else:
                 r = _run([str(AUTOHARN), "service", "stop"], k3_env)
-                if r.returncode != 0 or "sent SIGTERM" not in r.stdout:
+                if r.returncode != 0 or "confirmed dead after SIGTERM" not in r.stdout:
                     print(f"k3-stale-squat-reclamation: FAIL -- stop after reclamation: exit "
                           f"{r.returncode}, stdout={r.stdout!r}, stderr={r.stderr!r}")
                     ok = False
@@ -592,6 +672,162 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             service_proc.kill()
         shutil.rmtree(k3_scratch, ignore_errors=True)
+
+    # l-stop-waits-for-delayed-exit / m-stop-escalates-to-sigkill-loud (rows 1332/1354): a fresh
+    # scratch world of their own, separate from every prior case's, so nothing above's teardown
+    # ordering matters here.
+    lm_scratch = Path("/tmp") / f"umbrella-cli-ensure-running-fixture-lm-{os.getpid()}"
+    lm_scratch.mkdir(parents=True, exist_ok=True)
+    lm_dep_path = lm_scratch / "deployment.json"
+    lm_dep_path.write_text(json.dumps({
+        "db": "toy", "host": "192.168.122.1", "kern": "toy_kernel", "name": "svctest",
+        "role": "toy_rw", "schema": "toy",
+        "boundary_url": f"http://127.0.0.1:{_free_port()}", "boundary_deployment": "svctest",
+    }), encoding="utf-8")
+    lm_toml_path = lm_scratch / "boundary-multiplex.toml"
+    lm_toml_path.write_text(
+        "[deployments.svctest]\npghost = \"192.168.122.1\"\npgdatabase = \"toy\"\n"
+        "pguser = \"toy_rw\"\npgschema = \"toy\"\npgkern = \"toy_kernel\"\n", encoding="utf-8")
+    lm_env = dict(os.environ)
+    lm_env["PICKUP_DEPLOYMENT"] = str(lm_dep_path)
+    lm_env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"] = env["AUTOHARN_FIXTURE_SANDBOX_WAIVER"]
+    lm_pidfile = lm_scratch / ".autoharn-service.pid"
+
+    # l: traps SIGTERM, exits ~1.5s later of its own accord -- well inside the production
+    # SIGTERM grace window (5.0s, libexec/autoharn-service's own _STOP_SIGTERM_TIMEOUT_S).
+    l_code = (
+        "import signal, sys, time\n"
+        "deadline = [None]\n"
+        "def _h(signum, frame):\n"
+        "    deadline[0] = time.monotonic() + 1.5\n"
+        "signal.signal(signal.SIGTERM, _h)\n"
+        "while True:\n"
+        "    if deadline[0] is not None and time.monotonic() >= deadline[0]:\n"
+        "        sys.exit(0)\n"
+        "    time.sleep(0.02)\n"
+    )
+    l_proc = _spawn_mock_boundary_service(lm_toml_path, l_code)
+    lm_pidfile.write_text(str(l_proc.pid), encoding="utf-8")
+    t0 = time.monotonic()
+    r = _run([str(AUTOHARN), "service", "stop"], lm_env)
+    elapsed = time.monotonic() - t0
+    if (r.returncode != 0 or "confirmed dead after SIGTERM" not in r.stdout
+            or "ESCALATING" in r.stderr or lm_pidfile.is_file() or l_proc.poll() is None
+            or elapsed < 1.4):
+        print(f"l-stop-waits-for-delayed-exit: FAIL -- exit {r.returncode}, elapsed={elapsed:.2f}s, "
+              f"stdout={r.stdout!r}, stderr={r.stderr!r}, pidfile_present={lm_pidfile.is_file()}, "
+              f"proc_alive={l_proc.poll() is None}")
+        ok = False
+    else:
+        print(f"l-stop-waits-for-delayed-exit: PASS (waited {elapsed:.2f}s for the real exit "
+              f"before touching the pidfile -- RED against pre-fix code, which would have "
+              f"removed the pidfile instantly while this mock was still alive for another "
+              f"~1.5s, the exact orphan this item closes)")
+
+    # m: ignores SIGTERM outright (SIG_IGN) -- only SIGKILL can end it. Must wait out the full
+    # grace window, disclose the escalation LOUDLY, then confirm the SIGKILL death.
+    m_code = (
+        "import signal, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "time.sleep(9999)\n"
+    )
+    m_proc = _spawn_mock_boundary_service(lm_toml_path, m_code)
+    lm_pidfile.write_text(str(m_proc.pid), encoding="utf-8")
+    t0 = time.monotonic()
+    r = _run([str(AUTOHARN), "service", "stop"], lm_env)
+    elapsed = time.monotonic() - t0
+    if (r.returncode != 0 or "ESCALATING" not in r.stderr or "SIGKILL" not in r.stderr
+            or "confirmed dead after SIGKILL" not in r.stdout or lm_pidfile.is_file()
+            or m_proc.poll() is None or elapsed < 4.9):
+        print(f"m-stop-escalates-to-sigkill-loud: FAIL -- exit {r.returncode}, "
+              f"elapsed={elapsed:.2f}s, stdout={r.stdout!r}, stderr={r.stderr!r}, "
+              f"pidfile_present={lm_pidfile.is_file()}, proc_alive={m_proc.poll() is None}")
+        ok = False
+    else:
+        print(f"m-stop-escalates-to-sigkill-loud: PASS (waited out the {elapsed:.2f}s grace "
+              f"window, LOUDLY disclosed the SIGKILL escalation in stderr, confirmed the kill, "
+              f"pidfile removed only after death)")
+    # Belt-and-braces cleanup, independent of whether `stop` (real or pre-fix) actually killed
+    # them: l_proc dies on its own; m_proc (SIGTERM-immune) relies on `stop`'s own SIGKILL
+    # escalation, which a RED run against pre-fix code never sends -- SIGKILL it here for real so
+    # a RED run never leaves an orphaned mock process behind on this host.
+    for _p in (l_proc, m_proc):
+        try:
+            _p.kill()
+        except OSError:
+            pass
+    shutil.rmtree(lm_scratch, ignore_errors=True)
+
+    # n-stop-refuses-pidfile-removal-while-alive: white-box -- imports libexec/autoharn-service
+    # directly and fakes ONLY its own `os.kill` (a no-op recorder; `os.path`/`/proc` stay real,
+    # delegated through __getattr__ below) so a REAL, genuinely-alive process's signals have no
+    # effect, simulating the uninterruptible-kernel-sleep case SIGKILL cannot rule out either.
+    n_scratch = Path("/tmp") / f"umbrella-cli-ensure-running-fixture-n-{os.getpid()}"
+    n_scratch.mkdir(parents=True, exist_ok=True)
+    n_dep_path = n_scratch / "deployment.json"
+    n_toml_path = n_scratch / "boundary-multiplex.toml"
+    n_toml_path.write_text("[deployments.svctest]\n", encoding="utf-8")
+    n_dep_path.write_text(json.dumps({
+        "db": "toy", "host": "192.168.122.1", "kern": "toy_kernel", "name": "svctest",
+        "role": "toy_rw", "schema": "toy",
+        "boundary_url": f"http://127.0.0.1:{_free_port()}", "boundary_deployment": "svctest",
+    }), encoding="utf-8")
+    n_pidfile = n_scratch / ".autoharn-service.pid"
+    n_proc = subprocess.Popen(
+        ["python3", "-c", "import time; time.sleep(30)",
+         "serving.boundary_service", "--config", str(n_toml_path)])
+    n_pidfile.write_text(str(n_proc.pid), encoding="utf-8")
+
+    class _FakeOS:
+        def __init__(self, real: object) -> None:
+            self._real = real
+            self.kill_calls: list[int] = []
+
+        def kill(self, pid: int, sig: int) -> None:
+            self.kill_calls.append(sig)  # recorded, never actually delivered
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._real, name)
+
+    _n_loader = importlib.machinery.SourceFileLoader(
+        "autoharn_service_mod_n", str(REPO_ROOT / "libexec" / "autoharn-service"))
+    _spec = importlib.util.spec_from_loader(_n_loader.name, _n_loader)
+    assert _spec is not None
+    autoharn_service_mod = importlib.util.module_from_spec(_spec)
+    _n_loader.exec_module(autoharn_service_mod)
+    fake_os = _FakeOS(os)
+    autoharn_service_mod.os = fake_os
+    autoharn_service_mod.DEPLOYMENT_PATH = n_dep_path
+    autoharn_service_mod._STOP_SIGTERM_TIMEOUT_S = 0.3
+    autoharn_service_mod._STOP_SIGKILL_TIMEOUT_S = 0.2
+    autoharn_service_mod._STOP_POLL_INTERVAL_S = 0.05
+    try:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            n_rc = autoharn_service_mod.cmd_stop(["stop"])
+        n_stdout, n_stderr = out.getvalue(), err.getvalue()
+        if (n_rc != 1 or "STILL ALIVE" not in n_stderr or not n_pidfile.is_file()
+                or fake_os.kill_calls != [signal.SIGTERM, signal.SIGKILL]
+                or int(n_pidfile.read_text(encoding="utf-8").strip()) != n_proc.pid):
+            print(f"n-stop-refuses-pidfile-removal-while-alive: FAIL -- exit {n_rc}, "
+                  f"stdout={n_stdout!r}, stderr={n_stderr!r}, "
+                  f"pidfile_present={n_pidfile.is_file()}, kill_calls={fake_os.kill_calls}")
+            ok = False
+        else:
+            print("n-stop-refuses-pidfile-removal-while-alive: PASS (SIGTERM and SIGKILL both "
+                  "sent and both had no effect on this genuinely-alive process; stop REFUSED, "
+                  "exit 1, and left the pidfile in place rather than orphan a live process while "
+                  "reporting success)")
+    finally:
+        try:
+            os.kill(n_proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            n_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        shutil.rmtree(n_scratch, ignore_errors=True)
 
     if ok:
         print("\nALL CASES PASS")

@@ -298,3 +298,73 @@ asyncio's own `loop.create_server()` calls `sock.listen()` again with ITS OWN de
 silently overriding the 2048 requested here -- not a no-op. THE FIX: the comment now states the
 measured reality (512 observed, not 2048) and notes this is harmless for this module's own
 purposes (512 is still generous for a local single-boundary service) without claiming "no-op".
+
+---
+
+ROWS 1332/1354 (service-stop-no-wait-orphans, 2026-07-26): `cmd_stop` sent SIGTERM and removed
+the pidfile UNCONDITIONALLY, with no wait and no exit confirmation -- a slow-to-die
+boundary_service was orphaned (still running, still holding the port) while the pidfile's
+disappearance made the world LOOK stopped. Three new cases witness this against a REAL scratch
+`serving.boundary_service` (case e/k3, wording only) and against slow-shutdown MOCKS that are
+never a real boundary (cases l/m/n, per this task's own house rule -- plain Python children whose
+`/proc/<pid>/cmdline` is made to satisfy `pid_is_boundary_service`'s text check):
+
+  l-stop-waits-for-delayed-exit: a mock that traps SIGTERM and exits ~1.5s later of its own
+    accord (well inside the eventual 5.0s SIGTERM grace window).
+  m-stop-escalates-to-sigkill-loud: a mock that IGNORES SIGTERM outright (SIG_IGN) and only dies
+    to SIGKILL.
+  n-stop-refuses-pidfile-removal-while-alive: white-box (imports libexec/autoharn-service
+    directly, fakes only its own `os.kill` to a no-op recorder against a REAL, genuinely-alive
+    process) -- simulates a pid that outlives even SIGKILL.
+
+REPRODUCTION, pre-fix code (`git stash` the `libexec/autoharn-service` hunk of this fix, rerun,
+`git stash pop` immediately after this capture -- confirmed reverted):
+
+$ python3 seen-red/umbrella-cli-ensure-running/run_fixtures.py
+a-status-unreachable: PASS (RED case: exit 1, UNREACHABLE)
+b-cold-spawn: PASS (one stderr notice, reachable after spawn, pidfile written)
+c-warm-adopt-silent: PASS (no new spawn, exit 0)
+d-race-two-invocations: PASS (one spawned+won, one adopted, both exit 0)
+g-race-structural-winner: PASS (converged to exactly one live process, agreeing with ss's
+port-holder AND the pidfile)
+e-explicit-stop: FAIL -- exit 0, stdout='autoharn service: sent SIGTERM to pid 920327 (was
+serving http://127.0.0.1:49909); pidfile removed.\n'
+f-stop-without-pidfile-refuses: PASS (RED case: exit 1, teaches, never guesses)
+h-stop-refuses-decoy-pid: PASS (RED case: decoy survives, stale pidfile removed, refusal teaches)
+i-squatter-refused-not-adopted: PASS (RED case: both status and start refuse a non-autoharn HTTP
+responder, name the port, never adopt)
+j-verb-auto-spawns-through-shim: PASS (led auto-spawned the down boundary itself)
+k-hot-service-late-straggler: PASS
+k2-adopted-requires-probe: PASS
+k3-stale-squat-reclamation: FAIL -- stop after reclamation: exit 0, stdout='autoharn service:
+sent SIGTERM to pid 920763 (was serving http://127.0.0.1:34795); pidfile removed.\n'
+l-stop-waits-for-delayed-exit: FAIL -- exit 0, elapsed=0.12s, stdout='autoharn service: sent
+SIGTERM to pid 920781 (was serving http://127.0.0.1:39179); pidfile removed.\n',
+pidfile_present=False, proc_alive=True
+m-stop-escalates-to-sigkill-loud: FAIL -- exit 0, elapsed=0.12s, stdout='autoharn service: sent
+SIGTERM to pid 920786 (was serving http://127.0.0.1:39179); pidfile removed.\n',
+pidfile_present=False, proc_alive=True
+n-stop-refuses-pidfile-removal-while-alive: FAIL -- exit 0, stdout='autoharn service: sent
+SIGTERM to pid 920791 (was serving http://127.0.0.1:45757); pidfile removed.\n', stderr='',
+pidfile_present=False, kill_calls=[<Signals.SIGTERM: 15>]
+
+AT LEAST ONE CASE FAILED
+
+THE EXACT DEFECT, in cases l/m/n's own numbers: `pidfile_present=False` while `proc_alive=True`
+-- the pidfile is gone (the world looks stopped) while the process this tool signaled is
+STILL RUNNING. Case n additionally shows `kill_calls=[SIGTERM]` only: pre-fix code never even
+attempts SIGKILL, so a process that ignores SIGTERM outlives `stop` forever, orphaned, with no
+disclosure at all.
+
+THE FIX: `cmd_stop` now polls `/proc/<pid>` after SIGTERM (`_STOP_SIGTERM_TIMEOUT_S = 5.0s`,
+`_STOP_POLL_INTERVAL_S = 0.1s`) before touching the pidfile. If the pid is still alive at the
+deadline, it prints a LOUD stderr line disclosing the escalation, sends SIGKILL, and polls again
+(`_STOP_SIGKILL_TIMEOUT_S = 2.0s`). The pidfile is removed ONLY once death is confirmed by either
+poll; if the pid is demonstrably still alive after SIGKILL too, `stop` REFUSES (exit 1) and
+leaves the pidfile in place rather than orphan a live process while reporting success. The
+happy-path success wording changed from "sent SIGTERM ... pidfile removed" (which only proved a
+signal was SENT) to "confirmed dead after SIGTERM ... pidfile removed" (which proves the process
+actually exited before the pidfile was touched) -- the sole no-marker output-wording delta on the
+fast-dying/ordinary-operator path; exit code and pidfile-removed behavior on that path are
+unchanged. Post-fix, all 16 cases (including l/m/n above) PASS -- see
+seen-red/umbrella-cli-ensure-running/run_fixtures.py's own current output.
