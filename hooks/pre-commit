@@ -39,7 +39,8 @@
 # running session enforces stays gated for the maintainer's own session-boundary batch, same as
 # every other hooks/ edit; this worktree's copy is the reviewable artifact, not a live wire.):
 # staging_guard -> no_lazy_imports -> fixture_census -> deep_walk_recursion_guard -> max_lines ->
-# link_integrity ->
+# link_integrity -> lineage_chain_coverage (added 2026-07-26, work item lineage-chain-lags-
+# directory, ledger rows 1392/1393) ->
 # apparatus_unknown_keys (gated only when bootstrap/templates/apparatus.json is touched) ->
 # doc_shapes -> doc-attestation-presence -> layout_census -> doc-legibility. layout_census is DISABLED here
 # as of the maintainer ruling below (2026-07-09); it still appears in this history note as the
@@ -202,6 +203,24 @@ PY="$HOME/w/vdc/venvs/generic/bin/python"
 "$PY" "$REPO_ROOT/gates/link_integrity.py" || {
     echo "" >&2
     echo "pre-commit: link-integrity gate FAILED — commit refused (a doc links somewhere that does not exist)." >&2
+    exit 1
+}
+
+# lineage_chain_coverage — mechanizes the class behind work item lineage-chain-lags-directory
+# (ledger rows 1392/1393, 2026-07-26): bootstrap/new-project.sh's --new-world birth carries TWO
+# hand-authored homes for "which kernel/lineage/sNN deltas does a fresh world get" (the psql -f
+# apply list and the LINEAGE_CHAIN provenance narrative) -- three merged, scratch-witnessed
+# deltas (s58/s59/s60) sat unwired in BOTH for a full day-plus before this gap was found. Asserts
+# every tracked kernel/lineage/sNN-*.sql delta (N >= 20; see gates/lineage_chain_coverage.py's own
+# NAMING SPACE section for the principled exclusions) is named in both homes -- a static, no-DB
+# check, same shape as link_integrity above, its natural sibling in this hook.
+# READ MODE: STAGED bytes by default (gates/_staged_read.py), same gates-staged-vs-tree-blindness
+# discipline (ledger row 1234) every other content-checking gate in this chain follows.
+"$PY" "$REPO_ROOT/gates/lineage_chain_coverage.py" || {
+    echo "" >&2
+    echo "pre-commit: lineage-chain-coverage gate FAILED — commit refused (a kernel/lineage/sNN" >&2
+    echo "delta is missing from bootstrap/new-project.sh's apply list and/or its LINEAGE_CHAIN" >&2
+    echo "narrative; see gates/lineage_chain_coverage.py)." >&2
     exit 1
 }
 
