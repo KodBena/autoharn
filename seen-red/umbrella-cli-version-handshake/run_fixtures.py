@@ -38,6 +38,11 @@ sys.path.insert(0, str(REPO_ROOT / "serving"))
 sys.path.insert(0, str(REPO_ROOT / "filing"))
 import boundary_cli_client as bcc  # noqa: E402  (path set immediately above -- top-of-file, not lazy: CLAUDE.md's 2026-07-02 ban is on RUNTIME-deferred imports, and this sys.path setup + import both execute unconditionally at module load, the same pattern serving/boundary_service.py's own module docstring documents for its sibling imports)
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

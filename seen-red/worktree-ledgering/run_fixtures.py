@@ -47,6 +47,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 REPO = Path(__file__).resolve().parents[2]
 MERGE_JSONL = REPO / "tools" / "merge_jsonl.py"
 MERGE_BACKLOG = REPO / "tools" / "merge_backlog_sections.py"

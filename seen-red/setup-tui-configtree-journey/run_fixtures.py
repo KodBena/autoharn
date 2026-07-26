@@ -133,6 +133,11 @@ from tools.setup_tui.plan import CallableAct, Plan, PlanEntry  # noqa: E402
 import layout_invariant  # noqa: E402
 from layout_invariant import wire_pilot  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # GLOBAL POST-INTERACTION LAYOUT INVARIANT (ledger row 1139, NET half) -- wired here, ONCE, at
 # import time, so EVERY case below (existing and any added later) is checked after every single
 # `pilot.pause()`/`click()`/`press()` automatically; no case opts in, none can opt out.

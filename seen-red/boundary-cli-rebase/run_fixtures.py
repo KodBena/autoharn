@@ -73,6 +73,11 @@ sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(REPO / "serving"))
 import deployment_record  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 _spec = importlib.util.spec_from_file_location("boundary_service_fixtures", SIBLING)
 assert _spec is not None and _spec.loader is not None
 bs_fixtures = importlib.util.module_from_spec(_spec)

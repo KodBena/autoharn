@@ -52,6 +52,11 @@ import ledger_differential  # noqa: E402
 import ledger_edb  # noqa: E402
 import pghost_resolve  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # cli-rebase-fixture-repairs (ledger row 1170): REUSE (ADR-0012 P1) serve_existing_world from
 # seen-red/boundary-service/run_fixtures.py -- the served `led` shim refuses every write until
 # this deployment.json gains boundary_url/boundary_deployment.

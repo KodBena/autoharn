@@ -47,6 +47,11 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "gates"))
 import link_integrity as g  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def run_case(tmp: Path, rel_target: str) -> tuple[int, str]:
     """Write fixture.md linking to rel_target, point the gate at just that file, capture output.

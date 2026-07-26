@@ -43,6 +43,11 @@ sys.path.insert(0, os.path.join(ROOT, "gates"))
 
 import max_lines  # noqa: E402 -- path insert above must precede this import
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def _check(label: str, condition: bool, detail: str) -> bool:
     status = "PASS" if condition else "FAIL"

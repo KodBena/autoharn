@@ -42,6 +42,11 @@ sys.path.insert(0, REPO)
 
 from tools.setup_tui import config_file, config_seam, destination  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PGHOST = os.environ.get("HARNESS_PGHOST") or os.environ.get("EPISTEMIC_PGHOST")
 PGDB = "toy"
 EXEMPLAR = os.path.join(REPO, "bootstrap", "templates", "known-good-blank.toml")

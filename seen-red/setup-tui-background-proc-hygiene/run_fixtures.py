@@ -74,6 +74,11 @@ sys.path.insert(0, str(REPO))
 
 from tools.setup_tui import runner  # noqa: E402 -- the REAL, fixed implementation under test
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # runner.py's own HEAD immediately before this dated fix -- pinned by SHA (never "HEAD", which
 # drifts stale the moment a later commit touches runner.py again, per this corpus's own
 # sibling fixtures' documented lesson).

@@ -54,6 +54,11 @@ import deployment_record  # noqa: E402  (unused directly here, but boundary_serv
 import boundary_service  # noqa: E402  (MAX_INFLIGHT_KERNEL_CALLS, compute_per_deployment_limit, PSQL_CONNECT_TIMEOUT_S -- reused constants, never a second literal)
 import boundary_multiplex_config  # noqa: E402
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 # The sibling module is loaded by FILE PATH (not `seen-red.boundary-service.run_fixtures` --
 # `seen-red`/`boundary-service` are not valid Python package names, hyphens included) under its
 # own distinct module name, so importing it here never collides with this file's own identity

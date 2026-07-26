@@ -38,6 +38,12 @@ sys.path.insert(0, str(REPO))  # repo root, so `tools.setup_tui` imports regardl
 # by the path setup a fixture invoked from an arbitrary cwd needs.)
 from tools.setup_tui import feature_facts  # noqa: E402
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 
 def main() -> int:
     # --- case 1: GREEN leg -- the real registry and the real live derivation agree ---

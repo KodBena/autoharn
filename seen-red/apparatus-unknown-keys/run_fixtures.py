@@ -46,6 +46,12 @@ GATE = REPO / "gates" / "apparatus_unknown_keys.py"
 sys.path.insert(0, str(REPO / "filing"))
 import apparatus_registry  # noqa: E402  (filing/apparatus_registry.py, the module case g exercises directly)
 
+import os
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PROBE_DIR = Path("/tmp/.apparatusunknownkeysprobe")
 
 

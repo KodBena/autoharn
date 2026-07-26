@@ -62,6 +62,11 @@ import ledger_differential  # noqa: E402  (engine/ledger_differential.py)
 import ledger_edb  # noqa: E402  (engine/ledger_edb.py -- export)
 import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
+# FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
+# environment before any subprocess is spawned -- inherited by the whole process tree
+# this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
+os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
+
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
 CHAIN_COMMON = [
