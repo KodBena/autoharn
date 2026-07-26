@@ -728,7 +728,11 @@ def export_entitlement(name: str) -> EdbExport:
     Capable only on an s41+s60 schema (principal_relation/principal_binding_active columns AND
     entitlement_act_class -- the latter is s60's own marker column, so a pre-s60 s41 world reads
     incapable here even though acts-for relations already exist, matching this family's OWN
-    reason for being: entitlement enforcement, not mere delegation recording)."""
+    reason for being: entitlement enforcement, not mere delegation recording).
+
+    s62 (row 1385) adds a seventh SQL-side act class (delegation_lifecycle, gating acts-for
+    rows) but needs no exporter change -- every in-force edge lands in acts_for_edge/2
+    regardless of which class gated its write; a refused self-assertion is never committed."""
     t = resolve(name)
     exp = EdbExport(target=t)
     rel = t.rel()

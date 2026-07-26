@@ -173,6 +173,7 @@ CHAIN = [
     "s58-missive-substrate.sql",
     "s59-missive-views.sql",
     "s60-entitlement-enforcement.sql",
+    "s62-delegation-lifecycle-gating.sql",
 ]
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
@@ -709,6 +710,9 @@ MANIFEST.append(dict(column="entitlement_act_class", kinds=("entitlement_class_c
                             "vocabulary of act-class strings a configuration row can USEFULLY "
                             "match lives in entitlement_act_class_of(), not a value CHECK (the "
                             "s36 decision_grade free-text-token precedent, one axis over)."))
+# s62 (kernel/lineage/s62-delegation-lifecycle-gating.sql, row 1385) extends this CHAIN
+# (s59's own "view/function-only, zero MANIFEST change" precedent): it CREATE-OR-REPLACEs
+# entitlement_act_class_of/validate_entitlement, zero new columns/kinds/CHECKs -- no MANIFEST row.
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 
