@@ -171,8 +171,10 @@ by construction, not by a second copy of the check.
   E6 verify_commission_event(Verdict,T) -- `.claude/logs/verify_commission.jsonl`
      (bootstrap/templates/verify-commission.tmpl, THIS SAME COMMISSION's own addition to that
      live verb -- see its own docstring's EVENT JOURNAL section). Verdict is one of the closed
-     FIVE that verb ever journals (VERIFIED, UNSIGNED, FORGED-OR-CORRUPT, GPG-UNAVAILABLE,
-     NO-COMMITTED-KEY). CAPABILITY, NAMED HONESTLY: since verify-commission.tmpl executes IN
+     SIX that verb ever journals (VERIFIED, UNSIGNED, FORGED-OR-CORRUPT, GPG-UNAVAILABLE,
+     NO-COMMITTED-KEY, MULTIPLE-VALID-SIGNATURES -- the last added by the s61 fix round, kernel
+     review tip c3d773a, alongside verify-commission.tmpl's own fourth typed refusal).
+     CAPABILITY, NAMED HONESTLY: since verify-commission.tmpl executes IN
      PLACE out of the live autoharn checkout (like every other verb), there is no per-world
      "template vintage" to detect -- the only observable signal is whether this world's own
      `.claude/logs/verify_commission.jsonl` FILE exists at all. Its absence means either "this
@@ -238,9 +240,13 @@ _VERIFY_COMMISSION_JOURNAL = "verify_commission.jsonl"
 # vocabulary CHECK belongs to preamble_ordering.lp's own `#show`n atoms, not this EDB layer).
 _STOP_OUTCOMES = frozenset({"clean_allow", "observed_would_block", "breaker_fail_open", "blocked"})
 # E6's closed verdict vocabulary (bootstrap/templates/verify-commission.tmpl's own
-# `_journal_verify_commission` call sites) -- named for the same reason.
+# `_journal_verify_commission` call sites) -- named for the same reason. Widened (s61 fix round,
+# kernel review tip c3d773a) to include MULTIPLE-VALID-SIGNATURES. FRAMING CORRECTION
+# (2026-07-26): unread outside this line (E6's loop checks verdict/ts truthiness only;
+# preamble_ordering.lp's F2 wildcards Verdict) -- declared, fail-safe/additive, not a hazard catch.
 _VERIFY_COMMISSION_VERDICTS = frozenset(
-    {"VERIFIED", "UNSIGNED", "FORGED-OR-CORRUPT", "GPG-UNAVAILABLE", "NO-COMMITTED-KEY"})
+    {"VERIFIED", "UNSIGNED", "FORGED-OR-CORRUPT", "GPG-UNAVAILABLE", "NO-COMMITTED-KEY",
+     "MULTIPLE-VALID-SIGNATURES"})
 
 # The journal-writing mechanisms and the hook script whose presence in a world's
 # .claude/settings.json means that mechanism is WIRED (the capability signal the run9 fix

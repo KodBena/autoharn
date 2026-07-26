@@ -40,7 +40,7 @@ VERDICTS (exit code in parentheses) — exactly the three the spec names, nothin
                          it against, and the signature does NOT verify against the statement's
                          current bytes. A real, checkable, cryptographic mismatch. LOUD.
 
-TWO TYPED REFUSALS (exit code in parentheses) — distinct from all three verdicts above, because
+THREE TYPED REFUSALS (exit code in parentheses) — distinct from all three verdicts above, because
 neither precondition leaves any of the three actually decidable:
   gpg missing       (2) — none of the three verdicts can be computed without gpg itself.
   NO-COMMITTED-KEY  (3) — a `.claude/commission-<id>.asc` EXISTS (a claim of SIGNED-mode
@@ -52,6 +52,11 @@ neither precondition leaves any of the three actually decidable:
                          `UNVERIFIABLE` verdict (a DISTINCT label there too, never folded into
                          its `BAD` outcome) — loud, never silently treated as a pass, but never
                          mislabeled as evidence of forgery either.
+  MULTIPLE-VALID-SIGNATURES (4) — fix-round addition (kernel review, s61 tip c3d773a): the
+                         `.asc` carries MORE THAN ONE valid signature (filing/gpg_trust.py's
+                         `signing_key_fingerprint` raises rather than silently reporting the
+                         first VALIDSIG it sees) — grading a signature against ONE s41 binding
+                         requires ONE unambiguous signer; never guessed.
 
 REVISION NOTE (2026-07-11/12, same commission, caught by an out-of-frame hack-rationalization
 audit before this shipped as "done" — CLAUDE.md's engineering-responsibility corollary in
@@ -86,9 +91,18 @@ USAGE:
   ./verify-commission                  # the MOST RECENT commission row
   ./verify-commission --id 7           # a specific commission row by ledger id
   ./verify-commission --json           # machine-readable report, same verdicts
+  ./verify-commission --attest         # v1.1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2
+                                        # item 1): on a real VERIFIED verdict ONLY, writes a
+                                        # commission_signature_verified ledger row (kernel/
+                                        # lineage/s61-signature-symmetry-and-key-binding.sql) --
+                                        # the marker fact that world's kernel-side SIGNED-
+                                        # supersession-symmetry check consults. A no-op (reported,
+                                        # never silent) on UNSIGNED/FORGED-OR-CORRUPT/any refusal
+                                        # -- there is nothing true to attest. Combine with --id
+                                        # and/or --json freely.
 
 EVENT JOURNAL (E6 of design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4, added 2026-07-12): every run
-that reaches a determination -- one of the three verdicts above OR one of the two typed refusals
+that reaches a determination -- one of the three verdicts above OR one of the three typed refusals
 -- appends ONE line to `<world>/.claude/logs/verify_commission.jsonl` ({"ts": <UTC-Z
 milliseconds>, "verdict": <the determination string>}), the unified hook-journal timestamp
 convention this project's other journals already use (hooks/posttooluse_bash_completion.py's own
@@ -105,6 +119,29 @@ for the full account. A world whose `.claude/logs/` carries no verify_commission
 file executes IN PLACE out of the live autoharn checkout like every other verb, so a re-run
 picks the journaling up immediately, no per-world re-scaffold needed) reads as capability-absent
 for that world, named honestly, never guessed.
+
+GRADE, ADDED (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2 / design/
+CONSULT-WORK-GATING-SHAPE-2026-07-26.md §B.2's authenticity table, v1.1): a VERIFIED verdict now
+also reports which vocabulary the check succeeded against -- BINDING-VERIFIED if the signing key's
+fingerprint matches an IN-FORCE `principal_key_bound` row (kernel/lineage/
+s41-principal-bindings-and-relations.sql D-5's `principal_keys` view) for the commission's own
+actor principal, DIRECTORY-VERIFIED if it verifies against a committed `keys/*.asc` key but that
+key is not (or not yet) bound to the actor via s41 -- the two grades §B.2's authenticity table
+names explicitly ("verified against `keys/` AND (once the key ceremony binds it) the actor's
+in-force `principal_key_bound` fingerprint"). This closes the gap §0.4 of the consult names
+precisely: "no verb verifies a signature against a *principal's bound key* (verify-commission
+checks the deployment's keys/ directory, not the s41 binding)". The check is ADDITIVE and
+NEVER refusal-bearing on its own: a deployment with no s41 in its kernel, or with an actor who
+has bound no key, still gets VERIFIED at DIRECTORY-VERIFIED grade exactly as before this change --
+this is a REPORTING refinement, not a new refusal (v1.1's own item 2 asks for "verify... checks...
+when one exists", never "requires"). The signing key's own fingerprint (recovered from gpg's
+`--status-fd`-emitted `VALIDSIG` line, never parsed out of the locale-dependent human-readable
+"Good signature" text this file already prints) is reported alongside the grade so an operator or
+downstream verb can audit which key actually signed, independent of which grade it earned.
+CAPABILITY-ABSENT, NAMED NOT GUESSED: if this deployment's kernel predates s41 (no
+`principal_keys` view), the grade is DIRECTORY-VERIFIED with a note stating the binding check was
+UNAVAILABLE (not "no binding exists" -- a materially different fact, the same capability-absent
+discipline the E6 journal note above already established for a missing `.claude/logs/`).
 
 Deployment resolution, connection posture, and path resolution mirror pickup.tmpl /
 distance-to-clean.tmpl exactly (PICKUP_DEPLOYMENT, AUTOHARN, `SET ROLE <dep.role>`) — this file
@@ -145,9 +182,10 @@ def _journal_verify_commission(world_root: Path, verdict: str) -> None:
     """E6 (design/ORCH-CONTEMPORANEITY-PART3-SPEC.md §4): append ONE line naming this run's
     determination -- best-effort, fail-open (module docstring's EVENT JOURNAL section): a
     journaling failure must never turn a real verdict into a crash or change this verb's exit
-    code. `verdict` is one of the closed five: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
-    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY (the two typed refusals) --
-    never a sixth value, so a consumer's Verdict vocabulary stays closed by construction."""
+    code. `verdict` is one of the closed six: VERIFIED, UNSIGNED, FORGED-OR-CORRUPT (the three
+    verdicts `verify()` returns) or GPG-UNAVAILABLE, NO-COMMITTED-KEY, MULTIPLE-VALID-SIGNATURES
+    (the three typed refusals) -- never a seventh value, so a consumer's Verdict vocabulary stays
+    closed by construction."""
     try:
         path = world_root / ".claude" / "logs" / "verify_commission.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -181,7 +219,7 @@ def fetch_commission(dep, commission_id: int | None) -> dict | None:
     order = "" if commission_id is not None else "ORDER BY l.id DESC LIMIT 1"
     sql = (f"SET ROLE {dep.role};\n"
            f"SELECT row_to_json(t) FROM (SELECT l.id, l.statement, p.name AS actor, "
-           f"l.stamp_agent, l.stamp_verified FROM {dep.schema}.ledger_current l "
+           f"l.actor AS actor_id, l.stamp_agent, l.stamp_verified FROM {dep.schema}.ledger_current l "
            f"JOIN {dep.kern}.principal p ON p.id = l.actor "
            f"WHERE l.kind = 'commission' AND {where} {order}) t;")
     r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1",
@@ -217,18 +255,55 @@ class NoCommittedKey(Exception):
     `law/keys/`."""
 
 
-def verify(dep, row: dict, world_root: Path) -> tuple[str, str]:
-    """Returns (verdict, detail). verdict in {VERIFIED, UNSIGNED, FORGED-OR-CORRUPT}. Raises
-    gpg_trust.GpgUnavailable if a .asc exists but gpg itself is not on PATH, or NoCommittedKey if
-    a .asc exists but THIS DEPLOYMENT's own keys/ (world_root / "keys", never autoharn's own
-    law/keys/) is empty — both are the caller's problem to report as typed refusals, distinct
-    from all three verdicts."""
+class BindingCheckUnavailable(Exception):
+    """v1.1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 2): raised internally by
+    `bound_key_fingerprints` when THIS DEPLOYMENT's kernel predates s41 (no `principal_keys`
+    view exists to query) — caught by `verify()` and folded into a DIRECTORY-VERIFIED grade with
+    an honest note, never surfaced as a crash or a fourth typed refusal (the binding check is a
+    REPORTING refinement, not a new precondition for VERIFIED — see this file's own GRADE,
+    ADDED docstring section)."""
+
+
+def bound_key_fingerprints(dep, actor_id) -> list[str]:
+    """v1.1 (spec §2 item 2): the commission actor's IN-FORCE `principal_key_bound` fingerprints
+    (kernel/lineage/s41-principal-bindings-and-relations.sql D-5's `principal_keys` view — already
+    filtered to unsuperseded AND active by that view's own definition, so every row returned here
+    is a live binding, never a withdrawn one). Raises BindingCheckUnavailable if this deployment's
+    kernel carries no `principal_keys` view at all (pre-s41) — a capability-absent fact, distinct
+    from "queried and found none bound" (an empty list, a legitimate, common answer for any
+    deployment that has never run the key-binding ceremony)."""
+    sql = (f"SET ROLE {dep.role};\n"
+           f"SELECT fingerprint FROM {dep.schema}.principal_keys WHERE subject = {int(actor_id)};")
+    r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1",
+                        "-c", sql], capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            raise BindingCheckUnavailable(
+                f"{dep.schema}.principal_keys does not exist in this deployment's kernel "
+                f"(pre-s41) — the binding check ran against the deployment's keys/ directory "
+                f"only (DIRECTORY-VERIFIED grade)")
+        print(f"verify-commission: principal_keys query failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(2)
+    lines = [ln for ln in r.stdout.strip("\n").splitlines() if ln.strip()]
+    return [ln.strip() for ln in lines[1:]] if lines else []  # first line echoes SET ROLE
+
+
+def verify(dep, row: dict, world_root: Path) -> tuple[str, str, str | None, str | None]:
+    """Returns (verdict, detail, grade, signing_fp). verdict in {VERIFIED, UNSIGNED,
+    FORGED-OR-CORRUPT}; grade/signing_fp are None except on VERIFIED, where grade is
+    BINDING-VERIFIED (signing_fp matches an in-force principal_key_bound fingerprint for row's
+    actor) or DIRECTORY-VERIFIED (verifies against a committed keys/ key, but not the actor's own
+    s41 binding — or s41 is unavailable in this deployment's kernel; the detail string says
+    which). Raises gpg_trust.GpgUnavailable if a .asc exists but gpg itself is not on PATH, or
+    NoCommittedKey if a .asc exists but THIS DEPLOYMENT's own keys/ (world_root / "keys", never
+    autoharn's own law/keys/) is empty — both are the caller's problem to report as typed
+    refusals, distinct from all three verdicts."""
     asc_path = world_root / ".claude" / f"commission-{row['id']}.asc"
     if not asc_path.exists():
         mode = signing_mode(row)
         return "UNSIGNED", (f"no {asc_path.relative_to(world_root)} found — legitimate {mode}-mode "
                              f"commission, not a defect (spec §3: UNSIGNED is a weaker claim, "
-                             f"never a failure)")
+                             f"never a failure)"), None, None
 
     # THIS DEPLOYMENT's own keyring — a sibling of deployment.json, never autoharn's law/keys/
     # (see this module's KEY-RESIDENCE REVISION note above for why). `gpg_trust.committed_keys`
@@ -250,21 +325,98 @@ def verify(dep, row: dict, world_root: Path) -> tuple[str, str]:
             data_path = Path(tf.name)
         try:
             env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
-            r = subprocess.run(["gpg", "--verify", str(asc_path), str(data_path)],
+            r = subprocess.run(["gpg", "--status-fd", "1", "--verify", str(asc_path), str(data_path)],
                                 capture_output=True, text=True, env=env)
             detail = (r.stdout + r.stderr).strip()
             if r.returncode == 0 and "Good signature" in detail:
-                return "VERIFIED", f"statement sha256={digest}. {detail}"
-            return "FORGED-OR-CORRUPT", f"statement sha256={digest}. {detail}"
+                # v1.1 (spec §2 item 2): grade against the s41 binding, when one exists.
+                # fix-round finding (kernel review, s61 tip c3d773a): a multi-signature .asc
+                # (more than one VALIDSIG line) cannot honestly be graded against ONE signing
+                # key -- gpg_trust.signing_key_fingerprint refuses rather than silently picking
+                # the first; propagated here as-is (caught by main(), the caller-side typed-
+                # refusal home every other precondition in this file already uses -- see
+                # NoCommittedKey/BindingCheckUnavailable just above).
+                sig_fp = gpg_trust.signing_key_fingerprint(r.stdout)
+                grade = "DIRECTORY-VERIFIED"
+                grade_note = "verified against this deployment's keys/ directory only"
+                try:
+                    bound = bound_key_fingerprints(dep, row["actor_id"])
+                    if sig_fp is not None and sig_fp in bound:
+                        grade = "BINDING-VERIFIED"
+                        grade_note = (f"signing key matches an in-force principal_key_bound "
+                                       f"fingerprint for actor '{row['actor']}' (s41)")
+                    elif bound:
+                        grade_note = (f"verified against keys/, but the signing key is NOT among "
+                                       f"actor '{row['actor']}''s {len(bound)} in-force "
+                                       f"principal_key_bound fingerprint(s) (s41)")
+                    else:
+                        grade_note = (f"verified against keys/; actor '{row['actor']}' has bound "
+                                       f"no key via s41 (principal_key_bound)")
+                except BindingCheckUnavailable as e:
+                    grade_note = str(e)
+                return ("VERIFIED",
+                        f"statement sha256={digest}. signing_key={sig_fp}. grade={grade} "
+                        f"({grade_note}). {detail}",
+                        grade, sig_fp)
+            return "FORGED-OR-CORRUPT", f"statement sha256={digest}. {detail}", None, None
         finally:
             data_path.unlink(missing_ok=True)
     finally:
         gpg_trust.teardown_scratch_keyring(gnupghome)
 
 
+def attest(dep, row: dict, grade: str, sig_fp: str) -> dict:
+    """s61 item 1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2): writes the
+    commission_signature_verified marker row THIS delta's own kernel-side symmetry check
+    (kernel/lineage/s61-signature-symmetry-and-key-binding.sql Element 6/7) consults -- called
+    ONLY after this file's OWN real gpg check has ALREADY returned VERIFIED (main()'s own
+    caller-side guard), never speculatively. Writes through the SAME SECURITY DEFINER boundary
+    function every other writer in this project uses (kernel.ledger_write), via a direct psql
+    connection (this file already connects raw for its READS -- see module docstring; the
+    boundary function, not the served HTTP layer, is the actual authority, so a direct
+    connection is exactly as authoritative as the served `led` CLI's own HTTP-to-boundary path).
+    Actor resolution: if LED_ACTOR is set, resolved to that principal's id explicitly (mirrors
+    `tools/dispatch_principal.py`'s own preflight contract); otherwise 'actor' is OMITTED from
+    the payload entirely, letting the kernel's strict-attribution declared-default resolve it
+    from session_user (s40) -- the SAME two-path resolution every other writer in this project
+    already has, never a third, verify-commission-only path. Returns the write_verdict dict
+    (disposition/message/row_id/...), the caller's to report."""
+    payload = {"kind": "commission_signature_verified",
+               "statement": f"commission {row['id']} independently GPG-verified "
+                             f"(verify-commission --attest)",
+               "signature_attests_row": row["id"], "signature_grade": grade.lower(),
+               "principal_key_fingerprint": sig_fp}
+    led_actor = os.environ.get("LED_ACTOR", "").strip()
+    if led_actor:
+        aid = subprocess.run(
+            ["psql", "-h", dep.host, "-d", dep.db, "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c",
+             f"SET ROLE {dep.role}; SELECT id FROM {dep.kern}.principal WHERE name = "
+             f"'{led_actor.replace(chr(39), chr(39) * 2)}';"],
+            capture_output=True, text=True, timeout=15)
+        lines = [ln for ln in aid.stdout.strip("\n").splitlines() if ln.strip()]
+        rows = lines[1:] if lines else []
+        if not rows:
+            raise RuntimeError(f"LED_ACTOR={led_actor!r} is not a registered principal in "
+                                f"{dep.schema} -- verify-commission --attest cannot attribute "
+                                f"this write")
+        payload["actor"] = int(rows[0])
+    pj = json.dumps(payload).replace("'", "''")
+    sql = (f"SET ROLE {dep.role};\n"
+           f"SELECT to_jsonb(v) FROM {dep.kern}.ledger_write('{pj}'::jsonb) v;\n")
+    r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "-v", "ON_ERROR_STOP=1",
+                        "-f", "/dev/stdin"], input=sql, capture_output=True, text=True, timeout=15)
+    if r.returncode != 0:
+        raise RuntimeError(f"attest write failed: {r.stderr.strip()[-800:]}")
+    lines = [ln for ln in r.stdout.splitlines() if ln.strip().startswith("{")]
+    if not lines:
+        raise RuntimeError(f"attest write returned no verdict line: stdout={r.stdout!r}")
+    return json.loads(lines[-1])
+
+
 def main(argv: list[str]) -> int:
     commission_id: int | None = None
     as_json = False
+    do_attest = False
     args = list(argv)
     i = 0
     while i < len(args):
@@ -274,6 +426,9 @@ def main(argv: list[str]) -> int:
             i += 2
         elif a == "--json":
             as_json = True
+            i += 1
+        elif a == "--attest":
+            do_attest = True  # s61 item 1: on a VERIFIED verdict, write the marker row
             i += 1
         else:
             print(f"verify-commission: unrecognized argument: {a}", file=sys.stderr)
@@ -288,7 +443,7 @@ def main(argv: list[str]) -> int:
         return 2
 
     try:
-        verdict, detail = verify(dep, row, world_root)
+        verdict, detail, grade, sig_fp = verify(dep, row, world_root)
     except gpg_trust.GpgUnavailable as e:
         _journal_verify_commission(world_root, "GPG-UNAVAILABLE")
         if as_json:
@@ -308,18 +463,60 @@ def main(argv: list[str]) -> int:
             print(f"  statement: {row['statement']!r}")
             print(f"  [!!] NO-COMMITTED-KEY -- {e}")
         return 3
+    except gpg_trust.MultipleValidSignatures as e:
+        # fix-round finding (kernel review, s61 tip c3d773a): a FOURTH typed refusal, mirroring
+        # the NO-COMMITTED-KEY precedent's own REVISION NOTE (never overload an existing verdict
+        # for a precondition none of the three actually decides) -- a .asc carrying more than one
+        # valid signature cannot honestly be graded against ONE signing key.
+        _journal_verify_commission(world_root, "MULTIPLE-VALID-SIGNATURES")
+        if as_json:
+            print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                               "refusal": "MULTIPLE-VALID-SIGNATURES", "detail": str(e)}, indent=2))
+        else:
+            print(f"verify-commission: row {row['id']} (actor={row['actor']}, "
+                  f"signing_mode={signing_mode(row)})")
+            print(f"  statement: {row['statement']!r}")
+            print(f"  [!!] MULTIPLE-VALID-SIGNATURES -- {e}")
+        return 4
 
     _journal_verify_commission(world_root, verdict)
+
+    # s61 item 1: --attest writes the marker row, ONLY after a real VERIFIED verdict above --
+    # never speculative, never on UNSIGNED/FORGED-OR-CORRUPT (there is nothing true to attest).
+    attest_verdict: dict | None = None
+    attest_error: str | None = None
+    if do_attest and verdict == "VERIFIED":
+        try:
+            attest_verdict = attest(dep, row, grade, sig_fp)
+        except Exception as e:  # noqa: BLE001 -- reported as a typed field below, never crashes
+            attest_error = str(e)
+    elif do_attest:
+        attest_error = (f"--attest skipped: verdict is {verdict}, not VERIFIED -- only a real, "
+                         f"successful signature check may be attested")
+
     if as_json:
-        print(json.dumps({"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
-                           "verdict": verdict, "detail": detail}, indent=2))
+        body = {"id": row["id"], "actor": row["actor"], "signing_mode": signing_mode(row),
+                "verdict": verdict, "detail": detail}
+        if verdict == "VERIFIED":  # v1.1 (spec §2 item 2): grade + signing key, VERIFIED only
+            body["grade"] = grade
+            body["signing_key_fingerprint"] = sig_fp
+        if do_attest:
+            body["attest"] = attest_verdict if attest_verdict is not None else {"error": attest_error}
+        print(json.dumps(body, indent=2))
         return 1 if verdict == "FORGED-OR-CORRUPT" else 0
 
     print(f"verify-commission: row {row['id']} (actor={row['actor']}, signing_mode={signing_mode(row)})")
     print(f"  statement: {row['statement']!r}")
     marker = {"VERIFIED": "OK", "UNSIGNED": "..", "FORGED-OR-CORRUPT": "!!"}[verdict]
     print(f"  [{marker}] {verdict}")
+    if verdict == "VERIFIED":
+        print(f"        grade={grade} signing_key={sig_fp}")
     print(f"        {detail}")
+    if do_attest:
+        if attest_verdict is not None:
+            print(f"  [attest] {attest_verdict}")
+        else:
+            print(f"  [attest] SKIPPED/FAILED -- {attest_error}")
     return 1 if verdict == "FORGED-OR-CORRUPT" else 0
 
 

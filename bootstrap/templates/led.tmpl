@@ -46,6 +46,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -58,6 +59,10 @@ sys.path.insert(0, str(AUTOHARN / "engine"))
 try:
     import boundary_cli_client as bcc  # noqa: E402
     import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
+    import gpg_trust  # noqa: E402  (filing/gpg_trust.py, the ONE home for the scratch-keyring
+    # mechanics -- s61 item 3's `attest-possession` verb reuses it verbatim, the SAME shared
+    # module verify-commission.tmpl and attest-tags already both point at their own domain's
+    # keys/ directory, ADR-0012 P1)
     import review_gap_thresholds as rgt  # noqa: E402  (guard-trio port, ledger row 1600's sibling
     # finding: the ONE HOME (ADR-0012 P1) for the content-free-review-statement threshold/
     # normalization is engine/review_gap_thresholds.py -- legacy-led.tmpl (bash) had to shell out
@@ -301,12 +306,19 @@ _KEY_FINGERPRINT_RE = re.compile(r"^[0-9A-F]{40}$")
 @dataclasses.dataclass(frozen=True)
 class KeyBindingPayload:
     """bind-key/revoke-key's own typed shape. Contract: `fingerprint` must match the kernel's
-    own `principal_key_fingerprint_shape` CHECK -- see `_KEY_FINGERPRINT_RE` above."""
+    own `principal_key_fingerprint_shape` CHECK -- see `_KEY_FINGERPRINT_RE` above.
+    `possession_ref` (s61, design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 3): the
+    principal_key_possession_verified row id `led principal attest-possession` returned --
+    MANDATORY on a FRESH bind (kernel/lineage/s61-signature-symmetry-and-key-binding.sql's own
+    key_binding_possession_ref_kind_shape CHECK), FORBIDDEN on a retraction (item 3: revocation
+    needs no fresh proof) -- `cmd_principal`'s own bind-key branch enforces which, this
+    dataclass only carries the value through."""
     subject: int
     fingerprint: str
     active: bool
     supersedes: int | str | None = None
     event_time: str | None = None
+    possession_ref: int | str | None = None
 
     def __post_init__(self) -> None:
         if not _KEY_FINGERPRINT_RE.match(self.fingerprint):
@@ -317,7 +329,39 @@ class KeyBindingPayload:
     def fields(self) -> dict:
         out = _binding_base_fields(self.subject, self.active, self.supersedes, self.event_time)
         out["principal_key_fingerprint"] = self.fingerprint
+        if self.possession_ref:
+            out["key_binding_possession_ref"] = int(self.possession_ref)
         return out
+
+
+def possession_statement(fingerprint: str) -> str:
+    """s61 item 3: the CANONICAL proof-of-possession statement text a detached signature must
+    cover -- ONE home (this function), read by BOTH the signer's own ceremony (the operator, or
+    a future TUI, constructs the SAME text before running `gpg --detach-sign`) and this file's
+    own `attest-possession` verifier (below), so the two sides can never drift out of byte
+    agreement. Byte-fidelity matches verify-commission.tmpl's own fixed hazard (module docstring
+    THE BYTE-FIDELITY HAZARD, FIXED): the ceremony must sign `printf '%s' \"$STATEMENT\"`, no
+    trailing newline, exactly what this function returns."""
+    return f"autoharn key-binding proof-of-possession: fingerprint={fingerprint}"
+
+
+@dataclasses.dataclass(frozen=True)
+class PossessionPayload:
+    """attest-possession's own typed shape (s61 item 3) -- fingerprint-scoped only, no
+    principal_subject (the kind carries none -- s41/s60's principal_subject_kind_shape CHECK
+    deliberately does not license principal_key_possession_verified, D-3's own enumerated-eight
+    list unchanged by this delta: possession is a fact about a KEY, not yet about any principal
+    -- the LATER bind-key act is what ties a proven fingerprint to a specific subject)."""
+    fingerprint: str
+
+    def __post_init__(self) -> None:
+        if not _KEY_FINGERPRINT_RE.match(self.fingerprint):
+            raise ValueError(f"fingerprint {self.fingerprint!r} is not a 40-uppercase-hex "
+                              f"OpenPGP v4 fingerprint (kernel/lineage/s41-principal-bindings-"
+                              f"and-relations.sql's own principal_key_fingerprint_shape CHECK)")
+
+    def fields(self) -> dict:
+        return {"principal_key_fingerprint": self.fingerprint}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -394,7 +438,10 @@ def _principal_usage() -> None:
     print("       led principal bind-role <name> --role \"<role-name>\"", file=sys.stderr)
     print("       led principal release-role <name> --role \"<role-name>\" --supersedes <id>",
           file=sys.stderr)
-    print("       led principal bind-key <name> --fingerprint \"<fp>\"", file=sys.stderr)
+    print("       led principal attest-possession <fingerprint> --asc <detached-sig-path>",
+          file=sys.stderr)
+    print("       led principal bind-key <name> --fingerprint \"<fp>\" --possession-ref <id>",
+          file=sys.stderr)
     print("       led principal revoke-key <name> --fingerprint \"<fp>\" --supersedes <id>",
           file=sys.stderr)
     print("       led principal grant-competence <name> --activity \"<a>\" --band \"<b>\" "
@@ -540,6 +587,88 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
               f"this world's refusal recorder, that is a maintainer decision, not a verb.",
               file=sys.stderr)
         return 1
+
+    if sub == "attest-possession":
+        # s61 item 3 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2): proof of possession --
+        # verifies a detached signature over the CANONICAL proof-of-possession statement
+        # (possession_statement(), this file's ONE home for that text) against THIS
+        # deployment's committed keys/ entry for the CLAIMED fingerprint specifically (never
+        # "any committed key" -- the signature must come from the fingerprint being proven, or
+        # this verb refuses), then writes the principal_key_possession_verified marker row
+        # `led principal bind-key --possession-ref` later cites. Mirrors verify-commission.
+        # tmpl's own gpg mechanics (filing/gpg_trust.py, ADR-0012 P1's shared module) rather than
+        # re-deriving them a second time.
+        parsed = _parse_principal_flags_strict(rest, {"--asc"}, 1, sub)
+        if parsed is None:
+            return 1
+        pos, flags = parsed
+        asc_arg = flags.get("--asc", "")
+        if not pos or not asc_arg:
+            print("usage: led principal attest-possession <fingerprint> --asc "
+                  "<detached-signature-path>", file=sys.stderr)
+            return 1
+        fp = pos[0].upper()
+        if not _KEY_FINGERPRINT_RE.match(fp):
+            print(f"led principal attest-possession: REFUSED -- '{fp}' is not a 40-uppercase-"
+                  f"hex OpenPGP v4 fingerprint.", file=sys.stderr)
+            return 1
+        asc_path = Path(asc_arg)
+        if not asc_path.is_file():
+            print(f"led principal attest-possession: REFUSED -- {asc_path} does not exist.",
+                  file=sys.stderr)
+            return 1
+        keys_dir = _world_root() / "keys"
+        keys = gpg_trust.committed_keys(keys_dir)
+        if not keys:
+            print(f"led principal attest-possession: REFUSED -- {keys_dir} carries NO "
+                  f"committed public key (AWAITING-KEY) -- nothing exists to check the claimed "
+                  f"signature against.", file=sys.stderr)
+            return 1
+        try:
+            gnupghome = gpg_trust.build_scratch_keyring(keys)
+        except gpg_trust.GpgUnavailable as e:
+            print(f"led principal attest-possession: REFUSED -- {e}", file=sys.stderr)
+            return 1
+        try:
+            statement = possession_statement(fp)
+            statement_bytes = statement.encode("utf-8")
+            with tempfile.NamedTemporaryFile(delete=False) as tf:
+                tf.write(statement_bytes)  # exact bytes, no added/stripped newline
+                data_path = Path(tf.name)
+            try:
+                env = {"GNUPGHOME": str(gnupghome), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+                r = subprocess.run(["gpg", "--status-fd", "1", "--verify", str(asc_path),
+                                     str(data_path)], capture_output=True, text=True, env=env)
+                gpg_detail = (r.stdout + r.stderr).strip()
+            finally:
+                data_path.unlink(missing_ok=True)
+        finally:
+            gpg_trust.teardown_scratch_keyring(gnupghome)
+        if r.returncode != 0 or "Good signature" not in gpg_detail:
+            print(f"led principal attest-possession: REFUSED -- the signature at {asc_path} "
+                  f"does not verify against this deployment's committed keys/ for the "
+                  f"canonical statement {statement!r}. {gpg_detail}", file=sys.stderr)
+            return 1
+        try:
+            sig_fp = gpg_trust.signing_key_fingerprint(r.stdout)
+        except gpg_trust.MultipleValidSignatures as e:
+            print(f"led principal attest-possession: REFUSED -- {asc_path} carries more than "
+                  f"one valid signature ({e}) -- proof of possession must come from a SINGLE, "
+                  f"unambiguous signer; sign the canonical statement with exactly one key.",
+                  file=sys.stderr)
+            return 1
+        if sig_fp != fp:
+            print(f"led principal attest-possession: REFUSED -- the signature verifies, but was "
+                  f"produced by fingerprint {sig_fp!r}, not the claimed {fp!r} -- proof of "
+                  f"possession must come from the EXACT key being proven. {gpg_detail}",
+                  file=sys.stderr)
+            return 1
+        payload = _build_or_refuse(sub, PossessionPayload, fingerprint=fp)
+        if payload is None:
+            return 1
+        return _write_principal(cfg, "principal_key_possession_verified",
+                                 f"possession of OpenPGP key {fp} proven "
+                                 f"(attest-possession)", actor, payload)
 
     if sub in ("declare-standing", "undeclare-standing", "suspend", "lift-suspension", "revoke"):
         caps = _health_capabilities(cfg)
@@ -852,15 +981,16 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
 
         if sub in ("bind-key", "revoke-key"):
             parsed = _parse_principal_flags_strict(
-                rest, {"--fingerprint", "--supersedes"}, 1, sub)
+                rest, {"--fingerprint", "--supersedes", "--possession-ref"}, 1, sub)
             if parsed is None:
                 return 1
             pos, flags = parsed
             fp = flags.get("--fingerprint", "")
             sup_id = flags.get("--supersedes")
+            possession_ref = flags.get("--possession-ref")
             if not pos or not fp:
-                print("usage: led principal bind-key <name> --fingerprint \"<fp>\"",
-                      file=sys.stderr)
+                print("usage: led principal bind-key <name> --fingerprint \"<fp>\" "
+                      "--possession-ref <id>", file=sys.stderr)
                 print("       led principal revoke-key <name> --fingerprint \"<fp>\" "
                       "--supersedes <old-row-id>", file=sys.stderr)
                 return 1
@@ -877,8 +1007,23 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                           f"already actively bound to '{name}' (row {cur_id}); no duplicate "
                           f"active truth.", file=sys.stderr)
                     return 1
+                # s61 item 3 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2): a FRESH bind
+                # needs proof of possession -- refused HERE, with teaching, before the write is
+                # even attempted (the kernel-side CHECK/trigger, kernel/lineage/
+                # s61-signature-symmetry-and-key-binding.sql Elements 2/8, refuses it too --
+                # this is the friendlier client-side leg, never the ONLY enforcement, matching
+                # every other client-side-plus-kernel-side pair this CLI already carries).
+                if not possession_ref:
+                    print(f"led principal bind-key: REFUSED -- a FRESH bind needs "
+                          f"--possession-ref <id> (s61 item 3, proof of possession). Run "
+                          f"./led principal attest-possession {fp} --asc <detached-signature-"
+                          f"path> first (verifies a signature over the canonical proof text "
+                          f"against THIS deployment's committed keys/ entry for {fp}), then "
+                          f"bind citing the returned row id.", file=sys.stderr)
+                    return 1
                 payload = _build_or_refuse(sub, KeyBindingPayload, subject=pid, fingerprint=fp,
-                                            active=True, event_time=event_time)
+                                            active=True, event_time=event_time,
+                                            possession_ref=possession_ref)
                 if payload is None:
                     return 1
                 return _write_principal(cfg, "principal_key_bound",
@@ -2700,7 +2845,8 @@ def cmd_generic(cfg: bcc.ServedConfig, kind: str, statement: str, shared: dict[s
     shared-flag strip (row 1173 finding 1) -- -f/-e/--supersedes/--amends/--amends-scope/
     --answers/--refs/--concern/--evidence/--confidence/--event-time, exactly legacy's own
     vocabulary, all of which this path (and only this path, plus register-principal/principal)
-    honors."""
+    honors -- PLUS --signature-witness (s61 item 1, design/
+    FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2), the twelfth shared flag, added by that delta."""
     if not _preflight_grammar(statement):
         return 1
     if not allow_cli_text:
@@ -2730,6 +2876,8 @@ def cmd_generic(cfg: bcc.ServedConfig, kind: str, statement: str, shared: dict[s
         payload["enacts"] = [int(x) for x in shared["-e"].split(",") if x]
     if shared.get("--supersedes"):
         payload["supersedes"] = int(shared["--supersedes"])
+    if shared.get("--signature-witness"):  # s61 item 1
+        payload["signature_symmetry_witness"] = int(shared["--signature-witness"])
     if shared.get("--amends"):
         payload["amends"] = int(shared["--amends"])
     if shared.get("--amends-scope"):
@@ -2766,7 +2914,14 @@ def cmd_generic(cfg: bcc.ServedConfig, kind: str, statement: str, shared: dict[s
 # below restores legacy's own front-anchored grammar: consume the leading run of recognized
 # shared flags, stop at the first token that is not one, and dispatch on THAT (post-strip) token.
 _SHARED_FLAG_NAMES = {"-f", "-e", "--supersedes", "--amends", "--amends-scope", "--answers",
-                      "--refs", "--concern", "--evidence", "--confidence", "--event-time"}
+                      "--refs", "--concern", "--evidence", "--confidence", "--event-time",
+                      # s61 item 1 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2): the
+                      # generic write path's own way to carry signature_symmetry_witness --
+                      # the field validate_supersession_target's symmetry refusal (kernel/
+                      # lineage/s61-signature-symmetry-and-key-binding.sql Element 7) names in
+                      # its own teach-text remedy. Twelfth shared flag, same front-anchored
+                      # grammar as --supersedes one flag over.
+                      "--signature-witness"}
 
 
 def _strip_shared_flags(argv: list[str]) -> tuple[dict[str, str], list[str]]:

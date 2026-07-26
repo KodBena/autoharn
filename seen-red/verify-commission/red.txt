@@ -1,5 +1,5 @@
 == generating throwaway test key (Ed25519, test-only, never a real maintainer key) ==
-  test key: 84480DF1C7239EC0B4F079F076330F57AA00C76A
+  test key: 2A0E3FC893A1CD94480F0EB1FB1DFE553F89D79F
 
 == scaffolding throwaway --new-world vcfxprobe ==
   scaffold OK.
@@ -10,6 +10,12 @@
 === b-verified ===
   [ok] sign_exit=0 verify_exit=0 verdict=VERIFIED
 
+=== f-directory-verified-grade-before-binding ===
+  [ok] grade=DIRECTORY-VERIFIED signing_key=2A0E3FC893A1CD94480F0EB1FB1DFE553F89D79F (expected DIRECTORY-VERIFIED / 2A0E3FC893A1CD94480F0EB1FB1DFE553F89D79F)
+
+=== g-binding-verified-grade-after-s41-bind ===
+  [ok] attest_possess_exit=0 possess_row=8 bind_exit=0 verify_exit=0 verdict=VERIFIED grade=BINDING-VERIFIED (attest_possess stdout tail: 'led: row 8 written.\n'; bind stdout tail: 'led: row 9 written.\n')
+
 === c-forged-tampered-bytes ===
   [ok] exit=1 verdict=FORGED-OR-CORRUPT
 
@@ -17,6 +23,23 @@
   [ok] exit=3 refusal=NO-COMMITTED-KEY
 
 === e-gpg-absent-typed-refusal ===
-  [ok] exit=2 stderr='{\n  "id": 1,\n  "actor": "commissioner",\n  "signing_mode": "FULL",\n  "refusal": "GPG-UNAVAILABLE",\n  "detail": "the \'gpg\' binary is not on PATH -- GPG trust layer verbs need GnuPG installed (see design'
+  [ok] exit=2 stderr='{\n  "id": 7,\n  "actor": "commissioner",\n  "signing_mode": "FULL",\n  "refusal": "GPG-UNAVAILABLE",\n  "detail": "the \'gpg\' binary is not on PATH -- GPG trust layer verbs need GnuPG installed (see user-g'
 
-ALL CASES OK -- verify-commission both-polarity proof (UNSIGNED / VERIFIED / FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal), zero residue.
+=== h-multi-signature-attest-refused ===
+  [ok] sign1_exit=0 sign2_exit=0 exit=4 refusal=MULTIPLE-VALID-SIGNATURES detail="2 VALIDSIG lines in gpg's status-fd stream (2A0E3FC893A1CD94480F0EB1FB1DFE553F89D79F, B8B927DDC61246C377E72DB55649338ECE2A73DB) -- this .asc carries more than one valid signature; signing_key_fingerprint() cannot honestly pick ONE signer arbitrarily."
+
+ALL CASES OK -- verify-commission both-polarity proof (UNSIGNED / VERIFIED / FORGED-OR-CORRUPT / NO-COMMITTED-KEY-refusal / GPG-UNAVAILABLE-refusal / MULTIPLE-VALID-SIGNATURES-refusal), zero residue.
+
+FIX-ROUND RE-BANK (2026-07-26, kernel re-review of 28f1f78's own tip -- moderate-SILENT coverage
+gap): a fresh-context review found verify-commission.tmpl's own MULTIPLE-VALID-SIGNATURES catch
+(main()'s `except gpg_trust.MultipleValidSignatures` block) had ZERO shipped-fixture coverage --
+seen-red/s61-signature-symmetry-and-key-binding/run_fixtures_cli.py's case j exercises only
+led.tmpl's attest-possession leg of the SAME underlying filing/gpg_trust.py check, never this
+verb's own. The reviewer proved the mechanism live with an ad hoc, unshipped probe (classic
+scaffold + s15..s61 lineage tail + served boundary + a two-key concatenated detached .asc) before
+this case shipped. Case h above closes that gap: a SECOND throwaway key independently signs the
+SAME commission statement, both signatures are concatenated into one banked `.asc`, and
+`verify-commission --attest --id <id> --json` is run against it live, through the real gpg
+binary, over the SAME throwaway --new-world scaffold every other case in this file already uses.
+Every line above corresponds to this fixture's own re-run against the CURRENT checkout; no line
+is carried over from the prior banked transcript.

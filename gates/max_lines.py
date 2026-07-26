@@ -197,7 +197,11 @@ BASELINE: dict[str, int] = {
     # missive_disposed) row, adds missive_regards' own row -- genuinely new, not padding.
     # bumped 1390 -> 1404 (s60-entitlement-enforcement.sql: one new MANIFEST row
     # (entitlement_act_class) + one widened row (principal_role_name) + CHAIN += s60).
-    "gates/kind_shape_manifest_gate.py":              1404,
+    # bumped 1404 -> 1444 (s61-signature-symmetry-and-key-binding.sql: FOUR new MANIFEST rows
+    # (signature_attests_row, signature_grade, key_binding_possession_ref, plus
+    # signature_symmetry_witness's own CORE_COLUMNS entry) + one widened row
+    # (principal_key_fingerprint, now three kinds) + CHAIN += s61).
+    "gates/kind_shape_manifest_gate.py":              1444,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -297,7 +301,10 @@ BASELINE: dict[str, int] = {
     # bumped 579 -> 610 (s60-entitlement-enforcement.sql: CHAIN += s60, three new declared
     # raw-ledger reader entries: validate_entitlement, entitlement_genesis_principal,
     # entitlement_act_class_of).
-    "gates/ledger_reader_allowlist.py":                 610,
+    # bumped 610 -> 632 (s61-signature-symmetry-and-key-binding.sql: CHAIN += s61, two new
+    # declared raw-ledger reader entries (validate_principal_binding, validate_signature_witness)
+    # + one widened entry's reason text (validate_supersession_target)).
+    "gates/ledger_reader_allowlist.py":                 632,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -394,7 +401,8 @@ BASELINE: dict[str, int] = {
     # the marker check + its own registry row); the union is 418. Third witnessed merge-union
     # ratchet crossing today -- the commit-phase contention class, again.
     # bumped 418 -> 419 (one new REGISTRY row: s60-entitlement-enforcement).
-    "gates/fixture_census.py":                          419,
+    # bumped 419 -> 420 (one new REGISTRY row: s61-signature-symmetry-and-key-binding).
+    "gates/fixture_census.py":                          420,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -439,7 +447,10 @@ BASELINE: dict[str, int] = {
     # Genuinely new reconciliation content, not padding.
     # bumped 518 -> 528 (s60-entitlement-enforcement.sql: four ratchet bumps in this same
     # file, each row's own comment naming its reason).
-    "gates/max_lines.py":                                528,
+    # bumped 528 -> 536 (s61-signature-symmetry-and-key-binding.sql: three more ratchet bumps
+    # in this same file, each row's own comment naming its reason -- the same self-measuring
+    # cost, again).
+    "gates/max_lines.py":                                539,
 }
 
 

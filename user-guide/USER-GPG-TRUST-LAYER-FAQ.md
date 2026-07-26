@@ -1,10 +1,19 @@
 # The GPG trust layer — operator FAQ
 
-<!-- doc-attest-exempt: legacy-led-retirement inventory pass (2026-07-23, ledger row 1149/1150)
-     — the only change at this content hash is one example command's own path,
-     `<dest>/legacy/led commission ...` -> `<dest>/led commission ...`, mechanical fallout of
-     `bootstrap/templates/legacy-led.tmpl`'s deletion (the served path already covered
-     `commission`; the example just named the wrong, now-retired shim). No other prose touched. -->
+<!-- doc-attest-exempt: v1.1 signature-symmetry/key-binding build (2026-07-26, design/
+     FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 item 3) added new §10 (proof of possession +
+     revocation for principal key bindings), documenting `led principal attest-possession`,
+     `bind-key --possession-ref`, AND `revoke-key` -- every command shown, including §10b's
+     `revoke-key`, was exercised for real against throwaway Ed25519 test keys in this same
+     build's own witness pass (seen-red/s61-signature-symmetry-and-key-binding/
+     run_fixtures_cli.py, cases d/h/i, all SHIPPED fixture cases as of the s61 fix round, kernel
+     review tip c3d773a), mirroring this file's own standing "every command below was exercised,
+     for real" convention (line 19). FIX-ROUND CORRECTION (2026-07-26, same review): an earlier
+     version of this note overclaimed -- §10b's `revoke-key` line was witnessed by the REVIEWER
+     directly, ad hoc, not exercised by any SHIPPED fixture case; that gap is closed (case i
+     above), so this note's claim is now the strong form honestly, not merely stated. Prior
+     exemption history (legacy-led-retirement inventory pass, 2026-07-23, ledger row 1149/1150)
+     superseded by this note. -->
 
 This page is written for an adopter — this page's own prose calls that reader "an operator,"
 the same role. It answers the question an operator actually has: **I've read
@@ -282,6 +291,7 @@ records them:
 | The `.asc` covers a DIFFERENT statement (tampered), a committed key exists to check it against | `FORGED-OR-CORRUPT` — a real cryptographic mismatch | 1 |
 | A signature is banked but the deployment's OWN `keys/` is empty (AWAITING-KEY, a fresh scaffold's honest starting state) | the DISTINCT typed refusal `NO-COMMITTED-KEY` — "nothing exists to check the claimed signature against," never confused with an actual forgery | 3 |
 | `gpg` itself is not installed | the OTHER typed refusal, `GPG-UNAVAILABLE` (`"the 'gpg' binary is not on PATH"`), never folded into any of the three verdicts above | 2 |
+| The `.asc` carries MORE THAN ONE valid signature (fix-round addition, 2026-07-26, kernel review tip c3d773a) | a FOURTH typed refusal, `MULTIPLE-VALID-SIGNATURES` — grading a signature against the s41 binding requires ONE unambiguous signer; `filing/gpg_trust.py`'s `signing_key_fingerprint` refuses rather than silently reporting whichever key it checked first | 4 |
 
 The `NO-COMMITTED-KEY` and `GPG-UNAVAILABLE` refusals are deliberately NOT `FORGED-OR-CORRUPT`,
 even though both are loud: `FORGED-OR-CORRUPT` means "a committed key exists and the signature
@@ -626,6 +636,60 @@ That is the whole procedure: four steps, each already exercised above, none of i
 - None of this replaces the existing HMAC stamp (`kernel/lineage/s17-stamp-mechanism.sql`) — the
   stamp still proves which live invocation wrote a row; the signature layer proves a HUMAN, outside
   the host entirely, vouched for something at a point in time. They answer different questions.
+
+## 10. Principal key bindings — proof of possession and revocation (v1.1)
+
+design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §2 (item 3) adds a THIRD thing this layer proves,
+narrower than §5's commission signing and §6's chain heads: that a specific human PRINCIPAL
+(kernel/lineage/s41-principal-bindings-and-relations.sql's `principal_key_bound`) genuinely holds
+the private half of the key being bound to them — proof of possession — before the kernel accepts
+the binding. Without it, `principal_key_bound` would be a bare, unverified CLAIM ("I say this
+fingerprint is mine") rather than an EARNED fact.
+
+### 10a. Binding a key to yourself
+
+```
+gpg --detach-sign --armor -o ~/possession.asc - <<< "autoharn key-binding proof-of-possession: fingerprint=$FP"
+./led principal attest-possession $FP --asc ~/possession.asc
+#   verified: writes a principal_key_possession_verified row, prints its id (say, 12)
+./led principal bind-key <your-principal-name> --fingerprint "$FP" --possession-ref 12
+```
+
+The signed text is the CANONICAL statement `bootstrap/templates/led.tmpl`'s own
+`possession_statement()` builds from the fingerprint alone — sign exactly that (no extra
+whitespace, no trailing newline: `printf '%s'`-shaped, same byte-fidelity discipline as the
+SIGNED-commission ceremony, §5 above), or the signature will not verify. `attest-possession`
+checks the signature against THIS deployment's own `keys/*.asc` (never your ambient keyring, the
+same §3 discipline every verb in this layer follows) — the fingerprint claimed must match a
+committed key, and the signature must come from THAT exact key, never merely some committed key.
+`bind-key` then refuses, with teaching, a fresh binding that omits `--possession-ref` or names a
+possession row for a different fingerprint (kernel/lineage/
+s61-signature-symmetry-and-key-binding.sql Element 8).
+
+### 10b. Revoking a principal's key binding
+
+Item 3's ratified shape is two acts, not one — a GPG revocation certificate (the cryptographic
+world's own "this key is no longer trusted by anyone," §2 above) PLUS the s41 retraction event
+(this DEPLOYMENT's own "this binding is no longer in force"):
+
+```
+# 1. the GPG side — exactly §8's rotation Step 1, applied to the COMPROMISED/RETIRED key
+sed 's/^:-----BEGIN/-----BEGIN/' ~/.gnupg/openpgp-revocs.d/<FINGERPRINT>.rev > /tmp/revoke.asc
+gpg --import /tmp/revoke.asc
+# distribute /tmp/revoke.asc wherever this key's public half is trusted (§8 Step 3) --
+# revocation stops FUTURE use; it does not retroactively invalidate past signatures.
+
+# 2. the ledger side — the s41 retraction event (NOT a fresh possession proof: a revocation
+#    needs none, deliberately -- a compromised or lost key cannot be asked to re-prove itself)
+./led principal revoke-key <your-principal-name> --fingerprint "$FP" --supersedes 5
+```
+
+Why no possession proof on revocation: the whole point of a revocation is that the key may be
+lost, stolen, or otherwise beyond the holder's control — REQUIRING a fresh signature from it
+would make exactly the cases revocation exists for unrevoke-able. `key_binding_possession_ref_
+kind_shape` (kernel/lineage/s61-signature-symmetry-and-key-binding.sql) reflects this at the
+schema level: mandatory on a fresh bind (`principal_binding_active=true`), FORBIDDEN on a
+retraction.
 
 ## Related
 
