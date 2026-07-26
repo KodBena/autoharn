@@ -50,6 +50,18 @@ at s61 time (either the twin dropped the rules in the same act, or the different
 probe corpus never exercised these branches — whichever it is, state it in the build
 report; if it is a probe-coverage gap, file it, do not silently widen scope).
 
+**Reconciliation answer (build finding, ledger row 1435; independently re-derived by the
+fresh-context review — the two analyses match):** NEITHER disjunct. The differential is
+blind to this defect class BY CONSTRUCTION: the ASP twin derives `superseded/1` from
+already-accepted `supersedes` facts and has no INSERT-time concept, while per-kind
+supersession REFUSAL logic lives only in the SQL write trigger — a refused write never
+becomes a row, so it never reaches the EDB the differential compares. No corpus of
+accepted-row scenarios could expose a dropped write refusal. Consequence, stated as an
+honest limit: the differential's guarantee perimeter EXCLUDES write-boundary refusal
+drift and always has; the §3 gate and the body-census instrument (ledger row 1433,
+Tier A) are the coverage for that perimeter. This paragraph is the committed home of
+the answer the spec demanded in the build report.
+
 ## 3. Mechanical guard against recurrence (generic, non-kernel, ships with the delta)
 
 A new gate `gates/lineage_reissue_lineage.py`, two mechanical checks per re-issued
