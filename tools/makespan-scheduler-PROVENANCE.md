@@ -47,7 +47,7 @@ scheduler happens in `https://github.com/KodBena/makespan-scheduler` first, and 
 autoharn by bumping the submodule pin to the new commit — never by patching
 `tools/makespan-scheduler/` in place from this side. If autoharn ever needs a change the
 upstream source does not have, that need is filed as an entry in this repository's own
-append-only decision ledger (`./led` at the repository root, not a markdown file), not
+append-only decision ledger (`./autoharn led` at the repository root, not a markdown file), not
 silently patched into the submodule — per
 [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P1 (a fact has one home;
 the upstream repository is that home).
@@ -55,7 +55,7 @@ the upstream repository is that home).
 ## License
 
 The source project carries no `LICENSE` file of its own as of the 2026-07-15 publication.
-Not resolved here — this was the open question on `./led show 616` at the repository root.
+Not resolved here — this was the open question on `./autoharn led show 616` at the repository root.
 Per the maintainer's 2026-07-15 ruling (recorded in that row and in a decision-ledger entry
 alongside this split): the project is now its own standalone repository under the
 maintainer's own GitHub account, and the license choice is the maintainer's, scoped to that

@@ -58,7 +58,7 @@ is COMPUTED — blockers-empty, visible the instant the last leaf resolves, no c
 - **Composite-ness is declared at the opening act, typed — and it means STRICT-BY-TYPE.**
   New nullable column `work_discharge`, legal only on `work_opened` rows (one-way shape
   CHECK, the s28/s30 idiom), closed vocabulary: `composite` is its one legal value. CLI:
-  `./led work open <slug> "<title>" --discharge composite`. Semantics: every future close
+  `./autoharn led work open <slug> "<title>" --discharge composite`. Semantics: every future close
   of a composite slug is a strict close — s29's `--strict` guarantee moves from opt-in at
   the moment of closing (exactly the moment a hurried closer skips it) into the item's
   type, where no later actor can forget it. No new enforcement mechanism exists: the
@@ -96,7 +96,7 @@ is COMPUTED — blockers-empty, visible the instant the last leaf resolves, no c
   The commission's full shape — "parent discharges when children are done AND their
   precedence held" — is the composition of s30 (order among children, enforced at strict
   close) with this delta (parent state derived from children), not a new monolith.
-- **Read surfaces follow.** `./pickup` and the stop gate's informational open-items line
+- **Read surfaces follow.** `./autoharn pickup` and the stop gate's informational open-items line
   read `effective_state`, so a discharged-by-children composite leaves the queue with no
   act. The stop gate's DEBT predicate is unaffected (it reads claims, not open items,
   post-queue-semantics fix).
@@ -143,7 +143,7 @@ the whole tree re-surface as open, as it should? Answer, made binding here:
   read).
 - **The ASP twin carries the same semantics.** The ledger's defeasible reasoning is the
   deductive layer's whole point; the discharge/defeat rules above get their `engine/lp/`
-  counterpart, and `./judge`'s SQL/ASP differential in AGREE — on fixtures that include
+  counterpart, and `./autoharn judge`'s SQL/ASP differential in AGREE — on fixtures that include
   a post-discharge defeat — is the acceptance witness that the two readings cannot drift.
 
 ## 4. Fail-safe classification
@@ -179,13 +179,13 @@ the queue), and doubt about the side of the line IS the routing.
 - SUPERSEDED CLOSE: deferred to `supersession-semantics-closure`'s own acceptance (this
   spec no longer carries that fix — see 3b); until it lands, this polarity is named
   UNEXERCISED here, honestly, not claimed.
-- `./judge` SQL/ASP differential: AGREE on a world containing all shapes above,
+- `./autoharn judge` SQL/ASP differential: AGREE on a world containing all shapes above,
   including the post-discharge defeat fixtures.
 
 ## 6. Migration posture
 
 Reaches reality in the next scaffolded world's birth chain (runs-are-linear ruling);
-existing worlds receive it via `./migrate`'s accommodation machinery like s29/s30 — no
+existing worlds receive it via `./autoharn migrate`'s accommodation machinery like s29/s30 — no
 live-world patching. The experience world picks it up at its next quiesced migrate.
 
 <!-- doc-attest-exempt: DRAFT constitutional spec awaiting maintainer ratification. -->

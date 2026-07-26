@@ -42,7 +42,7 @@ is the first witnessed instance.
   `.verify.sql` behavioral checks must pass identically on (a) a birth-chain world and
   (b) a migrated world, for all post-epoch rows.
 - **Who applies what:** the birth chain NEVER uses accommodations (fresh worlds get the
-  frozen delta verbatim, epoch 0, full governance). Only `./migrate`, on detecting
+  frozen delta verbatim, epoch 0, full governance). Only `./autoharn migrate`, on detecting
   pre-epoch history, applies `sNN.accommodate.sql` IN PLACE OF the frozen delta's
   history-validating statements — and the accommodation file itself carries, in its
   header, the exact statements of the frozen delta it substitutes for, so the
@@ -60,7 +60,7 @@ is the first witnessed instance.
    table is the deliverable even where the answer is "safe."
 3. **Authorship rule, forward-binding:** every FUTURE delta states its
    history-posture in its own header (`HISTORY: safe — reasons` or `HISTORY: requires
-   accommodation — provided as sibling`), and `./migrate`'s rehearsal step refuses any
+   accommodation — provided as sibling`), and `./autoharn migrate`'s rehearsal step refuses any
    delta whose header is silent. New deltas ship their accommodation at authorship or
    declare they need none; the landmine class ends at s29's successors.
 
@@ -71,7 +71,7 @@ is the first witnessed instance.
   world (the `.verify.sql` equivalence test of §2).
 - Negative controls: an accommodation attempting to relax a post-epoch guarantee is
   refused by the acceptance harness; a future delta without a HISTORY header is
-  refused by `./migrate` rehearsal.
+  refused by `./autoharn migrate` rehearsal.
 - The conveyor-death proof re-run on the migrated clone (witnessed close deposits zero
   `review_gap` debt) — the original point of the whole chain.
 

@@ -19,8 +19,8 @@
 #
 # What this does: fetches the pinned submodule's remote, checks out <new-sha> (refusing loudly if
 # it does not exist there), commits the new pin in the deployment's OWN git history (never
-# autoharn's), verifies every verb still answers, and prints the exact ./led decision line to
-# record the upgrade -- in BOTH autoharn's own ledger (self-application, CLAUDE.md) and the
+# autoharn's), verifies every verb still answers, and prints the exact ./autoharn led decision
+# line to record the upgrade -- in BOTH autoharn's own ledger (self-application, CLAUDE.md) and the
 # deployment's own ledger if it carries one.
 #
 # REFUSES LOUDLY, and touches NOTHING, on any of:
@@ -163,7 +163,7 @@ fi
 
 echo "== done =="
 echo "Record this upgrade in autoharn's OWN ledger (self-application, CLAUDE.md):"
-echo "  cd $SELF_ROOT && ./led decision \"upgrade: $(basename "$DEST") autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""
+echo "  cd $SELF_ROOT && ./autoharn led decision \"upgrade: $(basename "$DEST") autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""
 if [ -x "$DEST/led" ]; then
     echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
     echo "  cd $DEST && ./led decision \"upgrade: autoharn .autoharn submodule $OLD_SHA -> $RESOLVED_SHA\""

@@ -1,7 +1,0 @@
-#!/bin/sh
-# DEPRECATED alias (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6, ledger rows 1151-1183):
-# ./attest-tags is now a one-line shim over `autoharn attest-tags` -- removed at the first
-# post-2.0.0 minor. Semantics, refusal texts and exit codes are unchanged; only the invocation
-# spelling moved.
-echo "attest-tags: DEPRECATED spelling -- use 'autoharn attest-tags' instead (this alias is removed at the first post-2.0.0 minor, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6)." >&2
-exec "$(cd "$(dirname "$0")" && pwd)/autoharn" attest-tags "$@"

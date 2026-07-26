@@ -6,7 +6,7 @@
 Audience: anyone running a diagnostic or audit pass that produces a list of findings destined
 for classification — a defensive code audit turning up a batch of bugs to triage and fix, a
 document or process review sorting observations into categories, or a taxonomy of work items
-this repository's own `./led` (this repository's own append-only work-item tracker) will consume.
+this repository's own `./autoharn led` (this repository's own append-only work-item tracker) will consume.
 The method below is use-case-agnostic: it reads the same whether "finding" means a bug an
 auditor found in a codebase or an observation a reviewer found in a document. This page answers
 one question: **how do you keep "does every finding have a category, and does no finding sit in

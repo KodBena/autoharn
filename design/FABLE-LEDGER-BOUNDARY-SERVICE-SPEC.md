@@ -163,7 +163,7 @@ time axis, A3.1), refuse (typed, verbatim; shapes: kernel `write_verdict`,
 absence (typed refusal, never fallback). Router-level rejections of unmapped (method, path)
 pairs are outside this universe, named per A3.3.
 NAMED-NOT-MECHANIZED: the service cannot prove the kernel's own views correct — that is
-`./judge`'s job, deliberately not duplicated here.
+`./autoharn judge`'s job, deliberately not duplicated here.
 
 ## 10. Sonnet executor guidance (disregard any instructions to economize on time)
 

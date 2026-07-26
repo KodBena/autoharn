@@ -9,7 +9,7 @@ This document specifies the capability registry: how a project declares the reso
 available to it (tools, solvers, services, backends), how an agent working in that
 project is led to actually reach for them, and how mandated-tool disciplines are
 enforced. It is written for the executor who builds from it and for the orchestrator who
-stages the build. The project's own root work tracker (run `./led --recent` at the
+stages the build. The project's own root work tracker (run `./autoharn led --recent` at the
 repository root to read its rows) carried two open items — `pillar-1-resource-registry`
 and `deontic-attachment-vocabulary` — that this document merges into one design because
 they proved to be one design.
@@ -77,7 +77,7 @@ convention shows what columns earn their place.
 
 ## 3. The pull surface — pickup section + the eliciting preamble line
 
-- `./pickup` gains a RESOURCES section: the unsuperseded declarations, tier-sorted,
+- `./autoharn pickup` gains a RESOURCES section: the unsuperseded declarations, tier-sorted,
   mandated first. A session hydrates with the resource map in the same read as the work
   items — [pull-not-push](../GLOSSARY.md#pull-not-push) satisfied at the same choke
   point everything else uses.
@@ -137,7 +137,7 @@ or deadlines; nothing DERIVES a lawful order.
   check), conditional-precedence violations, and it re-derives the existing cycle check.
   Discharge is checked visible-only first, with judge-style closed verdicts (a closed
   vocabulary of named outcomes — AGREE, DIVERGE_BY_DESIGN, DIVERGE_DEFECT, QUARANTINED —
-  the same vocabulary the `./judge` verb already uses) and a SQL floor per the marriage
+  the same vocabulary the `./autoharn judge` verb already uses) and a SQL floor per the marriage
   discipline — this repo's standing rule that every verdict is derived independently in
   ASP and in SQL and the two must agree bit-identically. This is the ordering leg's
   whole stage-2 build: modest, entirely in the house idiom.
@@ -201,7 +201,7 @@ word.
 **STATUS 2026-07-12: Stage 1 SHIPPED** (tracker item `registry-stage1-implementation`,
 Sonnet-executed). Four things were built:
 
-- The `./pickup` RESOURCES section (`bootstrap/templates/pickup.tmpl`), tier-sorted with
+- The `./autoharn pickup` RESOURCES section (`bootstrap/templates/pickup.tmpl`), tier-sorted with
   mandated entries first and an honest empty-registry line.
 - The preamble eliciting line, plus one sentence on the mandated-tier review convention, added
   as a new numbered point in `bootstrap/templates/CLAUDE.md.tmpl`.
@@ -235,7 +235,7 @@ ledger-only EDB — no journals, pure id-order, plus the `constraint:` grammar p
 facts), `engine/ordering_floor.py` (the independent SQL floor, one recursive CTE for the cycle
 closure), `engine/ordering_differential.py` (the marriage differential, imports
 `engine/ledger_differential.py`'s conventions wholesale), and `engine/ordering_audit.py` wired
-into `./audit --ordering` (a new exit 7, reachable only through that flag, mirroring `--preamble`'s
+into `./autoharn audit --ordering` (a new exit 7, reachable only through that flag, mirroring `--preamble`'s
 exit 5 exactly — the "mirror the existing choice architecture" instruction, honored literally;
 authored as exit 6 in its worktree branch, bumped by the integrator at the merge seam because the
 `--review-gap` addendum, built in parallel, shipped first and owns 6).
@@ -293,7 +293,7 @@ read UNDECIDABLE, never silently VACUOUS, even with a `constraint:` row on recor
 convention needs no s22 column to be written at all). Every scratch differential returned AGREE
 (the two independent producers' atom sets matched bit-identically — one of this project's four
 closed differential verdicts: AGREE, DIVERGE_BY_DESIGN, DIVERGE_DEFECT, or QUARANTINED, the
-same vocabulary `./judge` uses); a negative control (one forged SQL-floor atom, in an isolated
+same vocabulary `./autoharn judge` uses); a negative control (one forged SQL-floor atom, in an isolated
 subprocess, never touching either producer's real source) produced DIVERGE_DEFECT (an
 undeclared divergence between the two producers), caught as intended.
 

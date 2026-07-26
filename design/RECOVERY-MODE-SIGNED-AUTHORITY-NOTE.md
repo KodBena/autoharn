@@ -4,7 +4,7 @@
 
 Audience: orchestrator and maintainer. This note exists to FRAME the problem and state the
 open constitutional questions plainly, not to answer them — per the work item's own text
-(`recovery-mode-signed-authority`, this project's decision ledger, `./led work list`):
+(`recovery-mode-signed-authority`, this project's decision ledger, `./autoharn led work list`):
 *"Design note first... may be drafted though key generation remains deferred per the
 standing ruling; Sonnet-draftable, constitutional pieces route to Fable+maintainer."* This
 document is that Sonnet-draftable piece. Nothing below authorizes building kernel, law, or
@@ -57,7 +57,7 @@ instead of inheriting stale ones.
 
 ## The problem, restated from the work item's own text
 
-Quoted from the current ledger's `recovery-mode-signed-authority` work item (`./led work
+Quoted from the current ledger's `recovery-mode-signed-authority` work item (`./autoharn led work
 list`), itself re-asserting a 2026-07-14 maintainer commission verbatim in substance:
 `~/ent` is a broken installation and, per that commission, was *still* broken as of this
 note being drafted — a live example of the hazard, not a hypothetical: **"a malfunctioning
@@ -156,5 +156,5 @@ a default.
   infrastructure that now exists and reframes open question 1 above.
 - `CLAUDE.md`, "ORCHESTRATION" — the kernel/law/engine constitutional-route rule and the
   class-ratified fail-safe deltas carve-out, both cited above.
-- This project's ledger: `./led work list` for the current `recovery-mode-signed-authority`
+- This project's ledger: `./autoharn led work list` for the current `recovery-mode-signed-authority`
   item's own text, quoted from throughout this note.

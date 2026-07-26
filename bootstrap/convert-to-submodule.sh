@@ -321,7 +321,7 @@ fi
 
 echo "== done =="
 echo "Record this migration in autoharn's OWN ledger (self-application, CLAUDE.md):"
-echo "  cd $SELF_ROOT && ./led decision \"migrate: $(basename "$DEST") pinned to autoharn@$DISCOVERED_SHA (deployment-live-exec-coupling migration)\""
+echo "  cd $SELF_ROOT && ./autoharn led decision \"migrate: $(basename "$DEST") pinned to autoharn@$DISCOVERED_SHA (deployment-live-exec-coupling migration)\""
 if [ -x "$DEST/led" ]; then
     echo "This deployment carries its own ledger too -- record it there as well, in its own voice:"
     echo "  cd $DEST && ./led decision \"migrated: pinned to autoharn@$DISCOVERED_SHA via .autoharn submodule (deployment-live-exec-coupling conversion)\""

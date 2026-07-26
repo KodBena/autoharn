@@ -34,18 +34,18 @@ depends_on = ["close-judgment"]
 
 [roles.open-items]
 authors = "the operator/orchestrator opening both work items together: the judgment item, and a companion item citing it (--refs work:<slug>) whose entire resolution IS the promised commit"
-implements = "the operator/orchestrator, via ./led work open (judgment item) and ./led work open ... --refs work:<slug> (companion item)"
+implements = "the operator/orchestrator, via ./autoharn led work open (judgment item) and ./autoharn led work open ... --refs work:<slug> (companion item)"
 
 [roles.claim-items]
-implements = "the operator/orchestrator, via ./led work claim on both items"
+implements = "the operator/orchestrator, via ./autoharn led work claim on both items"
 
 [roles.close-judgment]
 authors = "whichever principal's judgment the first item's close actually carries -- the FAQ's own text: 'the first item closes on its own merits... because it carries judgment'"
-implements = "the operator/orchestrator, via ./led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred"
+implements = "the operator/orchestrator, via ./autoharn led work close <slug> shipped with exactly one of the two ordinary review-disposition constructors, --review-witness or --review-deferred"
 reviews = "the review disposition itself IS the judgment content of this phase -- whichever of the two ordinary constructors is used, per the FAQ's own worked example (--review-witness self-review, in the scratch-world transcript)"
 
 [roles.close-companion]
-implements = "the operator/orchestrator, via ./led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>"
+implements = "the operator/orchestrator, via ./autoharn led work close <slug>-commit shipped --review-bookkeeping --witness commit:<sha>"
 reviews = "explicitly none -- the FAQ's own text: '--review-bookkeeping claims ONLY this commit exists -- nothing about its content, correctness, or completeness'; the CLI machine-checks the claim structurally (COMMIT-EXISTENCE, s38 Element 3) rather than via a judgment review"
 
 [convergence.open-items]

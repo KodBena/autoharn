@@ -48,7 +48,7 @@ ceremony function `kernel.missive_dispose(jsonb)`; **s59 (missive views)** — s
 views (view-only, zero columns, zero kinds, the s54/s56 discipline), one of which
 (`missive_outbound`) is the served transport feed. Plus, same commit: VIEW_REGISTRY /
 WRITE_SURFACES growth in `serving/boundary_service.py`, the scripted repo-root `courier`
-verb (receiver-pull over `/views`, writes through the LOCAL s43 boundary only), `./pickup`
+verb (receiver-pull over `/views`, writes through the LOCAL s43 boundary only), `./autoharn pickup`
 mail counts, gates and `.detect.sql` siblings.
 
 ## 1. Delta structure and head-body bases
@@ -123,7 +123,7 @@ GRANT SELECT ON :"kern".world_identity TO :"role";   -- read the identity, never
   addressee's provenance token.
 - **`missive_received`** — addressee-side: these bytes arrived from that world. Actor:
   the local `courier` principal (§2.6), and the ONLY kind that principal can write
-  (§2.5, Q3). Consumers: `missive_undisposed` (→ `./pickup`), the belief substrate as
+  (§2.5, Q3). Consumers: `missive_undisposed` (→ `./autoharn pickup`), the belief substrate as
   the one sanctioned `belief_source` for cross-world testimony (§4), `missive_receipts`
   (→ the courier's cursor/diff), `missive_stale`.
 - **`missive_disposed`** — addressee-side lifecycle close: `regards` the receipt row;
@@ -396,7 +396,7 @@ allowlist question is answered before it is asked). All GRANT SELECT TO `:role`.
    refusal a race backstop instead of a per-run drumbeat.
 3. **`missive_undisposed`** — in-force `missive_received`, `missive_act <>
    'acknowledgment'`, with no in-force `missive_disposed` regarding it. Columns: the
-   receipt's id/ts/envelope/statement. Keyed by `id`. Consumer: `./pickup` (mail is
+   receipt's id/ts/envelope/statement. Keyed by `id`. Consumer: `./autoharn pickup` (mail is
    part of hydration — the resumption doctrine covers cross-world state) and the
    deciding principal choosing dispositions.
 4. **`missive_stale`** — undisposed receipts `r` for which a later in-force receipt
@@ -404,7 +404,7 @@ allowlist question is answered before it is asked). All GRANT SELECT TO `:role`.
    `r2.missive_responds_to = r.missive_provenance` (a successor or withdrawal naming
    exactly the frozen thing `r` records — hash-pinned, never fuzzy thread-recency).
    Columns: the stale receipt + the superseding receipt's id and act. Keyed by `id`
-   (the stale receipt's). Consumer: `./pickup` surfacing "do not act on this one" before
+   (the stale receipt's). Consumer: `./autoharn pickup` surfacing "do not act on this one" before
    an agent does (consult §9's addressee half, verbatim semantics).
 5. **`missive_delivery_audit`** — author-side: in-force `missive_sent` rows with `act
    <> 'acknowledgment'`, each with `acknowledged boolean` (an in-force
@@ -517,7 +517,7 @@ acknowledgment is `missive_dispose`'s act, authored by a deciding principal at
 disposition time; the consult §7's sentence assigning it to the courier is superseded by
 the ratified Q3 scope), or summarizes (ADR-0020: transport never transforms).
 
-**`./pickup` integration** (same build): surface `missive_undisposed` and
+**`./autoharn pickup` integration** (same build): surface `missive_undisposed` and
 `missive_stale` counts (and the open-thread list when nonzero), plus a staleness note
 when the courier has not run this session — mail is part of hydration; the poll-liveness
 ceiling stays a ceiling (consult §11.1), mitigated not closed.
@@ -586,8 +586,8 @@ layer would owe an independently-authored SQL twin (I6/ADR-0000 INDEP) — real 
 consumer is honestly unnameable until at least one live thread exists. **Named
 follow-on, gated exactly like the file-protocol retirement (one witnessed live thread):**
 an `engine/lp/ledger_missive.lp` + floor pair mirroring
-`missive_undisposed`/`missive_stale`/`missive_delivery_audit`, entering `./judge` as its
-own layer. Until then, `./judge`'s existing layers are witnessed in AGREE on fixtures
+`missive_undisposed`/`missive_stale`/`missive_delivery_audit`, entering `./autoharn judge` as its
+own layer. Until then, `./autoharn judge`'s existing layers are witnessed in AGREE on fixtures
 CARRYING missive rows (kind-generic flow-through — the s43 write_refused precedent:
 "entry/6 is kind-generic; witnessed, never asserted").
 
@@ -735,14 +735,14 @@ claims.
     `supersedes` = the seq-3 row id) → accepted. Courier runs; worldb's
     `missive_stale` lists the undisposed seq-3 receipt naming the withdrawal receipt.
     Disposition `superseded-unread` closes it (green), acknowledgment travels back.
-12. **Chain and gates.** `./verify-chain` green on both worlds (87-column serializer
+12. **Chain and gates.** `./autoharn verify-chain` green on both worlds (87-column serializer
     correct, refusal-seq reconciliation consistent with the journaled reds above);
     `gates/hash_coverage_gate.py` green on the s58 head and RED on a
     columns-without-re-issue scratch (s42's law, both polarities);
     `kind_shape_manifest_gate` green with the new classifier arm and RED against a
     deliberately mis-declared manifest row; `.detect.sql` t on applied / f on
     s57-head scratch (both files, both polarities).
-13. **SQL/ASP differential, stated honestly.** `./judge` on both fixture worlds across
+13. **SQL/ASP differential, stated honestly.** `./autoharn judge` on both fixture worlds across
     its existing layers: witnessed in AGREE with missive rows present (kind-generic
     flow-through) and with the step-8 testimony belief exercising the belief layer's
     typed arm. **No missive-specific engine layer exists in v1** — recommended-not-

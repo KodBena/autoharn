@@ -1,5 +1,7 @@
 # FABLE-BOOKKEEPING-CLOSE-SPEC — a third, machine-verified close constructor (s38)
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (sentence fragments, unglossed compounds "durable-graded", "sibling fingerprints", "birth chain", "probe world"); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 **What this document is.** The Fable-authored, maintainer-ratified specification required
 to loosen s29 Element B (`kernel/lineage/s29-obligation-item-key-and-typed-close.sql`),
 which today makes every `led work close` carry exactly one of two review dispositions —
@@ -110,7 +112,7 @@ representable (new CHECK); review-gap debt quantifies over `deferred` only, befo
 after. Witness plan: scratch schema, both polarities (construct-succeeds with a real
 commit and appears in the view creating no review debt; refused on nonexistent commit, on
 malformed witness, on each forbidden flag combination), detect sibling both polarities,
-and the SQL/ASP differential (`./judge`) in AGREE — the executor checks whether the
+and the SQL/ASP differential (`./autoharn judge`) in AGREE — the executor checks whether the
 engine's work-layer rules enumerate disposition vocabulary and extends them in the same
 change if so.
 

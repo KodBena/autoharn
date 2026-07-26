@@ -17,7 +17,7 @@ Two shipped rules are jointly unsatisfiable:
 - **Preamble point 1** (every scaffolded deployment): decompose the ENTIRE commission into
   ledgered work items BEFORE implementing, "including ones you will not start this
   session." The open, unclaimed item is the PLANNED QUEUE — the resumption doctrine's own
-  substrate (`./pickup` hydrates successors from it; items are SUPPOSED to persist open
+  substrate (`./autoharn pickup` hydrates successors from it; items are SUPPOSED to persist open
   across sessions).
 - **The stop gate's work-item predicate**: any `state='open'` item is stop-blocking debt.
 

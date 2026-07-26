@@ -330,7 +330,7 @@ with it? The answer is stated up front because it is easy to read this section b
 estimate exists so a team can learn whether its own prediction habits are calibrated. It is
 **never** a cost-policing mechanism — the maintainer's own invariant, stated twice at
 commissioning, on the record in this repository's tracker ledger as work item
-`cost-estimation-retro` (run `./led show <id>` or `./led --recent` at the repository root to
+`cost-estimation-retro` (run `./autoharn led show <id>` or `./autoharn led --recent` at the repository root to
 read it, the same live-lookup convention [design/ORCH-SPEC-RESOURCE-ACCOUNTING.md](../design/ORCH-SPEC-RESOURCE-ACCOUNTING.md)
 and [design/ORCH-SPEC-DECOMPOSITION-POLICY.md](../design/ORCH-SPEC-DECOMPOSITION-POLICY.md) use for their
 own commissioning work items) — and nothing below proposes a gate, an audit family, or an exit
@@ -541,7 +541,7 @@ maintainer's same-day reiteration of that invariant.
 An `outcome:` row (grammar below) is only half the picture. The other half is the
 **delegation-observer journal** (`.claude/logs/delegation_observer.journal.jsonl`,
 `hooks/pretooluse_delegation_observer.py`), which — since work item
-`model-attribution-tracking` (`./led work list` shows its row) — journals `tool_input.model` and `tool_input.subagent_type`
+`model-attribution-tracking` (`./autoharn led work list` shows its row) — journals `tool_input.model` and `tool_input.subagent_type`
 verbatim on every subagent dispatch, alongside the session id and prompt fingerprint the module
 docstring's CORRELATION FIELD section already documents. **Both fields are
 DECLARED-BY-DISPATCHER grade, named honestly**: neither the journal nor an `outcome:` row is
@@ -620,7 +620,7 @@ never-silently-dropped, MALFORMED-flagged posture every prefix-convention reader
 already keeps.
 
 **Joining the record**, the two joins the commissioning work item's design (work item
-`model-attribution-tracking` — `./led work list` shows its row, whose title carries the full
+`model-attribution-tracking` — `./autoharn led work list` shows its row, whose title carries the full
 design captured at asking) names explicitly:
 
 - **join on the s28 parent edge** (`kernel/lineage/s28-work-parent-edge.sql`'s `work_parent`
@@ -677,7 +677,7 @@ project's tasks — never a verdict this harness enforces on a future dispatch d
   learning tiered by weight, the ratchet named explicitly ("every retrospective ends with
   lessons->mechanisms and could-not-answer->record-kind-candidates"), and the cross-project
   split this document's Section 5 keeps (harness lessons become mechanisms upstream; project
-  lessons become conventions in the deployment). Run `./led show 74` to read it verbatim.
+  lessons become conventions in the deployment). Run `./autoharn led show 74` to read it verbatim.
 - [USER-WORK-STATUS-OFFERING.md](USER-WORK-STATUS-OFFERING.md) — the sibling consumer-facing
   offering this document follows in shape and in its `USER-` naming convention.
 - [GLOSSARY.md](../GLOSSARY.md) — `world`, `run`, `principal`, and every other coined term this

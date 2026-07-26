@@ -77,7 +77,7 @@ are the ADR-0012 P1 two-writers drift and collapse into the one factoring.
    retraction every target is meaningful); the FK stays the one write constraint.
 2. **Engine companion**: `work_items.lp` / `work_review.lp` compose with
    `ledger_tnow.lp`'s supersession closure (`work_closed_in_force(...) :-
-   work_closed(...), not superseded(R)` and siblings); the work layer joins `./judge`'s
+   work_closed(...), not superseded(R)` and siblings); the work layer joins `./autoharn judge`'s
    standing SQL/ASP AGREE differential — the differential IS the standing mechanical
    detect that the two producers cannot drift.
 3. **The allowlist gate** (the delta's `.detect` sibling or a `gates/` member):
@@ -90,7 +90,7 @@ are the ADR-0012 P1 two-writers drift and collapse into the one factoring.
    history readers.
 4. **Non-SQL readers**: pickup/led/stop-hook already factor through the views and
    inherit the fix; `led --recent` keeps its declared history posture (marks, not
-   hides). The enumerator's two unswept corners (`./distance-to-clean`'s indirect path,
+   hides). The enumerator's two unswept corners (`./autoharn distance-to-clean`'s indirect path,
    `engine/*.py` beyond `ledger_floor.py`) are swept during the build and their rows
    appended to the closure universe before the delta ships.
 
@@ -112,7 +112,7 @@ are the ADR-0012 P1 two-writers drift and collapse into the one factoring.
 - Allowlist gate red polarity: a deliberately misfactored scratch view is REFUSED with
   teach-text naming both discharge paths (factor through in-force, or claim the history
   allowlist with a reason).
-- `./judge` SQL/ASP differential AGREE on a world containing every shape above — the
+- `./autoharn judge` SQL/ASP differential AGREE on a world containing every shape above — the
   work layer's first run under the standing gate.
 
 ## 6. Closure statement (ADR-0000 Rule 2(a))

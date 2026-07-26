@@ -123,18 +123,43 @@ def main() -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
     migrate_after = MIGRATE.read_bytes() if MIGRATE.exists() else None
-    half_a_untouched = migrate_before == migrate_after
-    check("half-a-untouched (./migrate byte-identical, out of this build's scope)",
-          half_a_untouched,
-          f"migrate_existed_before={migrate_before is not None} "
-          f"migrate_existed_after={migrate_after is not None} unchanged={half_a_untouched}",
-          failures)
+    if migrate_before is None and migrate_after is None:
+        # Dated note, 2026-07-26 (work item root-shim-pruning, ledger row 1357): ./migrate --
+        # half (a)'s home, referenced by this docstring as "untouched by this fixture and by
+        # this build" -- was itself deleted from the repo root by a *different*, ratified build
+        # (the ten root deprecation shims, migrate included, were pruned as a 2.0.0
+        # precondition). That means the byte-identity comparison below has nothing left to
+        # compare: both sides are unconditionally None, so `migrate_before == migrate_after`
+        # would report [ok] without ever having proven this fixture's own scope discipline
+        # again. Rather than let that silently read as a live proof, this branch names the
+        # vacuity explicitly -- still non-failing (this fixture did not cause the deletion and
+        # has no repoint target: there is no ./migrate left to be byte-identical to), matching
+        # the retirement/dated-note treatment given to
+        # seen-red/fixture-sandbox-runtime-foreclosure/red.txt's case 2d for the same root cause.
+        print("=== half-a-untouched (./migrate byte-identical, out of this build's scope) ===")
+        print("  [ok, VACUOUS] ./migrate does not exist at the repo root (deleted by "
+              "root-shim-pruning, ledger row 1357) -- no bytes on either side to compare; this "
+              "no longer tests this fixture's scope discipline against ./migrate, it just "
+              "confirms both reads found nothing")
+        print()
+    else:
+        half_a_untouched = migrate_before == migrate_after
+        check("half-a-untouched (./migrate byte-identical, out of this build's scope)",
+              half_a_untouched,
+              f"migrate_existed_before={migrate_before is not None} "
+              f"migrate_existed_after={migrate_after is not None} unchanged={half_a_untouched}",
+              failures)
 
     if failures:
         print(f"FAILURES: {failures}")
         return 1
+    migrate_note = (
+        "half (a)/./migrate check is vacuous (./migrate deleted by root-shim-pruning)"
+        if migrate_before is None and migrate_after is None
+        else "half (a)/./migrate untouched"
+    )
     print("ALL CASES OK -- scaffold-served orchlog wrapper proof (written, executable, "
-          "execs correctly, survives --force re-scaffold), half (a)/./migrate untouched.")
+          f"execs correctly, survives --force re-scaffold), {migrate_note}.")
     return 0
 
 

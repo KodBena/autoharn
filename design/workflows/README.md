@@ -1,5 +1,7 @@
 # Declared pipeline workflows (v0) — what this grammar covers, and what it does not
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found one pre-existing legibility finding (unglossed "makespan-scheduler"/"makespan-precedence-export"); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 This directory holds candidate TOML declarations of orchestration-pipeline shapes this project
 and its downstream adopters have actually run, plus the grammar those candidates transcribe into
 and the tool that checks a declaration for structural well-formedness. It exists to answer one
@@ -10,9 +12,9 @@ context, per [law/adr/0017-the-zero-context-reader.md](../../law/adr/0017-the-ze
 
 Two artifacts this page cites repeatedly are worth naming up front, since nothing below defines
 them again: **"the ledger"** is this project's append-only Postgres record of decisions, reviews,
-and work-item state, read and written through the `./led` command-line tool at the repository
+and work-item state, read and written through the `./autoharn led` command-line tool at the repository
 root (a "ledger row," "ledger item," or "close record" below is one entry in that record,
-addressable by its integer id via `./led show <id>`); **"blessed"** (as in "blessed resource" /
+addressable by its integer id via `./autoharn led show <id>`); **"blessed"** (as in "blessed resource" /
 "blessed-tier") names a resource formally registered at a specific trust tier via a
 `resource:`-prefixed ledger decision row plus a matching entry in a `CLAUDE.md` RESOURCES
 section — the convention the autoharn-panel deployment (a separate downstream checkout of this

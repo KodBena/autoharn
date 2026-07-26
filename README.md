@@ -142,7 +142,7 @@ time — reach for them when you want to script a deployment, or see every flag 
 3. [Upgrade a pinned deployment to a newer autoharn](#3-upgrade-a-pinned-deployment-to-a-newer-autoharn) —
    `bootstrap/upgrade-submodule.sh`
 4. [Bring a deployment's database up to date with a newer kernel](#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel) —
-   `./migrate`
+   `./autoharn migrate`
 
 Each step below links back to [Configuration](#configuration) for the settings it needs — read
 that section alongside, or first if you'd rather see every setting up front before typing
@@ -267,11 +267,11 @@ them):
    read [`kernel/lineage/README.md`](kernel/lineage/README.md) in this checkout and apply
    `high_watermark_1.sql` (the starting-point schema this lineage builds on top of, current as of
    its s19 generation — the `psql` invocation is spelled out there), then run
-   [`./migrate <dest-dir>`](#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel)
+   [`./autoharn migrate <dest-dir>`](#4-bring-a-deployments-database-up-to-date-with-a-newer-kernel)
    from this checkout to carry that base forward to the actual current lineage head (`s20`
-   onward, whatever it is by the time you read this — `./migrate` derives it live, so this page
+   onward, whatever it is by the time you read this — `./autoharn migrate` derives it live, so this page
    never has to name it). Never reverse-engineer `bootstrap/new-project.sh`'s own shell variables
-   to guess the full chain by hand; that is exactly what `./migrate` exists to do for you.
+   to guess the full chain by hand; that is exactly what `./autoharn migrate` exists to do for you.
 2. **Provision the stamp secret.** `<dest-dir>/.claude/HOOKS.md`, written by the scaffold, has
    the exact copy-paste commands for this (search it for "stamp secret") — do this once, and do
    not repeat it later: re-running it rotates the secret and invalidates every ledger entry
@@ -401,26 +401,29 @@ invocation after the commit — nothing else changes.
 ## 4. Bring a deployment's database up to date with a newer kernel
 
 An upgraded autoharn checkout (step 3) can carry newer kernel SQL (`kernel/lineage/`) than a
-deployment's database has actually applied. `./migrate` is the one command that closes that gap,
+deployment's database has actually applied. `./autoharn migrate` is the one command that closes that gap,
 for any deployment, regardless of which kernel generation it's currently on.
 
 **Its interface is deliberately, permanently stable** — the script itself says so: it takes no
 new flags as the kernel grows, because the list of SQL deltas it needs is read live out of
 `bootstrap/new-project.sh`'s own manifest rather than hard-coded here.
 
-Unlike the ten operator verbs (`led`, `judge`, `pickup`, …), `./migrate` is **not** scaffolded
+Unlike the ten operator verbs (`led`, `judge`, `pickup`, …), `./autoharn migrate` is **not** scaffolded
 into your deployment directory — there is only one copy, at the root of this autoharn checkout,
-and it takes the deployment directory as an argument.
+dispatched through `./autoharn` like every other root verb, and it takes the deployment
+directory as an argument.
 
 **What you type**, from inside this autoharn checkout:
 
 ```
-./migrate <deployment-dir>            # rehearse, ask ONE typed confirmation, then apply
-./migrate <deployment-dir> --dry-run  # rehearse and print evidence; never applies anything
+./autoharn migrate <deployment-dir>            # rehearse, ask ONE typed confirmation, then apply
+./autoharn migrate <deployment-dir> --dry-run  # rehearse and print evidence; never applies anything
 ```
 
 **What you should see** if you run it with no arguments at all (its own usage line, witnessed by
-calling it bare — nothing is touched):
+calling it bare — nothing is touched; the underlying script's usage text still names itself
+`migrate`, unchanged by the umbrella-dispatch relocation — spell the invocation as
+`./autoharn migrate` regardless):
 
 ```
 usage: migrate <deployment-dir> [--dry-run]
@@ -459,7 +462,7 @@ backup and the printed evidence are what you'd use to investigate.
 ## Configuration
 
 Every field below either lives in a deployment's `deployment.json` (written by
-`bootstrap/new-project.sh`, read by every operator verb and by `./migrate`) or is a flag one of
+`bootstrap/new-project.sh`, read by every operator verb and by `./autoharn migrate`) or is a flag one of
 the four pinning/migration scripts above reads directly. `deployment.json` is a per-deployment
 file, not tracked by this repo (JSON has no comment syntax, so `deployment.json.example` at the
 repo root carries placeholder values only — this table is the field-by-field documentation for
@@ -470,11 +473,11 @@ them; copy the example to `deployment.json` and fill in your own values, or let
 
 | Field | Meaning | What a sane value looks like | What breaks if it's wrong |
 |---|---|---|---|
-| `db` | The Postgres **database name** the ledger lives in. | A database that already exists on `host`, reachable by the role you'll connect as. | Every verb (`led`, `judge`, `pickup`, `./migrate`, …) fails to connect; you'll see a plain Postgres "database ... does not exist" or connection error. |
+| `db` | The Postgres **database name** the ledger lives in. | A database that already exists on `host`, reachable by the role you'll connect as. | Every verb (`led`, `judge`, `pickup`, `./autoharn migrate`, …) fails to connect; you'll see a plain Postgres "database ... does not exist" or connection error. |
 | `host` | The Postgres **host** to connect to. | A hostname or IP your machine can actually reach on the Postgres port (usually 5432), e.g. `localhost` or your LAN database box. | Connection refused / timeout / DNS failure on every verb — nothing ledger-related will work until this is fixed. |
 | `schema` | The **ledger schema** — the Postgres schema holding the `ledger` table and its supporting views/triggers, applied by one of the `kernel/lineage/sNN-schema.sql` generations. | A short, project-specific name, e.g. your project's own name (`toycolors`). Must not collide with autoharn's own curated target names (`toy`, `nla`, `e15`–`e18`) or its scratch-naming conventions (matching `^s\d+[a-z]*$`, or ending in `_scratch`) — a distinctive, project-specific name (your project's own name is usually safe) avoids all of these. | If it doesn't match the schema the kernel DDL was actually applied into, every ledger read/write fails or silently targets the wrong tables. |
 | `kern` | The **kernel schema** — holds `principal` and the stamp/chain machinery, separate from `schema` so ledger content and kernel plumbing don't share one namespace. | Conventionally `<schema>_kernel`, e.g. `toycolors_kernel`. | Same failure mode as a wrong `schema`: verbs that need `principal` (registering agents, stamping) fail or hit the wrong schema. |
-| `role` | The Postgres **role** every verb connects as (`led`, `judge`, `pickup`, hooks, `./migrate`). | A role granted exactly the privileges `kernel/lineage/sNN-schema.sql`'s own GRANT block gives it (USAGE on `schema`/`kern`, INSERT+SELECT on `ledger`, etc.) — never a superuser. | Permission-denied errors on every write; a role with *more* than the granted privileges is a security posture problem even if things "work." |
+| `role` | The Postgres **role** every verb connects as (`led`, `judge`, `pickup`, hooks, `./autoharn migrate`). | A role granted exactly the privileges `kernel/lineage/sNN-schema.sql`'s own GRANT block gives it (USAGE on `schema`/`kern`, INSERT+SELECT on `ledger`, etc.) — never a superuser. | Permission-denied errors on every write; a role with *more* than the granted privileges is a security posture problem even if things "work." |
 | `name` | This deployment's own label (optional; defaults to the destination directory's basename). Used live by the `judge` shim as the target name it passes to autoharn's ledger-differential engine (the tool behind `./judge` that diffs two ledgers against each other), and hence which `derivations/<name>/` subdirectory inside *this autoharn checkout* your comparisons get filed under. | Something short and specific to your project, and — same constraint as `schema` above — not one of autoharn's own curated target names or scratch-naming patterns (`^s\d+[a-z]*$`, `*_scratch`), or `./judge` resolves to the wrong target. | `./judge` compares against, or files derivations under, the wrong target — confusing, not catastrophic, but worth getting right at scaffold time since renaming later means re-scaffolding. |
 
 ### Flags the pinning/migration scripts read (not stored in `deployment.json`)
@@ -491,7 +494,7 @@ scripts (steps 1–4 above).
 | `<new-sha>` | `upgrade-submodule.sh` | The exact commit to move a pinned deployment's `.autoharn` submodule to. | Must be a real, resolvable commit — never a branch name, never "latest"/"tip"/omitted; the script refuses anything it can't resolve after fetching. Picking the wrong commit pins your deployment to the wrong autoharn version, same as any other git checkout to the wrong SHA. |
 | `--yes` | `convert-to-submodule.sh`, `upgrade-submodule.sh` | Skips the typed confirmation prompt. | Fine for scripted/CI use once you trust the printed summary; leave it off for a first, manual run so you actually read what's about to change. |
 | `--force` | `new-project.sh` | Overwrites an existing `deployment.json`/scaffold at `<dest-dir>` instead of refusing. | Only pass this if you mean to re-scaffold over an existing deployment — it can replace an existing `.autoharn` pin (after deinit-ing the old submodule) and existing shims. |
-| `--dry-run` | `./migrate` | Rehearses a migration and prints evidence without ever touching the live database. | No downside to always trying this first — nothing is applied. |
+| `--dry-run` | `./autoharn migrate` | Rehearses a migration and prints evidence without ever touching the live database. | No downside to always trying this first — nothing is applied. |
 
 Settings you will see in a scaffolded deployment's `.claude/` directory (`governed_files.json`,
 `settings.json`, etc.) are hook/editor wiring, not part of the deployment/pinning surface this

@@ -79,7 +79,7 @@ The commission ladder becomes LAZY < FULL < SIGNED:
 
 ```
 gpg --detach-sign --armor ~/aa            # produces ~/aa.asc, one extra line of ceremony
-LED_ACTOR=commissioner ./led commission "$(cat ~/aa)"
+LED_ACTOR=commissioner ./autoharn led commission "$(cat ~/aa)"
 cp ~/aa.asc <world>/.claude/commission-1.asc   # the scaffold prints these lines
 ```
 
@@ -114,7 +114,7 @@ differential in AGREE, then enters the birth chain for the next world.
 **The signed head (the human act):** at run close, the maintainer signs the chain head:
 
 ```
-./verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc, apparatus_hash}
+./autoharn verify-chain --head > /tmp/head.json     # {world, max_id, head_hash, utc, apparatus_hash}
 gpg --detach-sign --armor /tmp/head.json
 ```
 
@@ -177,7 +177,7 @@ conflated them — "THIS repository should not have anything to do with end user
 The same physical keypair may sign in both domains, but the PUBLIC key is committed to a
 DIFFERENT place depending on what it is signing, and a verifying verb reads only its own
 domain's directory, never the other's: **autoharn's own law** — Rung 1's signed
-`ratified/*` tags on THIS repository — is verified by `./attest-tags` against
+`ratified/*` tags on THIS repository — is verified by `./autoharn attest-tags` against
 `law/keys/*.asc`, fingerprint stated in `law/keys/README.md`; that directory is scoped
 exclusively to autoharn's own law-signing and knows nothing of any downstream deployment.
 **Every scaffolded deployment** — a world (`new-project.sh --new-world`) or a standing

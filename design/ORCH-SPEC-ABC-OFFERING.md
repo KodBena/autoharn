@@ -6,7 +6,7 @@
 Audience: orchestrator (design spec; implementation stages are Sonnet-executable per §5).
 Status: Fable-authored 2026-07-12, from the maintainer's same-morning question ("is there
 a reason we can't use it for end users?" — on the record in this repository's tracker
-ledger, work item `abc-loop-offering`; run `./led show <id>` or `./led --recent` at the
+ledger, work item `abc-loop-offering`; run `./autoharn led show <id>` or `./autoharn led --recent` at the
 repository root to read it). The answer his question got: no architectural blocker —
 the loop's fresh reviewer (role B) is an ordinary subagent invocation billed to the
 session that chooses to run it, never a `claude -p` side-channel — only residence.

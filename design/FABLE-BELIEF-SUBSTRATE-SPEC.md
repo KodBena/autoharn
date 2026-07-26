@@ -156,7 +156,7 @@ and exactly what v2 closes.
    `("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp", "ledger_belief.lp")` — the
    defeat stack underneath because `credited_belief/1` consults `model_defeated/3` (§3.4);
    `require_layer_stack` refuses a mis-stacked invocation before grounding.
-4. `./judge --layer belief` wiring via `run_layer_differential` (the "work"-layer precedent),
+4. `./autoharn judge --layer belief` wiring via `run_layer_differential` (the "work"-layer precedent),
    with `_LAYER_FLOOR_PREDS["belief"]` naming the compared predicates (§3.4).
 5. The v1 scratch witness fixtures (§7.1).
 
@@ -187,15 +187,15 @@ shipper writes to this project's ledger, using the existing s22 machinery via th
 verbs:
 
 ```
-./led work open belief-substrate-v2 --title "belief substrate v2 (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §3): the typed kernel delta family — belief kind, nine columns, refusal triggers, derived views, judge layer belief, dispatch-grain independence delta; enters a FUTURE world's birth chain"
-./led work open belief-review-bridge --title "belief substrate second increment (spec §8.1, Q5 SECOND): derive testimony-basis beliefs from review verdicts in the EDB so CLEANs enter the corroboration/shared-premise calculus"
-./led work depends belief-review-bridge belief-substrate-v2
-./led work open belief-doubt-tier --title "belief substrate staged item (spec §8.2, ledger row 1895): light doubt tier + warrant-directed verification queue; demotes nothing, queues warrant-checks, costs a typed reason"
-./led work depends belief-doubt-tier belief-substrate-v2
+./autoharn led work open belief-substrate-v2 --title "belief substrate v2 (design/FABLE-BELIEF-SUBSTRATE-SPEC.md §3): the typed kernel delta family — belief kind, nine columns, refusal triggers, derived views, judge layer belief, dispatch-grain independence delta; enters a FUTURE world's birth chain"
+./autoharn led work open belief-review-bridge --title "belief substrate second increment (spec §8.1, Q5 SECOND): derive testimony-basis beliefs from review verdicts in the EDB so CLEANs enter the corroboration/shared-premise calculus"
+./autoharn led work depends belief-review-bridge belief-substrate-v2
+./autoharn led work open belief-doubt-tier --title "belief substrate staged item (spec §8.2, ledger row 1895): light doubt tier + warrant-directed verification queue; demotes nothing, queues warrant-checks, costs a typed reason"
+./autoharn led work depends belief-doubt-tier belief-substrate-v2
 ```
 
 Properties this discharges: the obligations are **typed** (s22 `work_opened` rows, kind-shape
-CHECKed), **queryable** (`work_item_current` / `led work list`), **surfaced** (`./pickup`'s
+CHECKed), **queryable** (`work_item_current` / `led work list`), **surfaced** (`./autoharn pickup`'s
 open-work reading), and **close-disciplined** (s29: a `shipped` close REQUIRES a witness — the
 birth-chain commit hash — so v2 cannot be hand-waved closed; `deferred`/`dropped` closes are
 themselves typed, dated acts the maintainer can see). Exactly the oblivion class row 1910
@@ -527,7 +527,7 @@ practice-side, or may want O4 pulled forward.
 | Polarity/basis vocabularies; kind-shape + coupling CHECKs (§3.1) | **write-time data constraint** |
 | Witness/universe token existence; edge validation; supersession discipline (§3.2) | **write-time data constraint** (trigger; refusals journaled via s43) |
 | v1 grammar obligations (§2.1) | **run-time invariant** of the engine (parse-time typed refusal) — honestly WEAKER than write-time, named; closed by v2 |
-| Derived views' correctness (§3.4) | **test/CI gate** — the SQL/ASP differential (`./judge --layer belief`, AGREE required), plus the seen-red fixtures |
+| Derived views' correctness (§3.4) | **test/CI gate** — the SQL/ASP differential (`./autoharn judge --layer belief`, AGREE required), plus the seen-red fixtures |
 | Hash coverage of new columns | **test/CI gate** (`gates/hash_coverage_gate.py`, both polarities) |
 | Kind-shape manifest totality | **test/CI gate** (`gates/kind_shape_manifest_gate.py`) |
 | Layer stack completeness | **construction/import-time** (`require_layer_stack` refuses before grounding) |
@@ -598,7 +598,7 @@ concurrence set spanning two agent classes → `corroboration_grade` reaches exa
 `corroborated-cross-class`, and a same-class pair reaches exactly `corroborated-same-class`
 never higher; a five-belief derivation chain sharing one ancestor → `shared_ancestor`
 non-empty (the five-layers query, seen answering *no independence*); the full differential in
-AGREE (`./judge --layer belief` on the scratch target). Negative control for the layer
+AGREE (`./autoharn judge --layer belief` on the scratch target). Negative control for the layer
 machinery: an incomplete stack list → `RegistryError` before grounding.
 
 **7.2 v2 delta B1/B2 (scratch schema pairs in the toy db, full chain s15..s52 + family):**

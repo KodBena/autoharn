@@ -102,3 +102,31 @@ $ git diff --stat libexec/autoharn-service
 
 -- byte-identical to the fix's own committed content (zero remaining delta once restored) -- and
 the fixture re-run green afterward, all 7a-7d cases PASS, no regression in cases 1-6.
+
+--------------------------------------------------------------------------------------------
+
+Dated note, 2026-07-26 (work item root-shim-pruning, ledger rows 1357/1358/1359): case 2d
+(alias-chain-refused) is RETIRED, not repointed. Row 1357 (maintainer ruling) inverted the
+umbrella spec's §6 removal schedule -- the ten root deprecation shims (`asof-export`,
+`attest-tags`, `audit`, `distance-to-clean`, `doctor`, `judge`, `led`, `migrate`, `pickup`,
+`verify-chain`; see design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6's dated amendment) are removed
+BEFORE 2.0.0 as a precondition, not "at the first post-2.0.0 minor". `./led` -- the exact
+one-hop indirection case 2d drove (`./led --recent 1`, execing
+`./autoharn led "$@"` underneath) -- is one of the ten deleted in this build. The property case
+2d witnessed (the runtime-foreclosure refusal surviving one hop of shim indirection before
+reaching ./autoharn) is now VACUOUS: there is no `./led` left to hop through, and no other
+root-level file left that has this alias-chain shape (`courier`, `extract-context`, `orchlog`,
+`otel-attest`, `otel-watch` are the five root executables that survive this pruning, and none
+of them exec `./autoharn <verb> "$@"` -- each is a standalone verb by its own documented design,
+never an alias into the umbrella dispatcher). No repoint target exists, so the case is retired
+outright rather than repointed to a shape that doesn't test the same thing. Case 2e (direct
+libexec bypass -- skipping ./autoharn's own dispatch and landing straight on
+libexec/autoharn/led) is UNCHANGED and continues to cover the other indirection direction (going
+straight to the target instead of through an alias); libexec/autoharn/led itself is untouched by
+this pruning (only the repo-root alias that pointed at it is gone). Fixture re-run after the
+retirement (case 2 now has four specimens, a/b/c/e, not five):
+
+$ python3 seen-red/fixture-sandbox-runtime-foreclosure/run_fixtures.py
+(see this build's own report for the full transcript; case 1, case 2's remaining four
+specimens, cases 3/4/6/7 all green, case 5 UNEXERCISED as before with the same named
+HARNESS_PGHOST/EPISTEMIC_PGHOST blocker.)

@@ -1,5 +1,7 @@
 # Elucidation Consult — Ratification Edition (2026-07-22)
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- one root-shim invocation spelling repointed (./led -> ./autoharn led); no prose rewrite. A real fresh-context B-review was run during this touch and found one pre-existing legibility gap (unglossed "principal[s]"), repaired in place; other pre-existing findings this pass's B surfaced elsewhere in the corpus were flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 ## What this document is
 
 This document merges three separate pieces of work into one, and rewrites them in plain
@@ -64,7 +66,8 @@ be shown to a founding operator during setup. The first ("specimen 1") lays out 
 to get a database for the software to use — using a database that already exists and is
 reachable, or having the installer stand up a brand-new, dedicated database — and states
 what each path requires and does. The second ("specimen 2") is a "Principals & authority"
-screen: it lists, per feature, four fields — `Aspiration` (what the feature is trying to
+screen — "principals" meaning the users, services, or roles the system grants authority to:
+it lists, per feature, four fields — `Aspiration` (what the feature is trying to
 achieve), `Standards` (what named external standard, if any, the feature relates to),
 `Mechanism` (what file or component implements it), and `External` (what happens outside
 the software itself, such as a prerequisite or a manual step). Both screens are generated
@@ -405,7 +408,7 @@ to check *that*. So the checks were real, and they passed honestly — they were
 witnesses to the wrong question. The consult ties this to a pattern this project has
 separately named on the *auditor's* side of similar work (a documented tendency, referred
 to in this project's decision ledger — the project's append-only log of maintainer
-rulings and findings, read via a tool called `./led` — as ledger row 1887's gloss: "false-MET —
+rulings and findings, read via a tool called `./autoharn led` — as ledger row 1887's gloss: "false-MET —
 requirements read down to fit found mechanisms"): here
 the same pattern shows up on the *builder's* side — "elucidation is honest and useful" got
 silently redefined, in practice, as "passes the three things we know how to test," and
@@ -632,7 +635,7 @@ third is a limit the consult is naming on purpose rather than a gap it failed to
 Each mechanism below is written to stand alone. Where a mechanism references this
 project's law documents (its "ADR"s — numbered Architecture Decision Records that record
 ratified engineering rules) or its decision ledger (the append-only log of maintainer
-rulings, read with a command-line tool called `./led`), a short plain-language gloss is
+rulings, read with a command-line tool called `./autoharn led`), a short plain-language gloss is
 given in place, rather than assuming the reader already knows them.
 
 ### M1 — Require every reference to an outside standard to state its relationship, not just its name

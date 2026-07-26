@@ -21,16 +21,16 @@ zero-progress, not an ergonomics nicety and explicitly not a cost-policing mecha
 maintainer's scenario: he leaves the terminal expecting a workflow to finish, a tool bug hangs
 it at minute three, he returns two hours later to nothing — an operational hazard, his words,
 "especially in a medical setting." Design bar: fail-safe, at the "recovery is the point, not
-observation" standard the maintainer's correcting ledger row states (`./led show 436`, cited again
+observation" standard the maintainer's correcting ledger row states (`./autoharn led show 436`, cited again
 in the Commission bullet below) — and where recovery is genuinely out of reach from this harness's
 own position, say so honestly and name the next-best, never fake an enforce this project cannot
 honor.
 
 - **Status:** Draft, smallest-honest-slice built alongside this note.
-- **Commission:** tracker work item `watchdog-liveness-harness`, read via `./led show 433`
+- **Commission:** tracker work item `watchdog-liveness-harness`, read via `./autoharn led show 433`
   (`led` is this project's tracker-ledger verb; `led show <id>` prints one ledger row in full by
   its numeric id), CORRECTED by a maintainer decision row superseding the opened framing
-  (`./led show 436`), further scoped by a live-evidence follow-up mid-build (`./led show 439`).
+  (`./autoharn led show 436`), further scoped by a live-evidence follow-up mid-build (`./autoharn led show 439`).
   All three are read in full before this note was drafted; where they differ, the correction and
   the follow-up govern, per this project's own reading-the-law discipline.
 
@@ -88,7 +88,7 @@ position can **recover** it — reach-limits stated honestly per class, not just
 
 **What:** a Bash tool call that never returns, riding all the way to the tool's own timeout
 ceiling (up to 600s in this harness) before the caller even learns something is wrong — the
-literal ent incident that opened this commission (`./led show 433`: "workflow agent idle 9m41s
+literal ent incident that opened this commission (`./autoharn led show 433`: "workflow agent idle 9m41s
 — likely a hung command riding the 600s Bash ceiling"), now understood (§0) as *possibly*
 something else, but the class itself — a Bash call that genuinely never returns — is real and
 distinct from class 5.
@@ -278,7 +278,7 @@ the gate one.
 4. The deployment's own ledger (`estimate:` rows + `work_item_current` — the kernel's derived
    view of each work item's live state, one of the closure-debt dimensions
    [`distance-to-clean`](../GLOSSARY.md#distance-to-clean) also reads — + the `work_claimed`
-   row's own `ts`, the ledger entry the `./led work claim <slug>` operator verb writes when a
+   row's own `ts`, the ledger entry the `./autoharn led work claim <slug>` operator verb writes when a
    principal claims an open work item), when a deployment (`deployment.json`) is resolvable and
    the DB is reachable — the
    **first in-flight consumer** of the `estimate:`/`actual:` WALL-CLOCK fields the commission
@@ -317,12 +317,12 @@ absolute-only framing, per row 433's "slack as ratio or absolute, per the mainta
 an operator who only cares about one sets the other to 0.
 
 **The `mode` field is presently INERT — stated plainly, not left as a silent lying signature
-(tracker item `watchdog-mode-field-inert`, read via `./led show 503`; ADR-0002 Rule 4).** The example block above carries
+(tracker item `watchdog-mode-field-inert`, read via `./autoharn led show 503`; ADR-0002 Rule 4).** The example block above carries
 `"mode": "observe"` because that is the only rung the escalation ladder (design constraint 4,
 row 433) names that this build actually implements — `load_watchdog_config()` in
 `tools/watchdog_liveness.py` does not read a `mode` key at all, and the checker always runs its
 full observe-rung sweep regardless of what (if anything) `mode` is set to. This is honest, not an
-oversight left unnamed: this commission is scoped to the observe rung only (`./led show 433`'s
+oversight left unnamed: this commission is scoped to the observe rung only (`./autoharn led show 433`'s
 own deliverable, "the smallest honest implementable slice"); a `warn` rung (surfacing a liveness
 question at the next hook event / `pickup`, design constraint 4's second ladder step) and an
 `enforce` rung do not exist yet, so there is nothing for `mode` to meaningfully select between —
@@ -330,7 +330,7 @@ wiring it now would mean validating a field with exactly one live value, which i
 for what the field currently is. When a `warn` rung is built, `mode` gains real read/dispatch
 logic and this paragraph is superseded by dated amendment, not silently dropped. Until then, an
 operator who sets `mode` to anything else sees no different behavior — this is the fact this
-paragraph exists to name plainly, per the tracker item's own two disposition options (`./led show
+paragraph exists to name plainly, per the tracker item's own two disposition options (`./autoharn led show
 503`: "wire mode up when the warn rung is built, or amend sec-4 to state plainly that mode is
 presently inert") — this paragraph takes the second option.
 
@@ -450,7 +450,7 @@ does not repeat that mistake.
 (This note's house convention: every law/ADR and design-doc citation used inline by number or
 name — e.g. "ADR-0013 Rule 5", "ADR-0002's fail-loud tenet" — is linked exactly once, here.)
 
-- `./led show 433` / `436` / `439` — the opening commission, its correction, and the mid-build
+- `./autoharn led show 433` / `436` / `439` — the opening commission, its correction, and the mid-build
   false-positive scope addition, all read in full before this note.
 - [law/adr/0002-fail-loudly.md](../law/adr/0002-fail-loudly.md) — the loudness hierarchy this
   note's "convert a silent hang into a typed, bounded failure" move instantiates.

@@ -5,8 +5,11 @@
 #   bootstrap/migrate.sh <deployment-dir>              -- rehearse, ask ONE typed confirmation, apply
 #   bootstrap/migrate.sh <deployment-dir> --dry-run     -- rehearse and print evidence; never applies
 #
-# (the root `./migrate` shim in this checkout execs this file unchanged -- same shim pattern as
-# `./led`/`./pickup`, ADR-0012 P1: one resolution mechanism, not a per-verb hand copy.)
+# (`./autoharn migrate`, via libexec/autoharn/migrate, execs this file unchanged -- same
+# resolution shape as `./autoharn led`/`./autoharn pickup`, ADR-0012 P1: one resolution
+# mechanism, not a per-verb hand copy. The bare `./migrate` root shim this comment used to name
+# was deleted by root-shim-pruning, ledger row 1357 -- reach this file via `./autoharn migrate`
+# now, not a bare root spelling.)
 #
 # All the actual logic (manifest parsing, process check, backup, rehearsal, per-delta
 # verification, the one typed confirmation, live apply, re-verify, ledger recording) lives in

@@ -1,5 +1,7 @@
 # Makespan-scheduled dispatch — what can honestly be guaranteed, and what cannot
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found one pre-existing legibility finding (unglossed "stamp-distinct"/"stamp"); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 This note is written for an orchestrator (human or LLM) deciding how to dispatch a batch of
 independent work units across parallel agent capacity, and for anyone assessing whether "the
 schedule was computed by a formal planner" is a claim this project can stand behind. The
@@ -10,11 +12,11 @@ precisely: given `tools/makespan-scheduler/` (vendored 2026-07-14, split into it
 repository and converted to a git submodule 2026-07-15; see
 [`tools/makespan-scheduler-PROVENANCE.md`](../tools/makespan-scheduler-PROVENANCE.md)) and this
 project's own **ledger** (this project's append-only decision/work-item record, read via the
-`./led` command-line tool), what is actually guaranteed about a dispatch order the scheduler produces,
+`./autoharn led` command-line tool), what is actually guaranteed about a dispatch order the scheduler produces,
 and what depends on a human/agent judgment the scheduler cannot check?
 
 **Provenance.** Maintainer directive, 2026-07-14 (dictated pre-sleep, verbatim in substance;
-ledger work item `makespan-scheduler-vendoring`, `./led show` at the repository root reads it in
+ledger work item `makespan-scheduler-vendoring`, `./autoharn led show` at the repository root reads it in
 full): the scheduler should be vendored and recommended as a standing practice for large-scale
 agentic workflows, "since Claude Code is essentially an infinite-server model of work — however
 the [ADR-0013](../law/adr/0013-execution-integrity.md)-violating default inclination of many models makes them default to sequential work
@@ -85,7 +87,7 @@ remaining independent jobs handed to this scheduler.
 ## 4. "We already have this in part" — what the ledger's typed work-split actually types today
 
 The maintainer's belief that typed work-splits partially exist already is correct, precisely
-scoped: `./led work open <slug> --parent <parent-slug>` and `led work depends <slug> <on-slug>`
+scoped: `./autoharn led work open <slug> --parent <parent-slug>` and `led work depends <slug> <on-slug>`
 ([`kernel/lineage/s22-work-item-ledger.sql`](../kernel/lineage/s22-work-item-ledger.sql),
 [`kernel/lineage/s28-work-parent-edge.sql`](../kernel/lineage/s28-work-parent-edge.sql)) give a work item a real,
 kernel-typed position in a dependency/parent tree — `led work depends` is exactly a **declared

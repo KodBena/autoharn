@@ -59,7 +59,7 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[birth chain](../GLOSSARY.md#birth-chain)** — the SQL applied at world creation:
   `high_watermark_1.sql` (bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 →
   s22 → s23 → s24 → s25 → s26 (row-hash chain) → s27 (chain high-water witness, tracker item
-  `s26-tail-deletion-witness`, ledger decision row 192 -- `./led show 192`). There is no s16;
+  `s26-tail-deletion-witness`, ledger decision row 192 -- `./autoharn led show 192`). There is no s16;
   s18 is deliberately excluded (experiment apparatus, not kernel). See kernel/lineage/README.md.
 - **[delta](../GLOSSARY.md#delta-kernel-lineage-delta)** — one additive lineage step. It
   reaches reality by entering the birth chain; the next world's scaffold carries it. Never
@@ -84,20 +84,27 @@ Condensed for quick reference; full definitions (the SSOT) live in
 - **[ephemera](../GLOSSARY.md#ephemera)** — local session transcripts/snapshots; never
   committed (privacy ruling).
 
-> **Forward note (2026-07-23, UPDATED):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md has landed
+> **Forward note (2026-07-26, UPDATED):** design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md has landed
 > for THIS repository's OWN root deployment: `./autoharn` (`autoharn led …`, `autoharn doctor`,
-> `autoharn --help` for the generated, self-updating roster) is now the primary spelling here,
-> and the ten `./verb` names below survive as one-line deprecation-warning alias shims (removed
-> at the first post-2.0.0 minor) — semantics, refusals and exit codes unchanged, only the
-> invocation spelling moved. **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN
-> world actually gets — is NOT yet updated to this build's shape**: a freshly scaffolded world
-> still receives the ten bare per-verb shims this card describes below, not `./autoharn` +
-> `libexec/`. That migration is a genuinely separate, larger change to a load-bearing 1200+ line
-> script and is deliberately left to a follow-on rather than rushed here (named, not silently
-> skipped). Until it lands, this card's per-verb descriptions below remain the accurate,
-> shipping-current reference for what a scaffolded world actually runs; only the invocation
-> spelling for THIS repo's own operator surface has changed (see CLAUDE.md's operator-surface
-> sentence).
+> `autoharn --help` for the generated, self-updating roster) is now the ONLY spelling here.
+> The ten one-line `./verb` deprecation-warning alias shims that briefly survived alongside it
+> have since been DELETED from the repo root (work item root-shim-pruning, ledger rows
+> 1357/1358/1359) — per maintainer ruling on ledger row 1357, their removal is a precondition of
+> the 2.0.0 tag rather than something deferred to "the first post-2.0.0 minor" as originally
+> planned in the spec above; that original schedule text stands as the planning-time record,
+> corrected by this dated amendment rather than silently rewritten. Semantics, refusals and exit
+> codes are unchanged from before the pruning — only the invocation spelling moved, now with no
+> bare-shim fallback at this repo's own root. (`courier`, `extract-context`, `orchlog`,
+> `otel-attest`, `otel-watch` were never part of this shim family and are untouched.)
+> **`bootstrap/new-project.sh`'s own scaffold — what a NEWLY-BORN world actually gets — is NOT
+> yet updated to this build's shape**: a freshly scaffolded world still receives the ten bare
+> per-verb shims this card describes below, not `./autoharn` + `libexec/`. That migration is a
+> genuinely separate, larger change to a load-bearing 1200+ line script and is deliberately left
+> to a follow-on rather than rushed here (named, not silently skipped). Until it lands, this
+> card's per-verb descriptions below remain the accurate, shipping-current reference for what a
+> scaffolded world actually runs; only the invocation spelling for THIS repo's own operator
+> surface has changed (see CLAUDE.md's operator-surface sentence) — and, as of this pruning,
+> that repo-root surface no longer has a `./verb` fallback at all.
 
 ## The verbs (run inside a world directory)
 
@@ -273,7 +280,7 @@ they fire from the same hook invocation).
 | stamp_intercept.py | PreToolUse Bash | injects HMAC stamp as PGOPTIONS, unconditionally | enforce |
 | clean_exit (stop_clean_exit.py) | Stop | review_gap / question_status / open work / violations; blocks dirty stop (3-strike breaker) | enforce |
 | mutation_observer (posttooluse_mutation_observer.py) | Pre+Post Bash (the filename keeps its original "posttooluse_" prefix even though it now also attaches PreToolUse — same naming precedent delegation_observer follows below, an added leg on an existing file rather than a rename) | find -newer sweep; warns on mutation with no work item | observe (enforce impossible) |
-| delegation_observer (pretooluse_delegation_observer.py) | Pre+Post Task/Agent/Workflow (widened from Task/Agent by the Workflow-tool-coverage work item, ledger row 1355, 2026-07-26 — this cell's own matcher text was stale, corrected in the same doc sweep; one file, two legs added by the "small follow-ups" work item closed 2026-07-11 — tracker slug `small-follow-ups-commission`, `./led show` its row for the full record: PreToolUse journals the dispatch, PostToolUse journals the return) | journals every subagent dispatch and its return, each line carrying the harness-assigned `tool_use_id` when present; CORRECTED 2026-07-14 ([design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](../vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md) sec-3/sec-4/sec-6.6): the old FIFO-by-`session_id`+`prompt_sha256` pairing is retired — dispatch and return are identity-keyed on `tool_use_id` (present and byte-identical across both legs, per a live payload capture), and neither leg stores a pairing verdict; a reader joins the two lines at read time. Warns when no open+claimed work item | observe |
+| delegation_observer (pretooluse_delegation_observer.py) | Pre+Post Task/Agent/Workflow (widened from Task/Agent by the Workflow-tool-coverage work item, ledger row 1355, 2026-07-26 — this cell's own matcher text was stale, corrected in the same doc sweep; one file, two legs added by the "small follow-ups" work item closed 2026-07-11 — tracker slug `small-follow-ups-commission`, `./autoharn led show` its row for the full record: PreToolUse journals the dispatch, PostToolUse journals the return) | journals every subagent dispatch and its return, each line carrying the harness-assigned `tool_use_id` when present; CORRECTED 2026-07-14 ([design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md](../vestigial_documentation/design/ORCH-RCA-PAIRING-KEY-DIVERGENCE.md) sec-3/sec-4/sec-6.6): the old FIFO-by-`session_id`+`prompt_sha256` pairing is retired — dispatch and return are identity-keyed on `tool_use_id` (present and byte-identical across both legs, per a live payload capture), and neither leg stores a pairing verdict; a reader joins the two lines at read time. Warns when no open+claimed work item | observe |
 | demurral_detect.py | AskUserQuestion, Stop | out-of-frame classifier for ADR-0013 Rule 3's "lower-ROI/invasive demurral is a tell, not an argument" pattern; warns only | **OFF (costs money)** |
 | doc_shapes_gate (pretooluse_doc_shapes_gate.py) | PreToolUse Write/Edit on *.md | runs [`gates/doc_shapes.py`](../gates/doc_shapes.py) checks in-world; refuse-and-teach in enforce | observe |
 | read_observer (pretooluse_read_observer.py) | PreToolUse Read | journals ts/session/path — the evidence trail that lets a reviewer confirm they read a file themselves rather than trusting another agent's summary of it (invariant I6, [law/briefs/BRIEF-CONFORMANCE-MAP.md](../law/briefs/BRIEF-CONFORMANCE-MAP.md): distinct-reviewer independence recorded separately from the author's own read) | observe |

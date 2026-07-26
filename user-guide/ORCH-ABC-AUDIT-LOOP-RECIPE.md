@@ -272,16 +272,16 @@ next integrator inherits the rule instead of rediscovering it.
 ### The merge convention row ("3c. The typed merge event")
 
 This project keeps a general append-only decision ledger in Postgres — a record of ledgered acts
-(decisions, reviews, work-item state, and more), written and read through the `./led` command-line
-verb — which is a SEPARATE record from the `attestations/doc-legibility-attestations.jsonl` ledger
+(decisions, reviews, work-item state, and more), written and read through the `./autoharn led`
+command-line verb — which is a SEPARATE record from the `attestations/doc-legibility-attestations.jsonl` ledger
 this recipe's own step 6/7 write to; the two are both "ledgers" in the ordinary-English sense but are
 different files serving different purposes. At each worktree merge, the integrator writes ONE row to
-the `./led` decision ledger: `decision` kind, a statement that starts with the literal prefix `merge:`,
+the `./autoharn led` decision ledger: `decision` kind, a statement that starts with the literal prefix `merge:`,
 naming the branch that was merged, the resulting merge commit, and the work-item slug(s) whose work
 rode that merge. Concretely:
 
 ```
-./led decision "merge: <branch-name> -> <merge-commit-sha> (work items: <slug-1>, <slug-2>)"
+./autoharn led decision "merge: <branch-name> -> <merge-commit-sha> (work items: <slug-1>, <slug-2>)"
 ```
 
 This is a plain `decision` row — no new ledger kind, no kernel change (a first-class typed merge-event

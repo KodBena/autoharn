@@ -60,8 +60,11 @@ it; the key restates the reading posture the bullet above mandates):
 - **For THIS repository's OWN root deployment, the operator surface is `./autoharn` and its
   subcommands; run `autoharn --help` for the authoritative, self-updating roster** (design/
   FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows 1151-1183: one root executable, dispatching to
-  `libexec/autoharn/<verb>`; the pre-umbrella root executables survive one deprecation window as
-  one-line `./verb` alias shims, removed at the first post-2.0.0 minor) plus refusals that teach.
+  `libexec/autoharn/<verb>`; the pre-umbrella root executables' one-line `./verb` alias shims have
+  already been deleted from this repo's root — work item root-shim-pruning, ledger row 1357,
+  executed ahead of the planned post-2.0.0-minor deprecation window as a precondition of the
+  2.0.0 tag — their functionality is unchanged and reached only via `./autoharn <verb>` or
+  `libexec/autoharn/<verb>` now) plus refusals that teach.
   **This is scoped to this repo's own root** — every world scaffolded by
   `bootstrap/new-project.sh` still gets the ten bare per-verb shims untouched by this build (the
   scaffold migration is a named follow-on, not yet done); see

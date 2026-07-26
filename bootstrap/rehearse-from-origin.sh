@@ -48,7 +48,7 @@
 #      -- deliberately --pin-url <repo-url>, NOT the default on-disk path, so the submodule this
 #      creates is fetched from the real remote, exactly what a real stranger would get.
 #   3. Apply kernel/lineage/high_watermark_1.sql (README section 1's "two manual steps", #1a).
-#   4. `./migrate` to carry the base to the current lineage head (README section 1's #1b).
+#   4. `./autoharn migrate` to carry the base to the current lineage head (README section 1's #1b).
 #   5. Provision the stamp secret (README section 1's "two manual steps", #2; commands verbatim
 #      from bootstrap/templates/HOOKS.md.tmpl's own copy-paste block).
 #   6. A REAL LEDGER WRITE (`./led decision ...`) inside the freshly deployed project -- the
@@ -283,8 +283,8 @@ run_jailed "psql -h '$PGHOST' -d '$PGDATABASE' -v ON_ERROR_STOP=1 \
     -v schema='$SCHEMA' -v kern='$KERN' -v role='$ROLE' \
     -f '$CLONE/kernel/lineage/high_watermark_1.sql'"
 
-echo "-- step 3: ./migrate to lineage head (typed confirmation piped: MIGRATE $SCHEMA) --"
-run_jailed "cd '$CLONE' && printf 'MIGRATE %s\n' '$SCHEMA' | ./migrate '$DEST'"
+echo "-- step 3: ./autoharn migrate to lineage head (typed confirmation piped: MIGRATE $SCHEMA) --"
+run_jailed "cd '$CLONE' && printf 'MIGRATE %s\n' '$SCHEMA' | ./autoharn migrate '$DEST'"
 
 echo "-- step 4: provision the stamp secret (bootstrap/templates/HOOKS.md.tmpl's own commands) --"
 # Written to a FILE with a quoted heredoc (no expansion at write time) so KERN reaches psql as a

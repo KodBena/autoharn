@@ -1,5 +1,7 @@
 # ORCH-SPEC-RESOURCE-ACCOUNTING — usage accounting and the deontic register
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found one pre-existing legibility finding (unglossed "WIRED deployment"); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 This document answers one question: for a declared resource (a solver, a service, a tool this
 project may/should/must/must-not reach for), how does the harness count what was actually used,
 and how does it type — per resource — whether the MAY/SHOULD/MUST/MUST-NOT rule attached to it
@@ -20,7 +22,7 @@ here layers on top of it.
 ## 1. The problem — three asks, one auditor's question
 
 The maintainer's asks (2026-07-12 morning, on the record in this repository's tracker
-ledger, work item `resource-accounting-spec` — run `./led show <id>` or `./led --recent`
+ledger, work item `resource-accounting-spec` — run `./autoharn led show <id>` or `./autoharn led --recent`
 at the repository root to read it):
 
 1. **Count uses.** A declared resource that is *requisitioned* — acquired in discrete,
@@ -121,7 +123,7 @@ stand unedited as the planning-time record; this is the dated correction that ma
 what they left too implicit to survive a fresh read. Substrate: three independent fresh-context
 probe runs asking whether the `mandated` tier is enforced — Opus once, Sonnet twice, the third
 run (referred to here as "probe3") graded on this project's own tracker row 223 (run
-`./led show 223` at the repository root to read the grading in full) — each probe answered the
+`./autoharn led show 223` at the repository root to read the grading in full) — each probe answered the
 question wrongly in one direction, because this section's derivation rule and
 [ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §4's shipped-mechanism prose
 read, side by side, as two competing stories for the same tier. This is the single owning
@@ -135,7 +137,7 @@ Verified 2026-07-13 against the mechanisms themselves, not the documents about t
 - `mandated`'s assigned mechanism (the row above: countersigned evidence-shape review) is REGISTRY
   §4 Stage 1, **SHIPPED and live** as of 2026-07-12: a mandated-shape work item's close is a
   review obligation by convention, and going undischarged surfaces as `review_gap` debt
-  (`./led review-gap`, `./audit --review-gap`) until a distinct principal countersigns citing the
+  (`./autoharn led review-gap`, `./autoharn audit --review-gap`) until a distinct principal countersigns citing the
   evidence shape. Per this section's own derivation rule: a deployment that has run `led obligate`
   for the relevant principal and exercised the countersign reads `POLICED
   (countersigned-evidence-shape-review)`; a deployment that declared the tier but never ran
@@ -150,7 +152,7 @@ Verified 2026-07-13 against the mechanisms themselves, not the documents about t
   boundary" are two different strengths, and this section's honest-limits register (§7) — the
   passage the probes over-read — is about `forbidden`'s still-unbuilt write-time gate, never a
   claim that `mandated` has none.
-- The deontic checker at `./audit --resources` (§5/§8 Stage C) is a **third, separate, still
+- The deontic checker at `./autoharn audit --resources` (§5/§8 Stage C) is a **third, separate, still
   UNBUILT** mechanism: it would derive VIOLATED/FLAGGED verdicts from witnessed tool-*use*
   evidence (REACH-matched invocations) against the declared tier — checking that the declared
   tool was actually reached for, which the Stage 1 review convention never attempts (it checks
@@ -190,7 +192,7 @@ cite a resource).
 - **Two surfaces.** The pickup RESOURCES section annotates each declaration in place:
   requisitioned → `uses: N witnessed, last <timestamp>`; ever-present →
   `first witnessed use <timestamp>` or the explicit `NOT-WITNESSED-USED`. The audit
-  surface is `./audit --resources`, marriage-grade like every checker in this house: the
+  surface is `./autoharn audit --resources`, marriage-grade like every checker in this house: the
   deontic rules in ASP (Answer Set Programming, the clingo layer that is this project's
   reason to exist) — a `mandated`-shape work item closed with neither a matching use
   nor a why-not row is VIOLATED; a witnessed use matching a `forbidden` shape is
@@ -240,7 +242,7 @@ spec's own stage 3 lands:
 - **Stage B — counting floor**: builds the SQL usage view over the journal and ledger, plus the
   pickup RESOURCES annotations, showing the §5 denomination text at the surface.
 - **Stage C — deontic checker**: builds the ASP program, the SQL floor, and the differential
-  between them behind `./audit --resources`, following Part 3's conventions throughout.
+  between them behind `./autoharn audit --resources`, following Part 3's conventions throughout.
 - **Stage D — subagent-spawn observer**: one costless journal-line observer in the
   apparatus, registered in the mechanism registry like its read/bash siblings.
 - **s27 fold-in**: when the registry spec's stage 3 lands the `resource` kernel kind,

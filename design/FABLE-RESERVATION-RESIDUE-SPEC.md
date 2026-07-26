@@ -127,7 +127,7 @@ purpose, stated in the header rather than discovered.
   every case above, superseded flag correct.
 - **Fixture** `seen-red/reservation-residue/run_fixtures.py` mechanizing the above;
   registered in `gates/fixture_census.py`.
-- All gates green; ./migrate accepts the manifest with the HISTORY header.
+- All gates green; ./autoharn migrate accepts the manifest with the HISTORY header.
 
 ## 7. Amendment, 2026-07-22 (same commission, engine coherence — added when the build
 ## disclosed the residual)
@@ -140,7 +140,7 @@ residual. This amendment extends the SAME ratified semantics change (nothing new
 ratified) to the engine mirror: the discharge predicate there accepts both attesting
 verdicts, identically to s56's `discharging_attest`, with the reservation-residue
 distinction preserved wherever the mirror models verdicts at all. Witness: the
-SQL/ASP differential (`./judge`) in AGREE on a scratch world exercising a
+SQL/ASP differential (`./autoharn judge`) in AGREE on a scratch world exercising a
 reservation-discharged item — the exact case the two layers would have disagreed on.
 The two-homes tension (SQL view + engine mirror both encode discharge) is noted as a
 standing P1 concern for a future consult, not resolved here.

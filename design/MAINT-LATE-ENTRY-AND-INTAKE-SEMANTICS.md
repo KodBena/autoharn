@@ -1,5 +1,7 @@
 # Late entries and intake bursts — DRAFT design for the maintainer
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (unglossed "s23"/"ALCOA+"/"birth chain"/"world", bare BACKLOG citations, and a DRAFT/RATIFIED title-vs-status contradiction); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 Audience: maintainer
 
 STATUS: RATIFIED (2026-07-11, maintainer: "you had three points on the contemporaneity
@@ -58,7 +60,7 @@ the previous such ambiguity). Deterministic, engine-side only.
 
 ## Proposal 2 — declared late entries (kernel delta + one new verdict; needs the word)
 
-- `led` gains an optional declared event time (e.g. `./led --event-time <ts> finding
+- `led` gains an optional declared event time (e.g. `./autoharn led --event-time <ts> finding
   "..."`), stored in a new NULLABLE ledger column. Writing it is always optional; omitting
   it means "this row records a present act", which is today's semantics unchanged.
 - The audit gains one verdict: **LATE_DECLARED** — the row's declared event time precedes

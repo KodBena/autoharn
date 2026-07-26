@@ -4,7 +4,7 @@
 # instant, wired together so the frozen dest's own ./pickup/./led/./judge/etc. read ONLY the
 # frozen snapshot, never the live tracker and never the live checkout.
 #
-# WHY THIS EXISTS (tracker slug `freeze-at-stamp`, `./led show 225` for the full commission; see
+# WHY THIS EXISTS (tracker slug `freeze-at-stamp`, `./autoharn led show 225` for the full commission; see
 # also decision rows 228/229 for the two spec amendments this script implements): a control-
 # evaluation ran in a git worktree pinned at an old commit, but (a) its ./pickup shim exec'd the
 # LIVE checkout's templates against the LIVE tracker (a later, ungraded ledger row leaked into a
@@ -14,7 +14,7 @@
 # project's identity) plus a frozen-and-truncated copy of the tracker, with the dest's verb shims
 # repointed at the DEST's own `bootstrap/templates/` (never the live checkout's).
 #
-# ISOLATION LEVEL (ratified via two tracker amendments; `./led show 228` then `./led show 229`
+# ISOLATION LEVEL (ratified via two tracker amendments; `./autoharn led show 228` then `./autoharn led show 229`
 # supersedes it): the frozen tracker copy lives in its OWN, STANDING, single-tenant database
 # (`autoharn_test` by default -- never a schema pair inside the live db that also holds this
 # repo's own root tracker). Rationale, the maintainer's own: if read-access to the tracker is
@@ -143,7 +143,7 @@ usage() {
     echo "usage: $0 <commit> <dest-dir> [--db <name>] [--host <host>] [--as-of <iso-ts|id>]" >&2
     echo "           [--worktree] [--writable] [--no-wipe] [--force]" >&2
     echo "       (see this script's own header comment for the full design rationale --" >&2
-    echo "        tracker slug freeze-at-stamp, './led show 225' then 228/229 for the two" >&2
+    echo "        tracker slug freeze-at-stamp, './autoharn led show 225' then 228/229 for the two" >&2
     echo "        spec amendments this build implements)" >&2
     exit 2
 }
@@ -376,7 +376,7 @@ _refuse_unreachable() {
     echo "  This script NEVER creates the database, the roles, or edits pg_hba.conf itself --" >&2
     echo "  CLAUDE.md ORCHESTRATION: credentials/pg_hba/hosts route to the maintainer, always." >&2
     echo "  One-time provisioning (a maintainer act, on $HOST, as a superuser), per tracker" >&2
-    echo "  decision row 229 ('./led show 229' in this checkout for the ratified statement):" >&2
+    echo "  decision row 229 ('./autoharn led show 229' in this checkout for the ratified statement):" >&2
     echo "    CREATE DATABASE ${DB};" >&2
     echo "    CREATE ROLE ${DB_OWNER_ROLE} LOGIN;" >&2
     echo "    CREATE ROLE ${DB_RO_ROLE} LOGIN;" >&2

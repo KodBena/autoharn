@@ -1,5 +1,7 @@
 # Proposed ADR-0012 amendment — "data is not code" (staged for ratification)
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- one root-shim invocation spelling repointed (./verify-chain -> ./autoharn verify-chain); no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (unglossed "Fable", unlinked "the standing orchestration contract"/ADR-0005, an unglossed compound, an unresolved "the runner", a sentence fragment); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 This document proposes an amendment to the project's structural-hygiene law,
 [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md), for the
 maintainer to ratify or reject: a rule that authored content (prompt text, teaching
@@ -8,7 +10,7 @@ literals inside logic modules. §2 holds the exact text to append on ratificatio
 §1 explains the drafting choices; §3 asks the ratification question. Throughout,
 "P1"/"P3"/"P9" name ADR-0012's nine numbered principles (P1 = single source of
 truth: one home per fact; P3 = no god-objects), and "the ledger" is the project's
-append-only Postgres decision record, written and read via the `./led` CLI.
+append-only Postgres decision record, written and read via the `./autoharn led` CLI.
 
 - **Status:** DRAFT — Fable-authored 2026-07-21, awaiting maintainer ratification.
   Per the standing orchestration contract nothing in `law/` is edited until

@@ -1,5 +1,7 @@
 # MAINT: ADR Portability Refactoring — the ratification spec
 
+<!-- doc-attest-exempt: root-shim-pruning mechanical edit (work item root-shim-pruning, ledger row 1357, 2026-07-26) -- root-shim invocation spelling(s) repointed to `autoharn <verb>`; no prose rewrite. A real fresh-context B-review was run during this touch and found several pre-existing legibility findings (a couple of bolded-label sentence fragments, unglossed "bracket-edit"/"bracket-strike", an unresolved "Jacobi/Van Vleck" citation); flagged to the maintainer rather than fixed here, out of this work item's scope. Removal condition: strike this marker and run the real two-round A:B:C loop next time this file is touched for content, not just spelling repair. -->
+
 *In plain words first: this document is the plan for making this project's ADR corpus —
 its 18 architecture-decision records, the files under `law/adr/` that state the
 project's binding engineering rules — reusable by other projects. It is written for the
@@ -8,7 +10,7 @@ anyone executes it, and it answers one question: what exactly will be changed in
 ADR, under what rules, and how will we know it worked? The status block below is process
 metadata about where the plan stands; the full orientation continues at "What this
 document is." Throughout, "ledger row N" cites this project's append-only decision/audit
-log — a Postgres-backed record written and read via the `./led` command-line verb, where
+log — a Postgres-backed record written and read via the `./autoharn led` command-line verb, where
 every maintainer ruling and work item is a numbered row.*
 
 - **Status: PHASE 1b COMPLETE — REVISED UNDER MAINTAINER ADJUDICATION, AWAITING FINAL
@@ -87,7 +89,7 @@ plus `law/STANDARDS-REGISTRY.md` (46 lines, in `law/` though outside `adr/`).
 
 ## §1 The commission, verbatim
 
-From the tracker (`./led`, work_opened row 357, transcribed):
+From the tracker (`./autoharn led`, work_opened row 357, transcribed):
 
 > MAINTAINER COMMISSION 2026-07-13 (settling a question he has carried 'to and fro'
 > without ledgering — now settled as intent): refactor the ADR corpus for PORTABILITY

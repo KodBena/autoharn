@@ -98,7 +98,7 @@ projects (amendment per commission row 1716, superseding this spec's original
 three-plus-proposals shape):** the maintainer's directive is that the catalog
 recover and distill the durable decisions "we've had most success with in this
 project and autoharn-panel." The builder therefore MINES two evidence sources,
-read-only: this repo's ledger (standing-rule decision rows via `./led`) and the
+read-only: this repo's ledger (standing-rule decision rows via `./autoharn led`) and the
 autoharn-panel submodule's record (`tools/autoharn-panel` — its CLAUDE.md,
 ledger exports, and docs; READ-ONLY, the never-touch-the-panel rule covers
 writes, not evidence reading). Every entry still meets the admission criterion

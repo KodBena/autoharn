@@ -86,7 +86,13 @@ def main(argv: list[str]) -> int:
     # Flipped to served "./led" (row 1307/1308, 2026-07-26): "./legacy/led" is a pure exit-1
     # stub, so this default made check_charter/fetch_brief fail unconditionally, UNCHARTED
     # regardless of any real charter. Prior rationale (role_brief.py misparsing) is dead too: 417b200 made it refuse loudly.
-    led = "./led"
+    # Re-flipped to "libexec/autoharn/led" (root-shim-pruning, ledger row 1357, 2026-07-26): this
+    # workflow is self-referential to THIS repo's own root (design/workflows/autoharn-builder-
+    # wave.toml's own header: "this repository's own builder-wave shape"), so the bare "./led"
+    # alias this default relied on is gone; libexec/autoharn/led is the same file the old shim
+    # execed, still a single-token executable path (unlike "./autoharn led", which is two argv
+    # words and would need argv splitting here).
+    led = "libexec/autoharn/led"
     instance: str | None = None
     role_map: dict[str, str] = {}
     allow_uncharted = False

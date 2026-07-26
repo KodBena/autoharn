@@ -39,7 +39,7 @@ ONE line saying so (transparent is never silent — ADR-0002), then proceed. The
 race under concurrent sessions: the port bind IS the lock; a loser detects the lost
 bind, re-probes, and ADOPTS the winner — someone-else-started-it is a success case
 (row 1165). A service that cannot start (port genuinely held by a non-autoharn
-process, config invalid) refuses loudly with the diagnosis; ./doctor's boundary line
+process, config invalid) refuses loudly with the diagnosis; ./autoharn doctor's boundary line
 is the standing check. `autoharn service status|start|stop` exist as explicit verbs
 for operators who want manual control; ensure-running never fights an explicit stop
 within the same invocation's scope.
@@ -103,6 +103,21 @@ doorway docs transform in the same build (the card's forward note discharges;
 QUICKSTART/USER-GUIDE/README spellings update; the roster becomes "see
 `autoharn --help`").
 
+*(Dated amendment, 2026-07-26, per ADR-0005 Rule 8 — the schedule above stands verbatim as the
+planning-time record; the maintainer's ruling corrected it in a load-bearing way, recorded here
+rather than as a silent rewrite. Autoharn ledger row 1357 (near-verbatim maintainer text): "v2
+must not precede the binary shim pruning, but removing them doesn't entail v2 either, it's just
+a precondition" — this INVERTS the schedule above: the ten root deprecation shims are removed
+BEFORE 2.0.0, as a precondition of the tag, not at "the first post-2.0.0 minor" as originally
+written; their removal triggers nothing else by itself (no other 2.0.0 obligation follows from
+pruning alone). Executed under work item root-shim-pruning (ledger rows 1357/1358/1359): all
+ten shims — `asof-export`, `attest-tags`, `audit`, `distance-to-clean`, `doctor`, `judge`,
+`led`, `migrate`, `pickup`, `verify-chain` — deleted from the repo root. `courier`,
+`extract-context`, `orchlog`, `otel-attest`, and `otel-watch` also live at repo root but were
+never part of this transition — each is a standalone verb with its own documented reason for
+living outside the `./autoharn` dispatcher (see each file's own header), not a one-line alias
+shim, and this pruning leaves them untouched.)*
+
 ### §6 AMENDMENT (2026-07-26, rows 1357/1365) — the scaffold clause executes; no shims for worlds
 
 The maintainer's rulings: the alias-shim removal schedule above is INVERTED (pruning
@@ -130,4 +145,4 @@ service survives); explicit-stop respected; version handshake red-first against 
 skewed version constant; descriptor written at a scratch birth and picked up by the
 hub without config edits; hub consolidation witnessed (both worlds served by one
 service, old service retired); --dry-run prints-without-writing red/green; help-never-
-writes swept at every depth. ./doctor all-PASS on a newborn under the new surface.
+writes swept at every depth. ./autoharn doctor all-PASS on a newborn under the new surface.
