@@ -103,6 +103,37 @@ and the class reserves maintainer attention for new permissions. Precedent cabin
 restoration rides the class only when the drop itself is on the record as an accident
 (here, row 1430); a contested drop's "restoration" does not inherit this path.
 
+### FYI — the doctrine behind the question (archaeology note, maintainer-requested 2026-07-26)
+
+Why this was a question at all, when "re-add the accidentally-deleted refusals" reads
+as obvious: the shape has legalistic prior art, and the doctrine is what made the
+routing non-trivial.
+
+- **Casus omissus** (a case the rule's author never contemplated): the 2026-07-09
+  ruling classifies deltas by what they DO (add vs relax), silently assuming the head
+  they act on is itself ratified. s61 broke that assumption, so s63 fell outside the
+  ruling's contemplated universe — and the ruling's own doubt clause ("doubt about
+  which side IS the routing: ask") functions as what courts call a certified question:
+  the interpreter refers the unprovided-for case to the rule's author rather than
+  extending the rule by analogy on their own authority.
+- **Revival of repealed law**: real legal systems faced exactly this. At common law,
+  repealing a repealing statute automatically revived the original; modern
+  interpretation acts reversed that default — nothing revives without EXPRESS
+  re-enactment. This kernel is structurally on the modern side, by construction rather
+  than by choice: lineage files are frozen history and worlds are born, not patched
+  (runs-are-linear ruling, 2026-07-11), so there is no mechanism by which declaring
+  s61's re-issue defective could void it retroactively and "revive" s58's body.
+  Restoration MUST be a new forward delta — an express re-enactment — and the open
+  question was only how that re-enactment classifies.
+- **The cabining** is ordinary precedent hygiene (holding limited to its facts): the
+  resolution's ratio is "restoration of an ON-THE-RECORD-accidental drop permits
+  nothing new," not "anything labeled restoration rides the class." A future contested
+  drop is distinguishable on exactly that fact and routes per-delta.
+
+These are analogies, not citations of project law; the in-project prior art proper is
+the 2026-07-09 ruling's own s21/s22 note (asked-then-classed) and its doubt clause,
+which this section is now the second recorded exercise of.
+
 ## 6. Closure statement
 
 Quantification universe, per ADR-0000 Rule 2(a): the four branches enumerated in §1 are
