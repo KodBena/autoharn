@@ -33,6 +33,22 @@ Per row 1385's own commission, RED FIRST -- the headline is THE ATTACK ITSELF:
                  across a supersession for the s41 relation kinds, so the candidate's claimed
                  relation cannot be trusted alone) -- REFUSED, and a follow-up act through the
                  SAME edge proves no side effect occurred.
+  RED-CROSS-KIND-WORK-DEPENDS-ON -- ROUND-2 HEADLINE (SECOND fresh-context re-review, ledger row
+                 1403, reviewer-witnessed live): round 1's own fix was itself too narrow -- it
+                 special-cased exactly ONE candidate kind (principal_relation_asserted) reading
+                 ONE target attribute. A chainless AND roleless saboteur opens an ordinary
+                 work_opened item (never gated), then writes a work_depends_on row (a THIRD,
+                 completely different candidate kind, never touched by round 1's fix at all)
+                 whose supersedes names the SAME live acts-for edge. Pre-round-2,
+                 entitlement_act_class_of's work_depends_on branch read only the target's
+                 edge_type looking for 'blocks-start'; a principal_relation_asserted target's
+                 edge_type is always NULL -- falls through, ungated, ACCEPTED, edge severed.
+                 Post-round-2, entitlement_act_class_of_target classifies the TARGET row
+                 independently of what KIND the candidate is -- REFUSED.
+  RED-CROSS-KIND-ROLE-BINDING -- the SAME vessel shape aimed at a DIFFERENT gated target class
+                 (principal_role_bound, not delegation_lifecycle/acts-for) -- proves the round-2
+                 fix is general over the TARGET's class, not a second special case bolted onto
+                 the first.
   RED-SUPERSESSION-UNAUTHORIZED -- an actor with no chain attempts to supersede (retract) the
                  now-live edge -- REFUSED (conjunct b, same act class).
   GREEN-SUPERSESSION-BY-DELEGATOR -- the delegator (root-chained) supersedes the SAME edge --
@@ -281,6 +297,27 @@ def bind_role(world: str, actor: str, subject: str, role_name: str) -> dict:
         "principal_binding_active": "true"})
 
 
+def open_work(world: str, actor: str, slug: str, title: str) -> dict:
+    return bw_call(world, "ledger_write", {
+        "kind": "work_opened", "actor": actor, "work_slug": slug, "work_title": title,
+        "statement": f"open {slug} (s62 round-2 fixture)"})
+
+
+def depends_on_supersede(world: str, actor: str, work_slug: str, antecedent_slug: str,
+                          old_id: str) -> dict:
+    """ROUND-2 FIX ATTACK SHAPE (row 1403, the reviewer's exact witnessed vessel): a
+    work_depends_on row whose OWN candidate class is unconditionally NULL for any target that is
+    not itself a live blocks-start edge (entitlement_act_class_of's work_depends_on branch reads
+    ONLY the target's edge_type, never any other class) -- edge_type is left NULL/'informs' here
+    (not subject to any DAG cycle refusal, s39's own disclosed exemption), so the ONLY thing that
+    makes this write interesting is `supersedes`, aimed at some OTHER kind's live gated row."""
+    return bw_call(world, "ledger_write", {
+        "kind": "work_depends_on", "actor": actor, "work_slug": work_slug,
+        "work_depends_on": antecedent_slug,
+        "statement": f"{work_slug} informs {antecedent_slug} (claims to supersede row {old_id})",
+        "supersedes": old_id})
+
+
 def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s60's own shape
     failures: list[str] = []
     tmps: list[Path] = []
@@ -300,6 +337,7 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         v_bind_attacker = bind_role(world_main, author, attacker, "authority")
         if v_bind_attacker["disposition"] != "accepted":
             raise RuntimeError(f"could not bind attacker's role: {v_bind_attacker}")
+        role_binding_row_id = v_bind_attacker.get("row_id")
         v_pre_attack = bw_call(world_main, "registration_write", {
             "name": "attacker-victim-pre", "agent_class": "subagent", "actor": attacker,
             "purpose": "attacker's ORIGINAL act, chainless -- must be refused (conjunct b)"})
@@ -380,6 +418,73 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
               f"attacker's authority-bearing act, through the SAME edge, immediately after the "
               f"blocked sabotage attempt -- the edge was never severed -- verdict={v_edge_survived}",
               failures)
+
+        # ---- RED-CROSS-KIND-WORK-DEPENDS-ON: the SECOND round-2 headline (ledger row 1403,
+        # reviewer-witnessed live) -- a CHAINLESS AND ROLELESS saboteur, using a COMPLETELY
+        # DIFFERENT candidate KIND this time (work_depends_on, never mentioned by round 1's fix
+        # at all), opens an ordinary work item then writes a work_depends_on row whose supersedes
+        # names the SAME live acts-for edge. Pre-round-2, entitlement_act_class_of's
+        # work_depends_on branch read ONLY the target's edge_type (looking for 'blocks-start');
+        # the target here is a principal_relation_asserted row, edge_type NULL, never
+        # 'blocks-start' -- falls through to RETURN NULL, ungated, ACCEPTED, the edge severed.
+        # Post-round-2, entitlement_act_class_of_target independently classifies the TARGET
+        # (principal_relation_asserted, relation acts-for) as 'delegation_lifecycle' REGARDLESS
+        # of the candidate's own (work_depends_on, unclassified) kind -- REFUSED.
+        cross_kind_saboteur = register(world_main, "cross-kind-saboteur", "subagent", author)
+        v_open_own_item = open_work(world_main, cross_kind_saboteur, "xk-item-a", "xk item a")
+        v_open_own_item_b = open_work(world_main, cross_kind_saboteur, "xk-item-b", "xk item b")
+        if v_open_own_item["disposition"] != "accepted" or v_open_own_item_b["disposition"] != "accepted":
+            raise RuntimeError(f"cross-kind saboteur could not even open ordinary work items "
+                                f"(work_opened is NEVER gated) -- {v_open_own_item} {v_open_own_item_b}")
+        v_cross_kind_wdo = depends_on_supersede(
+            world_main, cross_kind_saboteur, "xk-item-a", "xk-item-b", edge_row_id) \
+            if edge_row_id else {"disposition": "error", "message": "no edge_row_id"}
+        check("RED-CROSS-KIND-WORK-DEPENDS-ON-refused",
+              v_cross_kind_wdo["disposition"] == "refused"
+              and "conjunct b" in v_cross_kind_wdo["message"]
+              and "delegation_lifecycle" in v_cross_kind_wdo["message"],
+              f"cross-kind saboteur (CHAINLESS, ROLELESS, and using a work_depends_on candidate "
+              f"kind entitlement_act_class_of never links to delegation_lifecycle at all) "
+              f"supersedes the live acts-for edge -- verdict={v_cross_kind_wdo}", failures)
+
+        v_edge_survived_2 = bw_call(world_main, "registration_write", {
+            "name": "attacker-victim-post-cross-kind", "agent_class": "subagent", "actor": attacker,
+            "purpose": "attacker's act after the blocked cross-kind sabotage attempt -- the edge "
+                       "must still be live"})
+        check("RED-CROSS-KIND-WORK-DEPENDS-ON-no-side-effect",
+              v_edge_survived_2["disposition"] == "accepted",
+              f"attacker's authority-bearing act, through the SAME edge, immediately after the "
+              f"blocked cross-kind sabotage attempt -- verdict={v_edge_survived_2}", failures)
+
+        # ---- RED-CROSS-KIND-ROLE-BINDING: the SAME vessel shape (work_depends_on candidate,
+        # never itself classified, chainless/roleless writer) aimed at a DIFFERENT gated target
+        # CLASS entirely -- attacker's own principal_role_bound row (role 'authority'), never an
+        # acts-for edge. Proves the fix is general over TARGET CLASS, not special-cased to
+        # delegation_lifecycle/acts-for the way both round-1's fix and the reviewer's own named
+        # attack specimen were.
+        v_cross_kind_role = depends_on_supersede(
+            world_main, cross_kind_saboteur, "xk-item-b", "xk-item-a", role_binding_row_id) \
+            if role_binding_row_id else {"disposition": "error", "message": "no role_binding_row_id"}
+        check("RED-CROSS-KIND-ROLE-BINDING-refused",
+              v_cross_kind_role["disposition"] == "refused"
+              and "conjunct a" in v_cross_kind_role["message"]
+              and "principal_role_bound" in v_cross_kind_role["message"],
+              f"cross-kind saboteur (holds NO role at all, unlike the acts-for-edge saboteurs "
+              f"above) supersedes attacker's OWN LIVE principal_role_bound row (role "
+              f"'authority') via a work_depends_on candidate -- refused on conjunct a (no role "
+              f"binding at all) before conjunct b is even reached, since entitlement_enforce_class "
+              f"checks (a) before (b) -- verdict={v_cross_kind_role}",
+              failures)
+
+        v_role_binding_survived = bw_call(world_main, "registration_write", {
+            "name": "attacker-victim-post-role-sabotage", "agent_class": "subagent", "actor": attacker,
+            "purpose": "attacker's act after the blocked role-binding sabotage attempt -- the "
+                       "role binding (conjunct a) must still be intact, proving no side effect"})
+        check("RED-CROSS-KIND-ROLE-BINDING-no-side-effect",
+              v_role_binding_survived["disposition"] == "accepted",
+              f"attacker's authority-bearing act (requires role ''authority'' AND chain) "
+              f"immediately after the blocked role-binding sabotage attempt -- the role binding "
+              f"was never severed -- verdict={v_role_binding_survived}", failures)
 
         # ---- RED-SUPERSESSION-UNAUTHORIZED: an unchained actor tries to retract the edge ----
         outsider = register(world_main, "outsider", "subagent", author)
