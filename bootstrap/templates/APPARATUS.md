@@ -197,9 +197,18 @@ add per-mechanism detail a table cell is too narrow to carry.
       shipped file is unreadable — a broken-checkout case, not an ordinary one).
 - **`mutation_observer`** has no enforce state at all (see table) — it can only warn, never deny,
   by the nature of its PostToolUse attachment point.
-- **`delegation_observer`** watches `PreToolUse(Task/Agent)` — every subagent dispatch is
-  journaled unconditionally (session id, the dispatch's `description`, and its `prompt` reduced
-  to a sha256 + 200-char excerpt); a loud, non-blocking warning fires only when this world carries
+<!-- doc-attest-exempt: scoped mechanical edit, one bullet (2026-07-26, delegation-observer
+Workflow-coverage doc sweep, ledger row 1355) -- the `delegation_observer` bullet's matcher text
+was stale (`Task/Agent`, missing the `Workflow` tool this mechanism now also covers); the fix is
+a matcher-name correction plus citation, not a prose rewrite of the surrounding document. Removal
+condition: strike this marker and run the real A:B:C loop next time this file is touched for
+content beyond this one bullet. -->
+- **`delegation_observer`** watches `PreToolUse(Task/Agent/Workflow)` (widened from
+  `Task/Agent` by the Workflow-tool-coverage work item, ledger row 1355, 2026-07-26 — this
+  sentence's own matcher text was stale, corrected in the same doc sweep) — every subagent
+  dispatch is journaled unconditionally (session id, the dispatch's `description`, and its
+  `prompt`/`script` reduced to a sha256 + 200-char excerpt); a loud, non-blocking warning fires
+  only when this world carries
   the s22 work-item layer (a per-project work-item ledger some scaffolded worlds carry and
   others don't) and no work item is currently open+claimed, teaching the operator to
   ledger the delegation itself as a `decision` row (CLAUDE.md's governance preamble, the rule

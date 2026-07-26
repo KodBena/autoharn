@@ -961,7 +961,9 @@ own:
   live-captured PreToolUse+PostToolUse payload pair proving `tool_use_id` is present on both legs,
   so this claim is checkable rather than re-asserted in prose.
 - **The delegation observer gained a return leg.** `hooks/pretooluse_delegation_observer.py`
-  (extended) now also attaches at PostToolUse on `Task|Agent`. It journals a `kind: "return"`
+  (extended) now also attaches at PostToolUse on `Task|Agent|Workflow` (widened from `Task|Agent`
+  by the Workflow-tool-coverage work item, ledger row 1355 -- this bullet's own matcher text was
+  stale, corrected 2026-07-26 doc sweep). It journals a `kind: "return"`
   line FIFO-paired against its own dispatch line (the hook's existing per-dispatch journaling
   contract is unchanged; the return leg is a strictly additive new line kind in the SAME
   journal), giving dispatch-to-return duration per subagent — the reviewer-execution-window
