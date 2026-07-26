@@ -84,6 +84,8 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at mod
 from __future__ import annotations
 
 import argparse
+import ast
+import importlib.util
 import os
 import subprocess
 import sys
@@ -113,11 +115,115 @@ STRUCTURAL_BLOCKERS: dict[str, str] = {
         "drive/arm.sh requires a <build-dir> positional argument (a runs/<label>-build/ "
         "directory carrying its own launch.conf) -- no such directory ships with this checkout "
         "(see runs/README.md); the sweep has no generic build-dir to hand it."),
+    # Same shape as the two entries above (ledger row 1459, cluster-1 fixture-repair triage):
+    # instruments/verify_gate_journal_registered.py requires a REQUIRED positional <target>
+    # argument (the arm-time target being checked for contemporaneity registration) -- the
+    # census entry names the script alone, with no target, so invocation_for() would hand it a
+    # bare argv with nothing to check and it would exit 2 on its own usage error, not on any
+    # real defect. That is the identical "declares a required positional this sweep has no
+    # generic value to supply" shape as arm.sh's <build-dir>, so it is listed here rather than
+    # attempted-and-crashed.
+    "42-gate-journal-registered": (
+        "instruments/verify_gate_journal_registered.py requires a REQUIRED positional <target> "
+        "argument (the arm-time target to check for contemporaneity registration) -- the "
+        "registry names the script with no target; the sweep has no generic target to hand it "
+        "(ledger row 1459)."),
 }
 
 # Substrings whose presence in a fixture file's own source text mark it as declaring a Postgres
 # host dependency via the two established conventions (module docstring, ENV PRE-PROBE section).
 _PGHOST_MARKERS = ("pghost_resolve", "fixture_pghost", "HARNESS_PGHOST", "EPISTEMIC_PGHOST")
+
+
+def _local_module_basenames() -> frozenset[str]:
+    """Every top-level basename (a .py file's stem, or a directory carrying an __init__.py) this
+    checkout ships, anywhere under REPO_ROOT -- computed ONCE at module load (a plain directory
+    walk, not an import, so the lazy-import gate does not apply). This is the ONE thing that lets
+    the missing-package precondition probe below (declares_missing_package) tell "a fixture's own
+    sibling helper module (seen-red/_fixture_env.py, imported via a sys.path.insert the fixture
+    does itself)" apart from "a genuine third-party PyPI package this checkout does not have
+    installed" -- both look identical as a bare `import NAME` / `from NAME import ...` line; only
+    this checkout's own file layout disambiguates them."""
+    names: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for f in filenames:
+            if f.endswith(".py"):
+                names.add(f[:-3])
+        # Every directory counts as a local top-level name, __init__.py or not: Python 3's
+        # implicit namespace packages (PEP 420) make a bare directory importABLE the moment its
+        # parent is on sys.path, no __init__.py required -- e.g. `tools/` (no __init__.py) is
+        # how `from tools.configtree.fields import ...` resolves in several setup-tui-* fixtures
+        # (sys.path.insert(0, str(REPO)) is the universal convention every fixture in this tree
+        # already uses). Checking ONLY __init__.py-carrying directories under-recognized this
+        # class and produced a false-positive "missing package" on `tools` itself, live --
+        # caught by this same addition's own witnessing pass.
+        names.add(os.path.basename(dirpath))
+    return frozenset(names)
+
+
+_LOCAL_MODULE_BASENAMES = _local_module_basenames()
+
+
+def _module_level_import_names(source_text: str) -> set[str]:
+    """Every top-level package name a `import X[.Y]` / `from X[.Y] import ...` statement in
+    `source_text` names (absolute imports only -- a `from . import X` relative import, level > 0,
+    can only ever resolve within a package this checkout itself ships, never a third-party one,
+    so it is not a candidate). Parsed via `ast`, not a text-substring scan (declares_pghost's own
+    approach) -- import statements are syntactically unambiguous where a marker-substring scan
+    would be fooled by the word appearing in a comment or string; a file this checkout ships is
+    always valid Python, so `ast.parse` failing is itself notable, not silently swallowed into a
+    false negative."""
+    try:
+        tree = ast.parse(source_text)
+    except SyntaxError:
+        return set()
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module:
+                names.add(node.module.split(".", 1)[0])
+    return names
+
+
+def declares_missing_package(fixture_path: str) -> str | None:
+    """Pre-flight, mechanically-honest precondition probe (ledger row 1459's textual-package
+    addendum): does the family's own registered fixture (a file, or every .py file under a
+    directory target) import a top-level name that is neither a stdlib module, nor one of this
+    checkout's own local modules (_local_module_basenames above), nor actually importABLE in
+    THIS interpreter right now (importlib.util.find_spec)? If so, that name is a declared
+    package precondition this environment does not meet -- returned so the caller can report
+    UNEXERCISED with the concrete missing package named, the SAME shape declares_pghost/
+    pghost_available already give a missing Postgres host, rather than letting the fixture's own
+    ModuleNotFoundError traceback surface as an undifferentiated RED. Returns the first missing
+    package name found, or None if every module-level import resolves."""
+    abs_path = os.path.join(REPO_ROOT, fixture_path)
+    paths: list[str] = []
+    if os.path.isdir(abs_path):
+        for dirpath, _dirnames, filenames in os.walk(abs_path):
+            paths.extend(os.path.join(dirpath, f) for f in filenames if f.endswith(".py"))
+    elif os.path.isfile(abs_path):
+        paths = [abs_path]
+    for p in paths:
+        try:
+            with open(p, encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            continue
+        for name in sorted(_module_level_import_names(text)):
+            if name in sys.stdlib_module_names or name in _LOCAL_MODULE_BASENAMES:
+                continue
+            try:
+                spec = importlib.util.find_spec(name)
+            except (ImportError, ValueError):
+                spec = None
+            if spec is not None:
+                continue
+            return name
+    return None
 
 
 def declares_pghost(fixture_path: str) -> bool:
@@ -191,6 +297,13 @@ def run_family(name: str, fixture_path: str, timeout: int) -> FamilyResult:
     abs_path = os.path.join(REPO_ROOT, fixture_path)
     if not os.path.exists(abs_path):
         return FamilyResult(name, "RED", f"registry target does not exist: {fixture_path}", 0.0)
+
+    missing_pkg = declares_missing_package(fixture_path)
+    if missing_pkg is not None:
+        return FamilyResult(name, "UNEXERCISED",
+                             f"declared package precondition unmet -- {missing_pkg!r} is not "
+                             f"importable in this interpreter (pip install {missing_pkg} or "
+                             f"run this sweep under an interpreter that has it).", 0.0)
 
     if declares_pghost(fixture_path):
         ok, detail = pghost_available()

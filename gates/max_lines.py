@@ -537,7 +537,24 @@ BASELINE: dict[str, int] = {
     # above; the union is re-measured on the merged file, this reconciliation comment and
     # its sibling above included (the usual self-referential fixpoint, settled by
     # re-measuring after writing).
-    "gates/max_lines.py":                          626,
+    "gates/max_lines.py":                          643,
+    # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
+    # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
+    # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
+    # blocker is an uninstalled third-party package (e.g. `textual`) reports UNEXERCISED naming
+    # it, never RED with a raw ModuleNotFoundError traceback -- same shape as the existing
+    # declares_pghost/pghost_available pair one function up. Every added line is either a new
+    # helper with its own docstring (ADR-0007's "decisions-about-the-file header" rule) or the
+    # one new STRUCTURAL_BLOCKERS entry (42-gate-journal-registered) added in the same commit.
+    # Not padding: witnessed a zero-false-positive pass over the full fixture_census.py registry
+    # and both polarities (a synthetic missing-package fixture -> UNEXERCISED; an unaffected
+    # GREEN family unchanged) before this bump was taken. Written plain, no golfing (ADR-0007's
+    # no-go clause); witnessed growth of a previously-under-ceiling file, grandfathered honestly
+    # rather than silently golfed to fit.
+    "gates/fixture_sweep.py":                      406,
+    # bumped 626 -> 643 (this gate's own BASELINE growing to carry the gates/fixture_sweep.py
+    # entry immediately above plus this comment's own settling -- self-referential, checked
+    # here too, same idiom as every prior self-reference bump in this file's own history above).
 }
 
 
