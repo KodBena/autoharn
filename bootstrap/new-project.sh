@@ -519,20 +519,20 @@ if [ -n "$NEW_WORLD" ]; then
     # about ("a reviewer principal exists") is actually true yet (BACKLOG "Maintainer ruling:
     # self-application", 2026-07-09 -- "starting a run becomes a verb": the operator no longer
     # hand-registers this principal for a --new-world scaffold).
-    REVIEWER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'reviewer', class subagent, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after the stamp secret above) -- do NOT re-register; a repeat \`./led register-principal reviewer ...\` is REFUSED loudly with teach-text (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one."
+    REVIEWER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'reviewer', class subagent, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after the stamp secret above) -- do NOT re-register; a repeat \`./autoharn led register-principal reviewer ...\` is REFUSED loudly with teach-text (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one."
     # COMMISSIONER_STATUS: mirrors REVIEWER_STATUS exactly -- the honest, mode-aware record of
     # whether the 'commissioner' principal (kernel/lineage/s25-commission-kind.sql's FULL signing
     # mode; BACKLOG "Five-item batch, maintainer-approved 2026-07-11 evening", item 2) exists yet.
     # Registering it here, alongside 'reviewer', means the maintainer's OWN signing act (see the
     # printed copy-paste line at the end of this script) never has to register its own principal
     # first -- the same "starting a run becomes a verb" closure REVIEWER_STATUS already documents.
-    COMMISSIONER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'commissioner', class human, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after 'reviewer' above) -- do NOT re-register; a repeat is REFUSED loudly (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one. FULL-mode signing (the maintainer signs the ask himself): \`LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\"\` -- typed by the maintainer in his OWN terminal, inside this world. LAZY-mode (the implementer vicariously transcribes the ask on receiving it, first ledger act, no commissioner guarantee): see this world's CLAUDE.md preamble."
+    COMMISSIONER_STATUS="Registered automatically by this --new-world scaffold run through the s40 ceremony (principal 'commissioner', class human, purpose stated, a principal_registered event on the ledger; see the birth-sequence step in this same run, right after 'reviewer' above) -- do NOT re-register; a repeat is REFUSED loudly (s40 deleted the silent ON CONFLICT no-op), and the scaffold's own re-run existence check prints 'already registered' instead of attempting one. FULL-mode signing (the maintainer signs the ask himself): \`LED_ACTOR=commissioner ./autoharn led commission \"<the ask verbatim>\"\` -- typed by the maintainer in his OWN terminal, inside this world. LAZY-mode (the implementer vicariously transcribes the ask on receiving it, first ledger act, no commissioner guarantee): see this world's CLAUDE.md preamble."
 else
     LINEAGE_CHAIN="NOT applied by this scaffold run -- apply a kernel lineage to $SCHEMA/$KERN/$ROLE manually (kernel/lineage/, see kernel/lineage/README.md) before first use"
     STAMP_SECRET_STATUS="**One manual step remains: provision the stamp secret. UNWITNESSED — the block below has not been run in this instance.**"
     S21_STATUS="NOT applied by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). If this world's kernel predates s21, apply it as a separate, explicit operator act from autoharn's own checkout: \`bootstrap/apply-delta.sh <this-project's-directory> kernel/lineage/s21-session-aware-distinctness.sql\` (prints the resolved command, requires a typed schema confirmation, never applies bare) -- status/witness live in autoharn's BACKLOG.md (search \"s21\")."
-    REVIEWER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above, so there is no \`principal\` table yet to register into). Once a kernel lineage is applied, register one explicitly: \`./led register-principal reviewer subagent\`."
-    COMMISSIONER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). Once a kernel lineage carrying kernel/lineage/s25-commission-kind.sql is applied, register one explicitly: \`./led register-principal commissioner human\`."
+    REVIEWER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above, so there is no \`principal\` table yet to register into). Once a kernel lineage is applied, register one explicitly: \`./autoharn led register-principal reviewer subagent\`."
+    COMMISSIONER_STATUS="NOT registered by this scaffold run (classic --schema/--kern/--role mode applies no kernel lineage at all -- see item 1 above). Once a kernel lineage carrying kernel/lineage/s25-commission-kind.sql is applied, register one explicitly: \`./autoharn led register-principal commissioner human\`."
 fi
 
 AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -1627,16 +1627,107 @@ mkdir -p "$PROJECT_ROOT/roles"
 sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
 echo "wrote roles/README.md"
 
-echo "-- the ten project-local shims (the operator verbs led, judge, pickup, audit, distance-to-clean, attest-doc, asof-export, doctor, plus the two signing tools verify-commission and verify-chain -- SHIM_VERBS_ALL, bootstrap/shim-verbs.sh): thin shims exec'ing autoharn's live templates --"
+# §6 AMENDMENT (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
+# SPEC.md's scaffold clause executes): this used to write TEN separate per-verb shim files
+# (SHIM_VERBS_ALL, bootstrap/shim-verbs.sh) -- one operator surface everywhere, not just this
+# repo's own root, was the maintainer's stated purpose of the root-shim-pruning precondition
+# (row 1357: "it's just a precondition"; row 1365: "was descoped and is wrong" applied to
+# worlds too). A world now gets ONE dispatcher, `./autoharn`, routing `autoharn <verb>
+# [args...]` to the exact same `bootstrap/templates/<verb>.tmpl` + PICKUP_DEPLOYMENT env each
+# retired per-verb shim used -- consolidation of ten files into one, not a semantics change: the
+# verb roster (SHIM_VERBS_ALL, still the one list every scaffold-writing script sources) and the
+# exec target per verb are unchanged. No libexec/ for worlds -- a world's verbs already resolve
+# straight to bootstrap/templates/*.tmpl in the exec-root checkout, so the dispatcher below is
+# the one home for that routing instead of it being copy-pasted ten times. Unknown verb: a
+# teaching refusal listing the roster (never a bare shell "not found"). `--help`/no-args: the
+# roster generated from the SAME table the dispatch/refusal paths read, never re-derived,
+# writes nothing and touches no boundary. Existing pre-migration worlds keep their ten shim
+# files untouched (runs-are-linear; --force on this scaffold does not retroactively collapse an
+# existing world's shims into a dispatcher -- see this script's own idempotent-force comments).
+_verb_desc() {
+    case "$1" in
+        led) echo "write to or read from the append-only governance ledger (decisions, work items, obligations, principals, ...)" ;;
+        judge) echo "compare the SQL and ASP polarities against the ledger and report AGREE/DIVERGE/QUARANTINED" ;;
+        pickup) echo "resume-context read: hydrate an orchestrator from the ledger instead of session replay" ;;
+        audit) echo "run the standing audit surface against this world's own boundary" ;;
+        distance-to-clean) echo "one-line-per-section debt count against this world's own hygiene bars" ;;
+        verify-commission) echo "verify a SIGNED commission against this world's own GPG keyring (Rung 2, design/MAINT-GPG-TRUST-LAYER.md)" ;;
+        verify-chain) echo "reconcile the row-hash chain and the refusal_seq completeness oracle (Rung 3, design/MAINT-GPG-TRUST-LAYER.md)" ;;
+        attest-doc) echo "record or check this world's own ADR-0017 A:B:C fresh-context doc-legibility attestations" ;;
+        asof-export) echo "export a point-in-time snapshot of the ledger" ;;
+        doctor) echo "is this world set up right? one witnessed PASS/FAIL/SKIP report, read-only" ;;
+        *) echo "(no one-line description on file for this verb)" ;;
+    esac
+}
+DISPATCH_TABLE=""
 for verb in $SHIM_VERBS_ALL; do
-    cat > "$PROJECT_ROOT/$verb" <<SHIM
-#!/bin/sh
-HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/$verb.tmpl "\$@"
-SHIM
-    chmod +x "$PROJECT_ROOT/$verb"
-    echo "wrote $verb (shim -> $EXEC_ROOT/bootstrap/templates/$verb.tmpl)"
+    # Command substitution strips ITS OWN trailing newline -- concatenating printf('...\n')
+    # output straight into DISPATCH_TABLE loses every line separator and glues all ten verb
+    # lines into one (caught live: a scratch scaffold's `./autoharn --help` printed a single
+    # run-on "led ... judge ... pickup ..." line, no separators). Fixed by appending a LITERAL
+    # newline in the shell source itself (never inside a command substitution), which sh does
+    # not strip.
+    VERB_LINE="$(printf '%s\t%s' "$verb" "$(_verb_desc "$verb")")"
+    if [ -z "$DISPATCH_TABLE" ]; then
+        DISPATCH_TABLE="$VERB_LINE"
+    else
+        DISPATCH_TABLE="$DISPATCH_TABLE
+$VERB_LINE"
+    fi
 done
+echo "-- ./autoharn (this world's ONE dispatcher, no per-verb shims -- design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment): routes to autoharn's live templates, same as the ten shims it replaces --"
+cat > "$PROJECT_ROOT/autoharn" <<DISPATCHEREOF
+#!/bin/sh
+# autoharn -- this world's ONE operator-surface dispatcher (design/FABLE-AUTOHARN-UMBRELLA-CLI-
+# SPEC.md §6 amendment, ledger rows 1357/1365/1366/1367). Routes \`autoharn <verb> [args...]\`
+# to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with THIS world's own deployment.json
+# (PICKUP_DEPLOYMENT) -- byte-identical routing/env to what each retired per-verb shim did,
+# consolidated into one file. No libexec/ here: a world's verbs already resolve straight to
+# bootstrap/templates/*.tmpl in the exec-root checkout named above.
+set -eu
+
+HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+
+_dispatch_table() {
+    cat <<'DISPATCHVERBS'
+$DISPATCH_TABLE
+DISPATCHVERBS
+}
+
+_print_help() {
+    echo "usage: autoharn <verb> [args...]"
+    echo
+    echo "Each verb below is a thin dispatch to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with"
+    echo "this world's own deployment.json -- semantics, refusal texts and exit codes are"
+    echo "unchanged from the per-verb shims this dispatcher replaces."
+    echo
+    echo "verbs:"
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}'
+    echo
+    echo "For a verb's own full usage, run 'autoharn <verb> --help'."
+}
+
+if [ \$# -eq 0 ] || [ "\$1" = "--help" ] || [ "\$1" = "-h" ] || [ "\$1" = "help" ]; then
+    _print_help
+    exit 0
+fi
+
+VERB="\$1"; shift
+
+if ! _dispatch_table | cut -f1 | grep -qx "\$VERB"; then
+    echo "autoharn: REFUSED -- unrecognized verb '\$VERB'." >&2
+    echo >&2
+    echo "Known verbs:" >&2
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}' >&2
+    echo >&2
+    echo "Run 'autoharn --help' for the full roster. Nothing was touched." >&2
+    exit 2
+fi
+
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/"\$VERB".tmpl "\$@"
+DISPATCHEREOF
+chmod +x "$PROJECT_ROOT/autoharn"
+echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $SHIM_VERBS_ALL)"
 
 # deploy-feature-manifest (ledger row 1274/1322): principal_set, applied through the just-written
 # `led` shim (--new-world mode only -- refused earlier, before any act, for classic mode). A
@@ -1654,19 +1745,19 @@ if [ -n "$F_PRINCIPAL_SET_FILE" ] && [ -s "$F_PRINCIPAL_SET_FILE" ]; then
     {
         echo "#!/bin/sh"
         echo "# principal_set, prepared by new-project.sh (deploy-feature-manifest, ledger row 1274/1322)."
-        echo "# Run this once ./led is REACHABLE (boundary configured -- the TUI's own 'Boundary'"
-        echo "# step, or ensure-running already spawned it on a prior ./led call)."
+        echo "# Run this once ./autoharn led is REACHABLE (boundary configured -- the TUI's own"
+        echo "# 'Boundary' step, or ensure-running already spawned it on a prior ./autoharn led call)."
         echo 'HERE="$(cd "$(dirname "$0")" && pwd)"'
         while IFS="$(printf '\t')" read -r _pn _pc _pp; do
             [ -n "$_pn" ] || continue
-            printf '"$HERE"/led register-principal %s %s --purpose %s\n' \
+            printf '"$HERE"/autoharn led register-principal %s %s --purpose %s\n' \
                 "$(printf '%s' "$_pn" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")" \
                 "$(printf '%s' "$_pc" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")" \
                 "$(printf '%s' "$_pp" | sed "s/'/'\\\\''/g;s/^/'/;s/\$/'/")"
         done < "$F_PRINCIPAL_SET_FILE"
     } > "$PROJECT_ROOT/register-principal-set.sh"
     chmod +x "$PROJECT_ROOT/register-principal-set.sh"
-    echo "wrote register-principal-set.sh (PREPARED -- one 'led register-principal' line per principal_set row)"
+    echo "wrote register-principal-set.sh (PREPARED -- one 'autoharn led register-principal' line per principal_set row)"
     if [ -n "$BOUNDARY_URL" ] && [ -n "$BOUNDARY_DEPLOYMENT" ]; then
         echo "-- boundary already resolvable this run (BOUNDARY_URL/BOUNDARY_DEPLOYMENT set) -- applying principal_set live --"
         if "$PROJECT_ROOT/register-principal-set.sh"; then
@@ -1676,7 +1767,7 @@ if [ -n "$F_PRINCIPAL_SET_FILE" ] && [ -s "$F_PRINCIPAL_SET_FILE" ]; then
             exit 1
         fi
     else
-        echo "principal_set: PREPARED, NOT YET APPLIED -- boundary not resolvable at this invocation (typical for --new-world; the TUI's own Boundary step, or an explicit --boundary-url/--boundary-deployment pair, configures it). Run $PROJECT_ROOT/register-principal-set.sh once ./led is reachable."
+        echo "principal_set: PREPARED, NOT YET APPLIED -- boundary not resolvable at this invocation (typical for --new-world; the TUI's own Boundary step, or an explicit --boundary-url/--boundary-deployment pair, configures it). Run $PROJECT_ROOT/register-principal-set.sh once ./autoharn led is reachable."
     fi
 fi
 
@@ -1703,9 +1794,9 @@ mkdir -p "$PROJECT_ROOT/legacy"
 cat > "$PROJECT_ROOT/legacy/led" <<'STUB'
 #!/bin/sh
 echo "legacy/led: RETIRED 2026-07 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md) -- every surface" >&2
-echo "  serves through ./led now; the boundary is mandatory at every birth, and led principal *" >&2
-echo "  (grant-competence/relate and their 11 siblings) closed the one family the served path" >&2
-echo "  was ever missing. Use ./led instead." >&2
+echo "  serves through ./autoharn led now; the boundary is mandatory at every birth, and led" >&2
+echo "  principal * (grant-competence/relate and their 11 siblings) closed the one family the" >&2
+echo "  served path was ever missing. Use ./autoharn led instead." >&2
 exit 1
 STUB
 chmod +x "$PROJECT_ROOT/legacy/led"
@@ -1742,7 +1833,7 @@ echo "wrote orchlog (wrapper -> $EXEC_ROOT/orchlog --repo $EXEC_ROOT)"
 if [ "$PIN" = "submodule" ]; then
     echo "-- --pin submodule: committing the pin + the verbs/hooks it points at --"
     (cd "$PROJECT_ROOT" && git add \
-        $SHIM_VERBS_ALL orchlog \
+        autoharn orchlog \
         .claude/settings.json .gitignore 2>/dev/null || true)
     if (cd "$PROJECT_ROOT" && git diff --cached --quiet) 2>/dev/null; then
         echo "   nothing new to commit (already committed by an earlier --force re-run)"
@@ -1803,10 +1894,11 @@ if [ -n "$NEW_WORLD" ]; then
     echo "           # governance preamble (author + reviewer + commissioner principals, all"
     echo "           # already registered above); nothing to paste."
     echo ""
-    echo "(./led, ./judge, ./pickup, ./audit, ./distance-to-clean, ./verify-commission,"
-    echo " ./verify-chain, ./attest-doc, ./asof-export, ./doctor, ./orchlog are ready to use from inside that session; read"
+    echo "(./autoharn led/judge/pickup/audit/distance-to-clean/verify-commission/verify-chain/"
+    echo " attest-doc/asof-export/doctor, plus ./orchlog, are ready to use from inside that"
+    echo " session -- run './autoharn --help' for the full generated roster; read"
     echo " $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each"
-    echo " command. (./doctor answers \"is this world set up right?\" in one witnessed call --"
+    echo " command. (./autoharn doctor answers \"is this world set up right?\" in one witnessed call --"
     echo " read it first if anything below looks off. ./orchlog lists the harness changelog --"
     echo " notes on things a restarting session would want to know about autoharn itself, e.g."
     echo " \`./orchlog\` or \`./orchlog since <sha>\`.)"
@@ -1815,7 +1907,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "To SIGN this run's commission yourself (FULL mode -- kernel/lineage/s25-commission-"
     echo "kind.sql; the ask carries the commissioner's own guarantee, not a vicarious one), type"
     echo "this in YOUR OWN terminal, inside $PROJECT_ROOT (not inside the agent's session):"
-    echo "  LED_ACTOR=commissioner ./led commission \"<the ask verbatim>\""
+    echo "  LED_ACTOR=commissioner ./autoharn led commission \"<the ask verbatim>\""
     echo "The record then shows a commissioner-actor row, and -- typed from a bare shell with no"
     echo "claude session running -- an unstamped-but-attributed row (\`led --recent\` shows"
     echo "stamp_agent as NULL, actor as 'commissioner'): stamp state + actor together are what"
@@ -1830,11 +1922,11 @@ if [ -n "$NEW_WORLD" ]; then
     echo "byte-fidelity hazard -- see verify-commission.tmpl's own module docstring). With the ask"
     echo "in a file (say ~/aa), from YOUR OWN terminal, inside $PROJECT_ROOT:"
     echo "  STATEMENT=\"\$(cat ~/aa)\"                          # exactly what the ledger stores"
-    echo "  LED_ACTOR=commissioner ./led commission \"\$STATEMENT\""
+    echo "  LED_ACTOR=commissioner ./autoharn led commission \"\$STATEMENT\""
     echo "  printf '%s' \"\$STATEMENT\" | gpg --detach-sign --armor -o ~/aa.asc -"
     echo "  mkdir -p $PROJECT_ROOT/.claude"
     echo "  cp ~/aa.asc $PROJECT_ROOT/.claude/commission-<id>.asc   # <id> from the commission's own output"
-    echo "  cd $PROJECT_ROOT && ./verify-commission --id <id>"
+    echo "  cd $PROJECT_ROOT && ./autoharn verify-commission --id <id>"
     echo "Signing 'printf %s \"\$STATEMENT\"' (never the raw file \"~/aa\") is deliberate: it signs"
     echo "byte-for-byte what \"\$(cat ~/aa)\" actually inserted into the ledger (command"
     echo "substitution strips trailing newlines; a raw-file signature would not, and would verify"
@@ -1849,7 +1941,7 @@ if [ -n "$NEW_WORLD" ]; then
     echo "The SIGNED HEAD (design/MAINT-GPG-TRUST-LAYER.md Rung 3 -- the run-close ritual, one line):"
     echo "at the end of a session, from YOUR OWN terminal, inside $PROJECT_ROOT:"
     echo "  cd $PROJECT_ROOT"
-    echo "  ./verify-chain --head > /tmp/head.json    # refuses (exit 1, empty stdout) if the"
+    echo "  ./autoharn verify-chain --head > /tmp/head.json    # refuses (exit 1, empty stdout) if the"
     echo "                                             # chain is not INTACT -- verifies first"
     echo "  gpg --detach-sign --armor /tmp/head.json"
     echo "  mkdir -p $PROJECT_ROOT/.claude"
@@ -1868,28 +1960,29 @@ elif [ "$PROFILE" = "tracker" ]; then
     echo "-- 'a standing project is not a governed world', track-work.sh's own words, preserved)."
     echo ""
     echo "  cd $PROJECT_ROOT"
-    echo "  ./led work open first-item \"Describe the first thing to track\"   # boundary auto-spawns"
-    echo "  ./pickup            # live resume brief, including every open work item in full"
-    echo "  ./distance-to-clean # composed closure-debt read"
-    echo "  ./led work claim <slug>  /  ./led work close <slug> shipped --witness \"<ref>\""
-    echo "  ./led work violations    # cycles / dangling deps / duplicate opens"
-    echo "  ./doctor                 # is this deployment set up right? (witnessed lines)"
+    echo "  ./autoharn led work open first-item \"Describe the first thing to track\"   # boundary auto-spawns"
+    echo "  ./autoharn pickup            # live resume brief, including every open work item in full"
+    echo "  ./autoharn distance-to-clean # composed closure-debt read"
+    echo "  ./autoharn led work claim <slug>  /  ./autoharn led work close <slug> shipped --witness \"<ref>\""
+    echo "  ./autoharn led work violations    # cycles / dangling deps / duplicate opens"
+    echo "  ./autoharn doctor                 # is this deployment set up right? (witnessed lines)"
     echo ""
-    echo "The FIRST call to any of the above spawns the boundary service automatically (a detached"
-    echo "child; logs at $PROJECT_ROOT/service.log) -- nothing is running yet at this line."
+    echo "(run './autoharn --help' for the full generated verb roster.) The FIRST call to any of"
+    echo "the above spawns the boundary service automatically (a detached child; logs at"
+    echo "$PROJECT_ROOT/service.log) -- nothing is running yet at this line."
     echo ""
-    echo "Rows written here via ./led are UNSTAMPED (stamp_agent/stamp_session/stamp_hmac all"
+    echo "Rows written here via ./autoharn led are UNSTAMPED (stamp_agent/stamp_session/stamp_hmac all"
     echo "NULL, stamp_verified=false) until a separate, deliberate act wires change_gate/"
     echo "stamp_intercept/clean_exit and provisions a stamp secret (copy new-project.sh's own"
     echo ".claude/ wiring stanzas by hand, or re-scaffold this directory with --new-world instead)."
     echo ""
     echo "keys/README.md (AWAITING-KEY) explains this deployment's OWN GPG keyring: commit a public"
     echo "key there (never to autoharn's law/keys/) to move SIGNED commissions from NO-COMMITTED-KEY"
-    echo "to VERIFIED -- ./verify-commission --id <id>; see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3."
+    echo "to VERIFIED -- ./autoharn verify-commission --id <id>; see user-guide/USER-GPG-TRUST-LAYER-FAQ.md §3."
 else
     echo "  1. Apply a kernel lineage to $DB/$SCHEMA/$KERN/$ROLE if not already applied (kernel/lineage/, autoharn)."
     echo "  2. Provision the stamp secret -- see $PROJECT_ROOT/.claude/HOOKS.md (marked UNWITNESSED until you run it)."
-    echo "  3. cd $PROJECT_ROOT && ./led decision \"...\"  /  ./judge  /  ./pickup"
+    echo "  3. cd $PROJECT_ROOT && ./autoharn led decision \"...\"  /  ./autoharn judge  /  ./autoharn pickup"
     echo "  4. Read $PROJECT_ROOT/.claude/HOOKS.md and replace its UNWITNESSED marks as you exercise each command."
     if [ "$PIN" = "submodule" ]; then
         echo ""
