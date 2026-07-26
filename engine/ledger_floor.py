@@ -562,25 +562,62 @@ def work_review_floor_atoms(name: str) -> set[str]:
     no EXISTING verdict distinction on this predicate to preserve, and inventing one with no
     consumer would be speculative generality (ADR-0004) -- the reservation's own tracked residue
     lives entirely in the s56 SQL view (`reservations_outstanding`), a display surface this engine
-    layer does not model (s56's own ENGINE -- NONE disclosure)."""
+    layer does not model (s56's own ENGINE -- NONE disclosure).
+
+    s25-ledger-differential-floor-bug (ledger row 1247) FIX: `succ`'s work_parent leg and
+    `closes`'s disposition column used to reference `work_parent` (s28) and
+    `work_review_disposition` (s29) UNCONDITIONALLY -- every OTHER column this file reads from a
+    later lineage step is `has_col`-gated (see `composite_exempt`, `orphan_children_arm`,
+    `bc_deps_cte` above/below), but these two were not, so this floor QUARANTINED (a raised
+    CalledProcessError, caught by `run_sql_work`'s own try/except) on any schema between s22 (this
+    layer's declared capability floor, `work_slug`) and s28/s29 -- exactly the s15..s25-only shape
+    `seen-red/s25-commission-kind`'s own fixture scaffolds, turning a legitimate bare-`./judge`
+    auto-detect run RED for a reason that has nothing to do with the thing under test. Now
+    column-gated exactly like this file's siblings, DEGRADING GRACEFULLY rather than raising the
+    capability floor: `engine/ledger_edb.py::export_work`'s own `has_parent`/`has_review` flags
+    already gate the ASP/EDB producer's twin facts (`work_parent_edge`/`w_disposition`) this same
+    way -- a pre-s28 schema emits no `w_parent_e` facts there, so `w_succ` (work_review.lp) derives
+    from `w_dep_e` alone; a pre-s29 schema emits no `w_disposition` facts, so `w_own_leaf_unresolved`
+    never fires (`w_disposition(R,deferred)` is never true). Matching that degrade in THIS floor
+    (rather than raising `layer_capability`'s "work" bar to s29) keeps the s22..s28 window
+    genuinely compared, not silently un-tested -- and is PROVABLY correct on both worlds: the
+    s15..s25 fixture now differentials AGREE (empty w_tree_member/etc. beyond bare opens, matching
+    the ASP twin's own equally degraded output), and a current (s57+) chain is untouched byte-for-
+    byte (has_parent/has_review both true there, same SQL as before this fix)."""
     t = resolve(name)
     rel = t.rel()
     rel_cur = t.rel("ledger_current")
     q_root, q_member = _wi_quote("t.root"), _wi_quote("t.member")
     q_slug = _wi_quote("slug")
+    has_parent = t.has_col("work_parent")
+    has_review = t.has_col("work_review_disposition") and t.has_relation(f"{t.schema}.review_detail")  # s25 finding 6: matches export_work's has_review gate literally
     composite_exempt = (
         f"""AND NOT (
           EXISTS (SELECT 1 FROM {rel_cur} oo WHERE oo.kind = 'work_opened'
                   AND oo.work_slug = o.slug AND oo.work_discharge = 'composite')
           AND EXISTS (SELECT 1 FROM succ s WHERE s.parent = o.slug)
         )""" if t.has_col("work_discharge") else "")
+    # s25-ledger-differential-floor-bug fix: the parent-edge leg of `succ` needs `work_parent`
+    # (s28) -- column-gated so a pre-s28 target degrades to the work_depends_on leg alone, the
+    # SAME degrade `export_work`'s `has_parent` flag already gives the ASP twin's `w_parent_e`
+    # facts (empty, so `w_succ` there derives from `w_dep_e` only -- see this function's own
+    # docstring).
+    succ_parent_leg = (
+        """SELECT work_parent AS parent, work_slug AS child FROM {rel_cur}
+        WHERE kind = 'work_opened' AND work_parent IS NOT NULL
+        UNION ALL
+        """.format(rel_cur=rel_cur) if has_parent else "")
+    # s25-ledger-differential-floor-bug fix: `disp` needs `work_review_disposition` (s29) --
+    # column-gated to a constant NULL (never 'deferred') on a pre-s29 target, matching
+    # `export_work`'s `has_review` flag emitting zero `w_disposition` facts there (so
+    # `w_own_leaf_unresolved`'s `w_disposition(R,deferred)` premise is never true -- see this
+    # function's own docstring).
+    disp_col = "work_review_disposition" if has_review else "NULL::text"
     sql = f"""
     WITH RECURSIVE
       opens AS (SELECT work_slug AS slug FROM {rel_cur} WHERE kind = 'work_opened'),
       succ AS (
-        SELECT work_parent AS parent, work_slug AS child FROM {rel_cur}
-        WHERE kind = 'work_opened' AND work_parent IS NOT NULL
-        UNION ALL
+        {succ_parent_leg}
         -- work_depends_on walked OPPOSITE its own column order -- see this function's docstring.
         SELECT work_slug AS parent, work_depends_on AS child FROM {rel_cur}
         WHERE kind = 'work_depends_on'
@@ -591,7 +628,7 @@ def work_review_floor_atoms(name: str) -> set[str]:
         SELECT t.root, s.child FROM tree t JOIN succ s ON s.parent = t.member
       ),
       closes AS (
-        SELECT work_slug AS slug, id AS rid, actor AS closer, work_review_disposition AS disp
+        SELECT work_slug AS slug, id AS rid, actor AS closer, {disp_col} AS disp
         FROM {rel_cur} WHERE kind = 'work_closed'
       ),
       discharged AS (

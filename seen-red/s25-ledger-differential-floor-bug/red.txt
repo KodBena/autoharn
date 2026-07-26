@@ -1,0 +1,30 @@
+== SETUP-S25: applying s15..s25 chain (work_parent/work_review_disposition absent) ==
+=== SETUP-S25 ===
+  [ok] exit=0 stderr='t "work_shipped_requires_witness" of relation "ledger" does not exist, skipping\npsql:/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a417fee9c05f8a11e/kernel/lineage/s22-work-item-ledger.sql:256: NOTICE:  trigger "validate_work_item" for relation "s25ldfbfxprobe.ledger" does not exist, skipping\n'
+
+=== RED-OLD-QUERY ===
+  [ok] exit=1 stderr_excerpt='ERROR:  column "work_parent" does not exist\nLINE 6:     SELECT work_parent AS parent, work_slug AS child FROM s2...\n                   ^'
+
+=== GREEN-FLOOR-S25 ===
+  [ok] raised=False err='' atoms=['w_tree_member("root-a","root-a")', 'w_tree_member("root-a","root-b")', 'w_tree_member("root-b","root-b")'] no_disposition_atom=True
+
+=== GREEN-LAYER-S25 ===
+  [ok] exit=0 stdout_tail="# marriage differential -- layer='work'\n#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']\n\n  [OK ] s25ldfbfxprobe AGREE              asp=5 sql=5 atoms; Δasp=[] Δsql=[]\n\n# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor"
+
+=== GREEN-AUTO-S25 ===
+  [ok] exit=0 stdout_tail="bfxprobe INCAPABLE          layer='defeat' declared: target has no principal_binding_active/principal_competence_activity columns (pre-s41 lineage) -- the 'defeat' layer has no grant substrate here, capability absent, not record-empty\n\n## layer='belief'\n  [OK ] s25ldfbfxprobe AGREE              asp=0 sql=0 atoms; Δasp=[] Δsql=[]\n\n\n# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor"
+
+== SETUP-S28: applying s15..s28 chain (work_parent present, work_review_disposition absent) ==
+=== SETUP-S28 ===
+  [ok] exit=0 stderr='NOTICE:  constraint "work_parent_kind_shape" of relation "ledger" does not exist, skipping\npsql:/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a417fee9c05f8a11e/kernel/lineage/s28-work-parent-edge.sql:279: NOTICE:  constraint "work_parent_not_self" of relation "ledger" does not exist, skipping\n'
+
+=== GREEN-LAYER-S28 ===
+  [ok] exit=0 stdout_tail="# marriage differential -- layer='work'\n#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']\n\n  [OK ] s28ldfbfxprobe AGREE              asp=4 sql=4 atoms; Δasp=[] Δsql=[]\n\n# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor"
+
+=== GREEN-FLOOR-S28-NONVACUOUS ===
+  [ok] atoms=['w_tree_member("child-y","child-y")', 'w_tree_member("parent-x","child-y")', 'w_tree_member("parent-x","parent-x")', 'w_tree_unresolved("parent-x")']
+
+=== zero-residue ===
+  [ok] schemas='' roles=''
+
+ALL CASES OK -- s25-ledger-differential-floor-bug both-polarity proof, zero residue.

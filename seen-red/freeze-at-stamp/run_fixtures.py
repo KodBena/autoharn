@@ -191,11 +191,11 @@ def main() -> int:
                 later_absent = later.stdout.strip() == "0"
                 details.append(f"row_id=1 present:{early_present} rows>200 present:{not later_absent}")
 
-                vc = sh(["./verify-chain"], cwd=str(dest_f))
+                vc = sh(["./verify-chain"], cwd=str(dest_f))  # fixture-scratch-pinning-guard-waiver: dest_f = tmp / "full-snapshot" (line 177), a tempfile.mkdtemp()-derived scratch snapshot, never this checkout's own root -- row 1249 fix-round 4 finding 4 (bare verb literal argv[0])
                 vc_ok = vc.returncode == 0 and ("INTACT" in vc.stdout or "UNAVAILABLE" in vc.stdout)
                 details.append(f"verify-chain exit={vc.returncode} stdout_tail={vc.stdout.strip()[-160:]!r}")
 
-                write_attempt = sh(["./led", "decision", "should be refused by grant"], cwd=str(dest_f))
+                write_attempt = sh(["./led", "decision", "should be refused by grant"], cwd=str(dest_f))  # fixture-scratch-pinning-guard-waiver: same dest_f scratch snapshot as above, not this checkout's own root
                 write_refused = write_attempt.returncode != 0
                 details.append(f"write-attempt exit={write_attempt.returncode} "
                                 f"stderr_tail={(write_attempt.stdout + write_attempt.stderr).strip()[-160:]!r}")
