@@ -190,6 +190,19 @@ MODULES: dict[str, ModuleSpec] = {
              "not merely groundable' shape ledger_defeat.lp's own note describes for "
              "support_star/affirmed; the 'belief' LAYER entry below is what a differential "
              "runner actually enforces."),
+    "ledger_entitlement.lp": ModuleSpec(
+        provides=("reaches_genesis/1",),
+        requires=("ledger_tnow.lp",),
+        stands_alone=True,
+        note="design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1 item 2: the chain closure in the "
+             "ledger_defeat.lp stratification shape, beside in_force/1, never into it -- reads "
+             "principal/1, acts_for_edge/2, genesis/1, principal_active/1 off "
+             "engine/ledger_edb.py's export_entitlement(), the independent second derivation of "
+             "kernel/lineage/s60-entitlement-enforcement.sql's "
+             "principal_authority_chain_reaches_genesis(). Does not itself consume in_force/1/"
+             "superseded/1 by name (acts_for_edge/2 arrives already in-force-filtered from the "
+             "exporter, mirroring ledger_defeat.lp's own trust_grant/3) -- the 'entitlement' "
+             "LAYER entry below is what a differential runner actually enforces."),
     "verification_stats.lp": ModuleSpec(
         provides=("count_workflow_verdict/3", "count_role_verdict/3", "count_round_verdict/3",
                   "count_verdict/2", "count_unparseable/1"),
@@ -211,6 +224,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     "work": ("ledger_tnow.lp", "work_items.lp", "work_review.lp"),
     "defeat": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
     "belief": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp", "ledger_belief.lp"),
+    "entitlement": ("ledger_tnow.lp", "ledger_entitlement.lp"),
 }
 
 

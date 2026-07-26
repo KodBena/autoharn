@@ -172,6 +172,7 @@ CHAIN = [
     "s57-obligation-revocation-event.sql",
     "s58-missive-substrate.sql",
     "s59-missive-views.sql",
+    "s60-entitlement-enforcement.sql",
 ]
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
@@ -502,13 +503,17 @@ MANIFEST = [
          reason="the typed relation (identity field); its closed four-value vocabulary and the "
                 "same-natural-person canonical-order closure are separate kind-free CHECKs "
                 "(principal_relation_check, principal_snp_canonical_order)."),
-    dict(column="principal_role_name", kinds=("principal_role_bound",),
+    dict(column="principal_role_name", kinds=("principal_role_bound", "entitlement_class_configured"),
          arity="two-way", mechanism="CHECK", constraint="principal_role_name_kind_shape",
-         defining_delta="s41-principal-bindings-and-relations.sql",
+         defining_delta="s41-principal-bindings-and-relations.sql "
+                         "(kinds widened by s60-entitlement-enforcement.sql)",
          reason="identity field, mandatory active or not. FREE non-empty text by RATIFIED "
                 "ruling (basis §9(c)/C13, witnessed rows 1432/1433): role naming is "
                 "organizational configuration -- deliberately NO value vocabulary CHECK exists "
-                "for this column, only non-emptiness."),
+                "for this column, only non-emptiness. s60 widens the iff to license "
+                "entitlement_class_configured too -- REUSED, never a second 'role name' column "
+                "(ADR-0012 P1): a configuration row's required-role value shares the SAME "
+                "free-text vocabulary a binding row's bound-role value uses."),
     dict(column="principal_key_fingerprint", kinds=("principal_key_bound",),
          arity="two-way", mechanism="CHECK", constraint="principal_key_fingerprint_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql",
@@ -695,6 +700,15 @@ MANIFEST.append(dict(column="missive_regards", kinds=("missive_disposed",), arit
                             "ledger(id) for structural existence; the KIND correlation (must be "
                             "missive_received) is validate_missive_regards' own cross-row check, "
                             "AMENDMENT 1's dedicated trigger."))
+MANIFEST.append(dict(column="entitlement_act_class", kinds=("entitlement_class_configured",),
+                     arity="two-way", mechanism="CHECK",
+                     constraint="entitlement_act_class_kind_shape",
+                     defining_delta="s60-entitlement-enforcement.sql",
+                     reason="identity field, mandatory on the one kind that carries it, "
+                            "forbidden elsewhere. Free text, no enum -- the kernel-computed "
+                            "vocabulary of act-class strings a configuration row can USEFULLY "
+                            "match lives in entitlement_act_class_of(), not a value CHECK (the "
+                            "s36 decision_grade free-text-token precedent, one axis over)."))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 

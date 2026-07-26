@@ -720,6 +720,74 @@ def export_defeat(name: str) -> EdbExport:
     return exp
 
 
+def export_entitlement(name: str) -> EdbExport:
+    """Export the entitlement-layer EDB (principal/1, acts_for_edge/2, genesis/1,
+    principal_active/1) for a target, read-only, capability-gated -- the independent SECOND
+    derivation input for engine/lp/ledger_entitlement.lp's reaches_genesis/1, the SQL twin of
+    kernel/lineage/s60-entitlement-enforcement.sql's principal_authority_chain_reaches_genesis().
+    Capable only on an s41+s60 schema (principal_relation/principal_binding_active columns AND
+    entitlement_act_class -- the latter is s60's own marker column, so a pre-s60 s41 world reads
+    incapable here even though acts-for relations already exist, matching this family's OWN
+    reason for being: entitlement enforcement, not mere delegation recording)."""
+    t = resolve(name)
+    exp = EdbExport(target=t)
+    rel = t.rel()
+
+    kernel_principal = t.has_relation(f"{t.kern}.principal")
+    has_relation_col = t.has_col("principal_relation")
+    has_active = t.has_col("principal_binding_active")
+    has_object = t.has_col("principal_object")
+    has_marker = t.has_col("entitlement_act_class")
+    capable = kernel_principal and has_relation_col and has_active and has_object and has_marker
+
+    for fam in ("principal", "acts_for_edge", "genesis", "principal_active"):
+        exp.capabilities.append(Capability(
+            fam, produced=capable, capable=capable,
+            reason="kernel.principal + principal_relation/principal_binding_active/"
+                   "principal_object + entitlement_act_class (s60) all present -- emitted"
+            if capable else
+            "no kernel.principal relation, or no s41 principal_relation/principal_binding_active/"
+            "principal_object columns, or no s60 entitlement_act_class column -- capability "
+            "absent (this family is s60-specific, not merely s41-capable)"))
+
+    if not capable:
+        return exp
+
+    n_p = 0
+    for (pid,) in t.rows(f"SELECT id FROM {t.kern}.principal ORDER BY id;"):
+        exp.facts.append(f"principal({int(pid)}).")
+        n_p += 1
+    exp.counts["principal"] = n_p
+
+    n_g = 0
+    for (gid,) in t.rows(
+            f"SELECT principal_subject FROM {rel} WHERE kind = 'principal_registered' "
+            f"ORDER BY id ASC LIMIT 1;"):
+        if gid != "":
+            exp.facts.append(f"genesis({int(gid)}).")
+            n_g += 1
+    exp.counts["genesis"] = n_g
+
+    n_e = 0
+    for subj, obj in t.rows(
+            f"SELECT lc.principal_subject, lc.principal_object FROM {t.schema}.ledger_current lc "
+            f"WHERE lc.kind = 'principal_relation_asserted' AND lc.principal_relation = 'acts-for' "
+            f"AND lc.principal_binding_active ORDER BY lc.id;"):
+        exp.facts.append(f"acts_for_edge({int(subj)},{int(obj)}).")
+        n_e += 1
+    exp.counts["acts_for_edge"] = n_e
+
+    n_a = 0
+    for (pid,) in t.rows(f"SELECT id FROM {t.kern}.principal ORDER BY id;"):
+        standing = t.scalar(f"SELECT {t.kern}.principal_standing({int(pid)});")
+        if standing == "active":
+            exp.facts.append(f"principal_active({int(pid)}).")
+            n_a += 1
+    exp.counts["principal_active"] = n_a
+
+    return exp
+
+
 def main(argv: list[str] | None = None) -> int:
     names = (argv if argv is not None else sys.argv[1:]) or ["nla"]
     for name in names:

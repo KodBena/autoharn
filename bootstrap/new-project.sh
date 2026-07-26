@@ -1101,6 +1101,95 @@ SQL
             echo "   (3/4) '${_pname}' registered through the boundary ceremony (class ${_pclass}, registrar author)"
         fi
     done
+
+    # THE s60 BIRTH SEQUENCE (kernel/lineage/s60-entitlement-enforcement.sql §1.3, spec §1 item
+    # 3): "solo-world zero-friction by construction... the same birth run binds the roles the
+    # default configuration names." TWO new acts, APPENDED after the existing s40/s43 sequence
+    # above (nothing above moved or re-ordered -- a pure append, minimal and surgically scoped
+    # per this delta's own commission, chosen so this edit collides with no other in-review
+    # scaffold change touching this same file):
+    #   (5) bind `author` to role 'authority' (principal_role_bound, actor=author) -- written
+    #       BEFORE any entitlement_class_configured row exists, so conjunct (a) reads
+    #       'principal_role_bound' as UNCONFIGURED at this exact moment (vacuous) -- the
+    #       ordering that lets this very act pass with zero special-casing in the kernel
+    #       trigger (s60's own header names this ordering explicitly). conjunct (b) passes
+    #       trivially: author IS this world's genesis principal (step 1's own self-attribution).
+    #   (6) configure the DEFAULT act-class role map -- five entitlement_class_configured rows,
+    #       one per s60's default-mapped authority-bearing class, all naming role 'authority'
+    #       (attention point 1, marked PROVISIONAL in s60's own header: one uniform role name is
+    #       this delta's own policy choice, not kernel-hardcoded -- a deployment may reconfigure
+    #       by writing fresh entitlement_class_configured rows later). Each of these acts is
+    #       ITSELF authority-bearing (entitlement_class_configured is in the hardcoded conjunct-
+    #       (b) set, unconditionally) -- author's chain trivially reaches genesis (self), so
+    #       every one of these five acts passes on conjunct (b) alone; conjunct (a) does not
+    #       apply to entitlement_class_configured writes in the default map (s60's own Element 8
+    #       note: the configuration surface protects itself via conjunct (b) only, never a
+    #       configuration-gated conjunct (a) on itself).
+    # CAPABILITY-GATED (this same guard shape as every other optional-capability check in this
+    # script): entitlement_act_class is s60's own marker column -- absent on any chain that does
+    # not yet carry s60 (this scaffold's LINEAGE_CHAIN currently ends at s57, per this delta's
+    # own PREREQUISITE section; s58/s59/s60 are authored, scratch-witnessed, not yet wired here
+    # -- the maintainer's own future integration act). Skipped with a named note, never a silent
+    # no-op, on any chain that lacks the column.
+    HAVE_S60=$(_psql_in "SELECT count(*) FROM information_schema.columns WHERE table_schema = :'schema' AND table_name = 'ledger' AND column_name = 'entitlement_act_class';" \
+        | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -tA)
+    if [ "$HAVE_S60" = "0" ]; then
+        echo "-- $WORLD_LABEL: s60 birth sequence SKIPPED -- this chain does not carry kernel/lineage/s60-entitlement-enforcement.sql (no entitlement_act_class column); role-gate/entitlement-config birth acts not applicable --"
+    else
+        echo "-- $WORLD_LABEL: s60 birth sequence (bind author to role 'authority', configure the default act-class map) --"
+        HAVE_ROLE=$(_psql_in "SELECT count(*) FROM :\"schema\".principal_role_bindings prb JOIN :\"kern\".principal p ON p.id = prb.subject WHERE p.name = 'author' AND prb.role_name = 'authority';" \
+            | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v kern="$KERN" -tA)
+        if [ "$HAVE_ROLE" != "0" ]; then
+            echo "   'author' already holds role 'authority'; not re-binding"
+        else
+            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
+        DO \$bw\$
+        DECLARE v ${KERN}.write_verdict;
+        BEGIN
+          SELECT * INTO v FROM ${KERN}.ledger_write(jsonb_build_object(
+            'kind', 'principal_role_bound',
+            'statement', 'author bound to role ''authority'' (s60 birth sequence step 5, the default conjunct-(a) role -- kernel/lineage/s60-entitlement-enforcement.sql)',
+            'actor', (SELECT id FROM principal WHERE name = 'author'),
+            'principal_subject', (SELECT id FROM principal WHERE name = 'author'),
+            'principal_role_name', 'authority',
+            'principal_binding_active', true));
+          IF v.disposition <> 'accepted' THEN
+            RAISE EXCEPTION 's60 birth sequence step 5 refused (SQLSTATE %): %', v.sqlstate, v.message;
+          END IF;
+        END \$bw\$;
+SQL
+            echo "   (5) 'author' bound to role 'authority' via the write boundary"
+        fi
+        for _actclass in principal_registered principal_role_bound standing_lifecycle milestone_closure gate_edge_supersession; do
+            HAVE_CFG=$(_psql_in "SELECT count(*) FROM :\"schema\".entitlement_class_roles WHERE act_class = :'actclass';" \
+                | psql -h "$HOST" -d "$DB" -v schema="$SCHEMA" -v actclass="$_actclass" -tA)
+            if [ "$HAVE_CFG" != "0" ]; then
+                echo "   act class '${_actclass}' already configured; not re-configuring"
+            else
+                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v actclass="$_actclass" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
+        SELECT set_config('birth.actclass', :'actclass', false);
+        DO \$bw\$
+        DECLARE v ${KERN}.write_verdict;
+        BEGIN
+          SELECT * INTO v FROM ${KERN}.ledger_write(jsonb_build_object(
+            'kind', 'entitlement_class_configured',
+            'statement', format('act class ''%s'' requires role ''authority'' (s60 birth sequence step 6, the default act-class map -- ATTENTION POINT 1, provisional, kernel/lineage/s60-entitlement-enforcement.sql)', current_setting('birth.actclass')),
+            'actor', (SELECT id FROM principal WHERE name = 'author'),
+            'entitlement_act_class', current_setting('birth.actclass'),
+            'principal_role_name', 'authority'));
+          IF v.disposition <> 'accepted' THEN
+            RAISE EXCEPTION 's60 birth sequence step 6 refused for act class % (SQLSTATE %): %', current_setting('birth.actclass'), v.sqlstate, v.message;
+          END IF;
+        END \$bw\$;
+SQL
+                echo "   (6) act class '${_actclass}' configured -> role 'authority' via the write boundary"
+            fi
+        done
+    fi
 fi
 
 # --profile tracker: the boundary is served via ensure-running, not a standing daemon -- pick a
