@@ -624,11 +624,26 @@ MANIFEST = [
          defining_delta="s43-typed-verdict-write-boundary.sql (widened two-way -> one-way by "
                          "s67-refusal-digest-bound.sql)",
          reason="SHA-256 of the refused payload's canonical text (digest, never verbatim -- "
-                "R4, ratified) -- legitimately NULL when the payload's canonical text exceeds "
-                "1,048,576 bytes (s67: the direct-psql-bypass hazard the service's own "
-                "MAX_WRITE_BODY_BYTES cap cannot reach), so the correlation cannot be an iff; "
-                "one-way forecloses it appearing on a non-write_refused row only. The 64-hex "
-                "shape (when present) is the separate refusal_payload_digest_shape value CHECK."),
+                "R4, ratified) -- legitimately NULL when refusal_digest_disposition = "
+                "'payload_over_bound' (s67 AMENDMENT: the direct-psql-bypass hazard the "
+                "service's own MAX_WRITE_BODY_BYTES cap cannot reach), so the correlation "
+                "cannot be an iff on kind alone; one-way forecloses it appearing on a "
+                "non-write_refused row only -- WHY it is legitimately NULL within the licensed "
+                "kind is now table-coupled to refusal_digest_disposition (CROSS_COLUMN_"
+                "COUPLING_MANIFEST's refusal_payload_digest_disposition_coupling row below), "
+                "never an implicit sentinel (maintainer ruling at merge-hold, 2026-07-27). The "
+                "64-hex shape (when present) is the separate refusal_payload_digest_shape value "
+                "CHECK."),
+    dict(column="refusal_digest_disposition", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK", constraint="refusal_digest_disposition_kind_shape",
+         defining_delta="s67-refusal-digest-bound.sql",
+         reason="design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 AMENDMENT (maintainer ruling "
+                "at merge-hold, 2026-07-27, 'NULL may not carry the meaning'): WHY "
+                "refusal_payload_digest holds the value it does on a write_refused row -- "
+                "ALWAYS known there (s44's attest_verdict idiom: mandatory-within-kind), "
+                "forbidden elsewhere; closed vocabulary ('computed'/'payload_over_bound') is "
+                "the separate refusal_digest_disposition_check value CHECK; table-coupled to "
+                "refusal_payload_digest via the CROSS_COLUMN_COUPLING_MANIFEST row below."),
     dict(column="refusal_attempted_actor", kinds=("write_refused",),
          arity="one-way", mechanism="CHECK", constraint="refusal_attempted_actor_kind_shape",
          defining_delta="s43-typed-verdict-write-boundary.sql",
@@ -852,6 +867,21 @@ CROSS_COLUMN_COUPLING_MANIFEST = [
                 "(attest_expected IS NULL) = (attest_verdict = 'unevaluated') -- an unevaluated "
                 "verdict with a declared expectation, or a match/mismatch claim with nothing to "
                 "match against, is unrepresentable."),
+    dict(constraint="refusal_payload_digest_disposition_coupling", kind="write_refused",
+         col_a="refusal_payload_digest", col_b="refusal_digest_disposition",
+         coupled_value="payload_over_bound",
+         defining_delta="s67-refusal-digest-bound.sql",
+         reason="design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 AMENDMENT (maintainer ruling "
+                "at merge-hold, 2026-07-27): (refusal_payload_digest IS NULL) = "
+                "(refusal_digest_disposition = 'payload_over_bound') -- a digest NULL row must "
+                "declare payload_over_bound, a populated digest must declare computed; the SAME "
+                "structural idiom as attest_expected_verdict_coupling above, transcribed to a "
+                "second instance (col_a's own one-way kind-shape CHECK stays separate and "
+                "necessary -- this coupling CHECK is guarded 'kind <> ... OR ...' so it is "
+                "airtight only because col_b is guaranteed non-NULL within the kind by its own "
+                "two-way kind-shape CHECK, never by this coupling CHECK alone -- see kernel/"
+                "lineage/s67-refusal-digest-bound.sql's own header for the live psql test that "
+                "falsifies the bare unguarded form)."),
 ]
 CROSS_COLUMN_BY_CONNAME = {row["constraint"]: row for row in CROSS_COLUMN_COUPLING_MANIFEST}
 assert len(CROSS_COLUMN_BY_CONNAME) == len(CROSS_COLUMN_COUPLING_MANIFEST), \

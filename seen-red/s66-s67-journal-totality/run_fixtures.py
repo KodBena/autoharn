@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s66-forged-stamp-journal-totality.sql
 and kernel/lineage/s67-refusal-digest-bound.sql (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md,
-RATIFIED 2026-07-27, ledger rows 1514/1519). Real infra, no mocks: a CLASSIC scaffold + manual
-chain apply (s15..s65[..s66..s67]) in the TOY db, torn down before AND after. Modeled directly
-on seen-red/s65-refusal-attempted-kind/run_fixtures.py (birth_via_boundary/bw_call/verify_chain
-helpers) -- same shape, same both-polarity discipline. The seen-red/boundary-service W36f
-fixture (the LIVE world's s43 shape, unchanged by this delta -- runs-are-linear) is deliberately
-LEFT UNTOUCHED; this is the delta's OWN new-shape fixture family instead (spec §4's own
-instruction).
+RATIFIED 2026-07-27 + the §2 AMENDMENT 2026-07-27 "NULL may not carry the meaning" -- maintainer
+ruling at merge-hold on this delta's first build, ledger rows 1514/1519). Real infra, no mocks: a
+CLASSIC scaffold + manual chain apply (s15..s65[..s66..s67]) in the TOY db, torn down before AND
+after. Modeled directly on seen-red/s65-refusal-attempted-kind/run_fixtures.py
+(birth_via_boundary/bw_call/verify_chain helpers) -- same shape, same both-polarity discipline.
+The seen-red/boundary-service W36f fixture (the LIVE world's s43 shape, unchanged by this delta
+-- runs-are-linear) is deliberately LEFT UNTOUCHED; this is the delta's OWN new-shape fixture
+family instead (spec §4's own instruction).
 
 RED, per the spec's own §4 witness plan (world s66s67fxpre, chain ends at s65 -- NO s66/s67):
   RED-FORGED-STAMP-ESCAPES  -- a structurally-complete-but-cryptographically-wrong vendor stamp
@@ -29,12 +30,27 @@ GREEN (world s66s67fxmain, chain ends at s67):
                                verdict shape to the same write on the pre-delta world.
   GREEN-UNSTAMPED-BYTE-IDENTICAL -- no vendor GUCs at all -- still accepted, stamp_verified=false,
                                byte-identical in verdict shape to the pre-delta world.
-  GREEN-DIGEST-BOUND-NULL   -- the SAME >1 MiB refused payload now journals with
-                               refusal_payload_digest NULL, the refusal otherwise fully recorded
-                               (surface/sqlstate/message/attempted actor+role+kind all present).
-  GREEN-DIGEST-BELOW-BOUND-BYTE-IDENTICAL -- an ordinary (well under 1 MiB) refused payload's
-                               digest is byte-identical pre-delta vs post-delta (same sha256 of
-                               the same canonical payload text).
+  GREEN-DIGEST-BOUND-NULL-AND-DISPOSITION-DECLARED -- the SAME >1 MiB refused payload now
+                               journals with refusal_payload_digest NULL AND
+                               refusal_digest_disposition='payload_over_bound' (§2 AMENDMENT --
+                               the reason for the NULL is now a typed, table-caught fact), the
+                               refusal otherwise fully recorded.
+  GREEN-DIGEST-BELOW-BOUND-BYTE-IDENTICAL / GREEN-DIGEST-COMPUTED-DISPOSITION-DECLARED -- an
+                               ordinary (well under 1 MiB) refused payload's digest is
+                               byte-identical pre-delta vs post-delta, and now additionally
+                               declares refusal_digest_disposition='computed'.
+  RED-COUPLING-REJECTS-NULL-DIGEST-WITH-COMPUTED / RED-COUPLING-REJECTS-POPULATED-DIGEST-WITH-
+  OVER-BOUND -- §2 AMENDMENT's own witness plan: a direct table INSERT (never through the
+                               boundary) claiming an INCONSISTENT (digest, disposition) pair is
+                               REFUSED by the coupling CHECK itself -- the illegal state is
+                               table-unrepresentable, not merely undocumented.
+  RED-DIGEST-STILL-FORBIDDEN-OFF-KIND -- a non-write_refused row carrying a populated digest is
+                               STILL refused (the one-way refusal_payload_digest_kind_shape CHECK,
+                               unchanged from this delta's first build, kept ALONGSIDE the new
+                               coupling CHECK -- this file's own header and kernel/lineage/
+                               s67-refusal-digest-bound.sql's own header explain, with a live
+                               psql test, why the guarded coupling CHECK alone cannot do this
+                               job).
   ZERO-FRICTION-BIRTH       -- a fresh classic scaffold's birth sequence through s67, unaffected.
   VERIFY-CHAIN-INTACT-THROUGH-REFUSALS -- ./autoharn verify-chain INTACT + the s43 refusal-oracle
                                CONFIRMED, after every refusal above.
@@ -240,13 +256,40 @@ def verify_chain(world_dir: Path) -> tuple[int, str]:
     return cp.returncode, cp.stdout + cp.stderr
 
 
-def refusal_row(world: str, refusal_id: str) -> str:
+def refusal_row_pre(world: str, refusal_id: str) -> str:
+    """world_pre's own chain ends at s65 -- NO refusal_digest_disposition column exists there at
+    all (s67 mints it), so this helper's own SELECT list is one field shorter than refusal_row's
+    below; querying the post-delta column against the pre-delta schema would itself error, which
+    is exactly why these are two separate helpers rather than one with an optional flag."""
     return psql_tuples(
         f"SELECT refusal_surface || '|' || refusal_sqlstate || '|' || "
         f"coalesce(stamp_verified::text,'<NULL>') || '|' || "
         f"coalesce(refusal_attempted_kind,'<NULL>') || '|' || "
         f"coalesce(octet_length(refusal_payload_digest)::text,'<NULL>') "
         f"FROM {world}.ledger WHERE id = {refusal_id};")
+
+
+def refusal_row(world: str, refusal_id: str) -> str:
+    """world_main's own chain ends at s67 -- refusal_digest_disposition exists (s67 AMENDMENT)."""
+    return psql_tuples(
+        f"SELECT refusal_surface || '|' || refusal_sqlstate || '|' || "
+        f"coalesce(stamp_verified::text,'<NULL>') || '|' || "
+        f"coalesce(refusal_attempted_kind,'<NULL>') || '|' || "
+        f"coalesce(octet_length(refusal_payload_digest)::text,'<NULL>') || '|' || "
+        f"coalesce(refusal_digest_disposition,'<NULL>') "
+        f"FROM {world}.ledger WHERE id = {refusal_id};")
+
+
+def raw_insert_fails(world: str, cols_vals: str) -> subprocess.CompletedProcess[str]:
+    """A direct owner-role INSERT into the ledger table itself (not through a boundary
+    function) -- used ONLY to exercise a raw table CHECK constraint in isolation (the
+    refusal_payload_digest_disposition_coupling / refusal_digest_disposition_kind_shape legs,
+    s67 AMENDMENT), never to exercise application semantics. Runs as the connecting role
+    (schema owner in this fixture's own psql invocation, same as every other raw psql_raw call
+    in this file) -- CHECK constraints bind every role including the owner, so this is a sound
+    way to prove the CONSTRAINT itself refuses the row, independent of any boundary-function
+    code path."""
+    return psql_raw(f"INSERT INTO {world}.ledger (kind, statement, actor, {cols_vals});\n")
 
 
 def note_row_count(world: str, statement: str) -> str:
@@ -284,7 +327,7 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         big_stmt = "A" * 1_100_000
         v_big_pre = bw_call(world_pre, "ledger_write",
                             {"kind": "not-a-real-kind", "statement": big_stmt, "actor": author_pre})
-        big_detail_pre = refusal_row(world_pre, v_big_pre["refusal_id"]) if v_big_pre["refusal_id"] else "N/A"
+        big_detail_pre = refusal_row_pre(world_pre, v_big_pre["refusal_id"]) if v_big_pre["refusal_id"] else "N/A"
         digest_len_pre = big_detail_pre.split("|")[-1] if big_detail_pre != "N/A" else "N/A"
         check("RED-DIGEST-UNBOUNDED",
               v_big_pre["disposition"] == "refused" and digest_len_pre == "64",
@@ -295,7 +338,7 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         v_small_pre = bw_call(world_pre, "ledger_write",
                               {"kind": "also-not-real", "statement": "small refused payload",
                                "actor": author_pre})
-        small_detail_pre = (refusal_row(world_pre, v_small_pre["refusal_id"])
+        small_detail_pre = (refusal_row_pre(world_pre, v_small_pre["refusal_id"])
                             if v_small_pre["refusal_id"] else "N/A")
 
         v_valid_pre = bw_call(world_pre, "ledger_write",
@@ -324,10 +367,11 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         attempted_note_landed = note_row_count(world_main, forged_note_stmt)
         check("GREEN-FORGED-STAMP-TYPED-REFUSAL",
               v_forged["disposition"] == "refused" and v_forged["sqlstate"] == "P0001"
-              and forged_detail == "ledger|P0001|false|note|64" and attempted_note_landed == "0",
+              and forged_detail == "ledger|P0001|false|note|64|computed"
+              and attempted_note_landed == "0",
               f"the SAME forged-complete stamp -- now a typed refused verdict (verdict="
               f"{v_forged}), journaled detail(surface|sqlstate|stamp_verified|attempted_kind|"
-              f"digest_len)={forged_detail!r} (expect stamp_verified=false, attempted_kind="
+              f"digest_len|disposition)={forged_detail!r} (expect stamp_verified=false, attempted_kind="
               f"'note', digest present); the attempted kind='note' row itself never lands "
               f"(count={attempted_note_landed}, expect 0)", failures)
 
@@ -363,11 +407,18 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         v_big_main = bw_call(world_main, "ledger_write",
                              {"kind": "not-a-real-kind", "statement": big_stmt, "actor": author})
         big_detail_main = refusal_row(world_main, v_big_main["refusal_id"]) if v_big_main["refusal_id"] else "N/A"
-        digest_len_main = big_detail_main.split("|")[-1] if big_detail_main != "N/A" else "N/A"
-        check("GREEN-DIGEST-BOUND-NULL",
+        # refusal_row's own field order: surface|sqlstate|stamp_verified|attempted_kind|
+        # digest_len|disposition -- index 4 is the digest length, index 5 the s67 AMENDMENT's
+        # own typed disposition (never inferred from the digest field alone).
+        digest_len_main = big_detail_main.split("|")[4] if big_detail_main != "N/A" else "N/A"
+        disposition_main = big_detail_main.split("|")[5] if big_detail_main != "N/A" else "N/A"
+        check("GREEN-DIGEST-BOUND-NULL-AND-DISPOSITION-DECLARED",
               v_big_main["disposition"] == "refused" and digest_len_main == "<NULL>"
+              and disposition_main == "payload_over_bound"
               and big_detail_main.split("|")[0:2] == ["ledger", "23514"],
               f"the SAME >1 MiB refused payload now journals with refusal_payload_digest NULL "
+              f"AND refusal_digest_disposition='payload_over_bound' (s67 AMENDMENT -- the "
+              f"reason for the NULL is a typed, table-caught fact, never an implicit sentinel) "
               f"(detail={big_detail_main!r}), the refusal otherwise fully recorded (surface/"
               f"sqlstate present) -- verdict={v_big_main}", failures)
 
@@ -381,11 +432,69 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         # honest byte-identical check here (the two worlds mint different refusal_id/actor
         # values, which the payload itself does not carry, so the RAW digest need not match
         # across worlds -- what must hold is "still populated, same algorithm" below the bound).
+        # refusal_row_pre has 5 fields (index -1 == 4, digest_len); refusal_row has 6 (index 4
+        # is digest_len, index 5 is the s67 AMENDMENT's own disposition -- checked separately).
+        digest_len_small_main = small_detail_main.split("|")[4]
+        disposition_small_main = small_detail_main.split("|")[5]
         check("GREEN-DIGEST-BELOW-BOUND-BYTE-IDENTICAL",
-              small_detail_pre.split("|")[-1] == small_detail_main.split("|")[-1] == "64",
+              small_detail_pre.split("|")[-1] == digest_len_small_main == "64",
               f"an ordinary (well under 1 MiB) refused payload's digest is STILL a populated "
               f"64-hex digest on both sides, unaffected by the bound -- pre={small_detail_pre!r} "
               f"post={small_detail_main!r}", failures)
+        check("GREEN-DIGEST-COMPUTED-DISPOSITION-DECLARED",
+              disposition_small_main == "computed",
+              f"the SAME below-bound refused payload also declares refusal_digest_disposition="
+              f"'computed' (s67 AMENDMENT) -- detail={small_detail_main!r}", failures)
+
+        # ---- §2 AMENDMENT's own witness plan (maintainer ruling at merge-hold, 2026-07-27):
+        # the coupling CHECK REFUSES an inconsistent (digest, disposition) pair, direct table
+        # INSERT (never through the boundary -- these are pure CHECK-constraint proofs). ----
+        r_coupling_1 = raw_insert_fails(
+            world_main,
+            f"refusal_sqlstate, refusal_message, refusal_surface, refusal_payload_digest, "
+            f"refusal_attempted_role, refusal_digest_disposition) VALUES "
+            f"('write_refused', 'coupling leg 1: digest NULL but disposition computed', "
+            f"{author}, 'P0001', 'msg', 'ledger', NULL, 'fx', 'computed'")
+        check("RED-COUPLING-REJECTS-NULL-DIGEST-WITH-COMPUTED",
+              r_coupling_1.returncode != 0
+              and "refusal_payload_digest_disposition_coupling" in r_coupling_1.stderr,
+              f"a write_refused row claiming disposition='computed' but digest NULL is REFUSED "
+              f"by the table CHECK itself (rc={r_coupling_1.returncode}, stderr tail="
+              f"{r_coupling_1.stderr.strip()[-300:]!r}) -- the exact illegal state the §2 "
+              f"AMENDMENT's coupling CHECK exists to make unrepresentable", failures)
+
+        r_coupling_2 = raw_insert_fails(
+            world_main,
+            f"refusal_sqlstate, refusal_message, refusal_surface, refusal_payload_digest, "
+            f"refusal_attempted_role, refusal_digest_disposition) VALUES "
+            f"('write_refused', 'coupling leg 2: digest populated but disposition "
+            f"payload_over_bound', {author}, 'P0001', 'msg', 'ledger', repeat('a',64), 'fx', "
+            f"'payload_over_bound'")
+        check("RED-COUPLING-REJECTS-POPULATED-DIGEST-WITH-OVER-BOUND",
+              r_coupling_2.returncode != 0
+              and "refusal_payload_digest_disposition_coupling" in r_coupling_2.stderr,
+              f"a write_refused row claiming disposition='payload_over_bound' but a populated "
+              f"digest is REFUSED by the table CHECK itself (rc={r_coupling_2.returncode}, "
+              f"stderr tail={r_coupling_2.stderr.strip()[-300:]!r}) -- the mirror-image illegal "
+              f"state, also unrepresentable", failures)
+
+        r_digest_off_kind = raw_insert_fails(
+            world_main,
+            f"refusal_payload_digest) VALUES "
+            f"('note', 'RED leg: non-write_refused row carrying a digest', {author}, "
+            f"repeat('a',64)")
+        check("RED-DIGEST-STILL-FORBIDDEN-OFF-KIND",
+              r_digest_off_kind.returncode != 0
+              and "refusal_payload_digest_kind_shape" in r_digest_off_kind.stderr,
+              f"a non-write_refused ('note') row carrying a populated refusal_payload_digest is "
+              f"STILL refused (rc={r_digest_off_kind.returncode}, stderr tail="
+              f"{r_digest_off_kind.stderr.strip()[-300:]!r}) -- confirms the ONE-WAY "
+              f"refusal_payload_digest_kind_shape CHECK (unchanged from this delta's first "
+              f"build) is doing necessary work the guarded coupling CHECK alone cannot "
+              f"(three-valued NULL logic: the coupling CHECK's own 'kind <> ... OR' guard skips "
+              f"validation entirely on a non-write_refused row) -- this file's own header names "
+              f"this exact live-tested divergence from the amendment's literal 'dissolves' "
+              f"prose", failures)
 
         # ---- ZERO-FRICTION-BIRTH ----
         print(f"== scaffolding classic world {world_birth} (chain ends {CHAIN_S67[-1]}, fresh birth) ==")

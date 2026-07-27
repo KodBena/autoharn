@@ -315,9 +315,18 @@ header for the full account.)*
   refusal journal's own payload digest at 1,048,576 bytes (the `s51` `artifact_too_large`
   figure): a direct-psql caller bypassing the service's own body-size cap could otherwise make
   the journaler digest an unbounded payload on every refusal; over the bound,
-  `refusal_payload_digest` records NULL (a grep handle lost, never the refusal record itself,
-  which journals in full regardless of payload size) — the same one-way "legitimately NULL
-  beyond a named bound" idiom `s65` already uses for `refusal_attempted_kind`.
+  `refusal_payload_digest` records NULL. A maintainer ruling at merge-hold (2026-07-27,
+  "NULL may not carry the meaning") refused this delta's first build, which had licensed that
+  NULL by widening a CHECK — an implicit sentinel (a NULL a reader must infer the meaning of
+  from a comment, rather than from a typed column), a drift hazard under
+  [ADR-0000](law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)'s "make illegal states
+  unrepresentable" discipline: the reason for an absent value must itself be a representable,
+  typed fact, never an inference. The re-shape adds `refusal_digest_disposition` (`'computed'` or
+  `'payload_over_bound'`), mandatory on `write_refused` and table-coupled to the digest column
+  (a digest NULL row must declare `payload_over_bound`, a populated digest must declare
+  `computed`) — the SAME structural idiom `s44`'s `attest_expected`/`attest_verdict` coupling
+  already established, one column pair over. A digest's absence is now always a typed,
+  table-caught fact, never an inference from a comment.
 
 ## Birth-selection: does choosing scaffold capabilities prune this chain?
 

@@ -7,7 +7,7 @@
 
 == scaffolding classic world s66s67fxmain (chain ends s67-refusal-digest-bound.sql) ==
 === GREEN-FORGED-STAMP-TYPED-REFUSAL ===
-  [ok] the SAME forged-complete stamp -- now a typed refused verdict (verdict={'row_id': None, 'message': 'Ledger policy: the write stamp did not validate (fabricated, replayed, or stale). Ledger writes are stamped by the tool interception, not typed by the writer — route this write through the intercepted psql path; do not hand-set app.vendor_*.', 'sqlstate': 'P0001', 'refusal_id': 6, 'disposition': 'refused'}), journaled detail(surface|sqlstate|stamp_verified|attempted_kind|digest_len)='ledger|P0001|false|note|64' (expect stamp_verified=false, attempted_kind='note', digest present); the attempted kind='note' row itself never lands (count=0, expect 0)
+  [ok] the SAME forged-complete stamp -- now a typed refused verdict (verdict={'row_id': None, 'message': 'Ledger policy: the write stamp did not validate (fabricated, replayed, or stale). Ledger writes are stamped by the tool interception, not typed by the writer — route this write through the intercepted psql path; do not hand-set app.vendor_*.', 'sqlstate': 'P0001', 'refusal_id': 6, 'disposition': 'refused'}), journaled detail(surface|sqlstate|stamp_verified|attempted_kind|digest_len|disposition)='ledger|P0001|false|note|64|computed' (expect stamp_verified=false, attempted_kind='note', digest present); the attempted kind='note' row itself never lands (count=0, expect 0)
 
 === GREEN-VALID-STAMP-BYTE-IDENTICAL ===
   [ok] a genuinely valid stamp (real HMAC over each world's own armed secret) still accepts, byte-identical pre-delta (verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=true) vs post-delta (verdict={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=true)
@@ -15,11 +15,23 @@
 === GREEN-UNSTAMPED-BYTE-IDENTICAL ===
   [ok] an ordinary unstamped write (no vendor GUCs at all) is byte-identical pre-delta (verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=false) vs post-delta (verdict={'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=false)
 
-=== GREEN-DIGEST-BOUND-NULL ===
-  [ok] the SAME >1 MiB refused payload now journals with refusal_payload_digest NULL (detail='ledger|23514|false|not-a-real-kind|<NULL>'), the refusal otherwise fully recorded (surface/sqlstate present) -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 10, 'disposition': 'refused'}
+=== GREEN-DIGEST-BOUND-NULL-AND-DISPOSITION-DECLARED ===
+  [ok] the SAME >1 MiB refused payload now journals with refusal_payload_digest NULL AND refusal_digest_disposition='payload_over_bound' (s67 AMENDMENT -- the reason for the NULL is a typed, table-caught fact, never an implicit sentinel) (detail='ledger|23514|false|not-a-real-kind|<NULL>|payload_over_bound'), the refusal otherwise fully recorded (surface/sqlstate present) -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 10, 'disposition': 'refused'}
 
 === GREEN-DIGEST-BELOW-BOUND-BYTE-IDENTICAL ===
-  [ok] an ordinary (well under 1 MiB) refused payload's digest is STILL a populated 64-hex digest on both sides, unaffected by the bound -- pre='ledger|23514|false|also-not-real|64' post='ledger|23514|false|also-not-real|64'
+  [ok] an ordinary (well under 1 MiB) refused payload's digest is STILL a populated 64-hex digest on both sides, unaffected by the bound -- pre='ledger|23514|false|also-not-real|64' post='ledger|23514|false|also-not-real|64|computed'
+
+=== GREEN-DIGEST-COMPUTED-DISPOSITION-DECLARED ===
+  [ok] the SAME below-bound refused payload also declares refusal_digest_disposition='computed' (s67 AMENDMENT) -- detail='ledger|23514|false|also-not-real|64|computed'
+
+=== RED-COUPLING-REJECTS-NULL-DIGEST-WITH-COMPUTED ===
+  [ok] a write_refused row claiming disposition='computed' but digest NULL is REFUSED by the table CHECK itself (rc=3, stderr tail=', null, null, P0001, msg, ledger, null, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, computed).') -- the exact illegal state the §2 AMENDMENT's coupling CHECK exists to make unrepresentable
+
+=== RED-COUPLING-REJECTS-POPULATED-DIGEST-WITH-OVER-BOUND ===
+  [ok] a write_refused row claiming disposition='payload_over_bound' but a populated digest is REFUSED by the table CHECK itself (rc=3, stderr tail='aaaaaaaaaaaaaaaaaaaaaaaaaaaa, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, payload_over_bound).') -- the mirror-image illegal state, also unrepresentable
+
+=== RED-DIGEST-STILL-FORBIDDEN-OFF-KIND ===
+  [ok] a non-write_refused ('note') row carrying a populated refusal_payload_digest is STILL refused (rc=3, stderr tail='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null).') -- confirms the ONE-WAY refusal_payload_digest_kind_shape CHECK (unchanged from this delta's first build) is doing necessary work the guarded coupling CHECK alone cannot (three-valued NULL logic: the coupling CHECK's own 'kind <> ... OR' guard skips validation entirely on a non-write_refused row) -- this file's own header names this exact live-tested divergence from the amendment's literal 'dissolves' prose
 
 == scaffolding classic world s66s67fxbirth (chain ends s67-refusal-digest-bound.sql, fresh birth) ==
 === ZERO-FRICTION-BIRTH-accepted ===

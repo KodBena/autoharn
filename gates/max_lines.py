@@ -222,7 +222,12 @@ BASELINE: dict[str, int] = {
     # refusal_payload_digest MANIFEST row is re-classified two-way -> one-way plus its own
     # explanatory reason text) -- witnessed growth from a genuine new arity/citation, not
     # unnoticed growth.
-    "gates/kind_shape_manifest_gate.py":           1605,
+    # bumped 1605 -> 1635 (s67 §2 AMENDMENT fix round, "NULL may not carry the meaning"): one
+    # new MANIFEST row (refusal_digest_disposition, two-way) plus one new
+    # CROSS_COLUMN_COUPLING_MANIFEST row (refusal_payload_digest_disposition_coupling) and the
+    # refusal_payload_digest MANIFEST row's own reason text extended to cite the new coupling --
+    # witnessed growth from two genuine new manifest entries, not unnoticed growth.
+    "gates/kind_shape_manifest_gate.py":           1635,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -602,7 +607,10 @@ BASELINE: dict[str, int] = {
     # Reconciled at THIS merge (2026-07-27, s66/s67 x bounds-vocabulary-drift): both parents'
     # bump comments kept verbatim above; the union is re-measured on the merged file below,
     # the same merge-union ratchet-crossing class as every reconciliation above.
-    "gates/max_lines.py":                          727,
+    # bumped 727 -> 732 (s67 §2 AMENDMENT fix round): this gate's own BASELINE growing to carry
+    # the one entry this same commit bumps (gates/kind_shape_manifest_gate.py, 1605 -> 1635) --
+    # the same self-referential fixpoint as every prior bump above, re-measured after writing.
+    "gates/max_lines.py":                          735,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
