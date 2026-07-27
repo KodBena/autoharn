@@ -30,21 +30,20 @@ unknown-token grammar finding (check 4), never guessed at.
 THE FIVE CHECKS:
   1. DISCHARGE VERIFICATION. `discharged-by=<sha>`: advisory if `<sha>` is not an ancestor of this
      repo's HEAD (`git merge-base --is-ancestor`, run against THIS module's own repo root —
-     `--repo-root` can redirect it, the same redirection device every sibling gate in this
-     directory offers, see MODES below). `superseded-by=<path>`: advisory if the named doc does
-     not exist under the design dir, or its OWN status is not a live-or-historical token (live =
-     proposed/ratified/in-build, per check 2's own live-status set, plus historical AND
-     discharged — a successor that was itself rejected leaves the predecessor un-superseded IN
-     FACT, spec §3 item 1's own parenthetical; `discharged` is a SECOND, freshly-found letter-vs-
-     spirit broadening this module makes, NOT yet reflected in the spec's own text — see
-     LIVE_OR_HISTORICAL's own module-level comment below for the concrete specimen that forced it
-     and why `superseded` stays excluded as an unevidenced, conservative call).
+     `--repo-root` can redirect it, same as every sibling gate in this dir, see MODES below).
+     `superseded-by=<path>`: advisory if the named doc does not exist under the design dir, or its
+     OWN status is not live/historical/`discharged` (live = proposed/ratified/in-build — SETTLED,
+     spec §3 item 1 amended 2026-07-27/945f9ab: `discharged` is a valid, in fact the STRONGEST,
+     successor status; `rejected`/`superseded` stay invalid — see LIVE_OR_HISTORICAL's own
+     comment below for the full account).
   2. DEPENDENCY DRIFT. For every doc whose OWN status is live (proposed/ratified/in-build):
-     advisory per `depends-on` target whose status is `superseded` or `rejected`, naming both
-     paths and both statuses in one message (the maintainer's own dispatch-mechanics/serving-
-     logging example this spec cites by name). A target that is `discharged` raises NOTHING —
-     satisfaction, not drift (spec §5's own stated polarity: "a depends-on edge to a discharged
-     doc raises NOTHING").
+     advisory per `depends-on` target whose status is `superseded` or `rejected` (both paths and
+     statuses named). A `discharged` target raises NOTHING (satisfaction, spec §5). A `depends-on`
+     target that does NOT EXIST gets its own advisory ("depends-on target missing", fix round on
+     a7781ce — previously silent). A target that EXISTS but is headerless stays silent (documented
+     asymmetry: check 5's no-per-doc-noise rule applies to an edge the same as to the doc itself).
+     A target with a garbled/unknown status is caught by ITS OWN check-4 finding, not cross-
+     referenced here — known, accepted imprecise attribution.
   3. STALE-CURRENCY SMELL — SETTLED (spec §3 item 3, amended 2026-07-27). Fires when the doc's
      OWN status is discharged/superseded/rejected, OR when its status is something ELSE
      (historical, most plausibly) but the doc ALREADY carries a verifiably-resolved
@@ -65,9 +64,12 @@ THE FIVE CHECKS:
      advisory naming the doc, since a machine-verified resolution fact now coexists with an
      unreconciled human-authored marker.
   4. GRAMMAR. A malformed header — an unknown key, an unrecognized status token, a `discharged`
-     without `discharged-by`, a `superseded` without `superseded-by`, a duplicate key — is an
-     advisory naming the doc and the offending header text verbatim (a refusal that teaches,
-     ADR-0002's loudness hierarchy applied to a header rather than a runtime call).
+     without `discharged-by`, a `superseded` without `superseded-by`, a duplicate key, OR MORE
+     THAN ONE `design-currency` HEADER IN THE SAME DOC (fix round on a7781ce: an earlier version
+     silently parsed only the first header via `.search()` — an honest first header plus a stray,
+     unverifiable second one parsed CLEAN, an ADR-0002 lying-signature shape; `re.finditer` now
+     catches this, naming the doc, the header count, and every header's own status) — is an
+     advisory naming the doc and the offending text (a refusal that teaches).
   5. BACK-CATALOG HONESTY. One line, no per-doc noise: "N of M design docs carry no currency
      header (adopt on touch)".
 
@@ -110,37 +112,29 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESIGN_DIR = REPO_ROOT / "design"
 
-# Spec §2's eight NAMED status tokens (see module docstring's "AN HONEST DISCREPANCY" section —
-# §6's closure statement calls this set nine, the enumerated list here is what §2 actually names).
+# Spec §2's eight NAMED status tokens (module docstring's "STATUS TOKENS" section: §6's closure
+# statement once called this set nine before its 2026-07-27 amendment corrected it to eight).
 STATUS_TOKENS = frozenset({
     "proposed", "ratified", "in-build", "discharged", "superseded",
     "rejected", "evergreen", "historical",
 })
 LIVE_STATUSES = frozenset({"proposed", "ratified", "in-build"})
-# A SECOND, freshly-found letter-vs-spirit call (fix round on commit 4cbbb8e, 2026-07-27),
-# flagged here rather than silently decided, same discipline as the historical+superseded-by
-# call §3 item 3's spec text was itself amended to cover. Spec §3 item 1's literal text still
-# says a superseded-by TARGET must carry "a live/historical token" (unchanged by the 2026-07-27
-# amendment round) — read letter-strictly, a target that is `discharged` fails this test, which
-# is backwards: `discharged` is the STRONGEST possible confirmation a successor is real (built
-# AND merged), stronger evidence than merely `proposed`/`ratified`/`in-build`. The concrete case
-# that surfaced this: FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md moved from in-build to discharged
-# in this same fix round, and LOGGING-DIRECTION-SURVEY-2026-07-27.md's superseded-by names it —
-# the letter-strict read would advisory-flag the CLEANEST possible supersession as invalid. This
-# module therefore also accepts `discharged` as a valid successor status; `rejected` (the one
-# status the spec's own parenthetical names as invalidating — a successor that never actually
-# happened leaves the predecessor un-superseded in fact) and `superseded` (a successor that was
-# itself later replaced — left OUT of the valid set as a conservative, unevidenced judgment call:
-# no concrete specimen has forced a decision either way yet, and the spec's letter does not name
-# it, so this module does not silently widen further than the one gap a real doc just exposed)
-# remain invalid. Surfaced in this build's own report for the maintainer/spec author, not
-# silently decided.
+# SETTLED (spec §3 item 1, amended 2026-07-27, commit 945f9ab): a superseded-by TARGET is valid
+# at status live (proposed/ratified/in-build), historical, OR discharged — `discharged` (built
+# AND merged) is the STRONGEST possible confirmation a successor is real, stronger than merely
+# live, so excluding it (this module's original build) was backwards; the fix round (4cbbb8e)
+# caught it against FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md turning discharged mid-build while
+# LOGGING-DIRECTION-SURVEY-2026-07-27.md's superseded-by names it. `rejected` (never happened)
+# and `superseded` (replaced again — the header should point at the chain's end) stay invalid.
 LIVE_OR_HISTORICAL = LIVE_STATUSES | {"historical", "discharged"}
 DISCHARGE_LIKE = frozenset({"discharged", "superseded", "rejected"})
 
 ALLOWED_KEYS = ("status", "discharged-by", "superseded-by", "depends-on")
 
-HEADER_RE = re.compile(r"<!--\s*design-currency:(?P<body>.*?)-->", re.DOTALL)
+# `^` + MULTILINE: a real header sits flush-left (every seeded doc's convention) -- excludes an
+# INDENTED grammar illustration (this spec's own §2 code block quotes the header syntax at 4-space
+# indent) from being mistaken for a second real instance, found live authoring this fix round.
+HEADER_RE = re.compile(r"^<!--\s*design-currency:(?P<body>.*?)-->", re.DOTALL | re.MULTILINE)
 TOKEN_RE = re.compile(r"(status|discharged-by|superseded-by|depends-on)=(\S+)")
 # Any doc-attest-exempt HTML comment naming an (unreconciled) "Removal condition:" clause — the
 # same "must sit inside an HTML comment, never a bare substring" discipline
@@ -173,15 +167,28 @@ def _line_of(text: str, pos: int) -> int:
 
 
 def parse_header(text: str) -> Header:
-    """Parses the FIRST `<!-- design-currency: ... -->` comment found (a second one is not a
-    grammar this spec defines; only the first is read, matching every other header-comment
-    convention in this codebase). Returns a Header with `.present = False` when no such comment
-    exists at all — that is NOT a grammar violation, it is the back-catalog case (check 5)."""
+    """Parses the `<!-- design-currency: ... -->` comment(s) found. `.present = False` when none
+    exists — NOT a grammar violation, the back-catalog case (check 5).
+
+    MULTIPLE HEADERS (fix round on a7781ce): grammar defines exactly ONE header per doc. An
+    earlier `HEADER_RE.search` (first-match-only) let a doc with an honest first header and a
+    stray, unverifiable second one parse CLEAN (an ADR-0002 lying-signature shape). Now checked
+    via `re.finditer`: >1 match is itself a check-4 advisory naming the doc, the count, and every
+    match's own status (or `<missing>`) — never silently taking the first. The FIRST header's
+    fields still populate this Header (nothing better to prefer once malformed on this axis)."""
     h = Header()
-    m = HEADER_RE.search(text)
-    if not m:
+    matches = list(HEADER_RE.finditer(text))
+    if not matches:
         return h
     h.present = True
+    if len(matches) > 1:
+        statuses = []
+        for dup in matches:
+            sm = re.search(r"status=(\S+)", dup.group("body"))
+            statuses.append(sm.group(1) if sm else "<missing>")
+        h.issues.append(f"multiple design-currency headers ({len(matches)} found, statuses "
+                         f"{statuses}); only one is defined by the grammar")
+    m = matches[0]
     h.raw_line = _line_of(text, m.start())
     body = m.group("body")
 
@@ -264,17 +271,33 @@ def check_discharge_verification(rel: str, h: Header, headers: dict[str, Header]
             target_status = target_h.status if target_h is not None else None
             if target_status not in LIVE_OR_HISTORICAL:
                 out.append(f"{rel}: superseded-by={h.superseded_by} names a successor whose own "
-                           f"status is {target_status!r}, not a live-or-historical token — a "
-                           f"successor that was itself rejected/discharged/superseded leaves "
+                           f"status is {target_status!r}, not a live/historical/discharged token "
+                           f"— a successor that was itself rejected or further superseded leaves "
                            f"{rel} un-superseded in fact")
     return out
 
 
 def check_dependency_drift(rel: str, h: Header, headers: dict[str, Header]) -> list[str]:
+    """Spec §3 item 2. Fix round on a7781ce: `depends-on=NoSuchDoc.md` previously read exactly
+    like a healthy live dependency (target status None, not in the drift set, nothing fired) —
+    gains the SAME existence check its superseded-by sibling already has, its own message
+    ("depends-on target missing") so it is never confused with drift.
+
+    ASYMMETRIC BOUNDARY, a deliberate choice: a target that EXISTS but is headerless stays SILENT
+    (check 5's no-per-doc-noise rule applied to an edge — no status to have drifted FROM yet).
+
+    KNOWN, ACCEPTED IMPRECISE ATTRIBUTION (reviewer's minor observation): a target with a garbled
+    status is caught by ITS OWN check-4 finding, not a dedicated message here — imprecise
+    attribution, not total silence."""
     out: list[str] = []
     if h.status not in LIVE_STATUSES:
         return out
     for dep in h.depends_on:
+        target_path = DESIGN_DIR / dep
+        if not target_path.exists():
+            out.append(f"{rel} (status={h.status}) depends-on={dep} — depends-on target missing "
+                       f"(no such doc under {DESIGN_DIR})")
+            continue
         dep_h = headers.get(dep)
         dep_status = dep_h.status if dep_h is not None else None
         if dep_status in ("superseded", "rejected"):

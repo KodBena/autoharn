@@ -41,6 +41,26 @@ Cases:
                                   the STRONGEST confirmation a successor is real) must NOT raise
                                   check 1's "not a live-or-historical token" advisory. --strict
                                   exit 0.
+  red-duplicate-headers-both-valid -- two individually well-formed design-currency headers in one
+                                  doc -> check-4 advisory naming the doc, the count, and both
+                                  statuses; never silently takes the first. --strict exit 1.
+  red-duplicate-headers-first-valid-second-garbled -- first header well-formed, second carries no
+                                  `status` field at all -> same duplicate-header advisory, second
+                                  status reported as `<missing>`. --strict exit 1.
+  red-dangling-depends-on        -- a live doc's depends-on names a doc that does not exist under
+                                  the design dir -> "depends-on target missing" advisory, distinct
+                                  from the drift message. --strict exit 1.
+  green-depends-on-headerless-target-silent -- a live doc depends-on a doc that EXISTS but carries
+                                  no currency header -> raises NOTHING (the documented asymmetry:
+                                  check 5's no-per-doc-noise rule applied to an edge). --strict
+                                  exit 0.
+  green-indented-example-not-duplicate -- regression guard for the false positive found live
+                                  authoring this fix round: this spec's OWN §2 code block quotes
+                                  the header grammar at 4-space indent, which an earlier
+                                  `HEADER_RE` (no `^`/MULTILINE anchor) matched as a second real
+                                  header on the spec's own doc. A doc with one flush-left header
+                                  plus an indented illustrative line must NOT trip the duplicate-
+                                  header check. --strict exit 0.
 
 Usage: python3 seen-red/design-currency/run_fixtures.py
 Exit 0 if every case matches its expected polarity; 1 otherwise. Lazy imports banned."""
@@ -169,10 +189,62 @@ def main() -> int:
               cp7.returncode == 0 and "clean" in cp7.stdout,
               f"exit={cp7.returncode}, stdout={cp7.stdout.strip()[:200]!r}", failures)
 
+        # --- red-duplicate-headers-both-valid ---
+        d8 = tmp / "case8"
+        write(d8, "Dup.md",
+              "# Dup\n\n<!-- design-currency: status=proposed -->\n\ntext in between\n\n"
+              f"<!-- design-currency: status=discharged discharged-by={head} -->\n")
+        cp8 = run_gate(d8, strict=True)
+        check("red-duplicate-headers-both-valid",
+              cp8.returncode == 1 and "multiple design-currency headers" in cp8.stdout
+              and "'proposed'" in cp8.stdout and "'discharged'" in cp8.stdout,
+              f"exit={cp8.returncode}, stdout={cp8.stdout.strip()[:300]!r}", failures)
+
+        # --- red-duplicate-headers-first-valid-second-garbled ---
+        d9 = tmp / "case9"
+        write(d9, "DupGarbled.md",
+              "# DupGarbled\n\n<!-- design-currency: status=proposed -->\n\ntext\n\n"
+              "<!-- design-currency: depends-on=Nowhere.md -->\n")
+        cp9 = run_gate(d9, strict=True)
+        check("red-duplicate-headers-first-valid-second-garbled",
+              cp9.returncode == 1 and "multiple design-currency headers" in cp9.stdout
+              and "<missing>" in cp9.stdout,
+              f"exit={cp9.returncode}, stdout={cp9.stdout.strip()[:300]!r}", failures)
+
+        # --- red-dangling-depends-on ---
+        d10 = tmp / "case10"
+        write(d10, "Dangling.md", "# Dangling\n\n<!-- design-currency: status=ratified "
+                                   "depends-on=NoSuchDoc.md -->\n")
+        cp10 = run_gate(d10, strict=True)
+        check("red-dangling-depends-on",
+              cp10.returncode == 1 and "depends-on target missing" in cp10.stdout,
+              f"exit={cp10.returncode}, stdout={cp10.stdout.strip()[:300]!r}", failures)
+
+        # --- green-depends-on-headerless-target-silent (documented asymmetry) ---
+        d11 = tmp / "case11"
+        write(d11, "LiveHeaderless.md", "# LiveHeaderless\n\n<!-- design-currency: status=ratified "
+                                         "depends-on=Headerless.md -->\n")
+        write(d11, "Headerless.md", "# Headerless\n\nno currency header here at all.\n")
+        cp11 = run_gate(d11, strict=True)
+        check("green-depends-on-headerless-target-silent",
+              cp11.returncode == 0 and "clean" in cp11.stdout,
+              f"exit={cp11.returncode}, stdout={cp11.stdout.strip()[:200]!r}", failures)
+
+        # --- green-indented-example-not-duplicate (false-positive regression guard) ---
+        d12 = tmp / "case12"
+        write(d12, "SpecLike.md",
+              "# SpecLike\n\n<!-- design-currency: status=in-build -->\n\n"
+              "Grammar, illustrated (indented, not a real second header):\n\n"
+              "    <!-- design-currency: status=<token> [discharged-by=<sha>] -->\n")
+        cp12 = run_gate(d12, strict=True)
+        check("green-indented-example-not-duplicate",
+              cp12.returncode == 0 and "clean" in cp12.stdout,
+              f"exit={cp12.returncode}, stdout={cp12.stdout.strip()[:200]!r}", failures)
+
     if failures:
-        print(f"design-currency fixtures: {len(failures)}/7 case(s) FAILED: {failures}")
+        print(f"design-currency fixtures: {len(failures)}/12 case(s) FAILED: {failures}")
         return 1
-    print("design-currency fixtures: all 7 cases matched their expected polarity.")
+    print("design-currency fixtures: all 12 cases matched their expected polarity.")
     return 0
 
 
