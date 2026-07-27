@@ -11,7 +11,9 @@ identity — a human operator's vendor stamp, or a dispatched sub-agent's minted
 kernel already performs for a direct `psql` caller. It is aimed at whoever builds or
 reviews that service change.
 
-- **Status:** PROPOSED 2026-07-27. This is [FABLE-PRINCIPAL-STAMPS-SPEC.md](FABLE-PRINCIPAL-STAMPS-SPEC.md)
+- **Status:** RATIFIED 2026-07-27 (maintainer, same day, after the full +A:B:C loop on
+  this text: "let's go; I want the principal stamps done with" — ledger row records it).
+  This is [FABLE-PRINCIPAL-STAMPS-SPEC.md](FABLE-PRINCIPAL-STAMPS-SPEC.md)
   §3 item 3 (dispatch mechanics) built out, per the maintainer's standing word on ledger
   row 1471: the confirmed stamp finding "enters the dispatch-mechanics build spec as a
   named requirement — one HTTP-borne identity plumbing serving both minted principals and
