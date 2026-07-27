@@ -3,7 +3,8 @@
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
 A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment; W31,
-A12's amendment; W32, A13's amendment). Real infra, no mocks:
+A12's amendment; W32, A13's amendment; W34-W35, design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md,
+ledger row 1500). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -154,6 +155,7 @@ import pghost_resolve  # noqa: E402
 import audit_served  # noqa: E402  (compare_row_sets -- the negative-control comparator, reused not re-derived)
 import boundary_service  # noqa: E402  (W12 -- the in-process app.routes closure witness, and MAX_WRITE_BODY_BYTES/PSQL_CONNECT_TIMEOUT_S -- W9/W14 reuse the module's OWN bounds, never a second literal)
 import boundary_multiplex_config  # noqa: E402  (route-shape migration, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §2/§3 -- the server now takes --config, not --deployment)
+import boundary_diagnostic_log  # noqa: E402  (W34 -- design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, the closed event vocabulary under direct, in-process test)
 
 # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
 # environment before any subprocess is spawned -- inherited by the whole process tree
@@ -502,6 +504,36 @@ def serve_existing_world(deployment_path: Path, tmpdir: Path) -> subprocess.Pope
     return proc
 
 
+def _spawn_boundary_service(args: list[str], env: dict[str, str] | None = None) -> subprocess.Popen:
+    """Diagnostic-logging build hazard fix (found in passing while adding the fixture legs
+    below, per CLAUDE.md's engineering-responsibility rule -- not this build's assigned task,
+    but squarely in reach of it): spawns a `serving.boundary_service` subprocess with
+    stdout+stderr redirected to a real scratch FILE, never the anonymous PIPE this fixture used
+    to pass and never drained while the server keeps running. An anonymous pipe's OS buffer
+    (64KB on Linux) previously never filled because this service's own log volume was small
+    (one uvicorn access line per request); design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md's
+    own JSON-lines stream (4-7 lines per request: request_start, one-or-more kernel_call,
+    write_verdict/refusal, request_end) pushed a long-lived WORLD B server's cumulative output
+    past that wall mid-suite -- WITNESSED live: the server's own `sys.stderr.write` call
+    blocked on the full pipe, hanging every subsequent request (this fixture's own W21-family
+    /health poll timed out at exactly that point, reproduced in isolation and traced to this
+    cause before this fix). A real file has no such fixed wall -- the SAME reason
+    `serving/ensure_running.py`'s own PRODUCTION redirect targets `<world>/service.log`, a
+    file, never a pipe, for this exact process; this fix makes the fixture MORE faithful to how
+    the service is actually operated, not a fixture-only workaround. The log path is stashed on
+    the returned `Popen` (`proc._diag_log_path`) so `stop_server` below can read it back
+    without changing any of this function's callers' own unpacking shape."""
+    fd, log_path_str = tempfile.mkstemp(prefix="boundary-service-fixture-log-", suffix=".log")
+    log_path = Path(log_path_str)
+    logf = os.fdopen(fd, "w")
+    try:
+        proc = subprocess.Popen(args, cwd=str(REPO), stdout=logf, stderr=subprocess.STDOUT, env=env)
+    finally:
+        logf.close()  # the child already holds its own dup'd fd; the parent's copy closes now
+    proc._diag_log_path = log_path  # type: ignore[attr-defined]
+    return proc
+
+
 def start_server(config_path: Path, host: str = "127.0.0.1", port: int | None = None,
                   extra_flag: bool = False, env_overrides: dict[str, str] | None = None
                   ) -> tuple[subprocess.Popen, int]:
@@ -521,8 +553,7 @@ def start_server(config_path: Path, host: str = "127.0.0.1", port: int | None = 
     env = dict(os.environ)
     if env_overrides:
         env.update(env_overrides)
-    proc = subprocess.Popen(args, cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, env=env)
+    proc = _spawn_boundary_service(args, env=env)
     return proc, port
 
 
@@ -628,6 +659,26 @@ def _post_trickled(host: str, port: int, path: str, declared_len: int, total_wal
 
 
 def stop_server(proc: subprocess.Popen) -> str:
+    """Reads back whatever `_spawn_boundary_service` redirected this process's stdout+stderr
+    to (a real file, `proc._diag_log_path`) -- terminate-then-read, since a file (unlike a
+    pipe) can never deadlock `.wait()` on a full buffer. Falls back to the OLD
+    `communicate()`-based path for any `Popen` NOT spawned via that helper (defensive; every
+    real call site in this file routes through it as of this build) -- `communicate()`, not
+    `.wait()` first, in that fallback branch specifically, because a genuine PIPE-backed
+    process can be blocked mid-write on a full buffer and `.wait()` alone would hang exactly
+    like the hazard this fix closes."""
+    log_path = getattr(proc, "_diag_log_path", None)
+    if log_path is not None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+        try:
+            return log_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
     proc.terminate()
     try:
         out, _ = proc.communicate(timeout=5)
@@ -1743,6 +1794,184 @@ def main() -> int:
               "other write-path check in this run, not a check named separately for this leg.")
         print()
 
+        # -- W34 (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, ledger row 1500): the
+        # diagnostic JSON-lines log layer. Both polarities, reusing WORLD B's already-running
+        # server (`proc_b`/`base`) rather than scaffolding a second one -- its own
+        # `_diag_log_path` (see `_spawn_boundary_service`) is read DIRECTLY, live, no teardown
+        # needed first.
+        #
+        # Leg (i), RED: an unknown event name and a missing required field each raise the
+        # closed-vocabulary contract's teaching error, in-process, driven directly against the
+        # module under test (unit-style, like W32i above) -- BEFORE any level filter (spec §2
+        # L2's own ordering requirement).
+        w34_unknown_event_raised: Exception | None = None
+        try:
+            boundary_diagnostic_log.log_event("not_a_real_event")
+        except boundary_diagnostic_log.LogContractError as e:
+            w34_unknown_event_raised = e
+        w34_missing_field_raised: Exception | None = None
+        try:
+            boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REQUEST_START)
+        except boundary_diagnostic_log.LogContractError as e:
+            w34_missing_field_raised = e
+        check("w34i-red-unknown-event-and-missing-field-raise-log-contract-error",
+              isinstance(w34_unknown_event_raised, boundary_diagnostic_log.LogContractError)
+              and isinstance(w34_missing_field_raised, boundary_diagnostic_log.LogContractError)
+              and "not_a_real_event" in str(w34_unknown_event_raised)
+              and "route" in str(w34_missing_field_raised) and "method" in str(w34_missing_field_raised),
+              f"log_event('not_a_real_event') raised={w34_unknown_event_raised!r}; "
+              f"log_event(REQUEST_START) with no fields raised={w34_missing_field_raised!r}",
+              failures)
+
+        # Leg (ii), RED: an unrecognized `log_level` value in the multiplex TOML refuses
+        # loudly, before the socket ever binds (construction time) -- the SAME whole-file
+        # validation pass every other config axis already goes through.
+        w34_bad_cfg = wb.parent / "w34-bad-log-level.toml"
+        w34_bad_cfg.write_text(
+            f'log_level = "VERBOSE"\n'
+            f'[deployments.{world_b}]\n'
+            f'pghost = "{PGHOST}"\npgdatabase = "{PGDB}"\n'
+            f'pguser = "{world_b}_rw"\npgschema = "{world_b}"\npgkern = "{world_b}_kernel"\n',
+            encoding="utf-8")
+        w34_bad_level_raised: Exception | None = None
+        try:
+            boundary_multiplex_config.load_multiplex_config_with_log_level(w34_bad_cfg)
+        except boundary_multiplex_config.MultiplexConfigError as e:
+            w34_bad_level_raised = e
+        check("w34ii-red-unknown-log-level-value-refused-before-bind",
+              isinstance(w34_bad_level_raised, boundary_multiplex_config.MultiplexConfigError)
+              and "VERBOSE" in str(w34_bad_level_raised),
+              f"load_multiplex_config_with_log_level(log_level='VERBOSE') raised="
+              f"{w34_bad_level_raised!r}",
+              failures)
+
+        # Leg (iii), GREEN: a served write (accepted leg) yields a jq-reconstructable record
+        # chain (request_start -> kernel_call -> write_verdict -> request_end) sharing ONE
+        # request_id -- read from WORLD B's own live log file, no teardown needed.
+        w34_accept_payload = {"kind": "note", "statement": "W34 diagnostic-log accepted write witness", "actor": author_id}
+        st34a, body34a = http_post(base + "/write/ledger", w34_accept_payload) if up_b else (0, {})
+        time.sleep(0.3)  # let the JSON line flush to the log file
+        w34_log_text = proc_b._diag_log_path.read_text(encoding="utf-8", errors="replace")
+        w34_json_lines = [json.loads(ln) for ln in w34_log_text.splitlines() if ln.startswith("{")]
+        w34_accept_wv = [r for r in w34_json_lines
+                         if r.get("event") == "write_verdict" and r.get("row_id") == body34a.get("row_id")
+                         and body34a.get("row_id") is not None]
+        w34_chain_ok = False
+        w34_chain_events: list[str] = []
+        if w34_accept_wv:
+            w34_rid = w34_accept_wv[0]["request_id"]
+            w34_chain_events = [r["event"] for r in w34_json_lines if r.get("request_id") == w34_rid]
+            w34_chain_ok = (
+                w34_chain_events[:1] == ["request_start"] and w34_chain_events[-1:] == ["request_end"]
+                and "kernel_call" in w34_chain_events and "write_verdict" in w34_chain_events
+                and w34_chain_events.index("kernel_call") < w34_chain_events.index("write_verdict")
+                < w34_chain_events.index("request_end"))
+        check("w34iii-green-accepted-write-jq-reconstructable-chain-one-request-id",
+              up_b and st34a == 200 and body34a.get("disposition") == "accepted" and w34_chain_ok,
+              f"POST /write/ledger (accepted) status={st34a} verdict={body34a}; reconstructed "
+              f"chain for its own request_id: {w34_chain_events}",
+              failures)
+
+        # Leg (iiiv), GREEN, fresh-context review finding (a) fixed: field-shape COHERENCE
+        # across the same chain -- a jq query grouping/filtering on a field name must see the
+        # SAME kind of value under that name on every event that carries it. Two assertions,
+        # both against the SAME w34_chain_events/w34_rid this leg already reconstructed:
+        #   1. every record in the chain that carries `route` carries the BARE path (never
+        #      method-prefixed "METHOD /path") -- request_start/request_end/kernel_call all
+        #      qualify here (no infra/unclassified_failure fires on this accepted-write leg).
+        #   2. the kernel_call record(s) in this chain carry `route`, never `surface`; the
+        #      write_verdict record carries `surface` as the short write-surface label
+        #      ("ledger", WRITE_SURFACES's own vocabulary), never a route path.
+        w34_records_in_chain = [r for r in w34_json_lines if r.get("request_id") == w34_rid] if w34_accept_wv else []
+        w34_routes_seen = {r["route"] for r in w34_records_in_chain if "route" in r}
+        w34_route_bare = all(not re.match(r"^[A-Z]+ /", rt) for rt in w34_routes_seen)
+        w34_kernel_call_recs = [r for r in w34_records_in_chain if r.get("event") == "kernel_call"]
+        w34_write_verdict_recs = [r for r in w34_records_in_chain if r.get("event") == "write_verdict"]
+        w34_kernel_call_shape_ok = bool(w34_kernel_call_recs) and all(
+            "route" in r and "surface" not in r for r in w34_kernel_call_recs)
+        w34_write_verdict_shape_ok = bool(w34_write_verdict_recs) and all(
+            r.get("surface") == "ledger" for r in w34_write_verdict_recs)
+        check("w34iiiv-green-jq-floor-field-coherence-one-shape-per-name",
+              up_b and w34_route_bare and w34_kernel_call_shape_ok and w34_write_verdict_shape_ok,
+              f"routes seen across the chain (must all be bare paths, never method-prefixed): "
+              f"{w34_routes_seen}; kernel_call record(s) carry 'route' not 'surface': "
+              f"{[{'route': r.get('route'), 'has_surface': 'surface' in r} for r in w34_kernel_call_recs]}; "
+              f"write_verdict record(s) carry surface='ledger' (the short write-surface label): "
+              f"{[r.get('surface') for r in w34_write_verdict_recs]}",
+              failures)
+
+        # Leg (iv), GREEN: the refuse leg's `refusal_id` joins to the scratch world's own
+        # journaled write_refused ledger row -- the join anchor row-1498 settled on (NEVER the
+        # payload digest, which the spec's §1 point 1 witness proved unequal by mechanism).
+        w34_refuse_payload = {"kind": "note", "statement": "W34 diagnostic-log refused write witness",
+                              "actor": author_id, "row_hash": "deadbeef"}
+        st34r, body34r = http_post(base + "/write/ledger", w34_refuse_payload) if up_b else (0, {})
+        w34_refusal_id = body34r.get("refusal_id")
+        w34_journal_row = boundary_service._query_json(
+            w28_cfg, f"SELECT to_jsonb(l) FROM {world_b}.ledger l "
+                     f"WHERE l.id = {w34_refusal_id} AND l.kind = 'write_refused';"
+        ) if w34_refusal_id else None
+        check("w34iv-green-refusal-id-joins-scratch-journal-row",
+              up_b and st34r == 200 and body34r.get("disposition") == "refused"
+              and w34_refusal_id is not None and isinstance(w34_journal_row, dict)
+              and w34_journal_row.get("refusal_surface") == "ledger",
+              f"POST /write/ledger (refused) status={st34r} verdict={body34r}; journal row for "
+              f"refusal_id={w34_refusal_id}: {w34_journal_row}",
+              failures)
+
+        # -- W35 (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, ledger row 1500 --
+        # committed per fresh-context review finding (b), post-f450019: the review found the
+        # concurrency leg TRUE but UNCOMMITTED -- this closes that audit-trail gap). L1's
+        # contextvar propagation, live, under real parallel load, against WORLD B's already-
+        # running server -- reused rather than scaffolding a third server. N=20 (10 per route,
+        # not the ad hoc review's own N=60 -- the point is a committed, re-runnable witness,
+        # not a specific number; a smaller N against the SAME assertion is exactly as sound a
+        # proof of "no cross-contamination" as a larger one, and keeps this bank's own runtime
+        # down). Split across two distinct routes so a request_id's OWN chain disagreeing on
+        # `route` (the cross-contamination this leg exists to catch) is actually reachable.
+        w35_n_per_route = 10
+        w35_results: list[tuple[str, int]] = []
+        w35_lock = threading.Lock()
+
+        def _w35_fire(route_suffix: str) -> None:
+            try:
+                st, _ = http_get(f"{base}{route_suffix}")
+            except Exception:
+                st = 0
+            with w35_lock:
+                w35_results.append((route_suffix, st))
+
+        w35_threads = [
+            threading.Thread(target=_w35_fire, args=(rs,))
+            for rs in (["/health"] * w35_n_per_route + ["/rows/current"] * w35_n_per_route)
+        ] if up_b else []
+        for t in w35_threads:
+            t.start()
+        for t in w35_threads:
+            t.join(timeout=30)
+        time.sleep(0.3)  # let every JSON line flush to the log file
+
+        w35_all_200 = bool(w35_results) and all(st == 200 for _, st in w35_results)
+        w35_log_text = proc_b._diag_log_path.read_text(encoding="utf-8", errors="replace")
+        w35_json_lines = [json.loads(ln) for ln in w35_log_text.splitlines() if ln.startswith("{")]
+        w35_by_request_id: dict[str, set[str]] = {}
+        for rec in w35_json_lines:
+            rid, rt = rec.get("request_id"), rec.get("route")
+            if rid is not None and rt is not None:
+                w35_by_request_id.setdefault(rid, set()).add(rt)
+        # Only request_ids whose OWN chain touched a /health or /rows/current call from THIS
+        # burst are in scope (WORLD B's server already served many prior requests this same
+        # run; this leg does not require isolating the log to only its own burst -- it only
+        # requires that NO single request_id's own events ever disagree on route).
+        w35_cross_contaminated = {rid: routes for rid, routes in w35_by_request_id.items() if len(routes) > 1}
+        check("w35-concurrency-contextvar-propagation-no-cross-contamination",
+              up_b and w35_all_200 and not w35_cross_contaminated,
+              f"fired {len(w35_threads)} concurrent requests ({w35_n_per_route} each to "
+              f"/health and /rows/current) against the REAL, already-running WORLD B server; "
+              f"all 200={w35_all_200}; request_id(s) whose own chain disagreed on route "
+              f"(cross-contamination -- must be empty): {w35_cross_contaminated}",
+              failures)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
@@ -1915,10 +2144,9 @@ def main() -> int:
             'pgkern = "doesnotmatterw14_kernel"\n',
             encoding="utf-8")
         port14 = free_port()
-        proc14 = subprocess.Popen(
+        proc14 = _spawn_boundary_service(
             [str(PYVENV), "-m", "serving.boundary_service", "--config", str(cfg14),
-             "--host", "127.0.0.1", "--port", str(port14)],
-            cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+             "--host", "127.0.0.1", "--port", str(port14)])
         # The ASGI server itself binds instantly (it never touches postgres to do so) -- wait
         # for the bare TCP socket to accept, NOT for /health to answer (which is exactly the
         # call under timing below, and would hang for as long as the bound allows).
@@ -1996,10 +2224,9 @@ def main() -> int:
             'pgkern = "doesnotmatterw27_kernel"\n',
             encoding="utf-8")
         port27 = free_port()
-        proc27 = subprocess.Popen(
+        proc27 = _spawn_boundary_service(
             [str(PYVENV), "-m", "serving.boundary_service", "--config", str(cfg27),
-             "--host", "127.0.0.1", "--port", str(port27)],
-            cwd=str(REPO), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+             "--host", "127.0.0.1", "--port", str(port27)])
         asgi_up27 = False
         deadline27 = time.time() + 10
         while time.time() < deadline27:
@@ -2141,7 +2368,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W33 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W35 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

@@ -345,6 +345,22 @@ retired; the oversized-integer leg now also reports axis `"value"`. No consumer 
 two spellings before this (the client-visible DETAIL text, not the axis label, already carried
 the specific "too large to parse" wording) -- the only visible change is the axis word itself.
 
+DIAGNOSTIC-GRADE JSON-LINES LOGGING (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, RATIFIED
+IN FULL 2026-07-27, ledger row 1500). `boundary_diagnostic_log.py` is the ONE home (ADR-0012
+P1) for a per-request context object (L1, minted by this module's own async `@app.middleware
+("http")` -- NEVER a plain-`def` dependency, per the row-1498 witness that a plain-`def`
+dependency's OWN `ContextVar.set()` from inside Starlette's threadpool never flows back), a
+closed eight-event vocabulary with a per-event required-field contract raised loudly BEFORE any
+level filter (L2), and one JSON-line rendering to this service's EXISTING stderr/service.log
+capture -- no new destination, no new rotation, no new config channel beyond one optional
+`log_level` key in the already-existing multiplex TOML (L3). `_log_infra_failure`/
+`_log_unclassified_failure`/the startup banner below are the three pre-existing call sites this
+build migrates to typed events, beside their existing human stderr lines, never instead of them
+(L4). This layer is DIAGNOSTIC-grade ONLY -- no fact here is evidentiary; a request's outcome is
+never decided by whether a log line was written (see `boundary_diagnostic_log.py`'s own
+docstring for the full design, the fail-loud/never-500-a-request tension and its resolution,
+and the exact reasoning for why L1 must be async middleware).
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -359,11 +375,13 @@ import json
 import math
 import os
 import re
+import secrets
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -391,6 +409,12 @@ import deployment_record  # filing/deployment_record.py -- the ONE home for the 
 import ensure_running  # noqa: E402
 
 import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §3)
+# design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md (RATIFIED, ledger row 1500): the ONE home for
+# this service's diagnostic JSON-lines log -- L1's RequestContext/ContextVar, L2's closed event
+# vocabulary + contract validation, L3's JSON-line rendering. See that module's own docstring
+# for the full design and the witnessed contextvars-through-threadpool constraint it is built
+# around (ledger row 1498).
+import boundary_diagnostic_log  # noqa: E402
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
 # manifest parser (`_manifest`, pure text parsing over new-project.sh, no DB call) as the ONE home
 # for "what is the ordered kernel/lineage/*.sql birth chain" (ADR-0012 P1) -- see `_lineage_head`
@@ -912,12 +936,41 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"rather than queued. The cause is ordinary concurrent load, not a defect in this "
             f"request; the correct response is to retry after a short backoff."
         )
+    # Diagnostic-logging spec §5 emission site (b), `_psql`'s single chokepoint: `kernel_call`
+    # is emitted exactly once per subprocess.run outcome below (success or one of the three
+    # exception legs) -- never for a saturation refusal above (KernelCallSaturated/
+    # DeploymentCallSaturated are refused BEFORE subprocess.run ever runs; those are `refusal`
+    # events, emitted by the app's own exception handlers, not a kernel call that happened).
+    # `route` is the current request's own route (`current_route()`, `None`/"unknown" outside
+    # any request context -- this project's own fixture bank calls `_psql`/`_query_json`
+    # directly, unit-style, with no HTTP request in flight) -- deliberately NOT a new parameter
+    # threaded through every one of this function's callers (ADR-0004: minimal-touch). Fresh-
+    # context review finding (a), post-f450019: this field used to be named `surface`, which
+    # `write_verdict`'s own field ALSO uses for a different shape (the short write-surface
+    # label, e.g. "ledger") -- one name, two shapes, silently splitting a `jq` query keyed on
+    # `surface` across events. Renamed to `route` here, which is exactly what this field
+    # already meant, and matches the SAME field's shape on `request_start`/`request_end`
+    # (see boundary_diagnostic_log.py's own EVENT_REQUIRED_FIELDS comment, "ONE SHAPE PER
+    # FIELD NAME, EVERYWHERE").
+    _kernel_call_started = time.monotonic()
     try:
-        return subprocess.run(
+        cp = subprocess.run(
             args, input=preamble + script, capture_output=True, text=True,
             env=env, timeout=PSQL_EXEC_TIMEOUT_S,
         )
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.KERNEL_CALL,
+            route=boundary_diagnostic_log.current_route() or "unknown",
+            exit_class=_psql_exit_class(cp.returncode),
+            duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
+        )
+        return cp
     except subprocess.TimeoutExpired as e:
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.KERNEL_CALL,
+            route=boundary_diagnostic_log.current_route() or "unknown",
+            exit_class="infra", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
+        )
         raise PsqlInfraFailure(
             f"psql subprocess exceeded PSQL_EXEC_TIMEOUT_S={PSQL_EXEC_TIMEOUT_S}s without "
             f"exiting -- a stalled peer (accept-then-silent), not an ordinary connection "
@@ -932,6 +985,11 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
         # connection-level infra fact -- it takes the typed unclassified-failure path (500)
         # so no present or future transport wall can ever wear the bare untyped shape §9
         # forbids. Full detail stays server-side, per the class's own logging discipline.
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.KERNEL_CALL,
+            route=boundary_diagnostic_log.current_route() or "unknown",
+            exit_class="unclassified", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
+        )
         raise PsqlUnclassifiedFailure(
             f"psql subprocess could not be launched (OSError before any connection was "
             f"attempted -- e.g. E2BIG past the kernel's per-argument MAX_ARG_STRLEN wall, or "
@@ -944,6 +1002,11 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
         # connection-level infra fact. Defense in depth: the primary mechanism is the
         # representability gate at each ingress (A4.1(b), A12's own query-string gate); this
         # is the net that catches whatever a future ingress fails to gate at its own boundary.
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.KERNEL_CALL,
+            route=boundary_diagnostic_log.current_route() or "unknown",
+            exit_class="unclassified", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
+        )
         raise PsqlUnclassifiedFailure(
             f"psql subprocess could not be launched (ValueError before any connection was "
             f"attempted -- e.g. an embedded NUL byte in an argument this function's own "
@@ -1013,6 +1076,24 @@ def _query_json_stdin_var(cfg: BoundaryConfig, var_name: str, file_path: str, sq
     return json.loads(lines[-1])
 
 
+def _psql_exit_class(returncode: int) -> str:
+    """The success/infra/unclassified three-way split over a psql exit code, named ONCE
+    (ADR-0012 P1) -- `_classify_psql_exit` below (which RAISES on the two non-success classes)
+    and the diagnostic-logging spec's `kernel_call` event (`_psql`, which only LABELS the
+    outcome, never raises on its account -- the log layer must never itself become a second,
+    raising validator, design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md's standing line) both
+    consult this ONE pure classifier rather than each independently re-deriving the
+    returncode -> class mapping (a hazard this build found in passing while touching this exact
+    function for the log event's own needs, per CLAUDE.md's engineering-responsibility rule --
+    a second, drifting copy of "exit 2 is infra, else nonzero is unclassified" would have been
+    exactly the class this project's own house style forbids)."""
+    if returncode == 2:
+        return "infra"
+    if returncode != 0:
+        return "unclassified"
+    return "success"
+
+
 def _classify_psql_exit(cp: subprocess.CompletedProcess[str]) -> None:
     """A4.3's exit-code fidelity, factored out (ADR-0012 P1) so `_lineage_head` below -- the
     design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md /meta route's own detect-query runner, which needs
@@ -1021,10 +1102,13 @@ def _classify_psql_exit(cp: subprocess.CompletedProcess[str]) -> None:
     share the ONE classification rule rather than re-deriving it. Raises `PsqlInfraFailure` on
     exit 2 (connection-level), `PsqlUnclassifiedFailure` on any other nonzero exit; returns None
     (the caller proceeds) on exit 0. Behavior-preserving extraction from `_query_json`'s own
-    pre-existing inline checks -- no classification changes."""
-    if cp.returncode == 2:
+    pre-existing inline checks -- no classification changes; as of the diagnostic-logging build
+    this reuses `_psql_exit_class` for the returncode -> class judgment rather than repeating the
+    `== 2` / `!= 0` tests inline a second time."""
+    cls = _psql_exit_class(cp.returncode)
+    if cls == "infra":
         raise PsqlInfraFailure(f"psql query failed (exit {cp.returncode}, connection-level): {cp.stderr.strip()[-2000:]}")
-    if cp.returncode != 0:
+    if cls == "unclassified":
         raise PsqlUnclassifiedFailure(
             f"psql query failed (exit {cp.returncode}, NOT connection-level -- a script/data-"
             f"level residue A4.1/A4.2's closures should have made unreachable via an ordinary "
@@ -1198,6 +1282,8 @@ def service_principal_name(cfg: BoundaryConfig) -> str | None:
 
 def capability_absent(capability: str, message: str) -> JSONResponse:
     body = CapabilityAbsent(capability=capability, message=message)
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition, capability=capability)
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
@@ -1208,6 +1294,9 @@ def payload_too_large(limit_bytes: int, observed_bytes: int, message: str) -> JS
     the checkpoint that refused -- the shape stays one, and its numbers stay honest about
     which bound actually fired."""
     body = PayloadTooLarge(limit_bytes=limit_bytes, observed_bytes=observed_bytes, message=message)
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition,
+        limit_bytes=limit_bytes, observed_bytes=observed_bytes)
     return JSONResponse(status_code=413, content=body.model_dump())
 
 
@@ -1232,6 +1321,7 @@ def server_saturated(message: str) -> JSONResponse:
     against, never claiming the connection-level `infra_failure` shape (this is ordinary load,
     not an infrastructure anomaly -- the two are deliberately distinct typed shapes)."""
     body = ServerSaturated(inflight_limit=MAX_INFLIGHT_KERNEL_CALLS, message=message)
+    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
     return JSONResponse(status_code=503, content=body.model_dump())
 
 
@@ -1241,6 +1331,8 @@ def deployment_saturated(deployment: str, inflight_limit: int, message: str) -> 
     (A6/A8's label-honesty ruling, extended to the new axis): this deployment is busy, which is
     NOT the same fact as the whole server being busy."""
     body = DeploymentSaturated(deployment=deployment, inflight_limit=inflight_limit, message=message)
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition, deployment=deployment)
     return JSONResponse(status_code=503, content=body.model_dump())
 
 
@@ -1254,6 +1346,7 @@ def unknown_deployment(known: list[str], deployment: str) -> JSONResponse:
                 f"(spec §2: the {{deployment}} discriminator is a closed enumeration fixed at "
                 f"startup); known deployments: {sorted(known)}",
     )
+    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
     return JSONResponse(status_code=404, content=body.model_dump())
 
 
@@ -1269,6 +1362,7 @@ def unknown_view(view: str) -> JSONResponse:
                 f"FABLE-BOUNDARY-READ-SURFACE-SPEC.md: the {{view}} discriminator is a closed, "
                 f"spec-enumerated allowlist); known views: {sorted(VIEW_REGISTRY)}",
     )
+    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
     return JSONResponse(status_code=404, content=body.model_dump())
 
 
@@ -1278,10 +1372,17 @@ def _resolve_deployment(
     """Multiplex spec §2: the ONE place every route resolves its `{deployment}` path segment
     against the loaded config (ADR-0012 P1 -- not re-derived per route). Returns
     `(cfg, None)` on a known deployment, `(None, <typed 404>)` otherwise -- the caller returns
-    the second element immediately when it is not None."""
+    the second element immediately when it is not None.
+
+    Diagnostic-logging spec §2 L1: this is also the ONE place `boundary_diagnostic_log.
+    bind_deployment` is called -- every route already routes through here to resolve its
+    `{deployment}` segment, so binding the resolved name onto the current request's own
+    `RequestContext` here (rather than once per route handler) keeps this a single call site,
+    not twenty (ADR-0012 P1)."""
     cfg = configs.get(deployment)
     if cfg is None:
         return None, unknown_deployment(list(configs.keys()), deployment)
+    boundary_diagnostic_log.bind_deployment(cfg.name)
     return cfg, None
 
 
@@ -1315,18 +1416,35 @@ def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
     return None
 
 
-def _log_infra_failure(context: str, exc: Exception) -> None:
+def _log_infra_failure(route: str, method: str, exc: Exception) -> None:
     """The full, loud, un-redacted detail stays server-side (stderr -- this project's own house
     channel for a loud diagnostic every other construction-time refusal in this file already
-    uses) -- never in the HTTP response (A2.4's exposure posture)."""
-    sys.stderr.write(f"boundary_service: INFRA FAILURE ({context}): {exc}\n")
+    uses) -- never in the HTTP response (A2.4's exposure posture). The human stderr line's own
+    combined "METHOD /path" text is UNCHANGED (spec: "their server-side-only discipline ... is
+    unchanged") -- only the JSON event's FIELDS split `route`/`method` apart (fresh-context
+    review finding (a), post-f450019: `route` must stay the bare path everywhere it appears,
+    matching `request_start`/`request_end`, never method-prefixed on this event alone).
+
+    Diagnostic-logging spec §2 L4: this is one of the THREE existing sites that migrate to a
+    typed call site rather than staying a parallel stream -- the pre-existing human stderr line
+    above is UNCHANGED; this JSON `infra_failure` event is added BESIDE it, not instead of it."""
+    sys.stderr.write(f"boundary_service: INFRA FAILURE ({method} {route}): {exc}\n")
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.INFRA_FAILURE, route=route, method=method)
 
 
-def _log_unclassified_failure(context: str, exc: Exception) -> None:
+def _log_unclassified_failure(route: str, method: str, exc: Exception) -> None:
     """A4.3's sibling to `_log_infra_failure` -- the full detail (which, unlike an ordinary
     infra failure, may include the actual psql stderr naming the offending SQL/data) stays
-    server-side only; the client sees `unclassified_failure`'s honest, cause-free message."""
-    sys.stderr.write(f"boundary_service: UNCLASSIFIED FAILURE ({context}): {exc}\n")
+    server-side only; the client sees `unclassified_failure`'s honest, cause-free message.
+    Same `route`/`method` field split as `_log_infra_failure` above, same reason.
+
+    Diagnostic-logging spec §2 L4: the second of the three migrated call sites -- the existing
+    human stderr line below is unchanged; this JSON `unclassified_failure` event is added
+    beside it."""
+    sys.stderr.write(f"boundary_service: UNCLASSIFIED FAILURE ({method} {route}): {exc}\n")
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.UNCLASSIFIED_FAILURE, route=route, method=method)
 
 
 class _BodyTooLarge(Exception):
@@ -1711,6 +1829,49 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         openapi_url=None,
     )
 
+    @app.middleware("http")
+    async def _diagnostic_logging_middleware(request: Request, call_next):
+        # Diagnostic-logging spec §2 L1, emission site (a): ASYNC middleware, per the row-1498
+        # witness (see boundary_diagnostic_log's own module docstring, "THE WITNESSED
+        # CONSTRAINT") -- never a plain-`def` dependency, whose own ContextVar.set() from
+        # inside the threadpool would be silently lost on write-back. This middleware runs on
+        # the event loop, ahead of routing/exception-handling (both of which run INSIDE
+        # `call_next` here); every plain-`def` route handler below is dispatched to the
+        # threadpool with a COPY of the context this middleware set, so it reads (and, via
+        # `bind_deployment`, mutates an attribute of) the SAME RequestContext object.
+        request_id = secrets.token_hex(8)
+        ctx = boundary_diagnostic_log.RequestContext(
+            request_id=request_id,
+            route=request.url.path,
+            method=request.method,
+            client_addr=request.client.host if request.client is not None else None,
+        )
+        token = boundary_diagnostic_log.REQUEST_CONTEXT.set(ctx)
+        started = time.monotonic()
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.REQUEST_START, route=ctx.route, method=ctx.method)
+        response: Response | None = None
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            duration_ms = (time.monotonic() - started) * 1000
+            # Every operational failure this service raises (PsqlInfraFailure, saturation, a
+            # write refusal, ...) is caught by one of this app's OWN registered exception
+            # handlers, which run INSIDE `call_next` (Starlette's exception-handling machinery
+            # sits below this user middleware, above routing) -- so `response` is populated
+            # with the typed status code on every path this service's own code can reach.
+            # `-1` below is reserved for a TRULY unhandled exception (a genuine bug this
+            # service's own typed shapes do not cover) escaping past this point entirely --
+            # Starlette's outer ServerErrorMiddleware still turns that into a bare 500 for the
+            # client; this sentinel just distinguishes that path from an already-typed one in
+            # the log, honestly, rather than fabricating a status this middleware never saw.
+            status = response.status_code if response is not None else -1
+            boundary_diagnostic_log.log_event(
+                boundary_diagnostic_log.Event.REQUEST_END,
+                route=ctx.route, status=status, duration_ms=duration_ms)
+            boundary_diagnostic_log.REQUEST_CONTEXT.reset(token)
+
     @app.exception_handler(PsqlInfraFailure)
     async def _infra_failure_handler(request: Request, exc: PsqlInfraFailure) -> JSONResponse:
         # A2.4, narrowed per A3.2, narrowed FURTHER per A4.3: the ONE place a genuinely
@@ -1719,7 +1880,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # becomes a typed 503, for every route uniformly (ADR-0012 P1: one handler, not a
         # try/except duplicated per route). Registered on the DEDICATED exception class, never
         # the bare `RuntimeError` a foreign failure (RecursionError, for one) could also raise.
-        _log_infra_failure(f"{request.method} {request.url.path}", exc)
+        _log_infra_failure(request.url.path, request.method, exc)
         return infra_failure(
             "the ledger's underlying database connection failed -- this is an infrastructure "
             "problem, not a problem with your request; see the server's own log for full detail.")
@@ -1733,7 +1894,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # or deployment defect; the message says exactly that, honestly, rather than claiming
         # a cause (infra vs request) this boundary did not witness -- the lying-signature class
         # ADR-0002 rung 3 exists to forbid. Full psql stderr logged server-side only.
-        _log_unclassified_failure(f"{request.method} {request.url.path}", exc)
+        _log_unclassified_failure(request.url.path, request.method, exc)
         return unclassified_failure(
             "the storage layer refused for a reason this boundary did not anticipate -- this "
             "may be the deployment or the request; the boundary declines to guess. Full detail "
@@ -1779,6 +1940,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # directly above -- a dependency's exception propagates to the app's own exception
         # handling before the (now synchronous, off-the-event-loop) handler is ever dispatched.
         body = BodyReadTimeout(timeout_s=exc.timeout_s, message=exc.message)
+        boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
         return JSONResponse(status_code=408, content=body.model_dump())
 
     @app.get("/d/{deployment}/health", response_model=HealthResponse)
@@ -2316,6 +2478,22 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 f"SELECT to_jsonb(v) FROM {cfg.kern}.{fn}(:'payload'::jsonb) v;",
                 extra_v={"payload": payload_json},
             )
+            # Diagnostic-logging spec §5 emission site (c): the verdict/refusal classification
+            # path -- kernel.write_verdict's own shape (kernel/lineage/
+            # s43-typed-verdict-write-boundary.sql: disposition/row_id/refusal_id/sqlstate/
+            # message) is read verbatim here, never a second copy of its field names. The join
+            # anchor is `refusal_id` (the committed write_refused row's own id), NEVER the
+            # payload digest -- row-1498's witness (boundary_diagnostic_log's own module
+            # docstring; design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §1 point 1) found the
+            # kernel's canonical-jsonb-text digest and this service's own `json.dumps` digest
+            # UNEQUAL by mechanism (key-order normalization differs) -- so a digest was never a
+            # sound join key to log in the first place.
+            v_disposition = verdict.get("disposition") if isinstance(verdict, dict) else None
+            v_row_id = verdict.get("row_id") if isinstance(verdict, dict) else None
+            v_refusal_id = verdict.get("refusal_id") if isinstance(verdict, dict) else None
+            boundary_diagnostic_log.log_event(
+                boundary_diagnostic_log.Event.WRITE_VERDICT, surface=surface,
+                disposition=v_disposition, row_id=v_row_id, refusal_id=v_refusal_id)
             # Kernel verdicts (accepted AND refused) cross byte-verbatim as HTTP 200 -- a
             # kernel refusal is a first-class domain RESULT, not a transport error (spec §4).
             return JSONResponse(status_code=200, content=verdict)
@@ -2462,6 +2640,15 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 f"SELECT to_jsonb(v) FROM {cfg.kern}.artifact_write(:'payload'::jsonb) v;")
         finally:
             os.unlink(tmp_path)
+        # Diagnostic-logging spec §5 emission site (c), the artifact route's own instance --
+        # see `make_write_route`'s handler for the shared reasoning (refusal_id, never the
+        # payload digest, is the join anchor).
+        v_disposition = verdict.get("disposition") if isinstance(verdict, dict) else None
+        v_row_id = verdict.get("row_id") if isinstance(verdict, dict) else None
+        v_refusal_id = verdict.get("refusal_id") if isinstance(verdict, dict) else None
+        boundary_diagnostic_log.log_event(
+            boundary_diagnostic_log.Event.WRITE_VERDICT, surface="artifact",
+            disposition=v_disposition, row_id=v_row_id, refusal_id=v_refusal_id)
         return JSONResponse(status_code=200, content=verdict)
 
     app.add_api_route("/d/{deployment}/artifacts", artifact_put, methods=["POST"])
@@ -2547,10 +2734,14 @@ def main(argv: list[str] | None = None) -> int:
     # keys anywhere, a missing required key, or zero deployments each refuse loudly BY NAME,
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
-        records = boundary_multiplex_config.load_multiplex_config(args.config)
+        records, log_level = boundary_multiplex_config.load_multiplex_config_with_log_level(args.config)
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
         return 2
+    # Diagnostic-logging spec §2 "Config": the level is already validated (whole-file, before
+    # this point) by boundary_multiplex_config.py against boundary_diagnostic_log.LEVELS --
+    # configure_level here is construction-time defense in depth, not the primary validation.
+    boundary_diagnostic_log.configure_level(log_level)
     # Multiplex spec §4: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment
     # sub-bound is computed ONCE here (never re-derived per request) and PRINTED at startup
     # (spec §4, verbatim) so an operator can see what their own deployment count produced.
@@ -2559,6 +2750,15 @@ def main(argv: list[str] | None = None) -> int:
         f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global) "
         f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
         f"deployment(s): {sorted(records.keys())})\n")
+    # Diagnostic-logging spec §2 L4/§5 emission site (d): the startup banner's own typed call
+    # site, beside (not instead of) the pre-existing human stderr line directly above.
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.STARTUP,
+        deployments=sorted(records.keys()),
+        max_inflight_kernel_calls=MAX_INFLIGHT_KERNEL_CALLS,
+        max_inflight_per_deployment=per_dep_limit,
+        log_level=log_level,
+    )
     configs: dict[str, BoundaryConfig] = {}
     for name, record in records.items():
         configs[name] = BoundaryConfig(
