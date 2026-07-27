@@ -5,8 +5,9 @@ hand would be overwritten by the next regeneration. Removal condition: promoted 
 ratified recipe or superseded by a typed-findings mechanism. -->
 
 <!-- CONSUMER (named, per the named-consumer test): the A-side PRE-REVIEW of the ADR-0017
-A:B:C loop. Contract, maintainer-directed 2026-07-26 (amended same day: fix, don't just
-find): before dispatching any fresh-context B round, the dispatching A runs (or delegates
+A:B:C loop. The maintainer's name for the whole extended pipeline (pre-review + blind
+A:B:C) is "+A:B:C" (his coinage 2026-07-27, ledger row 1488). Contract,
+maintainer-directed 2026-07-26 (amended same day: fix, don't just find): before dispatching any fresh-context B round, the dispatching A runs (or delegates
 to a cheap model) one explicit pass over the ranked classes below AND APPLIES THE FIXES --
 a find-only pass would be waste; these classes are the easiest to find and the cheapest to
 repair. Everything after the pre-review is the unchanged A:B:C story. B itself stays fresh
