@@ -49,6 +49,17 @@ identifier check downstream).
 `tomllib` is Python 3.11+ stdlib (no new dependency; matches this project's existing "no new
 system packages" convention for `serving/`).
 
+LOG LEVEL (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2, "Config"): one new OPTIONAL
+top-level key, `log_level` -- a string, validated against `boundary_diagnostic_log.LEVELS` (the
+ONE home for the valid-level set, ADR-0012 P1: this module imports it rather than carrying a
+second copy that could drift). Absent entirely -> `boundary_diagnostic_log.DEFAULT_LEVEL`
+("INFO") -- an existing `boundary-multiplex.toml`, authored before this key existed, still
+validates unchanged (ADR-0004: this addition does not retroactively demand every existing
+config be touched). An unrecognized value is refused loudly, by name, in the SAME whole-file
+validation pass every other axis of this file already goes through -- before the socket ever
+binds (spec §3's own "the WHOLE file validates before the socket binds", extended to the one
+new key rather than carving out an exception for it).
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -65,6 +76,7 @@ from pathlib import Path
 # form puts `filing/` on sys.path automatically.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "filing"))
 import deployment_record  # noqa: E402
+import boundary_diagnostic_log  # noqa: E402  (serving/boundary_diagnostic_log.py -- the ONE home for LEVELS/DEFAULT_LEVEL, ADR-0012 P1)
 
 # Deployment names are operator LABELS (spec §2): [a-z0-9-]{1,64}, refused at load otherwise.
 # CROSS-REFERENCE (work item setup-tui-worldname-boundary-allowlist, row 1317 arc): this pattern
@@ -80,6 +92,11 @@ _DEPLOYMENT_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 # `pgschema`/`pgkern` join the spec's own three-key example.
 _REQUIRED_ENTRY_KEYS: frozenset[str] = frozenset({"pghost", "pgdatabase", "pguser", "pgschema", "pgkern"})
 
+# The ONLY two top-level keys this file recognizes, as of the diagnostic-logging spec's
+# `log_level` addition -- named ONCE (ADR-0012 P1), consulted by `load_multiplex_config`'s own
+# unknown-top-level-key check below rather than an inline literal `{"deployments"}` set.
+_TOP_LEVEL_KEYS: frozenset[str] = frozenset({"deployments", "log_level"})
+
 
 class MultiplexConfigError(Exception):
     """The config file is absent, unreadable, unparseable as TOML, not a table, carries an
@@ -93,7 +110,38 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     """Load and validate `boundary-multiplex.toml`'s WHOLE shape in one pass; returns a dict of
     deployment name -> `DeploymentRecord`. Never returns a partial config on any defect (every
     axis below raises `MultiplexConfigError` naming exactly what is wrong, before any entry's
-    identifiers even reach `BoundaryConfig`'s own downstream check)."""
+    identifiers even reach `BoundaryConfig`'s own downstream check).
+
+    Thin wrapper over `_load_and_validate` (ADR-0012 P1: ONE validation pass, one home) that
+    discards the `log_level` half of the result -- kept byte-for-byte backward compatible for
+    every EXISTING caller (this project's own fixture bank calls this exact name); a caller
+    that also needs the resolved log level (`serving/boundary_service.py`'s own `main()`) calls
+    `load_multiplex_config_with_log_level` instead, rather than this file growing a second,
+    diverging validation path."""
+    deployments, _log_level = _load_and_validate(path)
+    return deployments
+
+
+def load_multiplex_config_with_log_level(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str]:
+    """The diagnostic-logging spec's own entry point (design/
+    FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2, "Config") -- SAME single validation pass as
+    `load_multiplex_config` above (never a second, independent parse of the same file), also
+    returning the resolved `log_level` (already validated against
+    `boundary_diagnostic_log.LEVELS`, defaulted to `boundary_diagnostic_log.DEFAULT_LEVEL` when
+    the TOML omits the key entirely)."""
+    return _load_and_validate(path)
+
+
+def _load_and_validate(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str]:
+    """The ONE home (ADR-0012 P1) both public loaders above route through -- every validation
+    axis (unknown top-level key, missing/unknown/malformed `deployments` entry, an
+    unrecognized `log_level` value) runs in this SAME whole-file pass, before either public
+    function returns anything, matching spec §3's "the WHOLE file validates before the socket
+    binds" applied to the new key exactly as it already applies to every existing one."""
     p = Path(path)
     if not p.is_file():
         raise MultiplexConfigError(
@@ -110,12 +158,23 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     except tomllib.TOMLDecodeError as e:
         raise MultiplexConfigError(f"boundary-multiplex config at {p} is not valid TOML ({e})") from e
 
-    unknown_top = sorted(set(raw) - {"deployments"})
+    unknown_top = sorted(set(raw) - _TOP_LEVEL_KEYS)
     if unknown_top:
         raise MultiplexConfigError(
             f"boundary-multiplex config at {p} has unknown top-level key(s) {unknown_top} -- "
-            f"the only recognized top-level key is 'deployments' (spec §3). Refused before "
-            f"the socket ever binds.")
+            f"the only recognized top-level keys are {sorted(_TOP_LEVEL_KEYS)} (spec §3, "
+            f"extended by design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2's 'log_level'). "
+            f"Refused before the socket ever binds.")
+
+    log_level = raw.get("log_level", boundary_diagnostic_log.DEFAULT_LEVEL)
+    if not isinstance(log_level, str) or log_level not in boundary_diagnostic_log.LEVELS:
+        raise MultiplexConfigError(
+            f"boundary-multiplex config at {p}: 'log_level' = {log_level!r} is not one of "
+            f"{sorted(boundary_diagnostic_log.LEVELS)} (design/"
+            f"FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2 -- unknown values refuse loudly, "
+            f"before the socket ever binds; omit the key entirely for the default, "
+            f"{boundary_diagnostic_log.DEFAULT_LEVEL!r}).")
+
     if "deployments" not in raw:
         raise MultiplexConfigError(
             f"boundary-multiplex config at {p} is missing the required top-level key "
@@ -162,4 +221,4 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
         result[name] = deployment_record.DeploymentRecord(
             db=entry["pgdatabase"], host=entry["pghost"], schema=entry["pgschema"],
             kern=entry["pgkern"], role=entry["pguser"], name=name)
-    return result
+    return result, log_level
