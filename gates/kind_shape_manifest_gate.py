@@ -178,7 +178,16 @@ CHAIN = [
     "s63-supersession-body-restoration.sql",
     "s64-principal-stamps-delegation-conditions.sql",
     "s65-refusal-attempted-kind.sql",
+    "s66-forged-stamp-journal-totality.sql",
+    "s67-refusal-digest-bound.sql",
 ]
+# s66 (kernel/lineage/s66-forged-stamp-journal-totality.sql) re-issues ONLY kernel.set_stamp (a
+# trigger function, not a kind-shape CHECK) -- zero MANIFEST changes, named. s67 (kernel/lineage/
+# s67-refusal-digest-bound.sql) widens refusal_payload_digest_kind_shape from mandatory-two-way
+# to one-way (a write_refused row's digest may now be legitimately NULL when the refused
+# payload's canonical text exceeds 1,048,576 bytes) -- the MANIFEST row below is re-classified
+# to match, the SAME idiom refusal_attempted_actor (s43) and refusal_attempted_kind (s65) already
+# use for "legitimately NULL on the licensed kind too."
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
 # columns plus TWO genuinely new kind-shape idioms this codebase had none of before -- found live
@@ -611,11 +620,15 @@ MANIFEST = [
                 "refusal_surface_check (kernel-structural: it enumerates the boundary "
                 "functions themselves)."),
     dict(column="refusal_payload_digest", kinds=("write_refused",),
-         arity="two-way", mechanism="CHECK", constraint="refusal_payload_digest_kind_shape",
-         defining_delta="s43-typed-verdict-write-boundary.sql",
+         arity="one-way", mechanism="CHECK", constraint="refusal_payload_digest_kind_shape",
+         defining_delta="s43-typed-verdict-write-boundary.sql (widened two-way -> one-way by "
+                         "s67-refusal-digest-bound.sql)",
          reason="SHA-256 of the refused payload's canonical text (digest, never verbatim -- "
-                "R4, ratified) -- mandatory; the 64-hex shape is the separate "
-                "refusal_payload_digest_shape value CHECK."),
+                "R4, ratified) -- legitimately NULL when the payload's canonical text exceeds "
+                "1,048,576 bytes (s67: the direct-psql-bypass hazard the service's own "
+                "MAX_WRITE_BODY_BYTES cap cannot reach), so the correlation cannot be an iff; "
+                "one-way forecloses it appearing on a non-write_refused row only. The 64-hex "
+                "shape (when present) is the separate refusal_payload_digest_shape value CHECK."),
     dict(column="refusal_attempted_actor", kinds=("write_refused",),
          arity="one-way", mechanism="CHECK", constraint="refusal_attempted_actor_kind_shape",
          defining_delta="s43-typed-verdict-write-boundary.sql",

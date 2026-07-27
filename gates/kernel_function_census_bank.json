@@ -1,7 +1,7 @@
 {
   "kern:artifact_write": "d4ef75c7bea4f333b09dc2979530d9aa4cfd5420f62e07c4d572b0fe0db0e49b",
   "kern:bump_chain_high_water": "42d5ec2cca7ee054d64000ec0fa9d542fc01b08c8ceb27b41bfbede31ae003a0",
-  "kern:journal_write_refusal": "30e3f661681b4cbc3ed122025f08cbd3c718e909d91ddb49d9dba81d473242fe",
+  "kern:journal_write_refusal": "f89fc8d0310b5f262327881c03ea4cae44f551cbb5273848ad6e5fe40a7c0469",
   "kern:ledger_write": "d0546d7cbdfba6477622be878c4694dd7faeee72b45572aa45d07d45b72082ab",
   "kern:missive_dedup_race_text": "c7a1e8bd83f5f8844441a76f09ffd5b046beda30b1dfff7687afae0a27f566f2",
   "kern:missive_dispose": "947b29364d55b9235dd1e3d4c95333f670d07f77cb6cb6e4ea84f549a06832bd",
@@ -28,7 +28,7 @@
   "schema:principal_authority_chain_reaches_genesis_scoped": "15af95660195b62a3139c9b011af813e2988fecb8660b8487867255845bcb169",
   "schema:principal_redelegate_budget": "eb360cd9728b7a385e37130e8a4d3bb8cf1cfb57ecb8ac5f2bef555a4bef90ee",
   "schema:set_actor": "ed7a73b86b6e758b088703a4fdf45bbfe6595efdc76c23d778b99e039f68260b",
-  "schema:set_stamp": "70cd7789f249e36bf8b5e719a79a25f6e4597f755ba51ff631cb471d381ae934",
+  "schema:set_stamp": "bf8504ff96c99e132d3f4c03411a7e346e8a0f6791bf5a3f109692bf6f7fc4fb",
   "schema:validate_amends": "c1208cff5b9fd04c13d5db04cd26ae316f1284d0f1a968e8d2fac67fbfba25d9",
   "schema:validate_answers": "f835a4454dc545b75293fef1788d20df0bf9781b602c93f8f4a1a70f60668740",
   "schema:validate_artifact_witness_existence": "78c3a75aa8c8eb07533973fca37abf97a6933be0787fb107eb1aa9f857aa6796",

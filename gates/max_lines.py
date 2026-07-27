@@ -218,7 +218,11 @@ BASELINE: dict[str, int] = {
     # MANIFEST with its five s64 delegation_* rows, the 2f/2h assert_manifest symmetry,
     # check-4 exemption) -- all genuinely new decision-boundary logic and its own
     # reasoning/precedent-citing prose, not padding.
-    "gates/kind_shape_manifest_gate.py":           1592,
+    # bumped 1592 -> 1605 (s67-refusal-digest-bound.sql: the CHAIN list gains s66/s67, and the
+    # refusal_payload_digest MANIFEST row is re-classified two-way -> one-way plus its own
+    # explanatory reason text) -- witnessed growth from a genuine new arity/citation, not
+    # unnoticed growth.
+    "gates/kind_shape_manifest_gate.py":           1605,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -484,7 +488,11 @@ BASELINE: dict[str, int] = {
     # FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md build) -- the identical shape as the row
     # immediately above, witnessed growth from adding this build's own seen-red fixture bank
     # to the registry, not unnoticed growth.
-    "gates/fixture_census.py":                     434,
+    # bumped 434 -> 435 (one new REGISTRY row: s66-s67-journal-totality, design/
+    # FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md build) -- the identical shape as the two rows
+    # immediately above, witnessed growth from adding this build's own seen-red fixture bank
+    # entry, not unnoticed growth.
+    "gates/fixture_census.py":                     435,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -579,7 +587,11 @@ BASELINE: dict[str, int] = {
     # BASELINE growing to carry the one entry this same commit bumps (gates/fixture_census.py,
     # 433 -> 434) -- the same self-referential fixpoint as every prior bump, re-measured after
     # writing.
-    "gates/max_lines.py":                          704,
+    # bumped 704 -> 712 (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md build): this gate's own
+    # BASELINE growing to carry the two entries this same commit bumps
+    # (gates/kind_shape_manifest_gate.py 1592 -> 1605, gates/fixture_census.py 434 -> 435) --
+    # the same self-referential fixpoint as every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          716,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

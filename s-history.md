@@ -76,6 +76,7 @@ outside this synopsis's frame — superseded whole-kernel snapshots, not chain d
   and the distinctness gate in the same stroke.
 - **[`s18-criterion-principals.sql`](kernel/lineage/s18-criterion-principals.sql)** — adds two
   genuinely distinct, INSERT-only criterion-reviewer principals (no `SELECT` on the unit
+  ledger — the study-harness's own review-record table, distinct from the kernel's main
   ledger) so a first-contact review of a final artifact is enforced by database privilege, not
   by an honor system. This is the project's own study-harness apparatus, not part of the kernel
   a downstream user stands up — `high_watermark_1.sql` (below) deliberately excludes it.
@@ -92,7 +93,9 @@ plainly, and the numbering simply resumes at `s17`.
 ### `s19` – `s39`: foundational refusals, work-item tracking, and the tamper-evident chain
 
 - **[`s19-trigger-search-path.sql`](kernel/lineage/s19-trigger-search-path.sql)** — forecloses a
-  class of three findings (16, 37, 45): `s15`'s `set_actor()` trigger read the kernel schema via
+  class of three findings (16, 37, 45 — this delta's own internal numbering for prior review
+  findings that motivated it; not otherwise indexed in this repository's tracked history):
+  `s15`'s `set_actor()` trigger read the kernel schema via
   a hardcoded literal `kernel.` instead of the parameterized schema, so any deployment whose
   kernel schema is not literally named `kernel` silently failed to attribute writes. Fixed
   structurally (every trigger/function now resolves kernel objects via `search_path`), not
@@ -190,8 +193,9 @@ plainly, and the numbering simply resumes at `s17`.
 - **[`s41-principal-bindings-and-relations.sql`](kernel/lineage/s41-principal-bindings-and-relations.sql)**
   — the second half of the same family: typed bindings a registered identity can carry (role
   binds, cryptographic key-binding slots, competence grants, and typed relations to other
-  principals such as `acts-for`), all retracted uniformly through `s31`'s own supersession
-  mechanism rather than a second retraction shape.
+  principals such as `acts-for`, one principal authorizing another to act in its stead, and
+  `dispatched-by`, one principal marking another as the one who dispatched it), all retracted
+  uniformly through `s31`'s own supersession mechanism rather than a second retraction shape.
 - **[`s42-row-hash-full-coverage.sql`](kernel/lineage/s42-row-hash-full-coverage.sql)** —
   re-issues `compute_row_hash` so the tamper-evidence chain serializes EVERY ledger column
   except the hash itself, closing a gap where 22 columns added since `s26` sat outside the
@@ -266,7 +270,7 @@ header for the full account.)*
   missive substrate above: six new views (outbound, receipts, undisposed, stale, delivery audit,
   open threads).
 
-### `s60` – `s64`: entitlement, signatures, and delegation
+### `s60` – `s67`: entitlement, signatures, delegation, and journal totality
 
 - **[`s60-entitlement-enforcement.sql`](kernel/lineage/s60-entitlement-enforcement.sql)** —
   adds the kernel's first true authorization layer: an `entitlement_act_class` column and a new
@@ -292,6 +296,28 @@ header for the full account.)*
   expiry, scope) and closes a hazard found while building this: `dispatched-by` edges had been
   entirely ungated by entitlement until this same delta widened the enforcement functions to
   cover them too.
+- **[`s65-refusal-attempted-kind.sql`](kernel/lineage/s65-refusal-attempted-kind.sql)** — adds
+  `refusal_attempted_kind`, extracting the refused payload's own `kind` token (bounded at 256
+  bytes) into the refusal journal, so a refused write's own attempted vocabulary member is
+  legible without a multi-agent interrogation to reconstruct it (this bullet, and the two below,
+  fill a gap this file's own directory listing left when `s65` first landed — this document's
+  own "Staying current" warning below applies).
+- **[`s66-forged-stamp-journal-totality.sql`](kernel/lineage/s66-forged-stamp-journal-totality.sql)**
+  — closes a witnessed escape: a structurally-complete-but-cryptographically-wrong vendor stamp
+  used to raise as an unhandled error instead of returning a typed refusal (the journaler's own
+  INSERT re-fired `set_stamp` on the same forged session GUCs — the Postgres config variables
+  the tool interception injects to carry the stamp — and the second raise escaped the boundary
+  function's own exception handler with no refusal ever recorded). `set_stamp` gains one
+  guard: the journaler's own `write_refused` row records `stamp_verified := false` instead
+  of raising a second time — every other kind's
+  behavior, including the raise text, stays byte-identical.
+- **[`s67-refusal-digest-bound.sql`](kernel/lineage/s67-refusal-digest-bound.sql)** — bounds the
+  refusal journal's own payload digest at 1,048,576 bytes (the `s51` `artifact_too_large`
+  figure): a direct-psql caller bypassing the service's own body-size cap could otherwise make
+  the journaler digest an unbounded payload on every refusal; over the bound,
+  `refusal_payload_digest` records NULL (a grep handle lost, never the refusal record itself,
+  which journals in full regardless of payload size) — the same one-way "legitimately NULL
+  beyond a named bound" idiom `s65` already uses for `refusal_attempted_kind`.
 
 ## Birth-selection: does choosing scaffold capabilities prune this chain?
 
@@ -307,7 +333,7 @@ options shape only the surrounding birth ACTS, never which `sNN` deltas a new
   `--pin`) is orthogonal to this boolean — none of them appears in its computation.
 - When `FULL_LINEAGE` is 1, the script's own `LINEAGE_CHAIN` variable is set to ONE fixed
   string ([`bootstrap/new-project.sh`](bootstrap/new-project.sh):506) enumerating `s15` through
-  the current head (`s64` as of this writing) — the identical list regardless of which
+  the current head (`s67` as of this writing) — the identical list regardless of which
   `--new-world` name, `--profile tracker` name, or any feature checkbox was chosen. There is no
   conditional branch inside that assignment keyed on any user-selected option.
 - Precision added 2026-07-27 (content-review finding): `LINEAGE_CHAIN` is the hand-authored

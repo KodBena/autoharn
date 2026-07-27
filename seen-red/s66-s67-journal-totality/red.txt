@@ -1,0 +1,51 @@
+== scaffolding classic world s66s67fxpre (chain ends s65-refusal-attempted-kind.sql, NO s66/s67) ==
+=== RED-FORGED-STAMP-ESCAPES ===
+  [ok] pre-s66 (s65-head) world: a forged-complete stamp through ledger_write RAISES UNCAUGHT (exit=3, stderr tail='e,\n          encode(sha256(convert_to(p_payload::text, \'utf8\')), \'hex\'),\n          v_attempted, session_user,\n          v_attempted_kind)\n  RETURNING id"\nPL/pgSQL function journal_write_refusal(text,jsonb,text,text) line 60 at SQL statement\nPL/pgSQL function ledger_write(jsonb) line 54 at assignment'), zero write_refused rows land (wr_count=0) -- the w36f escape shape, re-witnessed
+
+=== RED-DIGEST-UNBOUNDED ===
+  [ok] pre-s67 world: a >1 MiB refused payload journals TODAY with a FULL 64-hex digest (digest_len='64', detail='ledger|23514|false|not-a-real-kind|64') -- the unbounded baseline -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 8, 'disposition': 'refused'}
+
+== scaffolding classic world s66s67fxmain (chain ends s67-refusal-digest-bound.sql) ==
+=== GREEN-FORGED-STAMP-TYPED-REFUSAL ===
+  [ok] the SAME forged-complete stamp -- now a typed refused verdict (verdict={'row_id': None, 'message': 'Ledger policy: the write stamp did not validate (fabricated, replayed, or stale). Ledger writes are stamped by the tool interception, not typed by the writer — route this write through the intercepted psql path; do not hand-set app.vendor_*.', 'sqlstate': 'P0001', 'refusal_id': 6, 'disposition': 'refused'}), journaled detail(surface|sqlstate|stamp_verified|attempted_kind|digest_len)='ledger|P0001|false|note|64' (expect stamp_verified=false, attempted_kind='note', digest present); the attempted kind='note' row itself never lands (count=0, expect 0)
+
+=== GREEN-VALID-STAMP-BYTE-IDENTICAL ===
+  [ok] a genuinely valid stamp (real HMAC over each world's own armed secret) still accepts, byte-identical pre-delta (verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=true) vs post-delta (verdict={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=true)
+
+=== GREEN-UNSTAMPED-BYTE-IDENTICAL ===
+  [ok] an ordinary unstamped write (no vendor GUCs at all) is byte-identical pre-delta (verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=false) vs post-delta (verdict={'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, stamp_verified=false)
+
+=== GREEN-DIGEST-BOUND-NULL ===
+  [ok] the SAME >1 MiB refused payload now journals with refusal_payload_digest NULL (detail='ledger|23514|false|not-a-real-kind|<NULL>'), the refusal otherwise fully recorded (surface/sqlstate present) -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 10, 'disposition': 'refused'}
+
+=== GREEN-DIGEST-BELOW-BOUND-BYTE-IDENTICAL ===
+  [ok] an ordinary (well under 1 MiB) refused payload's digest is STILL a populated 64-hex digest on both sides, unaffected by the bound -- pre='ledger|23514|false|also-not-real|64' post='ledger|23514|false|also-not-real|64'
+
+== scaffolding classic world s66s67fxbirth (chain ends s67-refusal-digest-bound.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s66/s67 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta pair -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after three refusals (forged stamp, >1 MiB payload, small payload) -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=3 == sequence=3
+
+  [clingo raw stdout]
+clingo version 5.8.0
+Reading from ...353d0fff000c5/engine/lp/ledger_tnow.lp ...
+Solving...
+Answer: 1 (Time: 0.002s)
+reaches_genesis(1) reaches_genesis_scoped(1,"principal_registered") reaches_genesis_scoped(1,"principal_role_bound") reaches_genesis_scoped(1,"standing_lifecycle") reaches_genesis_scoped(1,"milestone_closure") reaches_genesis_scoped(1,"gate_edge_supersession") reaches_genesis_scoped(1,"entitlement_class_configured") reaches_genesis_scoped(1,"delegation_lifecycle") reaches_genesis_scoped(1,"independent_verification_delegation")
+SATISFIABLE
+
+Models       : 1
+Calls        : 1
+Time         : 0.002s (Solving: 0.00s 1st Model: 0.00s Unsat: 0.00s)
+CPU Time     : 0.002s
+
+  [clingo raw stderr]
+
+
+=== AGREE-sql-asp-differential ===
+  [ok] SQL principal_authority_chain_reaches_genesis(pid) vs ASP reaches_genesis/1 on the s67-head world -- a non-regression sanity check, since NO derivation reads any refusal_*/stamp_* column -- symmetric_difference=[]
+
+
+ALL GREEN
