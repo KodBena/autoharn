@@ -10,7 +10,8 @@ forecloses the class it belongs to. It is Fable-authored because the fix touches
 `engine/` differential semantics, which CLAUDE.md's orchestration contract gates behind a
 Fable-authored, maintainer-ratified spec. Sonnet builds it once ratified.
 
-- **Status:** AWAITING MAINTAINER RATIFICATION (authored 2026-07-26).
+- **Status:** RATIFIED by the maintainer 2026-07-27 ("Let's start with 1(yes)"); build
+  dispatched the same day.
 - **Basis:** ledger row 1459 (the fixture-sweep triage that witnessed the crash — six
   families RED on this one cause), and the code as read at head: the capability-detection
   path in [`engine/ledger_differential.py`](../engine/ledger_differential.py) (the
