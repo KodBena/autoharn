@@ -127,19 +127,21 @@ EIGHTEEN CASES:
      left explicitly UNEXERCISED -- see the case's own in-file comment for the full account.
 
   l-led-kind-refusal-teach (RED, run-10 row 67's own specimen; the live-taught-vocabulary half is
-     UNEXERCISED-by-design, cluster-1 fixture-repairs aftermath, confirmed live): the SAME real
+     RESTORED 2026-07-27, ledger row 1480 -- see the case's own in-file comment): the SAME real
      `led` shim invoked as `./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."`
      -- an invented kind, refused by the kernel's ledger_kind_check CHECK constraint exactly as
-     run-10 row 67 was. Before BACKLOG "Run-10 closure audit (2026-07-11)" item 1's fix, the agent
-     saw only the bare "violates check constraint ledger_kind_check" text and had to separately
-     query pg_get_constraintdef by hand to learn the valid vocabulary. STILL PROVEN: exit non-zero
-     (the refusal itself is correct and stays a refusal), the ORIGINAL kernel error still visible
-     unrewrapped. NO LONGER REPRODUCIBLE (confirmed live, not assumed): the live-queried
-     valid-kind-list TEACHING half -- `_led_kind_refusal_teach` (e1059ef) was a CLIENT-SIDE
-     re-query tied to the legacy direct-SQL transport; the boundary-CLI rebase (commit 0b6379b)
-     replaced every write with a served HTTP POST whose refusal is the kernel's own s43 typed
-     verdict, with no equivalent re-teaching step ported across -- `out_l` carries no "valid
-     kinds" text anywhere anymore.
+     run-10 row 67 was. Before BACKLOG "Run-10 closure audit (2026-07-11)" item 1's original fix,
+     the agent saw only the bare "violates check constraint ledger_kind_check" text and had to
+     separately query pg_get_constraintdef by hand to learn the valid vocabulary. STILL PROVEN:
+     exit non-zero (the refusal itself is correct and stays a refusal), the ORIGINAL kernel error
+     still visible unrewrapped. RESTORED, not merely re-proven UNEXERCISED: the live-queried
+     valid-kind-list TEACHING half -- dropped by the boundary-CLI rebase (commit 0b6379b), which
+     replaced every write with a served HTTP POST and carried no equivalent re-teaching step --
+     is now served via a NEW `GET /d/{deployment}/kinds` route (SSOT'd off the same live
+     `ledger_kind_check` constraint the legacy direct-psql function queried) plus a CLI-side
+     re-teach pass in serving/boundary_cli_client.py; `out_l` now carries the live valid-kind
+     list alongside the original, unrewrapped kernel error, asserted end-to-end against this
+     real served world.
 
   m-led-kind-refusal-teach-success-unaffected (UNEXERCISED-by-design, cluster-1 fixture-repairs
      aftermath): ORIGINALLY a VALID kind (`decision`) written through TWO shims -- one pointing at
@@ -961,31 +963,37 @@ def main() -> int:
             # what led.tmpl's own header already lists. Real `led` shim (root_i, already
             # s24-capable and s43-capable from the full-chain scaffold above), real refusal, real
             # LIVE re-query -- never a hardcoded second copy of the vocabulary.
+            #
+            # 2026-07-27 RESTORED (ledger row 1480, maintainer ruling on row 1479's finding):
+            # this case's own TEACH assertion below was UNEXERCISED-by-design from the boundary-
+            # CLI rebase (commit 0b6379b) until this date -- `_led_kind_refusal_teach` was a
+            # legacy CLIENT-SIDE direct-psql re-query tied to the direct-SQL transport, and no
+            # equivalent step survived the rebase onto the served HTTP boundary. It is restored
+            # here, on the served transport, via a NEW `GET /d/{deployment}/kinds` route
+            # (serving/boundary_service.py's `_kind_vocabulary`, SSOT'd off the SAME live
+            # `ledger_kind_check` CHECK constraint the legacy function queried) plus a CLI-side
+            # re-teach pass (serving/boundary_cli_client.py's `write_and_report`/
+            # `_kind_refusal_teach`, called after every kernel-refused write). This case now
+            # asserts the FULL restored teach block end-to-end through this real served world:
+            # the original kernel error, unrewrapped, PLUS the live valid-kind list appended by
+            # the CLI's own re-query.
             code_l, out_l = run_led(root_i, ["acceptance-criteria",
                                              "QEUBO smoke-test acceptance criterion (run-10 row-67 specimen)"])
             ck(code_l != 0, f"CASE l: an invented kind must still be REFUSED (non-zero exit), got {code_l}: {out_l[-800:]}")
             ck("ledger_kind_check" in out_l,
                f"CASE l: the original kernel refusal must still be visible, unrewrapped: {out_l[-800:]}")
-            # The "TEACH the live valid-kind list" half of this case is UNEXERCISED-by-design
-            # (cluster-1 fixture-repairs aftermath, confirmed live, not assumed): witnessed,
-            # `out_l` carries no "valid kinds" text at all anymore -- only the kernel's own
-            # unwrapped write-boundary verdict ("REFUSED by the kernel write boundary (SQLSTATE
-            # 23514; journaled as write_refused row N ...): new row for relation "ledger"
-            # violates check constraint "ledger_kind_check""). `_led_kind_refusal_teach`
-            # (e1059ef) was a CLIENT-SIDE re-query (a direct psql `pg_get_constraintdef` lookup)
-            # tied to the legacy direct-SQL transport; the boundary-CLI rebase (commit 0b6379b)
-            # replaced every write with a served HTTP POST whose refusal IS the kernel's own s43
-            # typed verdict, and no equivalent client-side re-teaching step was ported across --
-            # `grep -n "valid kind" bootstrap/templates/led.tmpl` finds nothing. The refusal
-            # itself, and the original unwrapped kernel error, both still hold (asserted above);
-            # only the live-taught vocabulary addition is gone from the CLI layer.
+            ck("valid kinds" in out_l and "acceptance-criteria" not in out_l.split("valid kinds", 1)[1].split(":", 1)[0],
+               f"CASE l: the restored teach block must print the live valid-kind list (never "
+               f"including the invented, invalid kind itself as a member): {out_l[-1200:]}")
+            ck(all(k in out_l for k in ("decision", "finding", "commission")),
+               f"CASE l: the live-queried vocabulary must name real, currently-valid kinds "
+               f"(spot-checked, not the full closed set -- s25's own additive union): {out_l[-1200:]}")
             log.append(f"CASE l (led kind-refusal teach, run-10 row-67 specimen): exit={code_l}, "
-                       f"REFUSED, original ledger_kind_check error preserved (unrewrapped) -- the "
-                       f"live valid-kind-list TEACHING half is UNEXERCISED-by-design: that "
-                       f"client-side re-query mechanism was tied to the legacy direct-SQL "
-                       f"transport and was not ported across the boundary-CLI rebase (commit "
-                       f"0b6379b); confirmed live, no 'valid kinds' text appears anywhere in the "
-                       f"current led.tmpl")
+                       f"REFUSED, original ledger_kind_check error preserved (unrewrapped) AND "
+                       f"the restored live valid-kind-list TEACH block both present -- RESTORED "
+                       f"2026-07-27 (ledger row 1480): GET /d/{{deployment}}/kinds (SSOT'd off "
+                       f"the live ledger_kind_check constraint) plus boundary_cli_client.py's "
+                       f"own re-teach pass, witnessed end-to-end through this real served world")
 
             # ---- CASE m: OLD-vs-NEW byte-identical success path -- UNEXERCISED-BY-DESIGN
             # (cluster-1 fixture-repairs aftermath, confirmed live, not assumed). Confirmed via
@@ -1272,9 +1280,9 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
           "pre-s24-schema capability refusal is UNEXERCISED-by-design -- the served CLI's own "
           "client-side check was removed by the boundary-CLI rebase, confirmed live, see case k); "
           "the ledger_kind_check refusal (case l, run-10 row-67 specimen) still refuses with the "
-          "original unrewrapped kernel error -- its live valid-kind-list TEACHING half is "
-          "UNEXERCISED-by-design (that client-side re-query was tied to the legacy direct-SQL "
-          "transport, not ported across the boundary-CLI rebase, confirmed live); the OLD-vs-NEW "
+          "original unrewrapped kernel error, AND its live valid-kind-list TEACHING half is now "
+          "RESTORED (2026-07-27, ledger row 1480) via a served GET /d/{deployment}/kinds route "
+          "plus a boundary_cli_client.py-side re-teach pass, asserted end-to-end here; the OLD-vs-NEW "
           "byte-identical success-path comparison (case m) is "
           "UNEXERCISED-by-design (the pinned pre-fix SHA predates the entire boundary-CLI "
           "transport rebase, confirmed live via git merge-base); the "

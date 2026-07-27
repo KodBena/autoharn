@@ -21,6 +21,13 @@ fields bounded to the id domain; the body-read phase's own time bound; paginatio
 Read the spec in full, including A2, A3, A4, and A5, before touching this directory; this
 README is an operator's pointer into it, not a restatement.
 
+**Ledger row 1480** (maintainer ruling on row 1479's finding) restores the valid-kinds TEACHING
+the legacy direct-psql `led` gave on a `ledger_kind_check` refusal, dropped by the boundary-CLI
+rebase and never ported: a new `GET /kinds` route (this file's endpoint table below) plus a
+`serving/boundary_cli_client.py`-side re-teach pass (`write_and_report`/`_kind_refusal_teach`).
+No amendment letter of its own — a small, additive read surface, not a hardening pass over
+existing ingress.
+
 ## What this is, in one paragraph
 
 One FastAPI service is the **outer declared boundary** (ADR-0012 P2 Port) into an
@@ -110,11 +117,20 @@ serving.boundary_service`, matching the spec's own launch command).
 service; a fresh host needs `$HOME/w/vdc/venvs/generic/bin/pip install fastapi uvicorn`
 once (pydantic already ships in that venv for other consumers).
 
-## Endpoint table (spec §3, §4, extended by the read-surface amendment's own mechanism section —
-fixed; the route table itself IS the enumeration, spec §9/A2.1, RE-RATIFIED at fourteen)
+## Endpoint table (spec §3, §4, extended by the read-surface amendment's own mechanism section,
+Parts A+B of the legacy-led-retirement spec, the missives spec, and ledger row 1480 — fixed; the
+route table itself IS the enumeration, spec §9/A2.1)
 
-This service carries **exactly fourteen routes** — the ten GETs and four POSTs below — and
-**nothing else**. FastAPI's own self-documentation surface is **disabled, not merely
+This service carries **exactly twenty routes** — the thirteen GETs and seven POSTs below — and
+**nothing else**. (This count corrects a stale "fourteen routes" claim this section carried:
+that number named the read-surface amendment's own closure and was never bumped for the three
+routes design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A+B added — `/write/obligation_revoke`,
+`/artifacts/{hash}`, `/artifacts/{hash}/stat`, `/artifacts` — or for `/write/missive_dispose`
+[design/FABLE-MISSIVES-KERNEL-SPEC.md] — a real, pre-existing doc/fixture drift, found and fixed
+here in passing per CLAUDE.md's engineering-responsibility rule while adding this same table's
+twentieth row, `/kinds`, ledger row 1480; `seen-red/boundary-service/run_fixtures.py`'s own W12
+`EXPECTED_ROUTES` set carried the identical drift and is fixed alongside this table.)
+FastAPI's own self-documentation surface is **disabled, not merely
 unenumerated**: `docs_url=None, redoc_url=None, openapi_url=None` (A2.1), so `/docs`, `/redoc`,
 `/openapi.json`, and `/docs/oauth2-redirect` do not exist on this service at all — there is no
 running-schema self-report to ask, honest or otherwise. The witness suite's W12 asserts this
@@ -129,13 +145,19 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
 | GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s40-identity` (gated on `principal_standing_current` itself, kernel/lineage/s40-principal-identity-events.sql — legacy-led-retirement inventory pass, ledger row 1149: the prior s41-only gate over-narrowed a route that needs only s40) |
 | GET | `/work/items` | `work_item_current`, SLUG-KEYSET-paginated (`?after_slug=&limit=`, bounds below; `after_id` is refused typed 422 on this route, A11) | `s22-work` |
-| GET | `/views/{view}` | one of `VIEW_REGISTRY`'s eleven allowlisted views/tables (`question_status`, `review_gap`, `review_stamp_distinctness`, `standing_decisions`, `countersign_obligation`, `work_item_violations`, `work_review_gap`, `model_attestations`, `model_defeated_rows`, `credited_current`, `work_item_current`), id- or slug-paginated per the view's own natural key (`serving/boundary_service.py`'s own registry comment names each); an unknown `{view}` is a typed 404 `unknown_view` naming the known set | `view:{view}` (object existence) + `view:{view}:{key_col}` (column-shape existence, for a view whose key column arrived at a LATER lineage delta than the view's own name — see `_column_exists`'s own docstring) |
+| GET | `/views/{view}` | one of `VIEW_REGISTRY`'s allowlisted views/tables (`serving/boundary_service.py`'s own registry comment names each and their history), id- or slug-paginated per the view's own natural key; an unknown `{view}` is a typed 404 `unknown_view` naming the known set | `view:{view}` (object existence) + `view:{view}:{key_col}` (column-shape existence, for a view whose key column arrived at a LATER lineage delta than the view's own name — see `_column_exists`'s own docstring) |
 | GET | `/rows/asof/{ts}` | the whole-ledger AS-OF reconstruction (asof-export.tmpl's own "THE QUERY", `l.*` only — no `actor_name` join), id-paginated; `{ts}` is a typed ISO-8601 timestamp, refused typed 422 before any kernel call on malformed input | none |
 | GET | `/meta` | the served view allowlist, this deployment's kernel lineage head (walked via `bootstrap/migrate_core.py`'s own manifest, through THIS service's own admission-gated `_psql`, never migrate_core's bare unbounded runner — see `_lineage_head`'s own docstring), and this service's own version string | none |
+| GET | `/kinds` | `ledger_kind_check`'s live vocabulary (ledger row 1480: restores, on this served transport, the legacy direct-psql `led`'s dropped valid-kinds TEACHING on a kind refusal — see `KindsResponse`'s own docstring in `boundary_models.py` and `_kind_vocabulary`'s own in `boundary_service.py` for the exact query, SSOT'd off the live constraint, never a hardcoded copy) | none (this constraint has carried its exact name since s15 — this repo's first lineage delta with a `ledger` table at all — so every deployment this service could serve carries it) |
+| GET | `/artifacts/{hash}` | one stored artifact's raw bytes, by content-addressed SHA-256 hash | `s51-artifact-store` |
+| GET | `/artifacts/{hash}/stat` | one stored artifact's metadata (size, media type, custody) without its bytes | `s51-artifact-store` |
 | POST | `/write/ledger` | `kernel.ledger_write` | `s43-boundary` |
 | POST | `/write/review` | `kernel.review_write` | `s43-boundary` |
 | POST | `/write/registration` | `kernel.registration_write` | `s43-boundary` |
 | POST | `/write/obligation` | `kernel.obligation_write` | `s43-boundary` |
+| POST | `/write/obligation_revoke` | `kernel.obligation_revoke` | `s43-boundary` |
+| POST | `/write/missive_dispose` | `kernel.missive_dispose` (design/FABLE-MISSIVES-KERNEL-SPEC.md) | `s43-boundary` |
+| POST | `/artifacts` | `kernel.artifact_write` — a dedicated route, not routed through `/write/{surface}` (its payload can approach ~1.4 MiB, past that generic path's own `MAX_PSQL_ARG_BYTES` transport wall — see `artifact_put`'s own docstring) | `s51-artifact-store` |
 
 **Capability detection is object existence** (`to_regclass`/`pg_proc`), never a version
 literal — the same migrate-detect-drift discipline `bootstrap/templates/led.tmpl`'s own s43/s45

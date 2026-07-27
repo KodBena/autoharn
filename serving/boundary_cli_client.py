@@ -398,6 +398,61 @@ def post_artifact(base: str, payload: dict) -> tuple[int, dict]:
     return (0 if body["disposition"] == "accepted" else 1), body
 
 
+def _kind_refusal_teach(base: str, payload: dict) -> None:
+    """Ledger row 1480 (maintainer ruling on row 1479's finding): restores, on this served
+    transport, the legacy direct-psql `led`'s own `_led_kind_refusal_teach` -- called after EVERY
+    kernel-refused write (mirroring the legacy function's own unconditional-call, silent-unless-
+    relevant discipline exactly), never only for writes a caller has pre-flagged as kind-shaped.
+
+    Detection is INDEPENDENT of the kernel's refusal MESSAGE TEXT (never guessed, never matched
+    against a string that could read differently across postgres versions -- the legacy
+    function's own stated reasoning, preserved here verbatim in spirit): if this write's own
+    `kind` value is not a LIVE member of `GET /kinds`' freshly re-queried vocabulary, this refusal
+    certainly was that one, and the valid-kind list is printed alongside the original, unrewrapped
+    kernel error (which `write_and_report` has already written to stderr by the time this runs).
+    If `kind` IS a live member, the refusal was for some other reason entirely (a bad
+    `--supersedes` id, a segregation-of-duties refusal, ...) and this prints nothing -- exactly
+    the legacy function's own silent-if-irrelevant behavior.
+
+    A payload with no `kind` key (registration/obligation/obligation_revoke/review -- see
+    serving/boundary_cli_client.py's own module docstring's exit-code table for the surfaces this
+    can be called for) returns immediately, no HTTP call made at all.
+
+    The re-query itself (`GET /kinds`) can fail for the ordinary reasons any boundary call can --
+    the boundary going unreachable BETWEEN the write's own refusal and this re-query, or the
+    boundary itself refusing the read (e.g. `unknown_deployment` on a badly misconfigured
+    deployment.json, though the write above would already have hit the identical wall). Per this
+    commission's own house rule ("never mask the original error, never hang"): both are caught
+    here, never re-raised past this point (the ORIGINAL write refusal already stands, printed by
+    the caller, and is the one signal that matters if this re-query cannot add to it), and answer
+    with one honest line naming that the kind list could not be fetched -- never silence, never a
+    second, confusing traceback layered on top of the write's own already-reported refusal."""
+    kind = payload.get("kind")
+    if not isinstance(kind, str) or not kind:
+        return
+    try:
+        body = get_json(base, "/kinds")
+    except (BoundaryRefusal, BoundaryUnreachable) as e:
+        sys.stderr.write(
+            f"  (could not re-query the live kind vocabulary to check whether this was a kind "
+            f"refusal: {e} -- the refusal above stands as the only signal.)\n")
+        return
+    live_kinds = body.get("kinds") if isinstance(body, dict) else None
+    if not isinstance(live_kinds, list) or not live_kinds:
+        sys.stderr.write(
+            "  (could not determine the live kind vocabulary to check whether this was a kind "
+            "refusal -- the boundary's /kinds re-query returned no usable list -- the refusal "
+            "above stands as the only signal.)\n")
+        return
+    if kind in live_kinds:
+        return  # kind IS valid -- this failure was for some other reason, stay silent (the
+                 # legacy function's own discipline)
+    sys.stderr.write(
+        f"  '{kind}' is not a member of ledger_kind_check's vocabulary (the refusal above).\n"
+        f"  valid kinds (live, queried from the kernel's own constraint definition -- never "
+        f"hardcoded here): {', '.join(live_kinds)}\n")
+
+
 def write_and_report(base: str, surface: str, payload: dict, *, echo_row_id: bool = True) -> int:
     """The shim-facing convenience every rebased write call site uses (mirrors
     bootstrap/templates/led.tmpl's own `kernel_write()` printing convention byte-for-byte, spec
@@ -406,7 +461,11 @@ def write_and_report(base: str, surface: str, payload: dict, *, echo_row_id: boo
     exit code per this module's own convention. Boundary-level failures (`BoundaryRefusal`/
     `BoundaryUnreachable`) are NOT caught here -- the caller's own top-level dispatch catches
     them once, uniformly, so every rebased verb reports a boundary-vs-kernel refusal identically
-    (ADR-0012 P1; see e.g. `led`'s own `_main` wrapper)."""
+    (ADR-0012 P1; see e.g. `led`'s own `_main` wrapper). A kernel refusal ALSO gets
+    `_kind_refusal_teach`'s own re-teaching pass appended (ledger row 1480, restoring the legacy
+    direct-psql `led`'s dropped valid-kinds TEACHING) -- see that function's own docstring for why
+    this is safe to call unconditionally here (it is a no-op for any payload without a `kind`
+    key, and silent for a refusal whose `kind` value IS live-valid)."""
     exit_code, verdict = post_write(base, surface, payload)
     if exit_code == 0:
         row_id = verdict.get("row_id")
@@ -418,6 +477,7 @@ def write_and_report(base: str, surface: str, payload: dict, *, echo_row_id: boo
         f"journaled as write_refused row {verdict.get('refusal_id')} -- the refusal itself is "
         f"now a committed, hash-chained ledger record, s43):\n"
         f"  {verdict.get('message')}\n")
+    _kind_refusal_teach(base, payload)
     return 1
 
 
