@@ -39,6 +39,16 @@ GREEN (world s68fxmain, chain ends at s68), one case per witnessed branch:
   GREEN-ACTOR-RESOLVED-SESSION-DEFAULT-DECLARED -- no actor key, session's own standing-
                                          declaration default resolves -- actor populated,
                                          disposition='resolved_session_default'.
+  GREEN-ACTOR-OVER-BIGINT-SESSION-DEFAULT-DECLARED -- reviewer's transcribed minor (ledger row
+                                         1563): actor claim matches `^[0-9]+$` but overflows
+                                         bigint (s49's numeric_value_out_of_range handler nulls
+                                         the explicit claim), then the session default resolves
+                                         -- actor populated, disposition='resolved_session_default'.
+  GREEN-ACTOR-NONEXISTENT-ID-SESSION-DEFAULT-DECLARED -- reviewer's transcribed minor (ledger
+                                         row 1563): actor claim is syntactically valid and
+                                         in-range but names no registered principal, then the
+                                         session default resolves -- actor populated,
+                                         disposition='resolved_session_default'.
   GREEN-ACTOR-UNRESOLVABLE-DECLARED    -- a direct owner-role journal_write_refusal() call under a
                                          connecting role with NO principal_role binding at all --
                                          actor NULL, disposition='unresolvable' (the OWN mechanism
@@ -457,6 +467,51 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
               f"world's own login role is bound to author (birth_via_boundary) -- the session "
               f"default resolves, disposition='resolved_session_default' "
               f"(detail={detail_missing!r})", failures)
+
+        # ---- GREEN-ACTOR-OVER-BIGINT-SESSION-DEFAULT-DECLARED (reviewer's transcribed minor,
+        # ledger row 1563): an explicit `actor` claim that matches s49's `^[0-9]+$` regex but
+        # overflows bigint -- journal_write_refusal's own EXCEPTION WHEN numeric_value_out_of_range
+        # handler sets v_attempted := NULL (s49, unchanged by s68), which then falls through to the
+        # SAME session-default resolution the missing-actor-key leg above exercises (this world's
+        # login role is bound to author, birth_via_boundary) -- 'resolved_session_default', NOT
+        # 'unresolvable': the explicit claim was malformed-by-overflow, but the session fallback
+        # still resolves. ----
+        v_overbigint = bw_call(
+            world_main, "ledger_write",
+            {"kind": "note", "statement": "s68 fixture: over-bigint actor claim",
+             "actor": "99999999999999999999999999"})
+        detail_overbigint = (refusal_row(world_main, v_overbigint["refusal_id"])
+                             if v_overbigint["refusal_id"] else "N/A")
+        check("GREEN-ACTOR-OVER-BIGINT-SESSION-DEFAULT-DECLARED",
+              v_overbigint["disposition"] == "refused"
+              and detail_overbigint.split("|")[4] != "<NULL>"
+              and detail_overbigint.split("|")[5] == "resolved_session_default",
+              f"payload actor='99999999999999999999999999' (regex-valid, bigint-overflow) -- "
+              f"the s49 EXCEPTION WHEN numeric_value_out_of_range handler nulls the explicit "
+              f"claim, then the session default resolves: actor populated, "
+              f"disposition='resolved_session_default' (detail={detail_overbigint!r})", failures)
+
+        # ---- GREEN-ACTOR-NONEXISTENT-ID-SESSION-DEFAULT-DECLARED (reviewer's transcribed minor,
+        # ledger row 1563): an explicit `actor` claim that is syntactically valid AND within
+        # bigint's range, but names NO registered principal -- the explicit-resolution SELECT
+        # finds no row, v_attempted stays NULL, and the SAME session-default fallback resolves --
+        # 'resolved_session_default' again, distinct from 'unresolvable' (which additionally
+        # requires the session's OWN default to fail too, GREEN-ACTOR-UNRESOLVABLE-DECLARED below).
+        # ----
+        v_nonexistent = bw_call(
+            world_main, "ledger_write",
+            {"kind": "note", "statement": "s68 fixture: syntactically-valid nonexistent actor id",
+             "actor": "999999999"})
+        detail_nonexistent = (refusal_row(world_main, v_nonexistent["refusal_id"])
+                              if v_nonexistent["refusal_id"] else "N/A")
+        check("GREEN-ACTOR-NONEXISTENT-ID-SESSION-DEFAULT-DECLARED",
+              v_nonexistent["disposition"] == "refused"
+              and detail_nonexistent.split("|")[4] != "<NULL>"
+              and detail_nonexistent.split("|")[5] == "resolved_session_default",
+              f"payload actor='999999999' (syntactically valid, in-range, no such registered "
+              f"principal) -- the explicit-resolution SELECT finds no row, then the session "
+              f"default resolves: actor populated, disposition='resolved_session_default' "
+              f"(detail={detail_nonexistent!r})", failures)
 
         # ---- GREEN-ACTOR-UNRESOLVABLE-DECLARED: a role with NO principal_role binding at all ----
         r_unresolvable = journal_as_unbound_role(

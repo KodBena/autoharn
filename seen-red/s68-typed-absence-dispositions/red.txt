@@ -30,11 +30,17 @@
 === GREEN-ACTOR-RESOLVED-SESSION-DEFAULT-DECLARED ===
   [ok] the GREEN-KIND-ABSENT row: no explicit `actor` key in the payload, but this world's own login role is bound to author (birth_via_boundary) -- the session default resolves, disposition='resolved_session_default' (detail='ledger|23502|<NULL>|absent|1|resolved_session_default')
 
+=== GREEN-ACTOR-OVER-BIGINT-SESSION-DEFAULT-DECLARED ===
+  [ok] payload actor='99999999999999999999999999' (regex-valid, bigint-overflow) -- the s49 EXCEPTION WHEN numeric_value_out_of_range handler nulls the explicit claim, then the session default resolves: actor populated, disposition='resolved_session_default' (detail='ledger|22003|note|extracted|1|resolved_session_default')
+
+=== GREEN-ACTOR-NONEXISTENT-ID-SESSION-DEFAULT-DECLARED ===
+  [ok] payload actor='999999999' (syntactically valid, in-range, no such registered principal) -- the explicit-resolution SELECT finds no row, then the session default resolves: actor populated, disposition='resolved_session_default' (detail='ledger|23503|note|extracted|1|resolved_session_default')
+
 === GREEN-ACTOR-UNRESOLVABLE-DECLARED ===
   [ok] a refusal recorded by a role with NO principal_role binding at all (journal_as_unbound_role) -- actor NULL, disposition='unresolvable' (detail='ledger|22000|note|extracted|<NULL>|unresolvable')
 
 === GREEN-ACCEPTED-WRITE-BYTE-IDENTICAL ===
-  [ok] an ordinary (kind='decision') write's verdict shape is IDENTICAL pre-s68 vs post-s68-birth: pre={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, post={'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+  [ok] an ordinary (kind='decision') write's verdict shape is IDENTICAL pre-s68 vs post-s68-birth: pre={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, post={'row_id': 17, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
 
 === RED-COUPLING-REJECTS-KIND-NULL-WITH-EXTRACTED ===
   [ok] a write_refused row claiming disposition='extracted' but refusal_attempted_kind NULL is REFUSED by the table CHECK itself (stderr tail='ull, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, payload_over_bound, extracted, unresolvable).')
@@ -59,11 +65,11 @@
   [ok] a fresh world's own s40/s43/s68 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
 
 === VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
-  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=5 == sequence=5
+  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=7 == sequence=7
 
   [clingo raw stdout]
 clingo version 5.8.0
-Reading from ...e5107624a5cf1/engine/lp/ledger_tnow.lp ...
+Reading from ...693f21d82b823/engine/lp/ledger_tnow.lp ...
 Solving...
 Answer: 1 (Time: 0.002s)
 reaches_genesis(1) reaches_genesis_scoped(1,"principal_registered") reaches_genesis_scoped(1,"principal_role_bound") reaches_genesis_scoped(1,"standing_lifecycle") reaches_genesis_scoped(1,"milestone_closure") reaches_genesis_scoped(1,"gate_edge_supersession") reaches_genesis_scoped(1,"entitlement_class_configured") reaches_genesis_scoped(1,"delegation_lifecycle") reaches_genesis_scoped(1,"independent_verification_delegation")
