@@ -18,20 +18,22 @@ chain-reach genesis. TWO merged/pending kernel deltas gate on exactly that:
     a hazard broader than ledger row 1390's own framing (found sweeping this file for the SAME
     defect class, CLAUDE.md's hazard-in-reach corollary -- fixed in the same pass, not routed
     around).
-  - kernel/lineage/s62-delegation-lifecycle-gating.sql (NOT YET on main -- branch
-    worktree-agent-a9b3bd5031b11cd5a, commit 680e6e2, the s62 branch's round-3-reviewed HEAD
-    (round 1 closed a critical supersession-classification bypass a fresh-context review found in
-    the first cut, f099ed0; round 2 (row 1403) generalized that fix from one candidate kind to a
-    general target-class supersession gate, via a new entitlement_act_class_of_target function and
-    an entitlement_enforce_class helper applied to BOTH the candidate's own class and (when
-    superseding) the target's class; round 3 is a fresh-context review that CLEARS -- historical
-    pins 4b425b3 (round 1) and any round-2-only SHA are kept only as commit-message/docstring
-    history below, never re-pinned to -- this fixture pins past all three rounds, never to a
-    known-bypassed or since-superseded commit); this fixture cherry-picks its SQL text into this
-    worktree's own kernel/lineage/ via `git show 680e6e2:...`, working-tree only, NEVER committed
-    -- the build's own commit carries only the TUI fix + this fixture family; pinned by the
-    literal SHA, never the branch ref, per this family's own convention (see S62_SRC_COMMIT
-    below)): the
+  - kernel/lineage/s62-delegation-lifecycle-gating.sql (UPDATE, this build: MERGED directly into
+    kernel/lineage/ on main as of commit aa3abfb, past all three review rounds -- round 1 closed a
+    critical supersession-classification bypass a fresh-context review found in the first cut,
+    f099ed0; round 2 (row 1403) generalized that fix from one candidate kind to a general
+    target-class supersession gate, via a new entitlement_act_class_of_target function and an
+    entitlement_enforce_class helper applied to BOTH the candidate's own class and (when
+    superseding) the target's class; round 3 is a fresh-context review that CLEARS. At THIS
+    fixture's own original authoring time s62 was still branch-only (worktree-agent-
+    a9b3bd5031b11cd5a, commit 680e6e2) and this fixture cherry-picked its SQL text into this
+    worktree's own kernel/lineage/ via `git show 680e6e2:...`, working-tree only, at fixture-setup
+    time -- S62_SRC_COMMIT below is KEPT as that historical pin, not re-pinned to a post-merge
+    SHA, but the cherry-pick is now a no-op in practice: `main()`'s own `s62_precopied` check finds
+    the file already committed and skips the `git show`/write/later-unlink entirely, so re-running
+    this fixture against the current tree neither reads S62_SRC_COMMIT nor risks diverging from
+    it -- verified live, this build's own witness run printed no "cherry-picked s62 SQL" line):
+    the
     founding "orchestrator acts-for maintainer" edge (`relate_act`) is `principal_relation_
     asserted`/'acts-for', s62's own SEVENTH authority-bearing act class (delegation_lifecycle).
 
@@ -122,7 +124,7 @@ sys.path.insert(0, str(REPO / "tools" / "setup_tui"))
 import pghost_resolve  # noqa: E402
 from tools.setup_tui import probes  # noqa: E402
 from tools.setup_tui import checklist as ck  # noqa: E402
-from tools.setup_tui.plan import Plan  # noqa: E402
+from tools.setup_tui.plan import CommandAct, Plan  # noqa: E402
 from tools.setup_tui import commit_executor as CE  # noqa: E402
 import tools.setup_tui.steps_principals_authority as spa  # noqa: E402
 from tools.setup_tui import principals_authority as pa_current  # noqa: E402
@@ -351,7 +353,28 @@ def _load_pinned_principals_authority(commit: str, scratch: str):
     """The `principals_authority` module exactly as it stood at `commit` -- `git show`, executed
     in an isolated namespace, the SAME technique seen-red/setup-tui-pure-core-foundation's own
     `_load_pinned_commit_executor` and seen-red/setup-tui-rehearsal-mid-cancel's own
-    `load_old_commit_pane_class` both already use."""
+    `load_old_commit_pane_class` both already use.
+
+    POST-LOAD COMPATIBILITY PATCH (found running this fixture on the post-merge tree, hazard-in-
+    reach, CLAUDE.md): PRE_FIX_COMMIT predates `scaffold-umbrella-migration batch 3` (b528212),
+    which changed `tools.setup_tui.runner.served_led_path`'s return type from a bare `str` to a
+    2-tuple argv PREFIX (`design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md` §6 amendment) -- an
+    UNRELATED, later, already-merged change that landed on a sibling branch and only met this
+    fixture's own pin at the two branches' shared merge commit (7b89d42), never witnessed
+    together before now. Because this loader re-executes the pinned file's OWN top-of-file
+    `from tools.setup_tui.runner import ... served_led_path` against the CURRENT (not pinned)
+    `runner.py`, the pinned module's three act-builders -- written against the OLD str contract,
+    `argv = (led, "sub", ...)` -- now receive a tuple where they expect a string, and
+    `CommandAct.render()` throws `TypeError: sequence item 0: expected str instance, tuple found`
+    before ever reaching the entitlement gate this fixture exists to witness. That crash is pure
+    argv-shape noise, not the actor-authorship defect under test (the pin's `_COMMISSIONER_ENV`
+    forcing is the ONE fact this fixture isolates) -- so the three act-builders are re-bound here,
+    post-load, to the SAME §6-amended splat (`argv = (*led, "sub", ...)`) every OTHER caller in
+    this repo already received, while leaving `extra_env=mod._COMMISSIONER_ENV` (the actual
+    defect) untouched. `charter_register_act` is not re-bound: it never forced LED_ACTOR and was
+    never in this argv-shape bind to begin with (its own docstring, both at this commit and at
+    HEAD, already used the pre-tuple str-`led` shape consistently with the OLD runner.py it was
+    authored against -- verified by inspection of the pinned text, not assumed)."""
     src = sh(["git", "show", f"{commit}:tools/setup_tui/principals_authority.py"], cwd=str(REPO))
     assert src.returncode == 0 and src.stdout.strip(), (
         f"could not read {commit}:tools/setup_tui/principals_authority.py -- {src.stderr}")
@@ -365,6 +388,28 @@ def _load_pinned_principals_authority(commit: str, scratch: str):
     mod = importlib.util.module_from_spec(spec)
     sys.modules["principals_authority_prefix"] = mod
     spec.loader.exec_module(mod)
+
+    def _register_principal_act(dest, name, agent_class, purpose, led=None):
+        led = led if led is not None else mod._served_led(dest)
+        argv = (*led, "register-principal", name, agent_class, "--purpose", purpose)
+        return CommandAct(argv=argv, extra_env=mod._COMMISSIONER_ENV), f"principal-row:{name}"
+
+    def _grant_competence_act(dest, name, activity, band, basis, led=None):
+        led = led if led is not None else mod._served_led(dest)
+        argv = (*led, "principal", "grant-competence", name,
+                "--activity", activity, "--band", band, "--basis", basis)
+        return (CommandAct(argv=argv, extra_env=mod._COMMISSIONER_ENV),
+                f"competence-row:{name}:{activity}")
+
+    def _relate_act(dest, subject, relation, obj, led=None):
+        led = led if led is not None else mod._served_led(dest)
+        argv = (*led, "principal", "relate", subject, relation, obj)
+        return (CommandAct(argv=argv, extra_env=mod._COMMISSIONER_ENV),
+                f"relation-row:{subject}:{relation}:{obj}")
+
+    mod.register_principal_act = _register_principal_act
+    mod.grant_competence_act = _grant_competence_act
+    mod.relate_act = _relate_act
     return mod
 
 
@@ -528,10 +573,16 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching t
             raise RuntimeError(f"could not bind orchestrator's role (setup, not the fix under "
                                 f"test): {v_bind_orch}")
 
-        led62 = str(w62 / "led")
+        # led62: the argv PREFIX for a served `led` call in w62 -- `(<dest>/autoharn, "led")`,
+        # matching `runner.served_led_path`'s own §6-amended shape (found broken here as a bare
+        # `<dest>/led` path, the SAME post-merge argv-shape skew `_load_pinned_principals_
+        # authority`'s own header explains: the per-verb `led` shim this fixture was originally
+        # written against no longer exists post scaffold-umbrella-migration -- only `<dest>/
+        # autoharn led ...` does, `bootstrap/new-project.sh`'s own dispatcher-writing section).
+        led62 = (str(w62 / "autoharn"), "led")
         env_orch = dict(os.environ)
         env_orch["LED_ACTOR"] = "orchestrator"
-        r_subsequent = sh([led62, "register-principal", "probe-one", "subagent",
+        r_subsequent = sh([*led62, "register-principal", "probe-one", "subagent",
                            "--purpose", "subsequent act through the new chain"], env=env_orch)
         check("WORLD-S62-GREEN-subsequent-act-passes-conjunct-b",
               r_subsequent.returncode == 0,
@@ -558,7 +609,7 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching t
                                 f"{v_bind_scout}")
         env_scout = dict(os.environ)
         env_scout["LED_ACTOR"] = "scout"
-        r_scout = sh([led62, "register-principal", "probe-two", "subagent",
+        r_scout = sh([*led62, "register-principal", "probe-two", "subagent",
                      "--purpose", "scout's own subsequent act"], env=env_scout)
         check("WORLD-S62-GREEN-FULL-CEREMONY-scout-subsequent-act",
               r_scout.returncode == 0,
