@@ -178,7 +178,12 @@ twins, not duplicates.
 **Rule (checkable).** A boundary between two concerns is an **explicit port
 with its dependency injected**, not an import-coupling or a reach into the
 other side's internals. The template is the env↔Policy seam: **a new capability
-is a new `Policy` subclass with ZERO core edits.** A Port/ACL boundary
+is a new `Policy` subclass with ZERO core edits.** A Port/ACL boundary — a
+Port/[anti-corruption-layer](../../GLOSSARY.md#anti-corruption-layer) boundary
+(expansion added 2026-07-27 under [ADR-0017](0017-the-zero-context-reader.md) Rule 4,
+which migrates a document to the legibility standard when it is touched; the dated
+reader's glosses in [ADR-0000](0000-the-alpha-and-the-omega-type-driven-design.md)
+already point to this P2 for the definition) —
 **translates-and-validates** — it decodes the foreign representation into the
 native one and rejects what it cannot honor; it does **not** coerce a
 malformed input into a plausible one (a strict-decode boundary — see
@@ -976,6 +981,15 @@ result format).
 
 ### Amendment — 2026-07-02: The corrective diff IS new structure (closing the scope gap the fixes walked through)
 
+*(Reader's gloss, added 2026-07-27 as a dated append — the amendment text below stands
+verbatim per ADR-0005 Rule 8: "CB-NN" codes here and in the later amendments are the
+fact-mining recidivism study's own internal canonical-bug identifiers ("CB" = canonical
+bug), from a project outside this repository; the study's source ledger is
+`experiments/fact-mining/docs/recidivism-study/canonical_ledger.json` in the
+originating codebase, as
+[ADR-0000](0000-the-alpha-and-the-omega-type-driven-design.md)'s own 2026-07-02
+amendment records. "OBS-2" is the same study's observation-numbering.)*
+
 *(Provenance: the fact-mining recidivism study. CB-21: a pass-2 fix placed
 `recv_bounded()` outside the guarded try, re-minting the exact
 outside-the-guard shape pass 1 had found and fixed as CB-18 — two independent
@@ -1165,6 +1179,62 @@ stands unedited per ADR-0005 Rule 8: P10's enforcement-surface declaration lives
 in this paragraph, in the amendment that mints the principle — the same
 disposition the 2026-06-20 amendment used when it extended P7's declaration from
 its own text.*
+
+### Anecdote — 2026-07-27: P1's "home" is read at the unit of CHANGE, not the unit of topic (the monolithic-validator misreading)
+
+*(Dated append per ADR-0005 Rule 8; recorded in
+[ADR-0000](0000-the-alpha-and-the-omega-type-driven-design.md)'s anecdote register —
+the facts carry it. Provenance: the s61 kernel regression of 2026-07-26, project ledger
+rows 1429/1430 (the witnessed four-branch drop), 1432 (the three remedies), and the
+maintainer's own question of 2026-07-27 — "the monolithic validators seem a violation
+of ADR-0012 to begin with?" — which this append answers on the record. A "validator"
+here is a kernel-side `BEFORE INSERT` trigger function that refuses an illegal ledger
+write with a teaching message; the specimen is `validate_supersession_target` in
+[`kernel/lineage/`](../../kernel/lineage/).)*
+
+**The misreading, caught in the act.** P1 says every fact has exactly one home. The
+project's kernel used that rule to justify keeping ALL supersession discipline —
+belief holder-only revision, three missive retraction rules, signature symmetry — as
+branches of one PL/pgSQL function, and the build record praised the shape in P1's own
+vocabulary ("validate_supersession_target's single home"). The 2026-07-26 incident
+showed what that reading missed: those are not one fact but FIVE, and in PL/pgSQL the
+unit of change is the whole function body (`CREATE OR REPLACE` replaces everything),
+so amending any one fact forces re-stating every other from whatever copy the author
+has at hand. One re-issue (`s61`) worked from a stale copy and silently deleted four
+refusal branches while correctly adding its own — and the SQL/ASP differential was
+structurally blind to the drop (a refused write never becomes a row), so nothing
+mechanized caught it.
+
+**The rule, sharpened.** P1's "home" is read at the **unit of change**, never the unit
+of topic: a home whose replace-unit forces you to restate facts your change does not
+touch is not one home — it is N homes trading under one name, each exposed to every
+other's re-issues. The topic-level single home the original reading wanted is
+legitimate, but it belongs to the COMPOSITION — a thin dispatcher that names which
+per-fact leaf functions apply — while each fact keeps its own change-unit-sized home.
+(This is the same granularity move `FeatureLayout` made for the duplicated table in
+P1's worked example, applied to code instead of data.)
+
+**The tell, checkable in review.** A diff that RESTATES rules it does not change is
+the violation surfacing: if your re-issue's body contains the verbatim text of
+refusals your delta has no business touching, the fact-granularity and the
+change-granularity have diverged, and the two ADR-0000 questions fire on sight.
+
+**Scope, honestly.** This bites wherever a language's replace-unit is coarser than the
+fact granularity it carries — SQL function bodies, configuration blocks, template
+files — and it bites hardest where no compiler holds the compositional line (PL/pgSQL
+has no mypy). There the discipline is carried by gates: the project's existing
+precedent is `s35`'s decomposition of an earlier validator family into per-fact leaf
+functions policed by a byte-identity gate, plus the prior-body hash binding
+(`gates/lineage_reissue_lineage.py`) that makes a stale base unrepresentable in any
+re-issue. The specimen monolith's own decomposition is filed as project ledger row
+1432's third remedy, not yet executed at this writing.
+
+**The time-travel claim, stated falsifiably.** Had this append existed before
+2026-07-26, it had three chances to fire: when `s53` added the belief branch to an
+already-two-concern function, when `s58` added three more, and when `s61`'s re-issue
+diff visibly restated four branches it did not intend to change. Any one of the three
+would have prevented the incident; that is why this is recorded as a lesson and not
+only as a repair.
 
 ## License
 
