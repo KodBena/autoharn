@@ -1,14 +1,9 @@
-<!-- doc-attest-exempt: 2026-07-15 doc-table-mechanization commission — the only change at this
-     content hash is three table-separator lines (em-dash to hyphen; gates/doc_tables.py,
-     tools/markdown_tables.py), mechanically proven content-preserving (identical extracted
-     cell stream before/after, see the commit message). No prose changed, so ADR-0017's
-     fresh-context legibility concern does not apply to this touch; no live A:B:C loop was run
-     (this session cannot fork a genuinely fresh reviewer) and this marker does not claim one
-     did. Flagged to the maintainer as a standing exemption on this file rather than a
-     content-hash-scoped one — narrower handling (e.g. a --record entry that names "mechanical,
-     not reviewed" explicitly) may be worth adding to the gate; left as residue, not silently
-     resolved. A future PROSE edit to this file should get a real attestation regardless of
-     this marker's literal wholesale scope. -->
+<!-- The 2026-07-15 doc-table-mechanization exempt marker that stood here is struck per its
+     own closing sentence ("A future PROSE edit to this file should get a real attestation
+     regardless of this marker's literal wholesale scope"): the 2026-07-27 P11 amendment is
+     that prose edit, and its real +A:B:C attestation (two blind rounds, escalated per the
+     2-round cap, adjudicated) is recorded in attestations/doc-legibility-attestations.jsonl
+     for this file's current content hash. -->
 
 # ADR-0012: Compositional and Structural Hygiene
 
@@ -1235,6 +1230,78 @@ already-two-concern function, when `s58` added three more, and when `s61`'s re-i
 diff visibly restated four branches it did not intend to change. Any one of the three
 would have prevented the incident; that is why this is recorded as a lesson and not
 only as a repair.
+
+### Amendment — 2026-07-27: P11 — absence carries a typed reason (NULL is never a meaning-carrier)
+
+*(Provenance: the s67 merge-hold ruling, this project's ledger rows 1539/1541 — the
+"ledger" being this project's append-only decision/audit log, a database read via the
+`./autoharn led` verb rather than a file in this tree, and "s67" one of its numbered
+kernel lineage deltas (`kernel/lineage/sNN-*.sql`),
+held un-merged while the maintainer ruled on its shape. That kernel
+delta proposed recording a refusal-journal digest — the refusal journal being the
+kernel's audit record of refused ledger writes, rows of kind `write_refused` carrying
+a hash (digest) of the refused payload — as NULL when the refused payload
+exceeded a size bound — NULL's meaning, "not computed because over-bound," living in a
+comment and a function body. The fresh-context review argued containment (no code
+consumes the digest today, and sibling columns of the same journal already use NULL
+the same way); the maintainer refused the shape itself, near-verbatim: "NULL as an
+implicit sentinel/meaning-carrier is something I cannot condone here, no matter what the
+no-consumer test is saying — it's a drift hazard," invoking the industry's own name for
+the failure family, the billion-dollar mistake. The economy argument was the wrong test:
+representation explicitness governs, because drift hazards are about future readers, not
+present consumers. Numbered P11 by Fable — the maintainer's primary AI-collaborator
+authoring model, per the orchestration section of this repository's
+[CLAUDE.md](../../CLAUDE.md) — at the
+maintainer's direction to "add this in the appropriate register"; the P10 precedent —
+maintainer promotion to a standalone principle at ratification — is followed
+deliberately.)*
+
+**Rule (checkable).** When a value can be absent and the absence has a REASON any
+reader, gate, or investigator could ever need, that reason is a **representable, typed
+fact** — a disposition column with a closed vocabulary and a coupling constraint, a sum
+type, a tagged option — never a bare NULL/None/sentinel whose meaning lives in
+documentation. The check: *find every nullable column, Optional field, or sentinel
+value whose comment or spec assigns a meaning to the absence; each is a violation
+unless the meaning is also carried by a typed, constraint-coupled companion the
+storage layer itself can enforce.* A NULL with a documented meaning is a bare value
+carrying a contract-by-comment — the exact shape the standing no-bare-types rule bans
+at value granularity (project ledger row 1105, the maintainer's 2026-07-22 commission:
+every value construction goes through one single-source-of-truth home that checks a
+contract appropriate to the value's use case — no bare ints, no bare strings), stated
+here structurally.
+
+**The coupling half, load-bearing.** The typed reason must be TIED to the absence by a
+machine-checkable constraint (the s67 repair's shape:
+`(disposition = 'computed') = (value IS NOT NULL)`), so an accidental future writer
+that produces the absence without declaring the reason is caught structurally. A
+declaration column without the coupling is decoration; the constraint is the rule.
+What the constraint cannot buy — and this is stated, not hidden — is truthfulness of
+the declaration itself: a writer that lies can still satisfy the coupling constraint
+by producing a false disposition token alongside the matching absent-or-present value,
+so the constraint catches accidents, never a consistent lie. That residue is
+[ADR-0002](0002-fail-loudly.md)/[ADR-0011](0011-mechanization-discipline.md) territory
+(loudness and mechanized cross-checks), not representation.
+
+**What this does NOT ban.** Absence with genuinely NO meaning beyond "not applicable
+to this row's kind" is not a sentinel (the kernel's kind-shape idiom: a wide ledger
+table where each row-kind licenses its own column family, so a column is NULL on every
+row of a kind that simply does not carry it) — no reader needs a reason there beyond
+the kind itself, which IS the typed companion. The rule bites exactly when two or more causes of absence exist or can
+arrive, or when one cause is a fact someone might act on.
+
+**Cancer prevented: F (magic constants) generalized to magic ABSENCES, and the P8
+lying-signature family at the value level.** Composes with
+[ADR-0008](0008-classification-discipline.md)'s same-day (2026-07-27)
+vocabulary-register amendment: 0008 governs the vocabulary (absence-reasons are named
+tokens in a closed set); this principle governs the structure (the token is
+constraint-coupled to the absence). Known pre-existing instances at adoption, named
+per ADR-0008 Rule 3 rather than silently grandfathered: two sibling columns of the
+same refusal journal — `refusal_attempted_kind` (delta s65, recording which act kind a
+refused write attempted) and the attempted-actor family (deltas s43/s49, recording who
+attempted it) — both of whose NULLs today mean "not extractable" by documentation
+alone. Their disposition awaits a separate maintainer decision, tracked on the project
+ledger (row 1541; the backlogged codebase audit is work item null-sentinel-audit,
+row 1542).
 
 ## License
 

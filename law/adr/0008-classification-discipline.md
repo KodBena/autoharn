@@ -255,8 +255,51 @@ the discipline working as intended.
 - **Not a substitute for fail-loudly.** When the discipline fails in practice,
   ADR-0002's reactive register catches the resulting silent symptom.
 
+## Amendments
+
+### Amendment — 2026-07-27: NULL is not a vocabulary member (the positive register at the value level)
+
+*(Provenance: the s67 merge-hold ruling, this project's ledger rows 1539/1541 — "s67"
+being one of this project's numbered kernel lineage deltas (`kernel/lineage/sNN-*.sql`),
+held un-merged while the maintainer ruled on its shape. That delta
+proposed letting a column's NULL carry a specific meaning — "no digest was computed,
+because the refused payload exceeded a size cap" (the delta's spec:
+[design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md](../../design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md))
+— with that meaning carried by comment and function body alone. The maintainer refused the
+shape, near-verbatim: NULL as an implicit sentinel/meaning-carrier is a drift hazard
+he cannot condone regardless of any no-consumer argument — the industry's
+billion-dollar-mistake family. Ratified by his same-day direction to add the rule
+here, in this register.)*
+
+When a classification needs an "absent / unknown / not-computed / over-bound" case,
+that case is a **named token in the closed vocabulary** — never the storage layer's
+NULL. NULL is not a tag: it admits no CHECK against a closed set, cannot be told apart
+from a second NULL-producing cause that arrives later, and so is a fuzzy match **by
+construction** — one symbol, unboundedly many future meanings, which is the positive
+register's forbidden move made structural. The deliberately-imprecise-tag exception
+requires exactly that: a TAG, explicit and chosen ("this quantity is suspect,"
+`cited-not-rerun`); an undocumented-or-comment-documented NULL is the opposite of one.
+A meaning-bearing absence therefore ships as a typed companion value under this
+tenet's ordinary rules (closed set, true fit, gap surfaced) — the structural half
+(the companion must be constraint-coupled to the absence) is
+[ADR-0012](0012-compositional-and-structural-hygiene.md)'s same-day amendment P11
+("absence carries a typed reason", its eleventh numbered principle), this amendment's
+twin, not restated here.
+
+Known pre-existing instances at adoption, filed visibly per Rule 3 rather than
+silently grandfathered: the kernel refusal journal's attempted-kind column (delta s65,
+whose own LIMITS section already concedes its NULL conflates causes) and its
+attempted-actor sibling (deltas s43/s49); their disposition is a separate maintainer
+decision (ledger row 1541), and a codebase-wide
+audit against this amendment is a filed, backlogged work item on the project ledger
+(work item null-sentinel-audit, row 1542) —
+deliberately not executed the day the rule landed.
+
 ## License
 
 Public Domain (The Unlicense).
 
-<!-- doc-attest-exempt: mechanical, content-preserving edit (usability review, ledger row 1180, 2026-07-23, finding 16) -- the single existing word "chocofarm" at its first plain-text mention in this file was wrapped in a markdown link to GLOSSARY.md#omega-and-chocofarm (the Stand-Alone Principle's own first-use-link requirement, GLOSSARY.md#stand-alone-principle, applied here for the first time). No other character in this file changed; the rule content this ADR states is untouched. This mechanical class of edit is authorized by the maintainer's vested-judgment commission for this round (ledger row 1180), not a semantic change to law/ requiring further ceremony. Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for its actual rule content, not just a link wrap. -->
+<!-- The 2026-07-23 mechanical-edit exempt marker that stood here (link-wrap of one word,
+ledger row 1180) is struck per its own removal condition: this file has now been touched
+for actual rule content (the 2026-07-27 amendment above), and the real A:B:C loop ran on
+that edit -- see attestations/doc-attestation records for this file. -->
