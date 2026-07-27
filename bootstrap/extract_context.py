@@ -198,13 +198,26 @@ def build_provenance(dep, deployment_path: Path, mode: str, extracting_principal
         if head:
             chain_head_id, chain_head_hash = head[0][0], head[0][1]
 
-    vc_path = project_root / "verify-chain"
-    if vc_path.exists() and os.access(vc_path, os.X_OK):
-        r = subprocess.run([str(vc_path)], capture_output=True, text=True,
+    # root-shim-pruning residue sweep (ledger row 1357, 2026-07-27): a bare per-verb
+    # `verify-chain` shim only exists next to deployment.json for a world scaffolded BEFORE the
+    # §6 amendment (rows 1365/1366/1367) -- "a world scaffolded before this migration keeps its
+    # ten shims untouched" (CLAUDE.md). A world scaffolded on/after that amendment has ONE
+    # `autoharn` dispatcher instead; detect shape rather than assume either.
+    vc_bare = project_root / "verify-chain"
+    vc_dispatcher = project_root / "autoharn"
+    if vc_bare.exists() and os.access(vc_bare, os.X_OK):
+        vc_argv = [str(vc_bare)]
+    elif vc_dispatcher.exists() and os.access(vc_dispatcher, os.X_OK):
+        vc_argv = [str(vc_dispatcher), "verify-chain"]
+    else:
+        vc_argv = None
+    if vc_argv is not None:
+        r = subprocess.run(vc_argv, capture_output=True, text=True,
                             cwd=str(project_root), timeout=60)
         verify_chain_output = (r.stdout + r.stderr).strip()
     else:
-        verify_chain_output = f"UNAVAILABLE: no executable verify-chain shim at {vc_path}"
+        verify_chain_output = (f"UNAVAILABLE: no executable verify-chain shim and no autoharn "
+                                f"dispatcher at {project_root}")
 
     return {
         "record": "provenance",
@@ -493,28 +506,38 @@ def _load_manifest(path: Path) -> tuple[dict, list[dict], dict | None]:
     return provenance, items, review
 
 
-def _find_led(project_root: Path) -> Path | None:
+def _find_led(project_root: Path) -> list[str] | None:
     """legacy-led-retirement (ledger row 1149): the direct-psql `legacy/led` original is
-    RETIRED -- every surface, this one included, resolves the served `./led` (the boundary_url/
+    RETIRED -- every surface, this one included, resolves the served `led` (the boundary_url/
     boundary_deployment-requiring HTTP client, bootstrap/templates/led.tmpl) and no other path.
     This is a genuine behavior change from the pre-retirement docstring here (which preferred
     `legacy/led` specifically so ingestion would not depend on a boundary service being wired at
     all) -- named, not silently absorbed: a target deployment with no boundary configured (no
     `boundary_url`/`boundary_deployment` in its own deployment.json) now REFUSES here with
-    `./led`'s own teach-text (bcc.load_served_config's own message, exit 4) rather than silently
+    `led`'s own teach-text (bcc.load_served_config's own message, exit 4) rather than silently
     falling back to a byte-for-byte legacy original that no longer exists in a post-retirement
-    checkout. No candidate search remains -- there is exactly one lawful `led` per world."""
-    cand = project_root / "led"
-    if cand.exists() and os.access(cand, os.X_OK):
-        return cand
+    checkout. No candidate search remains -- there is exactly one lawful `led` per world.
+
+    Root-shim-pruning residue sweep (ledger row 1357, 2026-07-27): a bare per-verb `led` shim
+    only exists next to deployment.json for a world scaffolded BEFORE the §6 amendment (rows
+    1365/1366/1367) -- "a world scaffolded before this migration keeps its ten shims untouched"
+    (CLAUDE.md). A world scaffolded on/after that amendment has ONE `autoharn` dispatcher
+    instead. Returns the leading argv (a bare-shim path, or `[autoharn, "led"]`) rather than a
+    single Path, so callers can invoke either shape uniformly."""
+    bare = project_root / "led"
+    if bare.exists() and os.access(bare, os.X_OK):
+        return [str(bare)]
+    dispatcher = project_root / "autoharn"
+    if dispatcher.exists() and os.access(dispatcher, os.X_OK):
+        return [str(dispatcher), "led"]
     return None
 
 
-def _run_led(led: Path, args: list[str], actor: str, cwd: Path) -> subprocess.CompletedProcess:
+def _run_led(led: list[str], args: list[str], actor: str, cwd: Path) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["LED_ACTOR"] = actor  # EVERY invocation sets this explicitly (row 1943 lesson (a)) --
     # never inherited from whatever the ambient environment happened to carry.
-    return subprocess.run([str(led), *args], capture_output=True, text=True, cwd=str(cwd), env=env)
+    return subprocess.run([*led, *args], capture_output=True, text=True, cwd=str(cwd), env=env)
 
 
 REASSERT_MARKER = "re-asserted from {world}:"

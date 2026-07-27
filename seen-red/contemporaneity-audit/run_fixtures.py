@@ -100,10 +100,13 @@ EIGHTEEN CASES:
      the engine-side-only annotation Proposal 1 specifies, no vocabulary change.
 
   i-led-event-time-cli-success (GREEN, the CLI twin of case (f)'s SQL-level proof): a real `led`
-     shim (the same 3-line exec-wrapper `bootstrap/new-project.sh` writes into every scaffolded
-     world) invoked as `./led --event-time <iso> finding "..."` against the s24-capable
-     `contempprobe` schema -> exit 0, the row lands with `event_declared_ts` set to the declared
-     value, read back via a direct SELECT.
+     shim (this fixture's own hand-written 3-line exec-wrapper, `_make_led_shim()` below --
+     root-shim-pruning residue sweep, ledger row 1357: a freshly scaffolded world no longer
+     carries a bare per-verb `./led` file of its own to reuse, only the ONE `autoharn`
+     dispatcher, so this fixture writes the equivalent thin exec-wrapper directly rather than
+     depending on the scaffold's own output shape) invoked as `./led --event-time <iso> finding
+     "..."` against the s24-capable `contempprobe` schema -> exit 0, the row lands with
+     `event_declared_ts` set to the declared value, read back via a direct SELECT.
 
   j-led-event-time-cli-coverage-refusal (RED): the SAME shim invoked as `./led --event-time <iso>
      work open <slug> <title>` -> exit 1, REFUSED, naming that `--event-time` is only supported
@@ -404,10 +407,14 @@ def scaffold_nw(tmpdir: Path) -> tuple[object, Path, int]:
 
 def _make_led_shim(root: Path, tmpl_path: Path | None = None,
                     extra_env: dict[str, str] | None = None) -> None:
-    """Write the SAME 3-line exec-wrapper bootstrap/new-project.sh writes into every scaffolded
-    world's `./led` (BACKLOG maintainer ruling 2026-07-11, "live verbs") -- so cases (i)/(j)/(k)/
-    (l)/(m) exercise the REAL led.tmpl through the REAL shim mechanism, not a hand-rolled
-    substitute. `tmpl_path` overrides the real, current led.tmpl -- case (m) alone uses this, to
+    """Write a 3-line exec-wrapper equivalent to the one bootstrap/new-project.sh used to write
+    into every scaffolded world's `./led` before the §6 amendment (rows 1357/1365/1366/1367):
+    a fresh scaffold now writes ONE `autoharn` dispatcher instead, no standalone per-verb `led`
+    file to reuse here, so this fixture writes its own thin wrapper directly (BACKLOG maintainer
+    ruling 2026-07-11, "live verbs") -- so cases (i)/(j)/(k)/(l)/(m) still exercise the REAL
+    led.tmpl through the REAL shim mechanism (same exec shape the dispatcher's own per-verb
+    routing uses), not a hand-rolled substitute. `tmpl_path` overrides the real, current
+    led.tmpl -- case (m) alone uses this, to
     point one shim at this commit's PARENT led.tmpl (the pre-fix file, read via `git show`) for a
     genuine old-vs-new comparison; every other case leaves this at the default (the real file).
     `extra_env` -- case (m)'s OLD shim also passes AUTOHARN explicitly: the production shim

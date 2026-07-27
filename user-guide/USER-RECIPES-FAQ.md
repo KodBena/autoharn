@@ -580,7 +580,7 @@ requirement is grounded in — quoted verbatim below, not paraphrased). Witnesse
 refusal text from `bootstrap/templates/led.tmpl`'s own source):
 
 ```sh
-$ ./led register-principal nopurpose model
+$ ./autoharn led register-principal nopurpose model
 ```
 ```
 led register-principal: REFUSED -- --purpose is mandatory on an s40 kernel: a
@@ -590,7 +590,7 @@ usage: led register-principal <name> <human|model|subagent|tool> --purpose "<why
 ```
 (exit 1). Supply `--purpose` and it constructs:
 ```sh
-$ ./led register-principal reviewer2 model --purpose "second-tier model reviewer"
+$ ./autoharn led register-principal reviewer2 model --purpose "second-tier model reviewer"
 ```
 Re-registering the same name is never a silent no-op — both class polarities refuse loudly
 (`seen-red/s40-principal-identity-events/red.txt`, cases `register-duplicate-same-class` and
@@ -616,7 +616,7 @@ source: `db_role="$ROLE"` unless overridden) — the same `role` value your depl
 — rotating which principal your world's OWN connection role speaks for — you never need to
 pass `--db-role` at all:
 ```sh
-$ ./led principal declare-standing reviewer2
+$ ./autoharn led principal declare-standing reviewer2
 ```
 Only pass `--db-role <name>` explicitly when declaring standing for a DIFFERENT Postgres role
 than the one your `deployment.json` already names — e.g. a second writer role your world's
@@ -627,7 +627,7 @@ declaration (this is how you rotate which principal a role speaks for).
 *Binding a role.* Role text is free, non-empty, organizational text, not a closed vocabulary
 (ratified §9(c) — role naming is organizational configuration, not the harness's to impose):
 ```sh
-$ ./led principal bind-role reviewer2 --role "sql-review"
+$ ./autoharn led principal bind-role reviewer2 --role "sql-review"
 ```
 
 *Granting competence* — the [safety-critical-logging BRIEF](../law/briefs/safety-critical-logging/BRIEF.md)'s
@@ -635,7 +635,7 @@ $ ./led principal bind-role reviewer2 --role "sql-review"
 what safety activity, at what band, on what basis" — a competence assignment or its change),
 recordable but NOT gating (nothing in v1 refuses an act for lack of a matching grant):
 ```sh
-$ ./led principal grant-competence reviewer2 --activity "sql-review" --band "B" --basis "track record on s37-s39"
+$ ./autoharn led principal grant-competence reviewer2 --activity "sql-review" --band "B" --basis "track record on s37-s39"
 ```
 Witnessed lifecycle (`seen-red/s41-principal-bindings-and-relations/red.txt`, case
 `competence-lifecycle`): *"grant OK (view: 'sql-review|B'); duplicate refused; empty band
@@ -649,7 +649,7 @@ settled judgment that a closed band vocabulary (ASIL/SIL/DAL-style) is never com
 *Relating two principals* — the closed vocabulary is `acts-for`, `dispatched-by`,
 `same-natural-person`, `succeeds`:
 ```sh
-$ ./led principal relate reviewer2 acts-for reviewer3
+$ ./autoharn led principal relate reviewer2 acts-for reviewer3
 ```
 Self-edges refuse at the kernel, both via the CLI and via a raw direct write
 (`seen-red/s41-principal-bindings-and-relations/red.txt`, case `self-edges-refused`: *"all
@@ -671,8 +671,8 @@ every retraction stays visible in the raw ledger history regardless.
 
 *Suspending or revoking a principal, and the honest limit on getting back.*
 ```sh
-$ ./led principal suspend reviewer2 "on leave"
-$ ./led principal revoke reviewer2 "compromised"
+$ ./autoharn led principal suspend reviewer2 "on leave"
+$ ./autoharn led principal revoke reviewer2 "compromised"
 ```
 Writes under a suspended-or-revoked principal then refuse at the kernel (witnessed,
 `seen-red/s40-principal-identity-events/red.txt`, case `revoke-refuses-writes /
@@ -683,8 +683,8 @@ which order they landed in** (case `precedence-both-orders`: *"suspend-then-revo
 'revoked', revoke-then-suspend reads 'revoked'"*). The only way back to an active identity is
 registering a fresh successor principal and recording the succession:
 ```sh
-$ ./led register-principal reviewer2-successor model --purpose "reviewer2's replacement identity"
-$ ./led principal relate reviewer2-successor succeeds reviewer2
+$ ./autoharn led register-principal reviewer2-successor model --purpose "reviewer2's replacement identity"
+$ ./autoharn led principal relate reviewer2-successor succeeds reviewer2
 ```
 This is a new identity, not a reinstated old one — a real, if heavier, escape hatch, disclosed
 as a deliberate v1 limit rather than an oversight.
@@ -719,7 +719,7 @@ recipe is [design/MAINT-GPG-TRUST-LAYER.md](../design/MAINT-GPG-TRUST-LAYER.md) 
 that DOES already exist today, on top of that binding, is an ordinary countersign — a review row
 regarding the binding event, using the same verb every other ledger row is countersigned with:
 ```sh
-$ ./led review <bind-key-row-id> attest technical "fingerprint verified against a witnessed key-signing party"
+$ ./autoharn led review <bind-key-row-id> attest technical "fingerprint verified against a witnessed key-signing party"
 ```
 (`led review`'s independence argument requires a stamp-distinct invocation — one whose HMAC
 stamp (the session-identifying tripwire described just below) differs from the row being
@@ -829,11 +829,11 @@ The construction, worked end to end (verbs and refusal text from `s39-blocks-sta
 `led.tmpl`'s own source — read-from-DDL where not independently re-witnessed in this pass):
 
 ```sh
-./led work open v2-release   --title "v2.0.0 ships"        # the milestone
-./led work open spa-polish   --title "SPA polish pass"
-./led work depends spa-polish v2-release --type blocks-start   # judgment, spent once
+./autoharn led work open v2-release   --title "v2.0.0 ships"        # the milestone
+./autoharn led work open spa-polish   --title "SPA polish pass"
+./autoharn led work depends spa-polish v2-release --type blocks-start   # judgment, spent once
 
-./led work claim spa-polish
+./autoharn led work claim spa-polish
   → REFUSED (write_refused row journaled, s43):
     "Ledger policy: claim of work item 'spa-polish' refused — its blocks-start
      antecedent(s) are not yet resolved: v2-release (item is not yet closed).
@@ -843,16 +843,16 @@ The construction, worked end to end (verbs and refusal text from `s39-blocks-sta
      recipe, 'Correcting the record' above) ..."
 
 # ... months later, v2 ships. The flip, at whichever grade the act warrants:
-./led work claim v2-release
-./led work close v2-release shipped --witness "tag v2.0.0"
+./autoharn led work claim v2-release
+./autoharn led work close v2-release shipped --witness "tag v2.0.0"
 #   under s60: v2-release carries an INBOUND blocks-start edge (spa-polish depends on
 #   it), so its close is entitlement-gated -- accepted only from an actor whose
 #   in-force role binding covers milestone closure (conjunct a) and whose authority
 #   chain reaches genesis (conjunct b); optionally commissioned SIGNED for
 #   non-repudiation (a future rung, not yet built -- see the note below).
 
-./led work startable         # spa-polish now listed (work_startable, s39 Element 5)
-./led work claim spa-polish  # accepted; work proceeds
+./autoharn led work startable         # spa-polish now listed (work_startable, s39 Element 5)
+./autoharn led work claim spa-polish  # accepted; work proceeds
 ```
 
 **What counts as a "milestone" for entitlement purposes.** Only a work item that itself carries
@@ -1039,7 +1039,7 @@ the role at a fabricated tombstone principal (a real misattribution risk). s45 a
 sanctioned third way:
 
 ```sh
-$ ./led principal undeclare-standing
+$ ./autoharn led principal undeclare-standing
 ```
 
 (`--db-role <role>` is only needed if you are unbinding a role other than your own
@@ -1057,8 +1057,8 @@ practice, even though the vocabulary implied it was temporary. s45 makes it genu
 reversible:
 
 ```sh
-$ ./led principal suspend reviewer2 "on leave"
-$ ./led principal lift-suspension reviewer2
+$ ./autoharn led principal suspend reviewer2 "on leave"
+$ ./autoharn led principal lift-suspension reviewer2
 ```
 
 Once lifted, `reviewer2`'s writes are accepted again. **Revocation stays terminal by type —
@@ -1175,7 +1175,7 @@ fully visible in raw history, always shown together with its cause. **WITNESSED*
 read-only against this repository's own live world (2026-07-18):
 
 ```sh
-$ ./judge --layer defeat
+$ ./autoharn judge --layer defeat
 ```
 ```
 # marriage differential -- layer='defeat'
@@ -1904,8 +1904,8 @@ queue's state is *derived* from whichever row for a given SLUG has the highest l
 Copy-paste examples:
 
 ```sh
-./led decision "review: key-generation | 1 | decide the signing-key generation ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
-./led decision "review-done: key-generation | approved the brief's proposed ceremony as written"
+./autoharn led decision "review: key-generation | 1 | decide the signing-key generation ceremony | design/MAINT-MAINTAINER-DECISION-BRIEF.md"
+./autoharn led decision "review-done: key-generation | approved the brief's proposed ceremony as written"
 ```
 
 `./pickup`'s `MAINTAINER-REVIEW-QUEUE` section prints every open entry rank-ascending, each with
@@ -2160,7 +2160,7 @@ another:
   `deployment.json` with the two keys deliberately stripped out (a `--profile tracker` deployment,
   the modern standing work tracker, gets both keys automatically now — see below):
   ```
-  $ ./led --recent 3
+  $ ./autoharn led --recent 3
   led: deployment record at .../deployment.json is missing required-for-the-served-shim
   field(s): boundary_url, boundary_deployment (... refused-if-absent, never guessed. Add both
   keys to .../deployment.json, or run the ./legacy/ original instead.
@@ -2418,7 +2418,7 @@ Yes, as of `6677b2d` — every `led` write path prints `row <id> written.` on su
 review: row 42 written.`, `led register-principal: row 7 written.`), instead of leaving you to
 go find the id with a follow-up query. WITNESSED, against `autoharn1`:
 ```
-$ ./led decision "documentation witness probe (orchlog.d / FAQ authoring task): confirming the
+$ ./autoharn led decision "documentation witness probe (orchlog.d / FAQ authoring task): confirming the
   row-id echo on a live write path; no operational effect intended"
 SET
 SET
@@ -2438,7 +2438,7 @@ an incapable target asked for BY NAME still refuses loudly (`QUARANTINED`). WITN
 forms against `autoharn1` (a world with `s22` work but no `s41` identity, so the `defeat` layer
 has no grant substrate here):
 ```
-$ ./judge
+$ ./autoharn judge
 # marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
 ## layer='tnow'
   [OK ] autoharn1 AGREE              asp=2991 sql=2991 atoms; Δasp=[] Δsql=[]
@@ -2450,7 +2450,7 @@ $ ./judge
        the 'defeat' layer has no grant substrate here, capability absent, not record-empty
 # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
 
-$ ./judge --layer defeat
+$ ./autoharn judge --layer defeat
   [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
           asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not
           emit trust_grant/n (capability absent): no principal_binding_active/
@@ -2478,7 +2478,7 @@ generic unrecognized-flag refusal instead of the same usage-and-exit-0 teach eve
 subcommand's `--help` gets). WITNESSED, `autoharn1`, row count unchanged across all three forms
 (`--recent 1`'s leading id was `1567` before and after):
 ```
-$ ./led decision --help
+$ ./autoharn led decision --help
 usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list: ...)
        led --recent [N] | led current [N] | led show <id> | led question-status | ...
        ...
@@ -2493,7 +2493,7 @@ exit 0.)
 positionals are already present ahead of the token. WITNESSED, `autoharn1`, row count unchanged
 (`1567` before and after):
 ```
-$ ./led review --help
+$ ./autoharn led review --help
 usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
        verdict: attest|attest_with_reservations|refuse
        independence: self-review|technical|managerial|financial
@@ -2508,7 +2508,7 @@ guard (`bootstrap/templates/led.tmpl` ~line 2501) before `check_help_or_dash_fir
 count unchanged), but the exit code is **1**, not 0. The exit-0 path only fires once the three
 positionals precede the token:
 ```
-$ ./led review 1 attest self-review --help
+$ ./autoharn led review 1 attest self-review --help
 usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
        verdict: attest|attest_with_reservations|refuse
        independence: self-review|technical|managerial|financial
@@ -2525,7 +2525,7 @@ It REFUSES, teaching, rather than silently committing the word as statement pros
 closure this item's title names. WITNESSED, `autoharn1`, row count unchanged (`1567` before and
 after):
 ```
-$ ./led note -weirdflag "rest of statement"
+$ ./autoharn led note -weirdflag "rest of statement"
 led: REFUSED -- the statement's first word '-weirdflag' is dash-leading, which reads as
   a misplaced or mistyped flag rather than intended statement prose (item
   led-help-token-closure -- the same shape refuse_flag_in_statement forecloses for
@@ -2568,11 +2568,11 @@ WITNESSED, `autoharn1`, all zero-write (row count `1567` before and after every 
 argument validation and the capability check both run before `kernel_write` is ever called, so
 none of these reach a place that could write):
 ```
-$ ./led --json bogus /tmp/whatever.json
+$ ./autoharn led --json bogus /tmp/whatever.json
 led --json: REFUSED -- usage: led --json <ledger|review|registration|obligation> <file|->
   '<surface>' selects which s43 boundary function ... Got: 'bogus'.
 
-$ ./led --json ledger /tmp/does-not-exist.json
+$ ./autoharn led --json ledger /tmp/does-not-exist.json
 led --json: REFUSED (capability_absent, naming s43) -- this world's kernel does not
   carry kernel/lineage/s43-typed-verdict-write-boundary.sql, mirroring the FastAPI
   boundary service's own pre-s43 refusal ... Use the ordinary prose CLI on this world instead.
@@ -2589,13 +2589,13 @@ row id) — that is the surface `run_fixtures.py` and the boundary-service spec 
 By default, just what is open or claimed — closed items are hidden, not deleted; nothing about
 the ledger itself changes. `--all` restores the full historical view. WITNESSED, `autoharn1`:
 ```
-$ ./led work list | tail -1
+$ ./autoharn led work list | tail -1
 (56 rows)
-$ ./led work list | grep -c '| closed'
+$ ./autoharn led work list | grep -c '| closed'
 0
-$ ./led work list --all | tail -1
+$ ./autoharn led work list --all | tail -1
 (242 rows)
-$ ./led work list --all | grep -c '| closed'
+$ ./autoharn led work list --all | grep -c '| closed'
 186
 ```
 56 + 186 = 242: `--all` adds exactly the closed rows back, nothing else changes. The choice is
@@ -2605,7 +2605,7 @@ work asof <timestamp>` and the raw ledger rows remain the complete, unfiltered r
 of which view `work list` shows you. An unrecognized flag refuses rather than silently falling
 through:
 ```
-$ ./led work list --bogus
+$ ./autoharn led work list --bogus
 usage: led work list [--all]
 $ echo $?
 1
@@ -2633,10 +2633,10 @@ open/claimed/closed view. WITNESSED, this checkout's own world, a real supersess
 before the supersession still shows the superseded row in force, a moment after shows the
 superseding row instead, same row count either side:
 ```
-$ ./asof-export read --asof "2026-07-18 13:20:00" | grep -E "ledger id=158[34]|Row count"
+$ ./autoharn asof-export read --asof "2026-07-18 13:20:00" | grep -E "ledger id=158[34]|Row count"
 Row count    : 1501
 --- row 1501/1501 (ledger id=1583) ---
-$ ./asof-export read --asof "2026-07-18 13:25:00" | grep -E "ledger id=158[34]|Row count"
+$ ./autoharn asof-export read --asof "2026-07-18 13:25:00" | grep -E "ledger id=158[34]|Row count"
 Row count    : 1501
 --- row 1501/1501 (ledger id=1584) ---
 ```
@@ -2644,7 +2644,7 @@ The as-of filter is the row's own `ts` (system insert time, never writer-supplie
 `event_declared_ts`, which is honest only as far as the declaring writer is honest. A bad
 `--asof` value REFUSES loudly rather than returning an empty read, WITNESSED (exit 2):
 ```
-$ ./asof-export read --asof bogus-not-a-timestamp
+$ ./autoharn asof-export read --asof bogus-not-a-timestamp
 asof-export read: REFUSED -- as-of query failed: ERROR:  invalid input syntax for type timestamp with time zone: "bogus-not-a-timestamp"
 LINE 5:   WHERE l.ts <= 'bogus-not-a-timestamp'::timestamptz
                         ^
@@ -2658,7 +2658,7 @@ or just to keep?** Yes — `./asof-export export --asof <ts> --out <dir>` writes
 ledger — `export` is read-only against the ledger itself, its only writes are the three
 named files under the `--out` directory you give it):
 ```
-$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+$ ./autoharn asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
 asof-export export: wrote /tmp/asof-demo/ledger-asof.txt, /tmp/asof-demo/ledger-asof.json, /tmp/asof-demo/manifest.sha256 (1501 row(s) as of 2026-07-18 13:25:00).
   Verify with: (cd /tmp/asof-demo && sha256sum -c manifest.sha256)
   Signing is DEFERRED (standing maintainer crypto ruling) -- this manifest is an UNSIGNED sha256 content hash only. It lets a copy be checked against the bytes it left as; it proves neither who exported it nor that a differently-regenerated copy wasn't substituted for it. No inert --sign flag is offered by this verb.
@@ -2669,7 +2669,7 @@ ledger-asof.json: OK
 Re-running `export` at the same `--out` REFUSES rather than silently clobbering an existing
 inspection copy — an evidentiary export is not overwritten by accident. WITNESSED:
 ```
-$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+$ ./autoharn asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
 asof-export export: REFUSED -- 3 output file(s) already exist under /tmp/asof-demo: ['/tmp/asof-demo/ledger-asof.txt', '/tmp/asof-demo/ledger-asof.json', '/tmp/asof-demo/manifest.sha256']
   An inspection copy is not silently overwritten (ADR-0002). Pass --force to replace it deliberately, or choose a different --out.
 $ echo $?
@@ -2853,7 +2853,7 @@ an earlier version wrongly folded the two together).
 All five were WITNESSED on a scratch deployment (`bootstrap/new-project.sh --new-world`, torn
 down after). The first case shows what happens with no commission row at all:
 ```sh
-$ ./verify-commission
+$ ./autoharn verify-commission
 ```
 ```
 verify-commission: no commission row found (any commission row) in faq11probe.ledger
@@ -2987,7 +2987,7 @@ Flipping the mode to `observe` (with the STALE probe-doc.md and four scaffold-sk
 NO-ATTESTATION docs from above still in place, plus one open+claimed work item added to also
 exercise the WORK-ITEMS line in the same pass) then produces:
 ```sh
-$ ./distance-to-clean
+$ ./autoharn distance-to-clean
 ```
 ```
 ### SECTION: DISTANCE-TO-CLEAN
@@ -3108,9 +3108,9 @@ same `faqwit0718` family this page's scratch demonstrations use (torn down after
 section](USER-SHAPED-RECIPES-FAQ.md#the-bookkeeping-close-pairing-convention) for the scaffold
 command this family of worlds is built with):
 ```
-$ ./led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
+$ ./autoharn led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
 led: row 18 written.
-$ ./led decision "FAQ-DEMO systemic question: illustrative record showing the split -- a policy question this incident surfaces, filed as its own row rather than folded into the incident verdict above, and routed to the owning authority rather than self-adjudicated."
+$ ./autoharn led decision "FAQ-DEMO systemic question: illustrative record showing the split -- a policy question this incident surfaces, filed as its own row rather than folded into the incident verdict above, and routed to the owning authority rather than self-adjudicated."
 led: row 19 written.
 ```
 Two separate, independently-citable rows — nothing here forces the split; it is the discipline

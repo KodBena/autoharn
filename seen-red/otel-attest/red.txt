@@ -144,3 +144,43 @@ ALL OK
 -- 
 -- 
 -- FAILURES: ['L1-exact-command-single-candidate', 'L1-two-agreeing-candidates-NOT-exact-command', 'L2-ambiguous-mismatch-writes-attestation', 'L2-ambiguous-mismatch-companion-finding', 'L2-ambiguous-unevaluated-writes-attestation', 'L2-ambiguous-unevaluated-companion-finding', 'L3-delimiter-refused-at-write-time', 'L5-idempotency-skips-already-attested', 'L6-verification-lands-finding-fails-nonzero-exit']
+
+-- Dated correction, 2026-07-27 (ADR-0005 Rule 8: the record above stands verbatim; this append
+-- records the CURRENT state) -- retired-bare-shim straggler sweep (root-shim-pruning residue,
+-- ledger row 1357). FIXED, verified: `otel-attest`'s own `led()` helper shelled to
+-- `world / "led"` and `main()` checked `(args.world / "led").exists()` -- both retired paths,
+-- including for this repo's OWN root (the --world default), which now has only `./autoharn`.
+-- Repointed to `subprocess.run([world / "autoharn", "led", *args])` and
+-- `(args.world / "autoharn").exists()`; docstring/help text updated to match. Re-run live this
+-- date: the "has no `led` verb -- not a world root" failure from the row-1482/1485 correction
+-- above is GONE (confirmed: scaffolding now succeeds and every world_main_check/L6 world is
+-- reached).
+--
+-- SAME PASS, ADDITIONALLY FOUND AND FIXED (a hazard within reach, not the commissioned class
+-- but blocking this bank regardless): `recent_rows()`/`show_row()` parsed a pipe-delimited
+-- `id|kind|...|current` / `-[ RECORD 1 ]-`-style `key | value` format -- the shape of the
+-- direct-psql CLI legacy-led-retirement (ledger rows 1149/1150) already retired. The CURRENT
+-- served `led --recent`/`led show` (bootstrap/templates/led.tmpl's cmd_recent/cmd_show) print
+-- `[id] kind: statement` and `f"{k:28s}: {v}"` respectively -- neither parser matched either
+-- format, so both silently returned nothing/empty for every call, independent of the shim-path
+-- fix above. Fixed: both parsers now match the current served format.
+--
+-- STILL RED, NOT FIXED -- OUT OF SCOPE (flagged, not absorbed): with both fixes applied, the
+-- fixture reaches real candidate rows (11 for world s41oa, 7 for s41oaf7 -- up from 0), but
+-- every one reports `stamp_session` empty ("uncovered-no-events"), so L1/L2/L3/L5/L6 still
+-- fail. Root cause, confirmed live: `led_stamped()`'s test-time stamp simulation sets
+-- `app.vendor_session`/`app.vendor_invocation` via PGOPTIONS on the CLI subprocess's own
+-- environment -- a mechanism that only works when the CLI process itself opens the Postgres
+-- connection. Since the boundary-multiplex/CLI-rebase (predates root-shim-pruning), `led` is a
+-- thin HTTP client to an ALREADY-RUNNING `serving.boundary_service` daemon (spawned once by
+-- `bs_fixtures.serve_existing_world`); the daemon's own long-lived DB connection never sees
+-- this fixture's per-call PGOPTIONS, and `serving/boundary_service.py` has no
+-- vendor_session/vendor_invocation-forwarding mechanism at all (grepped: zero matches). This is
+-- a genuine, separate architectural gap from the served-CLI rebase, not from root-shim-pruning,
+-- and fixing it means adding a real per-request stamp-simulation channel to the write boundary
+-- (or an equivalent test-only mechanism) -- a design decision beyond a call-site repoint, left
+-- for the maintainer/Fable rather than absorbed here. Re-run live this date, exit 1:
+-- otel-attest: 0 attested, 0 already-attested skipped, 11 uncovered-no-events (reported, never
+-- fabricated), 0 refused (write-time field-hygiene, F2/A2), 0 companion finding-row write
+-- failures. [... same shape for world s41oaf7, 7 uncovered-no-events]
+-- FAILURES: ['L1-exact-command-single-candidate', 'L1-two-agreeing-candidates-NOT-exact-command', 'L2-ambiguous-mismatch-writes-attestation', 'L2-ambiguous-mismatch-companion-finding', 'L2-ambiguous-unevaluated-writes-attestation', 'L2-ambiguous-unevaluated-companion-finding', 'L3-delimiter-refused-at-write-time', 'L5-idempotency-skips-already-attested', 'L6-verification-lands-finding-fails-nonzero-exit']

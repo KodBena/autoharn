@@ -52,7 +52,10 @@ anchors (never counted toward `broken`, never silently dropped either) -- a targ
 `local/` that happens to ALSO be missing on a host that HAS installed the referenced tooling
 would still need a human's eyes (this gate cannot distinguish "not installed yet" from "typo'd
 the filename" for an untracked path), so the honest move is informational, not silent
-exclusion.
+exclusion. GENERALIZED (root-shim-pruning residue sweep, row 1357, found flagging
+design/LOGGING-DIRECTION-SURVEY-2026-07-27.md's `../service.log` links, a root-level gitignored
+runtime artifact, not under `local/`): `is_gitignored()` asks `git check-ignore` directly rather
+than hand-matching only the `local/` prefix -- same reasoning, any gitignored target.
 
 UNINITIALIZED SUBMODULES (found reproducing work_opened `worktree-submodule-link-integrity`,
 2026-07-19): a fresh `git worktree add` does NOT populate this repo's gitlink submodules
@@ -215,6 +218,13 @@ def uninitialized_submodules() -> set[str]:
     return paths
 
 
+def is_gitignored(rel_to_root: str) -> bool:
+    """True when `rel_to_root` is gitignored -- the general form of the `/local/` carve-out
+    below, for any gitignored target (e.g. `/service.log`), not just that one directory."""
+    r = run_git(["-C", ROOT, "check-ignore", "-q", "--", rel_to_root], capture_output=True)
+    return r.returncode == 0
+
+
 def under_submodule(rel_to_root: str, submodule_paths: set[str]) -> str | None:
     """Return the submodule path that `rel_to_root` resolves inside (itself or a descendant),
     or None. `os.path.relpath`-normalized paths only (no trailing slash), so the containment
@@ -327,7 +337,8 @@ def main() -> int:
                 # (DELETE-direction staged-vs-tree finding, 2026-07-26; see `staged_deletions()`).
                 if not os.path.exists(resolved) or rel_to_root in staged_deleted:
                     sm = under_submodule(rel_to_root, uninit_submodules)
-                    if rel_to_root == "local" or rel_to_root.startswith("local" + os.sep):
+                    if (rel_to_root == "local" or rel_to_root.startswith("local" + os.sep)
+                            or is_gitignored(rel_to_root)):
                         local_flags.append((rel, ln, m.group(1)))
                     elif sm is not None:
                         submodule_flags.append((rel, ln, m.group(1), sm))
@@ -352,9 +363,10 @@ def main() -> int:
             print(f"    ... +{len(anchor_flags) - 10} more")
 
     if local_flags:
-        print(f"\n  {len(local_flags)} link(s) into /local/ (gitignored operator evidence, "
-              f"never tracked -- NOT a failure; a host that has not locally installed the "
-              f"referenced tooling will not have the target, by the project's own convention):")
+        print(f"\n  {len(local_flags)} link(s) into /local/ or another gitignored path "
+              f"(operator evidence, never tracked -- NOT a failure; a host that has not "
+              f"locally installed the referenced tooling, or not yet produced the runtime "
+              f"artifact, will not have the target, by the project's own convention):")
         for rel, ln, target in local_flags[:10]:
             print(f"    {rel}:{ln}  {target}")
         if len(local_flags) > 10:

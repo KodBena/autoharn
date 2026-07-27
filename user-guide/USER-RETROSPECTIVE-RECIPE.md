@@ -50,16 +50,16 @@ it by slug (the ledger's free-text `--refs` field already carries mixed conventi
 hand without an extra lookup):
 
 ```sh
-./led work close <slug> shipped --witness <ref>
-./led --refs work:<slug> note "LESSON: <what worked, keep> / <what you'd change next time>"
+./autoharn led work close <slug> shipped --witness <ref>
+./autoharn led --refs work:<slug> note "LESSON: <what worked, keep> / <what you'd change next time>"
 ```
 
 A worked example, illustrative rather than a quoted ledger row (no such note is on record for
 this item; the shape is what matters):
 
 ```sh
-./led work close research-ledger-offering shipped --witness commit:9ebb7b8
-./led --refs work:research-ledger-offering note "LESSON: bounding the offering (no DDL apply, that stays the maintainer's own act) kept scope honest; would pre-register the scratch-schema naming convention up front instead of improvising it per build."
+./autoharn led work close research-ledger-offering shipped --witness commit:9ebb7b8
+./autoharn led --refs work:research-ledger-offering note "LESSON: bounding the offering (no DDL apply, that stays the maintainer's own act) kept scope honest; would pre-register the scratch-schema naming convention up front instead of improvising it per build."
 ```
 
 ### Tier (b) — per-phase: the full agent pass
@@ -379,7 +379,7 @@ The six fields, in order, separated by ` | ` (space-pipe-space):
 Copy-paste example:
 
 ```sh
-./led decision "estimate: cost-estimation-retro | 40-60 | 0 | 3h-5h | 100K | scoped from resource-accounting-spec stage A, a similarly-sized led.tmpl/pickup.tmpl validator pair plus one doc section and one seen-red fixture"
+./autoharn led decision "estimate: cost-estimation-retro | 40-60 | 0 | 3h-5h | 100K | scoped from resource-accounting-spec stage A, a similarly-sized led.tmpl/pickup.tmpl validator pair plus one doc section and one seen-red fixture"
 ```
 
 `./pickup` prints every on-record `estimate:` row under its own `### SECTION: ESTIMATES` header,
@@ -459,8 +459,8 @@ The six fields, in order, separated by ` | ` (space-pipe-space):
 Copy-paste examples (whole-item and spawn-granularity):
 
 ```sh
-./led decision "actual: actual-intake-grammar | 47 | 2 | 42m | 210K | harness task-notification duration_ms+subagent_tokens"
-./led decision "actual: kr-titration-design-exploration-b-round-2 | 6 | 1 | 8m | 1.2M | orchestrator wall clock plus subagent's own self-reported token usage"
+./autoharn led decision "actual: actual-intake-grammar | 47 | 2 | 42m | 210K | harness task-notification duration_ms+subagent_tokens"
+./autoharn led decision "actual: kr-titration-design-exploration-b-round-2 | 6 | 1 | 8m | 1.2M | orchestrator wall clock plus subagent's own self-reported token usage"
 ```
 
 `./pickup`'s `ESTIMATES` section pairs an accepted `actual:` row beside the `estimate:` row
@@ -594,7 +594,7 @@ The five fields, in order, separated by ` | ` (space-pipe-space):
 Copy-paste example:
 
 ```sh
-./led decision "outcome: model-attribution-tracking | sonnet | DELIVERED, merge HELD (ent gap) | 0 | all sec-6 items witnessed; hooks/led.tmpl/pickup.tmpl legs built, hooks leg fixture-verified against the toy db"
+./autoharn led decision "outcome: model-attribution-tracking | sonnet | DELIVERED, merge HELD (ent gap) | 0 | all sec-6 items witnessed; hooks/led.tmpl/pickup.tmpl legs built, hooks leg fixture-verified against the toy db"
 ```
 
 ### The read surface — grouping seam outcomes by model
