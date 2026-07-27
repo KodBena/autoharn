@@ -60,8 +60,12 @@ mechanical, none heuristic:
 
 1. **Discharge verification:** `discharged-by=<sha>` — advisory if the sha is not an
    ancestor of HEAD. `superseded-by=<path>` — advisory if the target does not exist or
-   its own status is not a live/historical token (a successor that was itself rejected
-   leaves the predecessor un-superseded in fact).
+   its own status is not a live, historical, or `discharged` token (amended 2026-07-27:
+   the build exposed that excluding `discharged` was backwards — a built-and-merged
+   successor is stronger confirmation than a merely-ratified one; `rejected` and
+   `superseded` successors stay excluded — a successor that was itself rejected leaves
+   the predecessor un-superseded in fact, and a superseded successor means the header
+   should point at the END of the chain).
 2. **Dependency drift:** for every doc with a live status (`proposed`/`ratified`/
    `in-build`), advisory per `depends-on` target whose status is `superseded` or
    `rejected` (with both paths and both statuses in the message).
