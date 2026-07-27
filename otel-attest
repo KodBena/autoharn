@@ -4,14 +4,14 @@
 framing: it lives at the repo root but operates on a TARGET world's ledger, given by --world).
 
 WHAT THIS DOES. Reads a local OTel collector's JSONL export (local/OTEL-COLLECTOR.md) and a
-target world's ledger (read-only, via that world's own `./led` verb — never raw psql), joins
-`api_request` events to ledger rows on the ledger's own stamp_session/stamp_invocation columns
-(kernel/lineage/s17-stamp-mechanism.sql, s23-per-invocation-stamp-token.sql), and writes one
-defeasible `verification` row per attributable ledger row at a declared confidence grade
+target world's ledger (read-only, via that world's own `./autoharn led` verb — never raw psql),
+joins `api_request` events to ledger rows on the ledger's own stamp_session/stamp_invocation
+columns (kernel/lineage/s17-stamp-mechanism.sql, s23-per-invocation-stamp-token.sql), and writes
+one defeasible `verification` row per attributable ledger row at a declared confidence grade
 (spec §5's v1 statement convention, §6's grade vocabulary), citing the spec's standing
 rebuttals (§7). A MISMATCH verdict additionally writes a companion `finding` row (§5). Writes
-go through `<world>/led` — the s43 write boundary, where present, is the only path in; this
-script never touches Postgres directly (self-application law, CLAUDE.md).
+go through `<world>/autoharn led` — the s43 write boundary, where present, is the only path in;
+this script never touches Postgres directly (self-application law, CLAUDE.md).
 
 NEVER a guarantee, NEVER a gate: nothing here blocks or grades anything (spec §9). Absence of
 correlated events writes NOTHING (spec §6's "no attestation" rule) — never a fabricated claim
@@ -21,9 +21,10 @@ USAGE:
   ./otel-attest --world <dir> [--export <jsonl>] [--recent N] [--dry-run] [--re-attest]
                  [--actor otel-sentry]
 
-  --world <dir>    a directory containing a `led` verb and deployment.json (default: this
-                    repo's own root — the "current" world). The scratch witness world used by
-                    this build's own harness is passed explicitly, e.g. --world /path/to/scratch.
+  --world <dir>    a directory containing an `autoharn` dispatcher (with a `led` verb) and
+                    deployment.json (default: this repo's own root — the "current" world). The
+                    scratch witness world used by this build's own harness is passed explicitly,
+                    e.g. --world /path/to/scratch.
   --export <path>  the collector's JSONL export (default: ~/tools/otelcol/data/claude-events.jsonl)
   --recent N       how many of the world's most recent ledger rows to consider as candidates
                     (default 50) — a batch verb, not a daemon; the operator scopes the window.
@@ -31,7 +32,7 @@ USAGE:
   --re-attest      re-attest rows that already carry a v1/v2 attestation (default: skip them —
                     idempotency, spec §6).
   --actor NAME     the registered principal writes land under (default: otel-sentry). Must
-                    already be registered in the target world (`led register-principal`).
+                    already be registered in the target world (`./autoharn led register-principal`).
 
 Exit code: 0 on a clean run (including "nothing to attest"); 1 on a malformed v1 statement
 encountered while scanning for already-attested rows (P-5: loud refusal, never a silent skip);
@@ -319,7 +320,9 @@ def grade_row(*, stamp_session: str, stamp_invocation: str | None, row_ts: datet
 
 
 # ---------------------------------------------------------------------------------------------
-# Ledger read/write via `<world>/led` (never raw psql).
+# Ledger read/write via `<world>/autoharn led` (never raw psql). The bare per-verb `led` shim was
+# retired repo-wide by root-shim-pruning (ledger row 1357); every world now dispatches through
+# ONE `autoharn` entrypoint (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment).
 # ---------------------------------------------------------------------------------------------
 
 
@@ -327,40 +330,69 @@ def led(world: Path, *args: str, actor: str | None = None) -> subprocess.Complet
     env = os.environ.copy()
     if actor:
         env["LED_ACTOR"] = actor
-    return subprocess.run([str(world / "led"), *args], cwd=str(world), env=env,
+    return subprocess.run([str(world / "autoharn"), "led", *args], cwd=str(world), env=env,
                            capture_output=True, text=True)
 
 
+_RECENT_LINE_RE = re.compile(r"^\[(\d+)\]\s+([^:]+):\s?(.*)$")
+
+
 def recent_rows(world: Path, n: int, *, kinds: set[str] | None = None) -> list[int]:
-    """Ids from `led --recent N`, newest first, CURRENT rows only (a superseded row -- e.g. a
-    corrected/malformed attestation, spec §6's supersede-and-replace idiom -- is never a
-    candidate to attest, and never counts toward already-attested when kinds={'verification'})."""
+    """Ids from `led --recent N`, newest first. Straggler fix (root-shim-pruning residue sweep,
+    2026-07-27): this used to parse a pipe-delimited `id|kind|...|current` line -- that shape
+    belongs to the pre-legacy-led-retirement raw-ledger CLI (ledger rows 1149/1150), which no
+    longer exists. The served `led --recent` (bootstrap/templates/led.tmpl's cmd_recent) prints
+    `[id] kind: statement` and already reads ONLY /rows/current (in-force rows; no raw/superseded
+    route survives on the boundary at all, so the old "CURRENT rows only" filter is now the
+    server's own unconditional behavior, not something this parser needs to re-check).
+
+    DISCLOSED RESIDUAL (fix-round review, 2026-07-27, no live specimen found): `cmd_recent`
+    prints ONE line per row, but a statement containing an embedded newline still lands as
+    multiple physical lines in stdout -- a continuation line that happens to itself look like
+    `[N] kind: ...` (arbitrary statement text is never otherwise restricted) could in principle
+    be misread as a second, spoofed row rather than the first row's own continuation text. This
+    used to be architecturally impossible (the retired pipe format had no free-text line shape
+    to imitate); the current bracket format does. Defensive tightening, not a full fix: rows are
+    printed newest-first (`sorted(rows, key=lambda r: -r['id'])`, led.tmpl's own cmd_recent), so
+    a genuine id sequence is strictly decreasing -- a candidate line whose id is not strictly
+    less than the previous ACCEPTED id is dropped as a probable statement-body artifact rather
+    than trusted as a new row. This raises the bar (a forged line must also guess a plausible
+    id) without requiring a JSON-structured read path, which would be the general fix."""
     r = led(world, "--recent", str(n))
     if r.returncode != 0:
         print(r.stderr, file=sys.stderr)
         raise SystemExit(f"otel-attest: `led --recent {n}` failed in {world}")
     ids = []
+    prev_id = None
     for line in r.stdout.splitlines():
-        parts = line.split("|")
-        if len(parts) < 7 or not parts[0].strip().isdigit():
+        m = _RECENT_LINE_RE.match(line)
+        if not m:
             continue
-        if parts[-1].strip() != "current":
+        row_id, kind = int(m.group(1)), m.group(2).strip()
+        if prev_id is not None and row_id >= prev_id:
+            continue  # not strictly decreasing -- probable statement-body artifact, not a row
+        prev_id = row_id
+        if kinds is not None and kind not in kinds:
             continue
-        if kinds is not None and parts[1].strip() not in kinds:
-            continue
-        ids.append(int(parts[0].strip()))
+        ids.append(row_id)
     return ids
 
 
 def show_row(world: Path, row_id: int) -> dict:
+    """Straggler fix (root-shim-pruning residue sweep, 2026-07-27): this used to parse a
+    `key | value` pipe line with a psql-`\\x`-style `-[ RECORD 1 ]-` header. The served `led show`
+    (bootstrap/templates/led.tmpl's cmd_show) prints `f"{k:28s}: {v}"` -- a colon-separated,
+    left-padded key with no pipe at all -- so the old parser matched nothing and every call
+    silently returned an empty dict (recent_rows() had the identical silent-empty failure mode,
+    both now fixed the same way: match the actual current format instead of a retired one)."""
     r = led(world, "show", str(row_id))
     if r.returncode != 0:
         raise SystemExit(f"otel-attest: `led show {row_id}` failed in {world}: {r.stderr}")
     fields: dict[str, str] = {}
     for line in r.stdout.splitlines():
-        if "|" not in line or line.startswith("-["):
+        if ":" not in line:
             continue
-        k, _, v = line.partition("|")
+        k, _, v = line.partition(":")
         fields[k.strip()] = v.strip()
     return fields
 
@@ -460,7 +492,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--world", type=Path, default=REPO_ROOT,
-                     help="directory with a `led` verb + deployment.json (default: this repo)")
+                     help="directory with an `autoharn` dispatcher + deployment.json "
+                          "(default: this repo)")
     ap.add_argument("--export", type=Path, default=DEFAULT_EXPORT)
     ap.add_argument("--recent", type=int, default=50)
     ap.add_argument("--dry-run", action="store_true")
@@ -475,10 +508,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     args.world = args.world.resolve()  # a relative --world (e.g. ".") must not become a bare
-    # "led" arg to subprocess.run -- POSIX exec of a slash-free relative path searches PATH,
-    # not cwd, which silently misses the world's own `led` shim entirely.
-    if not (args.world / "led").exists():
-        raise SystemExit(f"otel-attest: {args.world} has no `led` verb -- not a world root")
+    # "autoharn" arg to subprocess.run -- POSIX exec of a slash-free relative path searches PATH,
+    # not cwd, which silently misses the world's own `autoharn` dispatcher entirely.
+    if not (args.world / "autoharn").exists():
+        raise SystemExit(f"otel-attest: {args.world} has no `autoharn` dispatcher -- not a world root")
 
     export = load_export(args.export)
     if not export:

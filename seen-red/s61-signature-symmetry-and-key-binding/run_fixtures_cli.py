@@ -160,12 +160,15 @@ def gen_key(gnupghome: Path, name: str, email: str) -> str:
 
 
 def led(world_dir: Path, *args: str, env_extra: dict | None = None) -> subprocess.CompletedProcess[str]:
+    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has a
+    # standalone `led` shim -- routed through the ONE `autoharn` dispatcher instead (root-shim-
+    # pruning residue sweep, ledger row 1357).
     env = dict(os.environ)
     env["AUTOHARN"] = str(REPO)
     env["PICKUP_DEPLOYMENT"] = str(world_dir / "deployment.json")
     if env_extra:
         env.update(env_extra)
-    return sh(["bash", str(world_dir / "led"), *args], env=env, cwd=str(world_dir))
+    return sh(["bash", str(world_dir / "autoharn"), "led", *args], env=env, cwd=str(world_dir))
 
 
 def verify_commission(world_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -204,8 +207,11 @@ def main() -> int:
                 "--schema", schema, "--kern", kern, "--role", role])
         if r.returncode != 0:
             print("SCAFFOLD FAILED:", r.stdout[-1500:], r.stderr[-1500:]); return 1
-        for verb in ("led", "verify-commission"):
-            (world_dir / verb).chmod(0o755)
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world writes ONE
+        # `autoharn` dispatcher now, not separate per-verb shim files (root-shim-pruning residue
+        # sweep, ledger row 1357) -- new-project.sh already writes it chmod +x, but re-assert
+        # here defensively (matches this fixture's own pre-existing belt-and-suspenders posture).
+        (world_dir / "autoharn").chmod(0o755)
         args = ["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1",
                 "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
         for name in CHAIN_S61:

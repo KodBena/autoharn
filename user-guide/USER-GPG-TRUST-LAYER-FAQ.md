@@ -277,7 +277,7 @@ just relocated one step earlier — one file, one variable, read once, used twic
 **Step 3 — verify:**
 
 ```sh
-./verify-commission --id <id>
+./autoharn verify-commission --id <id>
 ```
 
 The witness pass covered all outcomes (`seen-red/verify-commission/red.txt` banks the full
@@ -455,7 +455,7 @@ At the end of a session (or whenever you want to anchor the ledger's current sta
 own key), from your own terminal, inside the world, run:
 
 ```sh
-./verify-chain --head > /tmp/head.json
+./autoharn verify-chain --head > /tmp/head.json
 gpg --detach-sign --armor /tmp/head.json
 mkdir -p <world>/.claude
 cp /tmp/head.json /tmp/head.json.asc <world>/.claude/
@@ -516,6 +516,12 @@ $ ./verify-chain --head
 verify-chain --head: REFUSED -- chain is not INTACT (status=BROKEN, ...); signing a head over a
 non-verified chain is refused, not attempted.
 ```
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: both transcripts above
+are dated 2026-07-11, eight+ days before the umbrella-CLI scaffold migration (rows 1365/1366/1367,
+2026-07-26) retired the bare `./verify-chain` shim this transcript typed — the transcript itself
+is left byte-for-byte as the dated record it is, never silently rewritten; the CURRENT equivalent
+invocation is `./autoharn verify-chain` / `./autoharn verify-chain --head`.)
 
 From the moment a head is signed, **any** retroactive alteration of that world's ledger —
 including by the database superuser, who can bypass every trigger — breaks the chain against a
@@ -604,7 +610,7 @@ verifiers who cached the old key learn not to trust it either.)
 key, run Ceremony 3 (§6) again with the new key:
 
 ```sh
-./verify-chain --head > /tmp/head.json
+./autoharn verify-chain --head > /tmp/head.json
 gpg --detach-sign --armor /tmp/head.json    # now signs with the NEW default key
 ```
 
@@ -650,9 +656,9 @@ fingerprint is mine") rather than an EARNED fact.
 
 ```
 gpg --detach-sign --armor -o ~/possession.asc - <<< "autoharn key-binding proof-of-possession: fingerprint=$FP"
-./led principal attest-possession $FP --asc ~/possession.asc
+./autoharn led principal attest-possession $FP --asc ~/possession.asc
 #   verified: writes a principal_key_possession_verified row, prints its id (say, 12)
-./led principal bind-key <your-principal-name> --fingerprint "$FP" --possession-ref 12
+./autoharn led principal bind-key <your-principal-name> --fingerprint "$FP" --possession-ref 12
 ```
 
 The signed text is the CANONICAL statement `bootstrap/templates/led.tmpl`'s own
@@ -681,7 +687,7 @@ gpg --import /tmp/revoke.asc
 
 # 2. the ledger side — the s41 retraction event (NOT a fresh possession proof: a revocation
 #    needs none, deliberately -- a compromised or lost key cannot be asked to re-prove itself)
-./led principal revoke-key <your-principal-name> --fingerprint "$FP" --supersedes 5
+./autoharn led principal revoke-key <your-principal-name> --fingerprint "$FP" --supersedes 5
 ```
 
 Why no possession proof on revocation: the whole point of a revocation is that the key may be

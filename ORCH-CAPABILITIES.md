@@ -231,12 +231,12 @@ defeasibility pipeline's [`model_defeated`](GLOSSARY.md#model-defeated)/`credite
 banked transcript):*
 
 ```
-$ ./judge --layer tnow
+$ ./autoharn judge --layer tnow
   [OK ] autoharn1 AGREE              asp=2925 sql=2925 atoms; Δasp=[] Δsql=[]
 # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
 (exit 0)
 
-$ ./judge --layer work
+$ ./autoharn judge --layer work
   [OK ] autoharn1 AGREE              asp=360 sql=360 atoms; Δasp=[] Δsql=[]
 # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
 (exit 0)
@@ -249,7 +249,7 @@ with its fixed refusal string is stable and reproduces verbatim.)
 
 ```
 
-$ ./judge --layer defeat
+$ ./autoharn judge --layer defeat
   [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
           asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not emit
           trust_grant/n (capability absent): no principal_binding_active/

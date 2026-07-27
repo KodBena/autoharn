@@ -125,7 +125,7 @@ example (the OR-Tools row above, promoted to `mandated` for a hyperparameter-enu
 shape):
 
 ```sh
-./led decision "resource: OR-Tools-CP-SAT | library | import:ortools.sat.python.cp_model | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration"
+./autoharn led decision "resource: OR-Tools-CP-SAT | library | import:ortools.sat.python.cp_model | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration"
 ```
 
 A `forbidden` example — declaring a tool this maintainer's project has decided must NOT be
@@ -133,7 +133,7 @@ reached for, for a named task shape (the MUST-NOT reads exactly like the two abo
 prohibition instead of an endorsement):
 
 ```sh
-./led decision "resource: legacy-eval-script | binary | binary:legacy_eval.sh | nothing provable -- an unmaintained script with no test coverage | superseded by MIP-SCIP; do not reach for it even under time pressure | forbidden: hyperparameter-enumeration"
+./autoharn led decision "resource: legacy-eval-script | binary | binary:legacy_eval.sh | nothing provable -- an unmaintained script with no test coverage | superseded by MIP-SCIP; do not reach for it even under time pressure | forbidden: hyperparameter-enumeration"
 ```
 
 ### `constraint:` — declaring an ordering constraint beyond a plain `work depends` edge
@@ -155,8 +155,8 @@ only; the checker that actually flags a violated `constraint:` row is
 of this page. Copy-paste examples:
 
 ```sh
-./led decision "constraint: precedes decompose-schema implement-consumer"
-./led decision "constraint: excludes migrate-live rollback-live"
+./autoharn led decision "constraint: precedes decompose-schema implement-consumer"
+./autoharn led decision "constraint: excludes migrate-live rollback-live"
 ```
 
 ## The conversion: a filled row becomes one `led` command
@@ -170,7 +170,7 @@ in the grammar section above:
 | OR-Tools-CP-SAT | library | `import:ortools.sat.python.cp_model` | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration |
 
 ```sh
-./led decision "resource: OR-Tools-CP-SAT | library | import:ortools.sat.python.cp_model | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration"
+./autoharn led decision "resource: OR-Tools-CP-SAT | library | import:ortools.sat.python.cp_model | finite enumeration -> exact hyperparameter search proof | use for hyperparameter enumeration over heuristic search; discharge evidence = committed declarative model file | mandated: hyperparameter-enumeration"
 ```
 
 Run that from your project's own root (the directory `./led` was scaffolded into), not from

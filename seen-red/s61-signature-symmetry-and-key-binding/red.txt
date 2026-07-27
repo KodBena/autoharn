@@ -85,3 +85,18 @@ refusal-path flag parsing AND its acceptance leg; a multi-signature .asc refusal
 filing/gpg_trust.py's new MultipleValidSignatures guard). Cases a-e and the kernel-level
 RED/GREEN cases are unchanged in shape from the prior banked run; every line above -- old and new
 -- corresponds to this one committed run, not a splice of an old and new transcript.
+
+-- Dated correction, 2026-07-27 (ADR-0005 Rule 8: the ALL GREEN record above is a true record of
+-- its own date and stands verbatim; this append records the CURRENT state) -- retired-bare-shim
+-- straggler sweep (root-shim-pruning residue, ledger row 1357): run_fixtures_cli.py's own
+-- `led()` helper shelled to the retired bare `<world>/led` per-verb shim (`sh(["bash",
+-- str(world_dir / "led"), *args], ...)`), and its scaffold step chmod'd the two retired shim
+-- files (`led`, `verify-commission`) directly -- both now dead since a world scaffolded by the
+-- current bootstrap/new-project.sh writes ONE `autoharn` dispatcher instead. Fixed: `led()` now
+-- runs `bash <world>/autoharn led <args...>`; the chmod step now targets `<world>/autoharn`
+-- (verify_commission() was already calling bootstrap/templates/verify-commission.tmpl directly
+-- and needed no change). Re-run live this date, real gpg keygen + real served boundary_service
+-- + real scratch schema (world s61clifxprobe), exit 0:
+-- ALL GREEN
+-- CLI-LEVEL: ALL GREEN (cases a-j all [ok])
+-- OVERALL: ALL GREEN

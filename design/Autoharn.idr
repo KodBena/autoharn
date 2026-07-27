@@ -26,11 +26,107 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s52 -- LAGGING: s53-s57 (belief substrate, belief views,
-||| dispatch-grain independence, reservation residue, obligation-revocation-as-event) are NOT
-||| yet transcribed here (gates/idris_model_freshness.py, report-only). Disclosed rather than
-||| silently stale -- a future pass pays this down in one transcription sweep across all five,
-||| not incrementally per delta (this file's own AS-OF discipline: never bump on faith).
+||| AS-OF: kernel chain through s65.
+||| THE s53-s65 SWEEP (this pass, one transcription sweep across all thirteen deltas, per-delta,
+||| not bumped on faith -- gates/idris_model_freshness.py, previously WARN on the s53-s57 lag,
+||| now clean): what each delta became here, or why nothing model-visible resulted.
+|||   s53 (belief substrate) -- MODEL-VISIBLE. PBelief: nine fields, four Gated by the two closed
+|||     axes (BeliefPolarity/BeliefBasis via UniverseF/WitnessF/SourceF/PremisesF, the SAME
+|||     mandatory-iff idiom CompetenceValueF already established, one family over). The
+|||     premises-nonempty cardinality refusal is enforced at checkPayload (RBeliefPremisesEmpty),
+|||     not doubled as a compile-time So proof on VBelief -- a scoped simplification, named at
+|||     VBelief's own doc (an Idris elaboration corner: unifying two occurrences of a stuck
+|||     type-family application over an abstract index). contests/concurs (existence + kind=belief
+|||     + in-force + DIFFERENT actor) is an Entry-level premise (beliefEdgesOkB, §2f/§3) since it
+|||     needs the writer's own actor, which ValidPayload's payload-only signature cannot see.
+|||     belief_universe/belief_witness's embedded row:/artifact: token EXISTENCE checks are NOT
+|||     re-derived here (free NonEmptyText prose) -- the SAME "deeper trigger validation, not
+|||     re-derived" posture PViolationDisposition's vclass field already takes.
+|||   s54 (belief views) -- MIXED, most of it genuinely nothing model-visible. belief_current/
+|||     contested_beliefs/corroboration/shared_premise are pure derived reports, no new invariant
+|||     -- SAY SO rather than re-derive. credited_beliefs' own recursive well-foundedness/defeat-
+|||     composition fixpoint is judged BELOW this rendering's altitude to re-implement a SECOND
+|||     fixpoint solver beside the already-modeled obligation-tree one (§2b) -- named, not silently
+|||     skipped, the identical honesty posture the two producers/epoch gate already take.
+|||   s55 (dispatch-grain independence) -- MODEL-VISIBLE, narrow: Independence gains
+|||     DisclosedIsolatedDispatch (behaves exactly like SelfReview, no stamp-distinctness gate, no
+|||     crediting rule reads it). HAZARD FOUND IN REACH, FIXED (CLAUDE.md's corollary): Independence
+|||     itself was missing SelfReview, a s17-era vocabulary member every prior parity pass silently
+|||     dropped -- added here, named at Independence's own doc.
+|||   s56 (reservation residue) -- MODEL-VISIBLE as a derived-read RELAXATION (not fail-safe-
+|||     additive, the maintainer's own ratified purpose): isAttest widens to also credit
+|||     AttestWithReservations, changing deferredUndischarged's own reading directly.
+|||     reservationsOutstanding (§2e) is the one new invariant-carrying read; review_verdicts is a
+|||     pure raw/history report, nothing model-visible.
+|||   s57 (obligation-revocation-as-event) -- MODEL-VISIBLE. PObligationRevoked: two free
+|||     NonEmptyText fields (scope, reason) -- the "unknown scope"/"already revoked" refusals are
+|||     OUT OF MODEL, named: countersign_obligation is a legacy table this rendering has never
+|||     carried. Deliberately NOT given R6 unretractability (maySupersede's catch-all) -- s57's own
+|||     disclosed non-foreclosure.
+|||   s58/s59 (missive substrate + views) -- MODEL-VISIBLE, the largest single delta. Three new
+|||     kinds (PMissiveSent/PMissiveReceived/PMissiveDisposed), a new opaque XRowRef (foreign-ledger
+|||     reference, shape-checked only, existence deliberately NEVER checked -- isolation is
+|||     founding), missiveSentDedupOk/missiveReceivedDedupOk (raw-history reads, the everOpened
+|||     "slug burned" idiom one mechanism over), and three new maySupersede arms (restored s63,
+|||     below) -- missive_sent superseded only by a same-thread successor, missive_received NEVER
+|||     superseded, missive_disposed superseded only by a same-regards re-disposition. The courier-
+|||     scope and world-identity-set premises are named as STANDALONE ambient predicates
+|||     (courierScopeOk/worldIdentitySetOk, §2f), NOT threaded into boundaryOk/write's own
+|||     aggregate signature -- a scope choice, matching StampOracle's own caller-held-oracle
+|||     posture. kernel.missive_dispose's atomic two-row ceremony (disposal + acknowledgment) is
+|||     named out-of-model (the artifact_write precedent) -- this file's append/write renders one
+|||     row per call. s59's own views are mostly pure reports (missive_receipts/missive_stale/
+|||     missive_delivery_audit/missive_open_threads); missive_outbound's own raw-vs-current choice
+|||     and missive_undisposed's existence predicate are named but not separately re-derived here.
+|||   s60/s62/s64 (entitlement enforcement, delegation-lifecycle gating, principal-stamps
+|||     delegation conditions) -- MODEL-VISIBLE, the second-largest piece: a full acceptance
+|||     predicate, not a single refusal. ActClass (eight tokens), entitlementActClassOf/
+|||     entitlementActClassOfTarget (candidate one-hop-through-supersedes vs target zero-hop
+|||     classification, s62 round 2's "severance is an act against the TARGET's class too"),
+|||     entitlementEnforceClass (conjuncts a/b), and s64's two additional conjuncts
+|||     (delegationConjunctCOk depth-budget, delegationConjunctDOk must-countersign) -- all in
+|||     boundaryOk (§2f/§3). PRelationAsserted gains a fifth field, DelegationConditionsF (Gated by
+|||     rel/active exactly like CompetenceValueF): redelegateDepth/mustCountersign/scopeClasses/
+|||     purpose are rendered; delegation_expiry is NOT (a wall-clock validity bound is out of this
+|||     model's universe for the SAME ts-vs-id reason the PRESERVED list already gives -- named,
+|||     not silently dropped). principalRedelegateBudget is a genuine new derived function (running-
+|||     min-then-max-over-paths, fuel-bounded like every other recursive walk here).
+|||     POST-REVIEW FIX (fresh-context review of this pass's first commit, ee8a727, BLOCKS MERGE,
+|||     one CRITICAL): entitlementActClassOf/entitlementActClassOfTarget's PRelationAsserted arms
+|||     originally carried a wrong `active &&` guard the SQL does not have (both functions classify
+|||     acts-for/dispatched-by as delegation_lifecycle by RELATION alone, regardless of
+|||     principal_binding_active -- the target-side function is not even passed active). The guard
+|||     let a retraction vacate conjuncts (c)/(d) entirely, MORE PERMISSIVE than the kernel --
+|||     dropped; witnessed both as a bare classification fact (r64c/r64d) and as the practical
+|||     consequence (b64c/b64d: a countersign-caveated principal can no longer sever their own
+|||     delegation edge silently).
+|||   s61 (signature symmetry and key-binding) -- MODEL-VISIBLE, two premises. (1) Signed-
+|||     supersession symmetry: PCommissionSignatureVerified (a new kind; the kernel CANNOT verify
+|||     GPG signatures -- this buys falsifiability, never unforgeability, the same disclosed grade
+|||     as the HMAC stamp) plus Entry.sigWitness (a new GENERIC entry-level field, licensed on
+|||     every kind, since the SQL column carries no kind-shape CHECK at all) and
+|||     signatureSymmetryOk (§2f/§3). (2) Key-binding proof-of-possession: PKeyBound gains a fourth
+|||     field, PossessionRefF (Gated by active exactly like CompetenceValueF), grounded by a new
+|||     kind PKeyPossessionVerified and possessionOk (VKeyBound's second premise).
+|||   s63 (supersession-body restoration) -- a BUG FIX, not new vocabulary: s61's own re-issue of
+|||     validate_supersession_target silently dropped s53's belief-holder-only branch and s58's
+|||     three missive branches by citing a stale base. This model was authored FRESH against the
+|||     CORRECT (restored) union body directly -- the belief/missive maySupersede arms above ARE
+|||     s63's own restored semantics, not a buggy s61-era snapshot ever rendered here.
+|||   s65 (refusal records the attempted kind) -- MODEL-VISIBLE, small. PWriteRefused gains a
+|||     seventh field, attemptedKind : Maybe NonEmptyText -- NULL is legitimate (not extractable),
+|||     never "not attempted". attemptedKindFor (a new total function) populates it exactly when
+|||     the payload travels the generic SurfLedger path (the one surface whose contract admits a
+|||     caller-supplied `kind` key at all, s65's own QUANTIFICATION UNIVERSE fact) -- structurally
+|||     TOTAL here (unlike the SQL's jsonb extraction) because a Payload value is already typed.
+|||     THE 256-BYTE BOUND (refusal_attempted_kind_length, table CHECK + the function's own guard):
+|||     DECIDED, not silently dropped, at PWriteRefused's own doc -- NOT rendered as a refined/
+|||     bounded type (unlike CommitRef/Fingerprint) because attemptedKindFor's domain is the
+|||     closed, short, static kind vocabulary (payloadKindToken), never a caller-suppliable
+|||     adversarial string -- the bound guards a raw-jsonb attack surface this model's already-
+|||     typed Payload never exposes, so a refinement type here would assert protection against an
+|||     unreachable input, the SAME "below this rendering's altitude" judgment already applied to
+|||     the epoch gate and the two producers.
 ||| (s50, 2026-07-18, landed WHILE the s44-s49 parity pass below was in flight and absorbed
 |||   by it before landing: the defeat-input exclusion fork this pass had rendered as an
 |||   unadjudicated PARAMETER was adjudicated by the maintainer (row 1647,
@@ -396,11 +492,40 @@ Eq Relation where
 
 data ReviewVerdict = Attest | AttestWithReservations | Refuse
 
+||| s56 (kernel/lineage/s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md):
+||| discharging_attest widens from verdict='attest' ONLY to verdict IN ('attest',
+||| 'attest_with_reservations') -- a RELAXATION of the discharge predicate (not fail-safe-additive:
+||| it closes an obligation-tree gap that previously stayed open), the maintainer's own ratified
+||| purpose ("a review that previously left a gap open now closes it"). isAttest is THE one home
+||| this reading feeds (deferredUndischarged, §2b) -- widening it here changes that fold's own
+||| verdict directly, matching the kernel's re-issued view. AttestWithReservations still leaves its
+||| OWN reservation open for separate tracking (reservationsOutstanding, §2e) -- discharging the
+||| obligation tree and resolving the reservation are two different questions, s56's own point.
 isAttest : ReviewVerdict -> Bool
-isAttest Attest = True
-isAttest _      = False
+isAttest Attest                 = True
+isAttest AttestWithReservations = True
+isAttest Refuse                 = False
 
-data Independence = Technical | Managerial | Financial
+||| HAZARD FOUND IN REACH, FIXED HERE (CLAUDE.md's hazard-in-reach corollary -- met while touching
+||| this exact type for s55's own sake, not a tangential file): review_detail.independence has
+||| carried a FOUR-member vocabulary since kernel/lineage/s17-independence-vocabulary.sql --
+||| 'self-review' (the HONEST value for a review of one's own work, "always allowed", no
+||| stamp-distinctness gate) alongside technical/managerial/financial -- but this model's
+||| Independence type carried only the latter three, silently missing the oldest member of its own
+||| four-word vocabulary across every prior parity pass (s21, s29, s34, s41 all re-issue the SAME
+||| four-way CHECK, unedited, self-review included every time). SelfReview is added here, not
+||| routed around: a hazard met in passing while extending this SAME type for s55 is fixed on
+||| sight, not left for the next reader to step on.
+||| s55 (kernel/lineage/s55-dispatch-grain-independence.sql, design/
+||| FABLE-BELIEF-SUBSTRATE-SPEC.md §3.5 Q6): the review_detail.independence CHECK widens from FOUR
+||| to FIVE members. DisclosedIsolatedDispatch is a DISCLOSURE, not an independence CLAIM --
+||| deliberately absent from validate_independence()'s gated set (below), so it behaves EXACTLY
+||| like SelfReview: no stamp-distinctness gate fires (the writing invocation genuinely is the
+||| dispatcher's own) and no crediting rule reads it. The rejected alternative (dispatch-id-keyed
+||| stamp distinctness) is NAMED, not built: no server-witnessed dispatch-id channel exists, so a
+||| dispatcher-asserted identity doing independence duty would be exactly the "lying signature"
+||| shape s17/s21 already exist to refuse -- a future amendment, not this one.
+data Independence = SelfReview | Technical | Managerial | Financial | DisclosedIsolatedDispatch
 
 ||| s29 discharge_grade -- COMPUTED at write time by validate_independence(),
 ||| never writer-asserted (see GradeF below: unrepresentable at Draft stage).
@@ -430,6 +555,124 @@ Eq EdgeType where
   BlocksStart == BlocksStart = True
   Informs     == Informs     = True
   _           == _           = False
+
+||| s53 (kernel/lineage/s53-belief-substrate.sql, design/FABLE-BELIEF-SUBSTRATE-SPEC.md): the two
+||| closed axes a belief row declares. Universal beliefs quantify over a stated universe and admit
+||| no witness (a universal claim is not evidenced by one instance); existential beliefs may name a
+||| universe never (the universe_coupling CHECK forbids it) and, when doubly OBSERVED, must name a
+||| witness (belief_witness_observed_mandatory).
+data BeliefPolarity = BUniversal | BExistential
+
+Eq BeliefPolarity where
+  BUniversal   == BUniversal   = True
+  BExistential == BExistential = True
+  _            == _            = False
+
+||| s53: the evidence-class vocabulary, ALSO the s54 contested_beliefs precedence rank (observed >
+||| derived > testimony > assumed, s54 Element 2's literal VALUES table) -- kept as one sum type,
+||| not duplicated, since both are readings of the SAME closed word.
+data BeliefBasis = BObserved | BDerived | BTestimony | BAssumed
+
+Eq BeliefBasis where
+  BObserved  == BObserved  = True
+  BDerived   == BDerived   = True
+  BTestimony == BTestimony = True
+  BAssumed   == BAssumed   = True
+  _          == _          = False
+
+||| s54 Element 2: the evidence-class precedence rank (observed=4, derived=3, testimony=2,
+||| assumed=1) -- STRICT inequality resolves a contest; a tie resolves nobody (contested_beliefs'
+||| own resolved_survivor = NULL on equal rank).
+basisRank : BeliefBasis -> Nat
+basisRank BObserved  = 4
+basisRank BDerived    = 3
+basisRank BTestimony = 2
+basisRank BAssumed   = 1
+
+||| s57 (kernel/lineage/s57-obligation-revocation-event.sql): the model needs no new sum here --
+||| obligation_revoked_scope/obligation_revoke_reason are free NonEmptyText (see PObligationRevoked,
+||| §1 below): scope names a countersign_obligation row this model has never carried (that legacy
+||| table is out of this model's universe, named rather than silently assumed -- the "does this
+||| scope exist / was it already revoked" premises are therefore OUT OF MODEL, exactly the
+||| WitnessRef precedent for a check this rendering cannot structurally reach).
+
+||| s58/s59 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md): the
+||| missive act vocabulary -- a request/response/acknowledgment/withdrawal/assertion protocol
+||| between two WORLDS (not principals; "the party is the world", spec §13 item 6).
+data MissiveAct = MAssertion | MRequest | MResponse | MAcknowledgment | MWithdrawal
+
+Eq MissiveAct where
+  MAssertion      == MAssertion      = True
+  MRequest        == MRequest        = True
+  MResponse       == MResponse       = True
+  MAcknowledgment == MAcknowledgment = True
+  MWithdrawal     == MWithdrawal     = True
+  _               == _               = False
+
+||| s58: the disposition an addressee records against a receipt (missive_disposition, mandatory on
+||| missive_disposed AND on an acknowledgment missive_sent row carrying it back -- see
+||| PMissiveDisposed/PMissiveSent below).
+data MissiveDisposition = MDConsumed | MDDeclined | MDSupersededUnread | MDEscalated
+
+||| s58 Element 3/s59: a foreign-ledger row reference, `xrow:<world>:<id>:<hash>` -- deliberately
+||| shape-checked ONLY, existence NEVER checked (isolation is founding: a receiving world cannot
+||| and must not reach into the sending world's own ledger to verify one). SIMPLIFICATION NAMED:
+||| the full shape (`^xrow:[a-z0-9-]{1,64}:[0-9]+:[0-9a-f]{64}$`) is a numeric/regex refinement one
+||| altitude below this rendering (the PRESERVED list's own precedent for SQLSTATE/digest
+||| granularity) -- this model checks only the "xrow:" tag, the one fact any premise below actually
+||| needs (that the field names SOME foreign row, never a local Fin n -- the model's own
+||| back-reference idiom does not reach across ledgers, and this type is exactly the boundary
+||| where it stops reaching).
+isXRowShaped : String -> Bool
+isXRowShaped s = case unpack s of
+  ('x' :: 'r' :: 'o' :: 'w' :: ':' :: _) => True
+  _                                      => False
+
+record XRowRef where
+  constructor MkXRowRef
+  token : String
+  0 ok : So (isXRowShaped token)
+
+||| s60/s62/s64 (kernel/lineage/s60-entitlement-enforcement.sql,
+||| kernel/lineage/s62-delegation-lifecycle-gating.sql,
+||| kernel/lineage/s64-principal-stamps-delegation-conditions.sql): the closed, KERNEL-COMPUTED
+||| act-class vocabulary entitlement_act_class_of/entitlement_act_class_of_target classify a row
+||| into (never a deployment-supplied string -- contrast PEntitlementClassConfigured's OWN
+||| act-class FIELD below, which is free text the deployment configures, matched against this
+||| vocabulary's own rendering via actClassToken, exactly the SQL's own string-equality join).
+||| EIGHT members as of s64: the six s60 tokens, s62's DelegationLifecycle, s64's
+||| IndependentVerificationDelegation carve-out.
+data ActClass = ACPrincipalRegistered | ACPrincipalRoleBound | ACStandingLifecycle
+              | ACMilestoneClosure | ACGateEdgeSupersession | ACEntitlementClassConfigured
+              | ACDelegationLifecycle | ACIndependentVerificationDelegation
+
+Eq ActClass where
+  ACPrincipalRegistered            == ACPrincipalRegistered            = True
+  ACPrincipalRoleBound             == ACPrincipalRoleBound             = True
+  ACStandingLifecycle              == ACStandingLifecycle              = True
+  ACMilestoneClosure               == ACMilestoneClosure               = True
+  ACGateEdgeSupersession           == ACGateEdgeSupersession           = True
+  ACEntitlementClassConfigured     == ACEntitlementClassConfigured     = True
+  ACDelegationLifecycle            == ACDelegationLifecycle            = True
+  ACIndependentVerificationDelegation == ACIndependentVerificationDelegation = True
+  _ == _ = False
+
+||| The kernel-computed string each ActClass token renders as (entitlement_act_class_of's own
+||| RETURN literals) -- the join key entitlementClassRole (§2f) matches against
+||| PEntitlementClassConfigured's free-text field, exactly the SQL's string-equality read.
+actClassToken : ActClass -> String
+actClassToken ACPrincipalRegistered                = "principal_registered"
+actClassToken ACPrincipalRoleBound                 = "principal_role_bound"
+actClassToken ACStandingLifecycle                  = "standing_lifecycle"
+actClassToken ACMilestoneClosure                   = "milestone_closure"
+actClassToken ACGateEdgeSupersession               = "gate_edge_supersession"
+actClassToken ACEntitlementClassConfigured         = "entitlement_class_configured"
+actClassToken ACDelegationLifecycle                = "delegation_lifecycle"
+actClassToken ACIndependentVerificationDelegation  = "independent_verification_delegation"
+
+||| s61 (kernel/lineage/s61-signature-symmetry-and-key-binding.sql): the closed grade CHECK on a
+||| verified-signature attestation.
+data SignatureGrade = GBindingVerified | GDirectoryVerified
 
 ||| R3: the s15 prose kinds, single-homed as one constructor's argument.
 ||| s36 PARITY: KDecision LEAVES this sum -- a decision now has its own
@@ -589,6 +832,54 @@ CompetenceValueF : Bool -> Type
 CompetenceValueF True  = (NonEmptyText, NonEmptyText)   -- (band, basis), G13's value fields
 CompetenceValueF False = ()
 
+||| s64 (kernel/lineage/s64-principal-stamps-delegation-conditions.sql, design/
+||| FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3): the five delegation-condition fields, licensed ONLY on a
+||| FRESH (active=True) acts-for/dispatched-by edge -- the s41 D-1 identity/value split applied to
+||| a fifth kind's own fresh-only fields, one family over from CompetenceValueF. delegation_expiry
+||| is DELIBERATELY NOT rendered here: a wall-clock validity bound is exactly the ts-vs-id
+||| nonuniformity this file's own header already keeps surfaced, not smoothed ("id is the ONLY
+||| ordering primitive anywhere in this file... there is no type here that could even express a
+||| ts-keyed precedence rule") -- naming it here would be the FIRST time-comparison fact this model
+||| has ever carried, and it stays out for the identical reason the PRESERVED list already gives.
+||| The four fields that ARE representable (redelegate depth, must-countersign target, scope-class
+||| restriction, the independent-verification carve-out) are computed-over-events facts, not
+||| wall-clock facts, and are rendered in full below.
+record DelegationConditions where
+  constructor MkDelegationConditions
+  redelegateDepth : Maybe Nat              -- 0 = no-redelegate, Nothing = unrestricted
+  mustCountersign : Maybe PrincipalId
+  scopeClasses    : Maybe (List ActClass)  -- Nothing = unrestricted
+  purpose         : Bool                   -- True = 'independent-verification' carve-out
+
+DelegationConditionsF : Relation -> Bool -> Type
+DelegationConditionsF ActsFor      True = DelegationConditions
+DelegationConditionsF DispatchedBy True = DelegationConditions
+DelegationConditionsF _             _   = ()
+
+||| s61 (kernel/lineage/s61-signature-symmetry-and-key-binding.sql Element on principal_binding):
+||| a FRESH key bind (active=True) must name a key_binding_possession_ref proving possession of the
+||| SAME fingerprint; a retraction (active=False) is forbidden from carrying one (the CHECK's own
+||| two-way shape, mirroring CompetenceValueF one family over).
+PossessionRefF : Bool -> Nat -> Type
+PossessionRefF True  n = Fin n
+PossessionRefF False n = ()
+
+||| s58 (kernel/lineage/s58-missive-substrate.sql §2, missive_responds_to_coupling): mandatory on
+||| response/acknowledgment/withdrawal, optional on assertion/request.
+RespondsToF : MissiveAct -> Type
+RespondsToF MResponse       = XRowRef
+RespondsToF MAcknowledgment = XRowRef
+RespondsToF MWithdrawal     = XRowRef
+RespondsToF MAssertion      = Maybe XRowRef
+RespondsToF MRequest        = Maybe XRowRef
+
+||| s58 (missive_disposition's three CHECKs, §1): mandatory on an acknowledgment missive_sent row
+||| (the disposition travels BACK to the author via the very acknowledgment that carries it),
+||| forbidden on every other act.
+DispositionF : MissiveAct -> Type
+DispositionF MAcknowledgment = MissiveDisposition
+DispositionF _               = ()
+
 ||| s44: the closed join-set confidence grade (attest_grade's value CHECK --
 ||| kernel-structural like s43's refusal_surface: it enumerates the sentry
 ||| design's own join algebra, never organizational naming). Deliberately
@@ -625,6 +916,46 @@ data RefusalSurface = SurfLedger | SurfReview | SurfRegistration | SurfObligatio
                     -- families -- an artifact write mints NO ledger row on acceptance,
                     -- only on refusal (digest-only journal), so the surface exists in
                     -- the vocabulary without a payload constructor behind it.
+                    | SurfObligationRevoke  -- s57: the sixth boundary function
+                    -- (kernel.obligation_revoke) -- reachable, surfaceFor (PObligationRevoked)
+                    -- names it directly.
+                    | SurfMissiveDispose  -- s58: the seventh boundary function
+                    -- (kernel.missive_dispose) -- reachable, surfaceFor (PMissiveDisposed)
+                    -- names it directly; missive_sent/missive_received themselves travel
+                    -- through the generic SurfLedger path (kernel.ledger_write), per s65's own
+                    -- QUANTIFICATION UNIVERSE enumeration of the seven surfaces.
+
+||| s53 (kernel/lineage/s53-belief-substrate.sql): universe is mandatory NonEmptyText exactly when
+||| BUniversal (belief_universe_coupling's own two-way shape collapsed onto the two-valued
+||| polarity axis -- "mandatory iff universal" and "forbidden iff existential" are the SAME fact
+||| when polarity has exactly two values).
+UniverseF : BeliefPolarity -> Type
+UniverseF BUniversal   = NonEmptyText
+UniverseF BExistential = ()
+
+||| s53: witness is forbidden under BUniversal (belief_witness_universal_forbidden), mandatory
+||| under BExistential+BObserved (belief_witness_observed_mandatory), optional under every other
+||| BExistential basis.
+WitnessF : BeliefPolarity -> BeliefBasis -> Type
+WitnessF BUniversal   _         = ()
+WitnessF BExistential BObserved = NonEmptyText
+WitnessF BExistential _         = Maybe NonEmptyText
+
+||| s53: source (the testimony's own citation) is mandatory exactly under BTestimony
+||| (belief_source_coupling's two-way shape), forbidden otherwise -- a self-table FK, Fin-typed
+||| like every other structural back-reference in this file.
+SourceF : BeliefBasis -> Nat -> Type
+SourceF BTestimony n = Fin n
+SourceF _          n = ()
+
+||| s53: premises (the derivation's own citation list) is mandatory nonempty exactly under
+||| BDerived (belief_premises_coupling), forbidden otherwise. The nonempty half is a separate
+||| ValidPayload premise (VBelief below) -- PremisesF only renders "list or nothing", matching
+||| this file's own idiom of keeping shape-unrepresentability and cardinality-refusal as two
+||| separate facts (contrast CompetenceValueF, which has no cardinality question).
+PremisesF : BeliefBasis -> Nat -> Type
+PremisesF BDerived n = List (Fin n)
+PremisesF _        n = ()
 
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
@@ -671,15 +1002,23 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   -- s41: the four binding/relation kinds, each indexed by its active flag
   -- (true = assertion, false = retraction restating identity fields only --
   -- the entry-level inactive-needs-supersedes half lives in boundaryOk, §3).
+  ||| s64: the fifth field is the delegation-conditions record, licensed ONLY on a fresh
+  ||| acts-for/dispatched-by edge (DelegationConditionsF, above) -- every other relation/active
+  ||| combination carries (), unrepresentable the same way CompetenceValueF forecloses a
+  ||| withdrawal's band/basis.
   PRelationAsserted    : (subject : PrincipalId) -> (rel : Relation)
-                      -> (object : PrincipalId) -> (active : Bool) -> Payload st n
+                      -> (object : PrincipalId) -> (active : Bool)
+                      -> DelegationConditionsF rel active -> Payload st n
   ||| roleName is FREE non-empty text BY RATIFIED RULING (basis §9(c)/C13) --
   ||| deliberately NOT a closed sum, the one vocabulary in this family the
   ||| kernel refuses to own.
   PRoleBound           : (subject : PrincipalId) -> (roleName : NonEmptyText)
                       -> (active : Bool) -> Payload st n
+  ||| s61: the fourth field is the possession proof, mandatory (Fin n, structural existence) on a
+  ||| FRESH bind, forbidden on a retraction (PossessionRefF, above) -- key-binding proof-of-
+  ||| possession, additive to the pre-existing human-only premise (VKeyBound, §3).
   PKeyBound            : (subject : PrincipalId) -> (fingerprint : Fingerprint)
-                      -> (active : Bool) -> Payload st n
+                      -> (active : Bool) -> PossessionRefF active n -> Payload st n
   PCompetenceGranted   : (subject : PrincipalId) -> (activity : NonEmptyText)
                       -> (active : Bool) -> CompetenceValueF active -> Payload st n
   ||| s43: a refusal the write boundary caught, COMMITTED as an ordinary row
@@ -700,11 +1039,45 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   ||| the s42 crypto boundary). s49's overflow guard is also subsumed at
   ||| this constructor's altitude: attemptedActor's resolution is total in
   ||| the model because PrincipalId = Nat is unbounded -- the PRESERVED
-  ||| list's Nat-vs-bigint entry names that idealization.
+  ||| list's Nat-vs-bigint entry names that idealization. s65
+  ||| (kernel/lineage/s65-refusal-attempted-kind.sql, ledger row 1487 "Yes,
+  ||| let's have that column" verbatim): attemptedKind is the refused
+  ||| payload's OWN `kind` token, extracted before the digest (R4's
+  ||| digest-only discipline over the payload AS A WHOLE is unchanged) --
+  ||| Maybe, and DELIBERATELY so: NULL is legitimate whenever the refused
+  ||| payload carried no `kind` key, a non-text value, a value over 256
+  ||| bytes (refusal_attempted_kind_length, the table CHECK; the SAME bound
+  ||| is ALSO enforced belt-and-suspenders inside journal_write_refusal
+  ||| itself), or the refusing surface's own payload contract never admits a
+  ||| `kind` key at all (every surface except SurfLedger, structurally -- the
+  ||| QUANTIFICATION UNIVERSE fact s65's own closure statement proves). NULL
+  ||| means "not extractable", NEVER "not attempted" -- the constructor's own
+  ||| existence already proves an attempt happened.
+  ||| THE 256-BYTE BOUND, DECIDED (not re-derived as a refined/bounded type,
+  ||| unlike CommitRef/Fingerprint's own shape-checked records): those two
+  ||| refine a WRITER-SUPPLIED field whose shape gates an accepted row's own
+  ||| legality. attemptedKind is different in kind -- it is never
+  ||| writer-supplied at all, only KERNEL-EXTRACTED (attemptedKindFor,
+  ||| below) from an ALREADY-TYPED Payload value, via payloadKindToken's own
+  ||| closed, static, short literal tokens ("principal_relation_asserted" is
+  ||| the longest, nowhere near 256 bytes). The SQL's bound exists to stop a
+  ||| caller's ADVERSARIAL raw jsonb string (a 2 MiB `kind` value, the
+  ||| review's own witnessed specimen) from reaching storage; this model's
+  ||| attemptedKindFor has no such input to begin with -- its domain is the
+  ||| closed kind vocabulary, never free text a caller supplies at this key,
+  ||| so the bound can never bind here. Modeling it as a refined
+  ||| `BoundedKindText` type would therefore assert a refinement with no
+  ||| reachable counter-instance: honest but pointless ceremony, the SAME
+  ||| judgment this file already applies to the epoch gate and the two
+  ||| producers. Named explicitly, not silently omitted -- the SQL's own
+  ||| protection is real and stays real at ITS altitude (raw jsonb), it is
+  ||| simply below this rendering's, exactly the Nat-vs-bigint idealization's
+  ||| own shape one field over.
   PWriteRefused : (sqlstate : NonEmptyText) -> (message : NonEmptyText)
                -> (surface : RefusalSurface) -> (digest : NonEmptyText)
                -> (attemptedActor : Maybe PrincipalId)
-               -> (attemptedRole : NonEmptyText) -> Payload st n
+               -> (attemptedRole : NonEmptyText)
+               -> (attemptedKind : Maybe NonEmptyText) -> Payload st n
   ||| s44: a model-identity attestation, the typed defeasible-claim shape.
   ||| target is Fin n -- the SQL's self-table FK (attest_row_id REFERENCES
   ||| ledger(id): "the target's existence is thereby structural, never
@@ -723,6 +1096,82 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
                 -> (hasExpected : Bool) -> (verdict : AttestVerdict hasExpected)
                 -> (expected : ExpectedF hasExpected)
                 -> Payload st n
+  ||| s53 (kernel/lineage/s53-belief-substrate.sql): a belief -- polarity/basis are the two closed
+  ||| axes, each field below Gated by them via the type families defined just above §1's own
+  ||| Payload block (UniverseF/WitnessF/SourceF/PremisesF). subject/contests/concurs are Fin n
+  ||| back-references with NO coupling CHECK -- always optional, structural existence is the only
+  ||| enforced fact at THIS altitude; the deeper cross-row rules (contests/concurs target must be
+  ||| kind=belief, unsuperseded at write time, held by a DIFFERENT actor) are ValidPayload premises
+  ||| (VBelief, §3), not type-level, because they read the WHOLE ledger, not just this row's shape.
+  PBelief : (polarity : BeliefPolarity) -> (basis : BeliefBasis)
+         -> (universe : UniverseF polarity) -> (witness : WitnessF polarity basis)
+         -> (source : SourceF basis n) -> (premises : PremisesF basis n)
+         -> (subject : Maybe (Fin n)) -> (contests : Maybe (Fin n)) -> (concurs : Maybe (Fin n))
+         -> Payload st n
+  ||| s57 (kernel/lineage/s57-obligation-revocation-event.sql): a typed revocation event against a
+  ||| countersign_obligation scope. Both fields free NonEmptyText -- scope names a row in a legacy
+  ||| table (countersign_obligation) this model has never carried (out of this model's universe,
+  ||| named rather than silently assumed); the "unknown scope" and "already revoked" refusals are
+  ||| therefore OUT OF MODEL for the identical reason WitnessRef's commit/artifact arms stay
+  ||| existence-unchecked here -- a deeper check this rendering cannot structurally reach. Terminal-
+  ||| by-type is NOT claimed here (unlike PPrincipalRevoked): s57's own disclosed asymmetry is that
+  ||| an obligation_revoked row is an ORDINARY supersedable kind (maySupersede's catch-all, §3) --
+  ||| a deliberate non-foreclosure, not an oversight.
+  PObligationRevoked : (scope : NonEmptyText) -> (reason : NonEmptyText) -> Payload st n
+  ||| s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md): the
+  ||| author-side envelope. respondsTo/disposition are Gated by the act (RespondsToF/DispositionF,
+  ||| above) -- protocol (always literal 1, v1-closed) carries no information and is not rendered.
+  ||| cites is free NonEmptyText (a comma-list of row:/artifact:/xrow: tokens this model does not
+  ||| parse -- the SAME "deeper trigger validation, not re-derived" posture PViolationDisposition's
+  ||| vclass field already takes, one family over).
+  PMissiveSent : (authorWorld : NonEmptyText) -> (addresseeWorld : NonEmptyText)
+              -> (thread : NonEmptyText) -> (seq : Nat) -> (act : MissiveAct)
+              -> (respondsTo : RespondsToF act) -> (cites : Maybe NonEmptyText)
+              -> (disposition : DispositionF act) -> Payload st n
+  ||| s58: the addressee-side arrival record -- provenance is MANDATORY (the sender's own row,
+  ||| named by an XRowRef this model deliberately does not existence-check -- isolation is
+  ||| founding). The courier-scope premise (only the courier principal's kind='missive_received'
+  ||| writes may pass) and the world-identity/dedup premises are entry-level and construction-time
+  ||| facts respectively -- see boundaryOk's courier/world-identity conjuncts and VMissiveReceived's
+  ||| own freshness premise, §3.
+  PMissiveReceived : (authorWorld : NonEmptyText) -> (addresseeWorld : NonEmptyText)
+                  -> (thread : NonEmptyText) -> (seq : Nat) -> (act : MissiveAct)
+                  -> (respondsTo : RespondsToF act) -> (provenance : XRowRef)
+                  -> (cites : Maybe NonEmptyText) -> Payload st n
+  ||| s58: the addressee's lifecycle-close event, regarding its own receipt (Fin n, structural
+  ||| existence). COMPOUND-WRITE NOTE, named rather than silently modeled as an ordinary single-row
+  ||| act: the kernel's own kernel.missive_dispose mints THIS row and an acknowledgment
+  ||| PMissiveSent row atomically, in one guarded transaction -- exactly the shape s51's
+  ||| artifact_write already established as a boundary function whose FULL operational surface
+  ||| exceeds this file's single-row append/write rendering (§3b). This constructor renders the
+  ||| ROW ALGEBRA (what a missive_disposed row may say) faithfully; the atomicity WITH its sibling
+  ||| acknowledgment is out-of-model, the same altitude choice as the refusal_seq oracle.
+  PMissiveDisposed : (regards : Fin n) -> (disposition : MissiveDisposition) -> Payload st n
+  ||| s60 (kernel/lineage/s60-entitlement-enforcement.sql): a deployment's own role requirement for
+  ||| one act class. actClass is FREE NonEmptyText (the deployment configures a STRING matched
+  ||| against entitlement_act_class_of's own kernel-computed vocabulary by string equality,
+  ||| entitlementClassRole §2f -- a misconfigured typo simply never matches anything, vacuously,
+  ||| exactly the SQL's own posture: no vocabulary CHECK constrains this column). No active flag --
+  ||| v1 supports fresh-assert and rotation (later row wins by id) only, never de-configuration
+  ||| (a LIMIT, not silently smoothed: removing a role requirement would be a RELAXING mechanism,
+  ||| out of the fail-safe-additive class s60 rode).
+  PEntitlementClassConfigured : (actClass : NonEmptyText) -> (roleName : NonEmptyText)
+                             -> Payload st n
+  ||| s61 (kernel/lineage/s61-signature-symmetry-and-key-binding.sql): a trusted assertion that a
+  ||| commission row (attestsRow, Fin n -- structural existence, never kind-checked here, matching
+  ||| PReview.regards' own weakly-kind-checked precedent since 'commission' is not itself a
+  ||| constructor this model carries, one of the ~20 ordinary un-modeled kinds s62's own audit
+  ||| names) carries a GPG-verified signature. The kernel CANNOT verify GPG signatures -- this row
+  ||| buys FALSIFIABILITY (re-checkable against real bytes later), never cryptographic
+  ||| unforgeability, the same disclosed grade as the HMAC stamp (out-of-model, §0). The attesting
+  ||| principal is Entry.actor (this row's own writer), not a separate field -- the same
+  ||| "the row IS the act" reading modelAttestations already uses.
+  PCommissionSignatureVerified : (attestsRow : Fin n) -> (grade : SignatureGrade)
+                              -> (fingerprint : Fingerprint) -> Payload st n
+  ||| s61: a trusted assertion of key possession, the fourth column's own dedicated target kind --
+  ||| grounds a FRESH PKeyBound's possessionRef (PossessionRefF, above). Same disclosed
+  ||| falsifiability-not-unforgeability grade as PCommissionSignatureVerified.
+  PKeyPossessionVerified : (fingerprint : Fingerprint) -> Payload st n
   -- s15 review: regards is MANDATORY for kind=review and RESERVED to it --
   -- the two-way trigger check is exactly "this constructor and only this
   -- constructor carries the field".
@@ -755,6 +1204,12 @@ record Entry (st : Stage) (n : Nat) where
   amends     : Maybe (Fin n, String)  -- target + verbatim quotation
   answers    : Maybe (Fin n)
   enacts     : List (Fin n)
+  ||| s61 (kernel/lineage/s61-signature-symmetry-and-key-binding.sql): signature_symmetry_witness,
+  ||| licensed on EVERY kind (optional everywhere, no kind-shape CHECK at all) -- an Entry-level
+  ||| field like supersedes/amends/answers, never a Payload field, because the symmetry premise it
+  ||| feeds (signatureSymmetryOk, §3) is an entry-wide fact about THIS write's own grounding, not a
+  ||| kind-scoped payload column.
+  sigWitness : Maybe (Fin n)
   payload    : Payload st n
 
 ||| §1 THE LEDGER: indexed append-only structure. The ledger holds RECORDED
@@ -1170,9 +1625,9 @@ data RowForce = RFSuperseded | RFRetracted | RFAsserting
 ||| -- four s41 binding kinds + the two lifecycle kinds licensed there;
 ||| principal_revoked's absence from this list IS the terminal-by-type fact).
 activeFlagOf : Payload st m -> Maybe Bool
-activeFlagOf (PRelationAsserted _ _ _ a)  = Just a
+activeFlagOf (PRelationAsserted _ _ _ a _) = Just a
 activeFlagOf (PRoleBound _ _ a)           = Just a
-activeFlagOf (PKeyBound _ _ a)            = Just a
+activeFlagOf (PKeyBound _ _ a _)          = Just a
 activeFlagOf (PCompetenceGranted _ _ a _) = Just a
 activeFlagOf (PStandingDeclared _ _ a)    = Just a
 activeFlagOf (PPrincipalSuspended _ a)    = Just a
@@ -1362,6 +1817,586 @@ creditedCurrentKernel : {n : Nat} -> Ledger n -> List Nat
 creditedCurrentKernel l = creditedCurrentIds (rawInputAt l) l
 
 -- ===========================================================================
+-- §2e  s56 RESERVATION RESIDUE. reservations_outstanding is the one NEW
+--      invariant-carrying view s56 adds (kernel/lineage/s56-reservation-residue.sql):
+--      an in-force attest_with_reservations review with no answering event yet.
+--      review_verdicts (s56 Element 3) is a pure raw/history report ("every review
+--      row, superseded or not, plus a superseded boolean") -- SAY SO rather than
+--      re-derive: it adds no invariant this model does not already carry via
+--      rowForce/inForce, just a display join of pre-existing facts. NOTHING
+--      model-visible there.
+-- ===========================================================================
+
+||| A reservation (an in-force AttestWithReservations review of slug-level row t)
+||| leaves outstanding status via exactly two disposition paths, existing vocabulary
+||| only (s56 Element 2): (a) the reservation review itself becomes superseded --
+||| inForce already folds this in below -- or (b) a distinct un-superseded review
+||| REGARDING the reservation review itself carries verdict=Attest ("attesting away"
+||| one's own or another's reservation is an ordinary meta-review act, no new kind).
+reservationAnsweredAt : {n : Nat} -> Ledger n -> Fin n -> Bool
+reservationAnsweredAt l reviewId = anyB answers (allIds n)
+  where
+    answers : Fin n -> Bool
+    answers u = inForce l u &&
+      (case entryAt l u of
+         (_ ** e) => case e.payload of
+           PReview regards d => finToNat regards == finToNat reviewId && isAttest d.verdict
+                              && (case d.verdict of Attest => True; _ => False)
+           _                 => False)
+
+||| s56 Element 2: in-force reviews of any regarded row whose verdict is
+||| AttestWithReservations and which no answering Attest has yet resolved.
+reservationsOutstanding : {n : Nat} -> Ledger n -> List Nat
+reservationsOutstanding l = [ finToNat t | t <- allIds n, outstanding t ]
+  where
+    outstanding : Fin n -> Bool
+    outstanding t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+           PReview _ d => (case d.verdict of AttestWithReservations => True; _ => False)
+                       && not (reservationAnsweredAt l t)
+           _           => False)
+
+-- ===========================================================================
+-- §2f  s53/s57/s58/s60/s61/s62/s64 HELPER MACHINERY: the belief cross-row edge
+--      premises, the s61 signature-symmetry read, the s58 courier/world-identity/
+--      dedup facts, and the s60/s62/s64 entitlement+delegation-conditions
+--      acceptance predicate. Placed here, ahead of §3, for the identical reason
+--      §2b sits ahead of the write boundary: these premises are read by
+--      boundaryOk (§3) and need entryAt/inForce/rowForce already in scope.
+-- ===========================================================================
+
+isAsserting : RowForce -> Bool
+isAsserting RFAsserting = True
+isAsserting _           = False
+
+isActiveStanding : Standing -> Bool
+isActiveStanding PsActive = True
+isActiveStanding _        = False
+
+||| s53: is row t (by its own raw kind) a belief, regardless of force. Used only to type-check a
+||| cross-row citation's own kind, never a force question itself.
+isBeliefKind : {n : Nat} -> Ledger n -> Fin n -> Bool
+isBeliefKind l t = case entryAt l t of
+  (_ ** e) => case e.payload of
+    PBelief _ _ _ _ _ _ _ _ _ => True
+    _                         => False
+
+||| s53 validate_belief_edges: a contests/concurs target must exist (Fin n, structural), be
+||| kind=belief, be UNSUPERSEDED AT WRITE TIME (in-force, since this is checked against the
+||| ledger BEFORE this write lands), and be held by a DIFFERENT actor than the writer -- self-
+||| contest/self-concurrence are both refused (one shape, both edges: "your own belief" reads the
+||| same either way).
+beliefEdgeOk : {n : Nat} -> Ledger n -> PrincipalId -> Maybe (Fin n) -> Bool
+beliefEdgeOk l actorP Nothing  = True
+beliefEdgeOk l actorP (Just t) = isBeliefKind l t && inForce l t &&
+  (case entryAt l t of (_ ** te) => te.actor /= actorP)
+
+||| Entry-level wrapper: beliefEdgeOk needs the WRITER's own actor (Entry.actor), which ValidPayload
+||| (payload-only) cannot see -- boundaryOk's own home for this premise (VBelief, §3, carries only
+||| the actor-FREE cardinality premise).
+beliefEdgesOkB : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+beliefEdgesOkB l e = case e.payload of
+  PBelief _ _ _ _ _ _ _ contests concurs => beliefEdgeOk l e.actor contests && beliefEdgeOk l e.actor concurs
+  _                                      => True
+
+||| s53 belief_premises_coupling's nonempty half (VBelief's own premise, kept separate from
+||| PremisesF's shape-unrepresentability, matching this file's own idiom of splitting
+||| shape-refusal from cardinality-refusal).
+premisesNonEmptyOk : (basis : BeliefBasis) -> PremisesF basis n -> Bool
+premisesNonEmptyOk BDerived   ps = not (null ps)
+premisesNonEmptyOk BObserved  _  = True
+premisesNonEmptyOk BTestimony _  = True
+premisesNonEmptyOk BAssumed   _  = True
+
+||| s61: is w (structural existence) a commission_signature_verified row?
+isCommissionSigVerified : {n : Nat} -> Ledger n -> Fin n -> Bool
+isCommissionSigVerified l w = case entryAt l w of
+  (_ ** e) => case e.payload of
+    PCommissionSignatureVerified _ _ _ => True
+    _                                  => False
+
+||| s61 item 1: does target row t rest its force on a VERIFIED signature -- either it IS an
+||| in-force attested commission (some in-force PCommissionSignatureVerified names it), or it
+||| carries its OWN signature_symmetry_witness pointing at one.
+||| Is absolute row k (a Nat, since it may have arrived as a smaller-index back-reference from an
+||| already-recorded row, exactly the rawInputAt/curInputAt idiom, §2d) an in-force
+||| commission_signature_verified row?
+isCommissionSigVerifiedAt : {n : Nat} -> Ledger n -> Nat -> Bool
+isCommissionSigVerifiedAt l k = anyB (\u => finToNat u == k && inForce l u && isCommissionSigVerified l u) (allIds n)
+
+restsOnVerifiedSignature : {n : Nat} -> Ledger n -> Fin n -> Bool
+restsOnVerifiedSignature l t =
+     anyB attestsT (allIds n)
+  || (case entryAt l t of
+        (_ ** te) => case te.sigWitness of
+          Just w  => isCommissionSigVerifiedAt l (finToNat w)
+          Nothing => False)
+  where
+    attestsT : Fin n -> Bool
+    attestsT a = inForce l a &&
+      (case entryAt l a of
+         (_ ** ae) => case ae.payload of
+           PCommissionSignatureVerified attests _ _ => finToNat attests == finToNat t
+           _                                         => False)
+
+||| s61 item 1, the symmetry itself: a target resting on a verified signature may only be
+||| superseded by a row whose OWN sigWitness also names a genuine attestation. NEW can never
+||| satisfy the "itself an attested commission" disjunct in the same statement it is inserted by
+||| (an attestation is authored strictly after the commission it attests) -- the correct asymmetry,
+||| not a gap, s61's own note.
+signatureSymmetryOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+signatureSymmetryOk l e = case e.supersedes of
+  Nothing => True
+  Just t  => if restsOnVerifiedSignature l t
+               then case e.sigWitness of
+                      Just w  => isCommissionSigVerified l w
+                      Nothing => False
+               else True
+
+||| s53's OWN supersession discipline (restored by s63 alongside the missive branches, §3's own
+||| maySupersede handles the KIND-match half; actor identity is an Entry-level fact, so it lives
+||| here): a belief target may be superseded only by its OWN holder (self-revision).
+beliefSupersedeIdentityOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+beliefSupersedeIdentityOk l e = case e.supersedes of
+  Nothing => True
+  Just t  => case entryAt l t of
+    (_ ** te) => case te.payload of
+      PBelief _ _ _ _ _ _ _ _ _ => te.actor == e.actor
+      _                         => True
+
+||| s58 dedup (validate_missive_dedup): raw-HISTORY reads -- a superseded prior claim on the SAME
+||| (thread, seq) still blocks a duplicate, the identical "slug burned" reasoning everOpened
+||| already carries, one mechanism over.
+missiveSentDedupOk : {n : Nat} -> Ledger n -> NonEmptyText -> Nat -> Bool
+missiveSentDedupOk l thread sq = not (anyB dup (allIds n))
+  where
+    dup : Fin n -> Bool
+    dup t = case entryAt l t of
+      (_ ** e) => case e.payload of
+        PMissiveSent _ _ th s _ _ _ _ => th.text == thread.text && s == sq
+        _                             => False
+
+missiveReceivedDedupOk : {n : Nat} -> Ledger n -> NonEmptyText -> NonEmptyText -> Nat -> Bool
+missiveReceivedDedupOk l authorWorld thread sq = not (anyB dup (allIds n))
+  where
+    dup : Fin n -> Bool
+    dup t = case entryAt l t of
+      (_ ** e) => case e.payload of
+        PMissiveReceived aw _ th s _ _ _ _ => aw.text == authorWorld.text && th.text == thread.text && s == sq
+        _                                  => False
+
+||| s58 validate_missive_courier_scope: the courier principal (an ambient, per-deployment fact --
+||| this model's PrincipalId is the id, not the NAME the SQL looks up, the same s40-era gap already
+||| named for principal registration freshness) writes missive_received and NOTHING else. Named as
+||| a STANDALONE premise, not threaded into boundaryOk's own aggregate signature (a scope choice:
+||| courier identity is session/deployment state orthogonal to the row algebra append/write render,
+||| the same posture StampOracle already takes as a caller-held oracle rather than a boundaryOk
+||| conjunct).
+courierScopeOk : {n : Nat} -> Maybe PrincipalId -> Entry Draft n -> Bool
+courierScopeOk Nothing            e = True
+courierScopeOk (Just courierPid)  e =
+  if e.actor == courierPid
+    then case e.payload of
+           PMissiveReceived _ _ _ _ _ _ _ _ => True
+           _                                => False
+    else True
+
+||| s58 validate_missive_identity: an empty kernel.world_identity refuses EVERY missive write
+||| loudly (fail-safe, not a silent default) -- ambient per-deployment state, same standalone
+||| posture as courierScopeOk.
+worldIdentitySetOk : {n : Nat} -> Bool -> Payload st n -> Bool
+worldIdentitySetOk wset (PMissiveSent _ _ _ _ _ _ _ _)     = wset
+worldIdentitySetOk wset (PMissiveReceived _ _ _ _ _ _ _ _) = wset
+worldIdentitySetOk wset _                                  = True
+
+||| s61: possession proof-of-possession, mandatory on a fresh key bind only (PossessionRefF's own
+||| shape already forecloses the retraction case to (), so this is total by construction there).
+possessionOk : {n : Nat} -> Ledger n -> Fingerprint -> (active : Bool) -> PossessionRefF active n -> Bool
+possessionOk l fp True  ref = case entryAt l ref of
+  (_ ** e) => case e.payload of
+    PKeyPossessionVerified fp2 => fp2.fp == fp.fp
+    _                          => False
+possessionOk l fp False ()  = True
+
+-- ---------------------------------------------------------------------------
+-- s60/s62/s64: THE ENTITLEMENT + DELEGATION-CONDITIONS ACCEPTANCE PREDICATE.
+-- ---------------------------------------------------------------------------
+
+||| s60 entitlement_genesis_principal(): the raw-HISTORY read (never ledger_current) of the
+||| FIRST-EVER principal_registered row, by insertion order -- an immutable historical fact
+||| (registration targets sit outside s45's own supersession discipline).
+firstJust : (a -> Maybe b) -> List a -> Maybe b
+firstJust f []        = Nothing
+firstJust f (x :: xs) = case f x of
+  Just y  => Just y
+  Nothing => firstJust f xs
+
+genesisPrincipal : {n : Nat} -> Ledger n -> Maybe PrincipalId
+genesisPrincipal l = firstJust regAt (allIds n)
+  where
+    regAt : Fin n -> Maybe PrincipalId
+    regAt t = case entryAt l t of
+      (_ ** e) => case e.payload of
+        PPrincipalRegistered s _ _ => Just s
+        _                          => Nothing
+
+||| Nat-keyed reachability with fuel, the identical shape to `reach` (§2b) one domain over
+||| (PrincipalId rather than Slug) -- kept as its own small walker rather than generalized, this
+||| file's own established style for edge-type-specific walkers (bcReach/bsReach beside reach).
+reachP : (fuel : Nat) -> List (PrincipalId, PrincipalId) -> (frontier : List PrincipalId)
+      -> (seen : List PrincipalId) -> List PrincipalId
+reachP Z     _  _        seen = seen
+reachP (S k) es frontier seen =
+  let next = [ c | (p, c) <- es, elem p frontier, not (elem c seen) ] in
+  case next of
+    [] => seen
+    _  => reachP k es next (seen ++ next)
+
+||| s64 Element 9/10 accessors -- DelegationConditionsF's own fields, read by (rel, active)
+||| pattern (the SAME two-constructor split DelegationConditionsF itself matches on, so each
+||| definitional equation here reduces exactly where the type family says a concrete
+||| DelegationConditions value exists).
+getRedelegateDepth : (rel : Relation) -> (active : Bool) -> DelegationConditionsF rel active -> Maybe Nat
+getRedelegateDepth ActsFor      True dc = dc.redelegateDepth
+getRedelegateDepth DispatchedBy True dc = dc.redelegateDepth
+getRedelegateDepth _            _    _  = Nothing
+
+getMustCountersign : (rel : Relation) -> (active : Bool) -> DelegationConditionsF rel active -> Maybe PrincipalId
+getMustCountersign ActsFor      True dc = dc.mustCountersign
+getMustCountersign DispatchedBy True dc = dc.mustCountersign
+getMustCountersign _            _    _  = Nothing
+
+getScopeClasses : (rel : Relation) -> (active : Bool) -> DelegationConditionsF rel active -> Maybe (List ActClass)
+getScopeClasses ActsFor      True dc = dc.scopeClasses
+getScopeClasses DispatchedBy True dc = dc.scopeClasses
+getScopeClasses _            _    _  = Nothing
+
+hasIVPurpose : (rel : Relation) -> (active : Bool) -> DelegationConditionsF rel active -> Bool
+hasIVPurpose ActsFor      True dc = dc.purpose
+hasIVPurpose DispatchedBy True dc = dc.purpose
+hasIVPurpose _            _    _  = False
+
+||| s60 Element 6 / s64 Element 7: the live acts-for/dispatched-by edges an authority walk may
+||| traverse -- IN FORCE, ACTIVE (RFAsserting, s45's own three-valued read), delegator standing
+||| active, and (s64) scope-conjuncted when a specific act class is asked about (mac = Nothing is
+||| the 1-arg s60 reading; mac = Just ac is the s64 scoped sibling -- ONE shared function, not a
+||| same-name overload, matching the SQL's own "differently-named sibling" discipline in spirit:
+||| chainReachesGenesis/chainReachesGenesisScoped below are the two distinctly-named callers).
+||| delegation_expiry is NOT conjuncted here -- named, not silently dropped: a wall-clock validity
+||| bound is out of this model's universe for the same ts-vs-id reason the header's PRESERVED list
+||| already gives (DelegationConditions' own doc, above).
+delegationEdgesFor : {n : Nat} -> Ledger n -> Maybe ActClass -> List (PrincipalId, PrincipalId)
+delegationEdgesFor l mac = concatMap edgeAt (allIds n)
+  where
+    scopeOk : (rel : Relation) -> (active : Bool) -> DelegationConditionsF rel active -> Bool
+    scopeOk rel active dc = case mac of
+      Nothing => True
+      Just ac => case getScopeClasses rel active dc of
+        Nothing => True
+        Just cs => elem ac cs
+    edgeAt : Fin n -> List (PrincipalId, PrincipalId)
+    edgeAt t = if isAsserting (rowForce l t)
+                 then case entryAt l t of
+                        (_ ** e) => case e.payload of
+                          PRelationAsserted subj rel obj active dc =>
+                            if active && (rel == ActsFor || rel == DispatchedBy)
+                               && isActiveStanding (principalStanding l obj) && scopeOk rel active dc
+                              then [(subj, obj)] else []
+                          _ => []
+                 else []
+
+||| The shared existential walk: pid reaches genesis if genesis does not yet exist (bootstrap
+||| vacuity, s60's own genesis exception) or genesis is directly reachable via delegationEdgesFor.
+reachGeneric : {n : Nat} -> Ledger n -> PrincipalId -> Maybe ActClass -> Bool
+reachGeneric l pid mac = case genesisPrincipal l of
+  Nothing => True
+  Just g  => pid == g || elem g (reachP n (delegationEdgesFor l mac) [pid] [pid])
+
+||| s60 Element 6: the UNSCOPED 1-arg reachability question, never re-issued by s64 -- byte-stable
+||| sibling, matching the SQL's own "never re-issued, still available to any caller" note.
+chainReachesGenesis : {n : Nat} -> Ledger n -> PrincipalId -> Bool
+chainReachesGenesis l pid = reachGeneric l pid Nothing
+
+||| s64 Element 7: the SCOPE/EXPIRY-conjuncted sibling (expiry not rendered, named above) --
+||| vacuously agrees with chainReachesGenesis on any chain carrying no delegation conditions.
+chainReachesGenesisScoped : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> Bool
+chainReachesGenesisScoped l pid ac = reachGeneric l pid (Just ac)
+
+||| s60 Element 4: the governing (latest, no active-flag discriminator -- s60's own v1 LIMIT)
+||| PEntitlementClassConfigured row per act class, matched by STRING EQUALITY against
+||| actClassToken (the deployment's own free-text configuration, never checked against this
+||| model's closed vocabulary at construction -- a typo simply never matches, vacuously, per
+||| PEntitlementClassConfigured's own doc).
+entitlementClassRole : {n : Nat} -> Ledger n -> ActClass -> Maybe NonEmptyText
+entitlementClassRole l ac = lastJust roleAt (allIds n)
+  where
+    roleAt : Fin n -> Maybe NonEmptyText
+    roleAt t = if inForce l t
+                 then case entryAt l t of
+                        (_ ** e) => case e.payload of
+                          PEntitlementClassConfigured ac' role =>
+                            if ac'.text == actClassToken ac then Just role else Nothing
+                          _ => Nothing
+                 else Nothing
+
+||| s60 Element 8 conjunct (a): vacuous (True) when the act class carries no configured role.
+hasConfiguredRole : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> Bool
+hasConfiguredRole l actorP ac = case entitlementClassRole l ac of
+  Nothing   => True
+  Just role => anyB (roleHeldAt role) (allIds n)
+  where
+    roleHeldAt : NonEmptyText -> Fin n -> Bool
+    roleHeldAt role t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+           PRoleBound s r active => active && s == actorP && r.text == role.text
+           _                     => False)
+
+||| s60 Element 8 / s62 Element 1c entitlement_enforce_class: BOTH conjuncts, a no-op on Nothing.
+||| Conjunct (b) is UNCONDITIONAL for every classified act class -- every ActClass member this
+||| model carries is authority-bearing, matching s60/s62/s64's own literal enumeration (all eight
+||| tokens appear in the SQL's v_authority_bearing IN-list; there has never been a classified-but-
+||| not-authority-bearing token in this lineage).
+entitlementEnforceClass : {n : Nat} -> Ledger n -> PrincipalId -> Maybe ActClass -> Bool
+entitlementEnforceClass l actorP Nothing   = True
+entitlementEnforceClass l actorP (Just ac) =
+  hasConfiguredRole l actorP ac && chainReachesGenesisScoped l actorP ac
+
+||| s60 Element 7 / s62's own milestone_closure test: does slug s have a live blocks-start edge
+||| naming it as antecedent (i.e. is s SOMEONE ELSE's gate)?
+isBlocksStartAntecedent : {n : Nat} -> Ledger n -> Slug -> Bool
+isBlocksStartAntecedent l ant = anyB isEdge (allIds n)
+  where
+    isEdge : Fin n -> Bool
+    isEdge t = inForce l t &&
+      (case entryAt l t of
+         (_ ** e) => case e.payload of
+           PWorkDepends _ ant' BlocksStart => ant' == ant
+           _                               => False)
+
+||| s62 round 2's target-side test: is row t itself (zero-hop, its own edge_type column) a live
+||| blocks-start edge?
+targetIsBlocksStart : {n : Nat} -> Ledger n -> Fin n -> Bool
+targetIsBlocksStart l t = case entryAt l t of
+  (_ ** te) => case te.payload of
+    PWorkDepends _ _ BlocksStart => True
+    _                            => False
+
+||| s60 Element 7 / s62 round 1 / s64 Element 9: the CANDIDATE's own act class -- one-hop through
+||| e.supersedes for gate_edge_supersession (reading what the candidate itself supersedes), s64's
+||| widened acts-for/dispatched-by relation test, and the independent-verification carve-out.
+||| FIX (fresh-context review, BLOCKS MERGE, CRITICAL): the s64 SQL classifies a
+||| principal_relation_asserted row of relation acts-for/dispatched-by as delegation_lifecycle /
+||| independent_verification_delegation REGARDLESS of principal_binding_active -- there is no
+||| `active` test anywhere in entitlement_act_class_of's own principal_relation_asserted branch
+||| (kernel/lineage/s64-principal-stamps-delegation-conditions.sql ~680-685). An EARLIER rendering
+||| here wrongly gated this classification on `active`, which let a RETRACTION (active=False)
+||| classify to Nothing -- vacuously passing delegationConditionsOk and silently skipping conjuncts
+||| (c)/(d) (depth-budget, must-countersign) for exactly the write s64's own Element 11b header
+||| says conjunct (d) "rides the whole chain" for: a countersign-caveated or depth-exhausted
+||| principal could SEVER a delegation edge the kernel would refuse. The model being MORE
+||| permissive than the kernel is the worst polarity for a consumer relying on this doc -- fixed
+||| by dropping the `active` test entirely, matching the SQL exactly. hasIVPurpose is still called
+||| (never gated) -- it already answers False for every active=False row on its own (its
+||| definitional equations only produce True on the (ActsFor,True)/(DispatchedBy,True) arms, and a
+||| retraction's own DelegationConditionsF is () regardless), which is ITSELF the faithful reading:
+||| delegation_purpose is forced NULL on a retraction row by its own kind-shape CHECK, so the SQL
+||| ALSO never returns the IV token for an inactive row -- both sides agree delegation_lifecycle,
+||| never independent_verification_delegation, for active=False, with zero special-casing needed
+||| here.
+entitlementActClassOf : {n : Nat} -> Ledger n -> Entry Draft n -> Maybe ActClass
+entitlementActClassOf l e = case e.payload of
+  PPrincipalRegistered _ _ _      => Just ACPrincipalRegistered
+  PRoleBound _ _ _                => Just ACPrincipalRoleBound
+  PStandingDeclared _ _ _         => Just ACStandingLifecycle
+  PPrincipalSuspended _ _         => Just ACStandingLifecycle
+  PPrincipalRevoked _             => Just ACStandingLifecycle
+  PEntitlementClassConfigured _ _ => Just ACEntitlementClassConfigured
+  PWorkClosed s _ _ _ _ _         => if isBlocksStartAntecedent l s then Just ACMilestoneClosure else Nothing
+  PWorkDepends _ _ _               => case e.supersedes of
+                                          Nothing => Nothing
+                                          Just t  => if targetIsBlocksStart l t
+                                                       then Just ACGateEdgeSupersession else Nothing
+  PRelationAsserted _ rel _ active dc =>
+    if rel == ActsFor || rel == DispatchedBy
+      then if hasIVPurpose rel active dc
+             then Just ACIndependentVerificationDelegation else Just ACDelegationLifecycle
+      else Nothing
+  _ => Nothing
+
+||| s62 round 2 Element 1b: the TARGET's own act class, judged PURELY from its own row, one hop
+||| (never chasing ITS OWN supersedes) -- "classify the target as if fresh". Uniformly
+||| DelegationLifecycle, never the independent-verification token: s64's own named limit (target
+||| classification never distinguishes the carve-out, since severance-protection is the only job).
+||| FIX (same review, same defect, target side): entitlement_act_class_of_target isn't even PASSED
+||| principal_binding_active (kernel/lineage/s64-principal-stamps-delegation-conditions.sql
+||| ~741-743, four scalar parameters, active never one of them) -- the `active` test dropped here
+||| too, matching exactly.
+entitlementActClassOfTarget : {n : Nat} -> Ledger n -> Fin n -> Maybe ActClass
+entitlementActClassOfTarget l t = case entryAt l t of
+  (_ ** te) => case te.payload of
+    PPrincipalRegistered _ _ _      => Just ACPrincipalRegistered
+    PRoleBound _ _ _                => Just ACPrincipalRoleBound
+    PStandingDeclared _ _ _         => Just ACStandingLifecycle
+    PPrincipalSuspended _ _         => Just ACStandingLifecycle
+    PPrincipalRevoked _             => Just ACStandingLifecycle
+    PEntitlementClassConfigured _ _ => Just ACEntitlementClassConfigured
+    PWorkClosed s _ _ _ _ _         => if isBlocksStartAntecedent l s then Just ACMilestoneClosure else Nothing
+    PWorkDepends _ _ BlocksStart    => Just ACGateEdgeSupersession
+    PWorkDepends _ _ _              => Nothing
+    PRelationAsserted _ rel _ _ _ =>
+      if rel == ActsFor || rel == DispatchedBy then Just ACDelegationLifecycle else Nothing
+    _ => Nothing
+
+||| s62 round 2's own rule: "severance is an act against the TARGET's class, not only the
+||| candidate's own" -- BOTH conjuncts, never precedence or replacement.
+entitlementOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+entitlementOk l e =
+     entitlementEnforceClass l e.actor (entitlementActClassOf l e)
+  && entitlementEnforceClass l e.actor (case e.supersedes of
+                                          Nothing => Nothing
+                                          Just t  => entitlementActClassOfTarget l t)
+
+-- ---------------------------------------------------------------------------
+-- s64 Elements 6/8/11b: the two extra conjuncts (depth-budget, must-countersign),
+-- CANDIDATE-only (never applied to a supersession target -- both read NEW's own
+-- object/sigWitness, not meaningful for a row being superseded).
+-- ---------------------------------------------------------------------------
+
+budgetSentinel : Nat
+budgetSentinel = 2000000000
+
+||| s64 Element 6's own per-hop combination: no cap here inherits upstream minus this hop; a cap
+||| here with an unrestricted upstream is this hop's own cap; both finite takes the running min.
+stepBudget : Maybe Nat -> Maybe Nat -> Maybe Nat
+stepBudget Nothing  upstream = map (\u => minus u 1) upstream
+stepBudget (Just c) Nothing  = Just c
+stepBudget (Just c) (Just u) = Just (min c (minus u 1))
+
+mapMaybeL : (a -> Maybe b) -> List a -> List b
+mapMaybeL f []        = []
+mapMaybeL f (x :: xs) = case f x of
+  Just y  => y :: mapMaybeL f xs
+  Nothing => mapMaybeL f xs
+
+||| Most-permissive-path-wins (MAX across paths) -- Nothing (unrestricted) beats every Just,
+||| mirroring chainReachesGenesis's own any-path-suffices existential.
+betterBudget : Maybe Nat -> Maybe Nat -> Maybe Nat
+betterBudget Nothing  _        = Nothing
+betterBudget _        Nothing  = Nothing
+betterBudget (Just a) (Just b) = Just (max a b)
+
+||| s64 Element 6, principal_redelegate_budget's own inbound-edge read for pid.
+inboundDelegationEdges : {n : Nat} -> Ledger n -> PrincipalId -> List (PrincipalId, Maybe Nat)
+inboundDelegationEdges l p = concatMap edgeAt (allIds n)
+  where
+    edgeAt : Fin n -> List (PrincipalId, Maybe Nat)
+    edgeAt t = if isAsserting (rowForce l t)
+                 then case entryAt l t of
+                        (_ ** e) => case e.payload of
+                          PRelationAsserted subj rel obj active dc =>
+                            if subj == p && (rel == ActsFor || rel == DispatchedBy) && active
+                               && isActiveStanding (principalStanding l obj)
+                              then [(obj, getRedelegateDepth rel active dc)] else []
+                          _ => []
+                 else []
+
+||| s64 Element 6: the running-min-then-max-over-paths derivation, ONE forward walk, fuel-bounded
+||| by ledger size (this file's own reach-idiom bound). Outer Maybe = "was genesis reached at all
+||| within fuel" (Nothing here collapses to "unrestricted" at the top level, s64's own v_budget IS
+||| NULL -> NULL reading: no PRE-EXISTING inbound chain found places no cap on a fresh grant).
+redelegateBudgetTo : {n : Nat} -> (fuel : Nat) -> Ledger n -> PrincipalId -> PrincipalId -> Maybe (Maybe Nat)
+redelegateBudgetTo Z     l pid genesis = if pid == genesis then Just Nothing else Nothing
+redelegateBudgetTo (S k) l pid genesis =
+  if pid == genesis then Just Nothing
+  else
+    let inbound    = inboundDelegationEdges l pid
+        candidates = mapMaybeL (\pc => map (stepBudget (snd pc)) (redelegateBudgetTo k l (fst pc) genesis)) inbound
+    in case candidates of
+         []        => Nothing
+         (c :: cs) => Just (foldl betterBudget c cs)
+
+principalRedelegateBudget : {n : Nat} -> Ledger n -> PrincipalId -> Maybe Nat
+principalRedelegateBudget l pid = case genesisPrincipal l of
+  Nothing => Nothing
+  Just g  => if pid == g then Nothing
+             else case redelegateBudgetTo n l pid g of
+                    Nothing => Nothing
+                    Just b  => b
+
+||| s64 Element 8: the reachable-from-pid principal set under the scoped edge graph (identical
+||| domain principal_authority_chain_countersigners walks: "every hop we could traverse toward
+||| genesis", not narrowed to the one path eventually used -- matching the SQL's own un-narrowed
+||| second query).
+reachableFrom : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> List PrincipalId
+reachableFrom l pid ac = pid :: reachP n (delegationEdgesFor l (Just ac)) [pid] [pid]
+
+countersignValuesAlongChain : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> List PrincipalId
+countersignValuesAlongChain l pid ac = mapMaybeL (countersignOnEdgeFrom (reachableFrom l pid ac)) (allIds n)
+  where
+    countersignOnEdgeFrom : List PrincipalId -> Fin n -> Maybe PrincipalId
+    countersignOnEdgeFrom rs t =
+      if isAsserting (rowForce l t)
+        then case entryAt l t of
+               (_ ** e) => case e.payload of
+                 PRelationAsserted subj rel obj active dc =>
+                   if (rel == ActsFor || rel == DispatchedBy) && active && elem subj rs
+                      && isActiveStanding (principalStanding l obj)
+                     then getMustCountersign rel active dc
+                     else Nothing
+                 _ => Nothing
+        else Nothing
+
+allSameAs : PrincipalId -> List PrincipalId -> Bool
+allSameAs x []        = True
+allSameAs x (y :: ys) = x == y && allSameAs x ys
+
+||| s64 Element 8: empty = CSNone (no requirement); a single distinct value = CSRequired; more
+||| than one distinct required countersigner = CSConflict, UNSATISFIABLE by a single-witness
+||| column -- a fail-safe LIMIT, never fail-open (s64's own disclosed choice).
+data CountersignReq = CSNone | CSRequired PrincipalId | CSConflict
+
+countersignRequirement : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> CountersignReq
+countersignRequirement l pid ac = case countersignValuesAlongChain l pid ac of
+  []        => CSNone
+  (x :: xs) => if allSameAs x xs then CSRequired x else CSConflict
+
+||| s64 Element 11b conjunct (c): fires ONLY on the exact token ACDelegationLifecycle -- the
+||| independent-verification carve-out (ACIndependentVerificationDelegation) is EXEMPT BY TYPE,
+||| never reaching this branch at all (structurally, not by a runtime skip).
+delegationConjunctCOk : {n : Nat} -> Ledger n -> ActClass -> PrincipalId -> Bool
+delegationConjunctCOk l ACDelegationLifecycle obj = case principalRedelegateBudget l obj of
+  Nothing => True
+  Just b  => b >= 1
+delegationConjunctCOk l _ obj = True
+
+||| s64 Element 11b conjunct (d): applies to ANY act class (not merely delegation acts) -- the
+||| must-countersign requirement rides the whole chain, not just delegation-lifecycle writes.
+||| PCommissionSignatureVerified's own attester is Entry.actor (the row IS the act, no separate
+||| attestedBy field), matching modelAttestations' own reading.
+delegationConjunctDOk : {n : Nat} -> Ledger n -> PrincipalId -> ActClass -> Maybe (Fin n) -> Bool
+delegationConjunctDOk l actorP ac witness = case countersignRequirement l actorP ac of
+  CSNone         => True
+  CSConflict     => False
+  CSRequired req => case witness of
+    Nothing => False
+    Just w  => case entryAt l w of
+      (_ ** we) => case we.payload of
+        PCommissionSignatureVerified _ _ _ => we.actor == req
+        _                                  => False
+
+||| s64 Element 12: BOTH new conjuncts, candidate class only (never target -- both read NEW's own
+||| object/sigWitness, a category error for a superseded row per s64's own note).
+delegationConditionsOk : {n : Nat} -> Ledger n -> Entry Draft n -> Maybe ActClass -> Bool
+delegationConditionsOk l e Nothing   = True
+delegationConditionsOk l e (Just ac) =
+     (case e.payload of
+        PRelationAsserted _ _ obj _ _ => delegationConjunctCOk l ac obj
+        _                             => True)
+  && delegationConjunctDOk l e.actor ac e.sigWitness
+
+-- ===========================================================================
 -- §3  THE WORK-ITEM EVENT GRAMMAR AS A RELATIONAL WRITE BOUNDARY (R8).
 --     TRANSCRIPTION FINDING (kernel wins over the elegant rendering): the
 --     kernel's write-boundary grammar is NOT linear open->claim->close.
@@ -1483,7 +2518,7 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| channel) is boundary-side payload VALIDATION at the SECURITY DEFINER
   ||| trust line, an authorship fact this row algebra cannot see (named, not
   ||| hidden; the oracle's count>sequence FAIL is its mechanical tripwire).
-  VWriteRefused : ValidPayload l (PWriteRefused q m sf d aa ar)
+  VWriteRefused : ValidPayload l (PWriteRefused q m sf d aa ar ak)
   ||| s40: the four identity events. Registration freshness by NAME lives on
   ||| the SQL anchor's UNIQUE(name) + the CLI ceremony -- this model's
   ||| PrincipalId is the id, not the name, so name-duplicate refusal is out of
@@ -1504,12 +2539,15 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| plain CHECK, here a So premise).
   VRelate : (0 notSelf : So (not (s == o)))
          -> (0 canonical : So (not (rel == SameNaturalPerson) || (s < o)))
-         -> ValidPayload l (PRelationAsserted s rel o active)
+         -> ValidPayload l (PRelationAsserted s rel o active dc)
   VRoleBound : ValidPayload l (PRoleBound s roleName active)
   ||| s41 D-3: agent keys stay refused -- a key binding demands a HUMAN
-  ||| subject (classOf reads the registration event).
+  ||| subject (classOf reads the registration event). s61: possOk is the
+  ||| additive proof-of-possession premise, vacuously True on a retraction
+  ||| (PossessionRefF False n = (), possessionOk's own False-branch, §2f).
   VKeyBound : (0 human : So (classOf l s == Just ACHuman))
-           -> ValidPayload l (PKeyBound s fp active)
+           -> (0 possOk : So (possessionOk l fp active pr))
+           -> ValidPayload l (PKeyBound s fp active pr)
   VCompetenceGranted : ValidPayload l (PCompetenceGranted s activity active v)
   ||| An opening act: the slug must be fresh in RAW history (slug burned --
   ||| no constructor exists that re-opens; a genuine redo is a NEW slug).
@@ -1561,6 +2599,41 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   VClose  : (0 opened   : So (everOpened l s))
          -> (0 strictOk : So (strictPremise l s (strict || isComposite l s) disp))
          -> ValidPayload l (PWorkClosed s res w disp ref strict)
+  ||| s53: NO type-level proof carried here, a scoped simplification named plainly: relating a
+  ||| premise over the DEPENDENT PremisesF-typed field to the SAME field in this constructor's own
+  ||| return type ran into an Idris elaboration corner (a stuck-metavariable unification between
+  ||| two occurrences of a type-family application over an abstract index) this pass did not chase
+  ||| further -- the cardinality refusal (belief_premises_coupling's nonempty half, BDerived only)
+  ||| IS still enforced, at the Either-returning checkPayload judgment (RBeliefPremisesEmpty) below,
+  ||| exactly as faithfully as every OTHER premise here -- only the DOUBLE assertion as a compile-
+  ||| time So proof on this ONE constructor is foregone, not the refusal itself. The contests/
+  ||| concurs "different actor" premise is separately NOT payload-checkable here regardless (it
+  ||| needs the WRITER's own actor, an Entry-level fact this GADT cannot see) -- it lives in
+  ||| boundaryOk (beliefEdgesOkB, §3), matching independenceScopeOkB's own precedent.
+  VBelief : ValidPayload l (PBelief polarity basis universe witness source premises subject contests concurs)
+  ||| s57: no payload premise of its own -- the "scope exists in countersign_obligation" and
+  ||| "not already revoked" refusals are OUT OF MODEL (named at PObligationRevoked's own doc): a
+  ||| legacy table this rendering has never carried.
+  VObligationRevoked : ValidPayload l (PObligationRevoked scope reason)
+  ||| s58: no payload premise beyond RespondsToF/DispositionF's own shape (already carried by the
+  ||| type index) -- dedup is a construction-time freshness premise, the SAME idiom VOpen already
+  ||| uses for slug-burning, one mechanism over.
+  VMissiveSent : (0 fresh : So (missiveSentDedupOk l thread seq))
+              -> ValidPayload l (PMissiveSent authorWorld addresseeWorld thread seq act respondsTo cites disposition)
+  VMissiveReceived : (0 fresh : So (missiveReceivedDedupOk l authorWorld thread seq))
+                  -> ValidPayload l (PMissiveReceived authorWorld addresseeWorld thread seq act respondsTo provenance cites)
+  ||| s58: regards is Fin n (structural existence, unchanged idiom); the "must name a
+  ||| missive_received row, not itself an acknowledgment" cross-kind check is OUT OF MODEL at THIS
+  ||| altitude (a deeper kind-of-the-target check this file's PReview.regards precedent already
+  ||| declines to re-derive for a plain Fin n back-reference).
+  VMissiveDisposed : ValidPayload l (PMissiveDisposed regards disposition)
+  ||| s60: no payload premise of its own -- the entry-level entitlement conjuncts (conjunct b,
+  ||| authority-bearing, applies to THIS kind unconditionally) live in boundaryOk, §3.
+  VEntitlementClassConfigured : ValidPayload l (PEntitlementClassConfigured actClass roleName)
+  ||| s61: no payload premise -- attestsRow is Fin n (structural existence, unchecked for kind,
+  ||| matching PReview.regards' own precedent).
+  VCommissionSignatureVerified : ValidPayload l (PCommissionSignatureVerified attestsRow grade fingerprint)
+  VKeyPossessionVerified : ValidPayload l (PKeyPossessionVerified fingerprint)
 
 -- ===========================================================================
 -- R9  THE RECORDING STEP: append = validate + compute-and-record (the trigger
@@ -1591,21 +2664,32 @@ recordPayload l st (PViolationDisposition c t r w) = PViolationDisposition c t r
 recordPayload l st (PReview r (MkReviewDetail v i b a ())) =
   let tgt = case entryAt l r of (_ ** e) => e.stamp
   in PReview r (MkReviewDetail v i b a (gradeLadder (stampPair st) (stampPair tgt)))
-recordPayload l st (PWriteRefused q m sf d aa ar) = PWriteRefused q m sf d aa ar
+recordPayload l st (PWriteRefused q m sf d aa ar ak) = PWriteRefused q m sf d aa ar ak
 recordPayload l st (PModelAttested t m g os jb he v ex) = PModelAttested t m g os jb he v ex
 recordPayload l st (PPrincipalRegistered s c p) = PPrincipalRegistered s c p
 recordPayload l st (PPrincipalSuspended s a)    = PPrincipalSuspended s a
 recordPayload l st (PPrincipalRevoked s)        = PPrincipalRevoked s
 recordPayload l st (PStandingDeclared s r a)    = PStandingDeclared s r a
-recordPayload l st (PRelationAsserted s r o a)  = PRelationAsserted s r o a
+recordPayload l st (PRelationAsserted s r o a dc) = PRelationAsserted s r o a dc
 recordPayload l st (PRoleBound s r a)           = PRoleBound s r a
-recordPayload l st (PKeyBound s f a)            = PKeyBound s f a
+recordPayload l st (PKeyBound s f a pr)         = PKeyBound s f a pr
 recordPayload l st (PCompetenceGranted s act a v) = PCompetenceGranted s act a v
 recordPayload l st (PWorkOpened s t p c) = PWorkOpened s t p c
 recordPayload l st (PWorkClaimed s)      = PWorkClaimed s
 recordPayload l st (PWorkDepends s a Nothing)   = PWorkDepends s a Informs  -- s30 default
 recordPayload l st (PWorkDepends s a (Just et)) = PWorkDepends s a et
 recordPayload l st (PWorkClosed s r w d f b)    = PWorkClosed s r w d f b
+-- s53/s57/s58/s60/s61: none of these carry a Stage-dependent field (every field is
+-- writer-supplied, no trigger-computed column) -- plain passthrough, matching PDecision's own
+-- posture.
+recordPayload l st (PBelief po ba u w so pr su co cn) = PBelief po ba u w so pr su co cn
+recordPayload l st (PObligationRevoked sc rs)   = PObligationRevoked sc rs
+recordPayload l st (PMissiveSent aw dw th sq ac rt ci di) = PMissiveSent aw dw th sq ac rt ci di
+recordPayload l st (PMissiveReceived aw dw th sq ac rt pv ci) = PMissiveReceived aw dw th sq ac rt pv ci
+recordPayload l st (PMissiveDisposed rg di)     = PMissiveDisposed rg di
+recordPayload l st (PEntitlementClassConfigured ac rn) = PEntitlementClassConfigured ac rn
+recordPayload l st (PCommissionSignatureVerified ar gr fp) = PCommissionSignatureVerified ar gr fp
+recordPayload l st (PKeyPossessionVerified fp)  = PKeyPossessionVerified fp
 
 ||| s40/s41: the ENTRY-LEVEL premise family (facts that live on the row, not
 ||| the payload alone -- exactly the checks the SQL's set_actor /
@@ -1632,7 +2716,7 @@ recordPayload l st (PWorkClosed s r w d f b)    = PWorkClosed s r w d f b
 maySupersede : Payload Recorded m -> Payload Draft k -> Bool
 -- s43 R6 (RATIFIED): a write_refused row is UNRETRACTABLE -- it records a
 -- historical fact about a refused attempt and asserts nothing retractable.
-maySupersede (PWriteRefused _ _ _ _ _ _) _ = False
+maySupersede (PWriteRefused _ _ _ _ _ _ _) _ = False
 -- s45 §3.4, the conversion-found closure: the three standing-lifecycle kinds
 -- accept only SAME-KIND, IDENTITY-CONTINUOUS supersessors. A declaration's
 -- supersessor restates the SAME db_role always, and the SAME subject when it
@@ -1667,9 +2751,31 @@ maySupersede (PPrincipalSuspended tSubj _) new = case new of
 maySupersede (PPrincipalRevoked tSubj) new = case new of
   PPrincipalRevoked nSubj => nSubj == tSubj
   _                       => False
+-- s53/s63 (kernel/lineage/s53-belief-substrate.sql, restored s63 after s61's own accidental
+-- drop): a belief is superseded only by ANOTHER belief row -- the KIND-match half; the actor
+-- IDENTITY half (same holder) is an Entry-level fact (beliefSupersedeIdentityOk, §2f/§3) since
+-- maySupersede sees only payloads, never Entry.actor.
+maySupersede (PBelief _ _ _ _ _ _ _ _ _) new = case new of
+  PBelief _ _ _ _ _ _ _ _ _ => True
+  _                         => False
+-- s58/s63: a missive_sent row is superseded ONLY by a same-thread successor missive_sent row --
+-- no same-actor condition (the party is the world, not the principal, spec §13 item 6).
+maySupersede (PMissiveSent _ _ tThread _ _ _ _ _) new = case new of
+  PMissiveSent _ _ nThread _ _ _ _ _ => nThread.text == tThread.text
+  _                                  => False
+-- s58/s63: a missive_received row may NEVER be superseded -- a receipt is unretractable history,
+-- the identical R6-shaped foreclosure PWriteRefused already carries, one kind over.
+maySupersede (PMissiveReceived _ _ _ _ _ _ _ _) _ = False
+-- s58/s63: a missive_disposed row is superseded only by a same-regards re-disposition.
+maySupersede (PMissiveDisposed tRegards _) new = case new of
+  PMissiveDisposed nRegards _ => finToNat nRegards == finToNat tRegards
+  _                           => False
 -- everything else: s31 uniform retraction, unchanged -- including s44
 -- attestations, deliberately supersession-retractable (a defeasible claim,
--- NOT given R6's unretractability; s44's own argued contrast).
+-- NOT given R6's unretractability; s44's own argued contrast). This catch-all also covers
+-- PObligationRevoked (s57's own deliberate non-foreclosure, named at its own doc) and
+-- PEntitlementClassConfigured/PCommissionSignatureVerified/PKeyPossessionVerified (no supersession
+-- restriction named for any of the three in s60/s61's own text).
 maySupersede _ _ = True
 
 ||| Premise (a): the actor's standing accepts writes (s40 §3.6).
@@ -1691,29 +2797,45 @@ supersessionOkB l e = case e.supersedes of
 ||| lives per-constructor.
 retractionAnchoredB : {n : Nat} -> Entry Draft n -> Bool
 retractionAnchoredB e = case e.payload of
-  PRelationAsserted _ _ _ False  => isJust e.supersedes
-  PRoleBound _ _ False           => isJust e.supersedes
-  PKeyBound _ _ False            => isJust e.supersedes
-  PCompetenceGranted _ _ False _ => isJust e.supersedes
-  PStandingDeclared _ _ False    => isJust e.supersedes   -- s45: an unbind
-  PPrincipalSuspended _ False    => isJust e.supersedes   -- s45: a lift
-  _                              => True
+  PRelationAsserted _ _ _ False _   => isJust e.supersedes
+  PRoleBound _ _ False              => isJust e.supersedes
+  PKeyBound _ _ False _             => isJust e.supersedes
+  PCompetenceGranted _ _ False _    => isJust e.supersedes
+  PStandingDeclared _ _ False       => isJust e.supersedes   -- s45: an unbind
+  PPrincipalSuspended _ False       => isJust e.supersedes   -- s45: a lift
+  _                                 => True
 
-||| Premise (c): s41 D-6 human-attested managerial/financial scoping.
+||| Premise (c): s41 D-6 human-attested managerial/financial scoping. s55: the two disclosure-only
+||| values (SelfReview, DisclosedIsolatedDispatch) carry no gate, exactly like Technical -- neither
+||| CLAIMS independence, so D-6's human-attestation demand (which exists to back a claim) does not
+||| apply.
 independenceScopeOkB : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
 independenceScopeOkB l e = case e.payload of
   PReview _ d => case d.independence of
-                   Managerial => classOf l e.actor == Just ACHuman
-                   Financial  => classOf l e.actor == Just ACHuman
-                   Technical  => True
+                   Managerial              => classOf l e.actor == Just ACHuman
+                   Financial                => classOf l e.actor == Just ACHuman
+                   Technical                => True
+                   SelfReview               => True
+                   DisclosedIsolatedDispatch => True
   _           => True
 
+||| Premise (e): s53/s63 belief self-revision (holder-only supersession).
+||| Premise (f): s61 item 1, signed-supersession symmetry.
+||| Premise (g): s60/s62/s64, BOTH conjuncts of the entitlement acceptance predicate, candidate AND
+||| target class.
+||| Premise (h): s64 Elements 6/8, the two extra delegation conjuncts (depth-budget,
+||| must-countersign), candidate class only.
 boundaryOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
 boundaryOk l e =
      actorStandingOkB l e
   && retractionAnchoredB e
   && independenceScopeOkB l e
   && supersessionOkB l e
+  && beliefSupersedeIdentityOk l e
+  && beliefEdgesOkB l e
+  && signatureSymmetryOk l e
+  && entitlementOk l e
+  && delegationConditionsOk l e (entitlementActClassOf l e)
 
 ||| The sanctioned growth step: the write boundary as the ONLY exported
 ||| introduction form for a bigger ledger (in a multi-module rendering (:<)
@@ -1726,7 +2848,8 @@ append : {n : Nat} -> (l : Ledger n) -> (e : Entry Draft n)
       -> (0 ok : ValidPayload l e.payload)
       -> (0 entryOk : So (boundaryOk l e)) -> Ledger (S n)
 append l e _ _ = l :< MkEntry e.session e.statement e.actor e.stamp e.supersedes
-                          e.amends e.answers e.enacts (recordPayload l e.stamp e.payload)
+                          e.amends e.answers e.enacts e.sigWitness
+                          (recordPayload l e.stamp e.payload)
 
 -- ===========================================================================
 -- §3b  THE TOTAL WRITE VERDICT (s43 internalized -- this pass's commission,
@@ -1763,6 +2886,7 @@ data RefusalReason
   | RRelationSelf              -- s41 D-3
   | RRelationNonCanonical      -- s41 D-3 (same-natural-person ordering)
   | RKeyNonHuman               -- s41 D-3 (agent keys refused)
+  | RKeyPossessionMissing      -- s61: a fresh key bind's possession proof is absent/mismatched
   | RSlugBurned                -- s22/s31 fork 2
   | RClaimUnopened             -- s22
   | RClaimStartBlocked         -- s39
@@ -1773,6 +2897,16 @@ data RefusalReason
   | RDepCycle                  -- s30/s39
   | RCloseUnopened             -- s22
   | RStrictUnresolved          -- s29 Element C / s33 / s38
+  | RSupersedeBeliefHolder     -- (e) s53/s63: belief superseded only by its own holder
+  | RSupersedeSignatureRequired -- (f) s61 item 1: signed-supersession symmetry
+  | REntitlementCandidate      -- (g) s60/s62: candidate's own act class refused (conjunct a or b)
+  | REntitlementTarget         -- (g) s62 round 2: the supersession target's act class refused
+  | REntitlementDepthBudget    -- (h) s64 Element 11b conjunct c: no-redelegate/depth exhausted
+  | REntitlementCountersign    -- (h) s64 Element 11b conjunct d: must-countersign missing/conflict
+  | RSupersedeMissiveDiscipline -- (d) s58/s63: missive_sent/received/disposed supersession discipline
+  | RBeliefEdgeInvalid         -- (e') s53: a contests/concurs target fails kind/in-force/different-actor
+  | RBeliefPremisesEmpty       -- s53: belief_premises_coupling's nonempty half, BDerived only
+  | RMissiveDup                -- s58: (author_world, thread, seq) or (thread, seq) duplicate
 
 ||| Which SQL boundary function would have carried this write -- refusal
 ||| surfaces are per-FUNCTION (s43's closed CHECK), and the function is
@@ -1784,11 +2918,70 @@ surfaceFor (PPrincipalRegistered _ _ _)   = SurfRegistration
 surfaceFor (PPrincipalSuspended _ _)      = SurfRegistration
 surfaceFor (PPrincipalRevoked _)          = SurfRegistration
 surfaceFor (PStandingDeclared _ _ _)      = SurfRegistration
-surfaceFor (PRelationAsserted _ _ _ _)    = SurfRegistration
+surfaceFor (PRelationAsserted _ _ _ _ _)  = SurfRegistration
 surfaceFor (PRoleBound _ _ _)             = SurfRegistration
-surfaceFor (PKeyBound _ _ _)              = SurfRegistration
+surfaceFor (PKeyBound _ _ _ _)            = SurfRegistration
 surfaceFor (PCompetenceGranted _ _ _ _)   = SurfRegistration
+-- s60: entitlement_class_configured travels with the registration family (s41-era vocabulary
+-- reuse, principal_role_name's own widened kind-shape CHECK), a reasonable inference where the
+-- kernel's own surface assignment is not separately named in the s60/s62/s64 digests.
+surfaceFor (PEntitlementClassConfigured _ _) = SurfRegistration
+-- s57: obligation_revoke is its own dedicated boundary function (kernel.obligation_revoke).
+surfaceFor (PObligationRevoked _ _)       = SurfObligationRevoke
+-- s58: missive_disposed travels ONLY through kernel.missive_dispose (the seventh boundary
+-- function); missive_sent/missive_received travel the generic ledger_write path (SurfLedger,
+-- the catch-all below) -- s65's own QUANTIFICATION UNIVERSE confirms only these two surfaces
+-- among the seven ever see a caller-supplied `kind` key, matching attemptedKindFor's own reading.
+surfaceFor (PMissiveDisposed _ _)         = SurfMissiveDispose
 surfaceFor _                              = SurfLedger
+
+||| s65 (kernel/lineage/s65-refusal-attempted-kind.sql): the refused payload's OWN `kind` token,
+||| verbatim to the closed vocabulary ledger_kind_check enforces on every ACCEPTED row (this
+||| model's structural analog of the SQL's jsonb `->>'kind'` string extraction -- here total and
+||| exact, never NULL for a non-text/oversized/malformed reason, because a Payload value is
+||| ALREADY typed, unlike the SQL's untyped jsonb; the one axis genuinely preserved is s65's own
+||| QUANTIFICATION UNIVERSE fact -- attemptedKindFor below still yields Nothing on every non-
+||| SurfLedger surface, exactly because those five boundary functions' payload contracts never
+||| admit a caller-supplied `kind` key at all, s65's own disclosed asymmetry, not a limitation of
+||| this function).
+payloadKindToken : Payload st n -> NonEmptyText
+payloadKindToken (PProse KAssumption)       = MkNonEmptyText "assumption" Oh
+payloadKindToken (PProse KQuestion)         = MkNonEmptyText "question" Oh
+payloadKindToken (PProse KVerification)     = MkNonEmptyText "verification" Oh
+payloadKindToken (PProse KFinding)          = MkNonEmptyText "finding" Oh
+payloadKindToken (PProse KSnag)             = MkNonEmptyText "snag" Oh
+payloadKindToken (PProse KRevision)         = MkNonEmptyText "revision" Oh
+payloadKindToken (PProse KNote)             = MkNonEmptyText "note" Oh
+payloadKindToken (PDecision _)              = MkNonEmptyText "decision" Oh
+payloadKindToken (PViolationDisposition _ _ _ _) = MkNonEmptyText "work_violation_disposition" Oh
+payloadKindToken (PReview _ _)                   = MkNonEmptyText "review" Oh
+payloadKindToken (PPrincipalRegistered _ _ _)    = MkNonEmptyText "principal_registered" Oh
+payloadKindToken (PPrincipalSuspended _ _)       = MkNonEmptyText "principal_suspended" Oh
+payloadKindToken (PPrincipalRevoked _)           = MkNonEmptyText "principal_revoked" Oh
+payloadKindToken (PStandingDeclared _ _ _)       = MkNonEmptyText "principal_standing_declared" Oh
+payloadKindToken (PRelationAsserted _ _ _ _ _)   = MkNonEmptyText "principal_relation_asserted" Oh
+payloadKindToken (PRoleBound _ _ _)              = MkNonEmptyText "principal_role_bound" Oh
+payloadKindToken (PKeyBound _ _ _ _)             = MkNonEmptyText "principal_key_bound" Oh
+payloadKindToken (PCompetenceGranted _ _ _ _)    = MkNonEmptyText "principal_competence_granted" Oh
+payloadKindToken (PWriteRefused _ _ _ _ _ _ _)   = MkNonEmptyText "write_refused" Oh
+payloadKindToken (PModelAttested _ _ _ _ _ _ _ _) = MkNonEmptyText "model_identity_attested" Oh
+payloadKindToken (PWorkOpened _ _ _ _)           = MkNonEmptyText "work_opened" Oh
+payloadKindToken (PWorkClaimed _)                = MkNonEmptyText "work_claimed" Oh
+payloadKindToken (PWorkDepends _ _ _)            = MkNonEmptyText "work_depends_on" Oh
+payloadKindToken (PWorkClosed _ _ _ _ _ _)       = MkNonEmptyText "work_closed" Oh
+payloadKindToken (PBelief _ _ _ _ _ _ _ _ _)     = MkNonEmptyText "belief" Oh
+payloadKindToken (PObligationRevoked _ _)        = MkNonEmptyText "obligation_revoked" Oh
+payloadKindToken (PMissiveSent _ _ _ _ _ _ _ _)  = MkNonEmptyText "missive_sent" Oh
+payloadKindToken (PMissiveReceived _ _ _ _ _ _ _ _) = MkNonEmptyText "missive_received" Oh
+payloadKindToken (PMissiveDisposed _ _)          = MkNonEmptyText "missive_disposed" Oh
+payloadKindToken (PEntitlementClassConfigured _ _) = MkNonEmptyText "entitlement_class_configured" Oh
+payloadKindToken (PCommissionSignatureVerified _ _ _) = MkNonEmptyText "commission_signature_verified" Oh
+payloadKindToken (PKeyPossessionVerified _)      = MkNonEmptyText "principal_key_possession_verified" Oh
+
+attemptedKindFor : Payload st n -> Maybe NonEmptyText
+attemptedKindFor p = case surfaceFor p of
+  SurfLedger => Just (payloadKindToken p)
+  _          => Nothing
 
 ||| The teach-text, one literal per reason (each a compile-time-checked
 ||| NonEmptyText -- the SQL's message payload, at headline altitude).
@@ -1802,6 +2995,7 @@ refusalText RIndependenceNeedsHuman     = MkNonEmptyText "managerial/financial i
 refusalText RRelationSelf               = MkNonEmptyText "a self-relation is refused (s41 D-3)" Oh
 refusalText RRelationNonCanonical       = MkNonEmptyText "same-natural-person must be canonically ordered (s41 D-3)" Oh
 refusalText RKeyNonHuman                = MkNonEmptyText "a key binding demands a human subject (s41 D-3)" Oh
+refusalText RKeyPossessionMissing       = MkNonEmptyText "a fresh key bind demands a matching key_binding_possession_ref (s61)" Oh
 refusalText RSlugBurned                 = MkNonEmptyText "slug already opened once: burned (s22/s31)" Oh
 refusalText RClaimUnopened              = MkNonEmptyText "claim of a never-opened slug (s22)" Oh
 refusalText RClaimStartBlocked          = MkNonEmptyText "blocks-start antecedent unresolved at claim (s39)" Oh
@@ -1812,6 +3006,16 @@ refusalText RDepDangling                = MkNonEmptyText "a gating edge to a nev
 refusalText RDepCycle                   = MkNonEmptyText "a gating-edge cycle is refused (s30/s39)" Oh
 refusalText RCloseUnopened              = MkNonEmptyText "close of a never-opened slug (s22)" Oh
 refusalText RStrictUnresolved           = MkNonEmptyText "strict close with an unresolved obligation tree or judgment-free disposition (s29/s33/s38)" Oh
+refusalText RSupersedeBeliefHolder      = MkNonEmptyText "a belief is superseded only by its own holder (s53/s63)" Oh
+refusalText RSupersedeSignatureRequired = MkNonEmptyText "signed supersession symmetry: target rests on a verified signature (s61)" Oh
+refusalText REntitlementCandidate       = MkNonEmptyText "entitlement refused: act class requires a role or an authority chain to genesis (s60/s62)" Oh
+refusalText REntitlementTarget          = MkNonEmptyText "entitlement refused: the supersession target's own act class requires a role or an authority chain to genesis (s62 round 2)" Oh
+refusalText REntitlementDepthBudget     = MkNonEmptyText "delegation refused: no further redelegation budget (s64)" Oh
+refusalText REntitlementCountersign     = MkNonEmptyText "delegation refused: missing or conflicting must-countersign requirement (s64)" Oh
+refusalText RSupersedeMissiveDiscipline = MkNonEmptyText "missive supersession discipline: same-thread successor, never-supersede-a-receipt, or same-regards re-disposition (s58/s63)" Oh
+refusalText RBeliefEdgeInvalid          = MkNonEmptyText "a belief's contests/concurs target must exist, be a belief, be unsuperseded, and belong to a different actor (s53)" Oh
+refusalText RBeliefPremisesEmpty        = MkNonEmptyText "a derived belief must cite at least one premise (s53 belief_premises_coupling)" Oh
+refusalText RMissiveDup                 = MkNonEmptyText "duplicate (author_world, thread, seq) or (thread, seq) -- missive dedup (s58)" Oh
 
 ||| SQLSTATE at headline altitude: the model journals every policy refusal as
 ||| P0001 (RAISE EXCEPTION's default). Per-arm granularity (23514 for CHECKs,
@@ -1844,23 +3048,25 @@ checkPayload l (PProse k)                      = Right VProse
 checkPayload l (PDecision g)                   = Right VDecision
 checkPayload l (PViolationDisposition c t r w) = Right VViolationDisposition
 checkPayload l (PReview r d)                   = Right VReview
-checkPayload l (PWriteRefused q m sf d aa ar)  = Right VWriteRefused
+checkPayload l (PWriteRefused q m sf d aa ar ak)  = Right VWriteRefused
 checkPayload l (PModelAttested t m g os jb he v ex) = Right VModelAttested
 checkPayload l (PPrincipalRegistered s c p)    = Right VPrincipalRegistered
 checkPayload l (PPrincipalSuspended s a)       = Right VPrincipalSuspended
 checkPayload l (PPrincipalRevoked s)           = Right VPrincipalRevoked
 checkPayload l (PStandingDeclared s r a)       = Right VStandingDeclared
-checkPayload l (PRelationAsserted s rel o act) =
+checkPayload l (PRelationAsserted s rel o act dc) =
   case chooseB (not (s == o)) of
     Right _      => Left RRelationSelf
     Left notSelf => case chooseB (not (rel == SameNaturalPerson) || (s < o)) of
       Right _    => Left RRelationNonCanonical
       Left canon => Right (VRelate notSelf canon)
 checkPayload l (PRoleBound s r a)              = Right VRoleBound
-checkPayload l (PKeyBound s fp a) =
+checkPayload l (PKeyBound s fp a pr) =
   case chooseB (classOf l s == Just ACHuman) of
-    Left h  => Right (VKeyBound h)
     Right _ => Left RKeyNonHuman
+    Left h  => case chooseB (possessionOk l fp a pr) of
+      Left poss => Right (VKeyBound h poss)
+      Right _   => Left RKeyPossessionMissing
 checkPayload l (PCompetenceGranted s act a v)  = Right VCompetenceGranted
 checkPayload l (PWorkOpened s title par comp) =
   case chooseB (everOpened l s) of
@@ -1908,16 +3114,54 @@ checkPayload l (PWorkClosed s res w disp ref strict) =
     Left op => case chooseB (strictPremise l s (strict || isComposite l s) disp) of
       Left ok => Right (VClose op ok)
       Right _ => Left RStrictUnresolved
+checkPayload l (PBelief polarity basis universe witness source premises subject contests concurs) =
+  if premisesNonEmptyOk basis premises
+    then Right VBelief
+    else Left RBeliefPremisesEmpty
+checkPayload l (PObligationRevoked scope reason) = Right VObligationRevoked
+checkPayload l (PMissiveSent authorWorld addresseeWorld thread seq act respondsTo cites disposition) =
+  case chooseB (missiveSentDedupOk l thread seq) of
+    Left fresh => Right (VMissiveSent fresh)
+    Right _    => Left RMissiveDup
+checkPayload l (PMissiveReceived authorWorld addresseeWorld thread seq act respondsTo provenance cites) =
+  case chooseB (missiveReceivedDedupOk l authorWorld thread seq) of
+    Left fresh => Right (VMissiveReceived fresh)
+    Right _    => Left RMissiveDup
+checkPayload l (PMissiveDisposed regards disposition) = Right VMissiveDisposed
+checkPayload l (PEntitlementClassConfigured actClass roleName) = Right VEntitlementClassConfigured
+checkPayload l (PCommissionSignatureVerified attestsRow grade fingerprint) = Right VCommissionSignatureVerified
+checkPayload l (PKeyPossessionVerified fingerprint) = Right VKeyPossessionVerified
 
 ||| Which entry-level premise refused (called only on the not-boundaryOk
 ||| path; total anyway -- the unreachable arms return the nearest reason).
+||| Extended (e)-(h) in boundaryOk's own && order: belief holder-identity, signature symmetry,
+||| entitlement (candidate then target class), the two delegation-conditions conjuncts.
 boundaryReason : {n : Nat} -> Ledger n -> Entry Draft n -> RefusalReason
 boundaryReason l e =
   if      not (actorStandingOkB l e)    then RActorStanding
   else if not (retractionAnchoredB e)   then RRetractionUnanchored
   else if not (independenceScopeOkB l e) then RIndependenceNeedsHuman
-  else supersedeReason
+  else if not (supersessionOkB l e)     then supersedeReason
+  else if not (beliefSupersedeIdentityOk l e) then RSupersedeBeliefHolder
+  else if not (beliefEdgesOkB l e)      then RBeliefEdgeInvalid
+  else if not (signatureSymmetryOk l e) then RSupersedeSignatureRequired
+  else if not (entitlementEnforceClass l e.actor candClass) then REntitlementCandidate
+  else if not (entitlementEnforceClass l e.actor targetClass) then REntitlementTarget
+  else if not (candidateDepthOk) then REntitlementDepthBudget
+  else REntitlementCountersign
   where
+    candClass : Maybe ActClass
+    candClass = entitlementActClassOf l e
+    targetClass : Maybe ActClass
+    targetClass = case e.supersedes of
+      Nothing => Nothing
+      Just t  => entitlementActClassOfTarget l t
+    candidateDepthOk : Bool
+    candidateDepthOk = case candClass of
+      Nothing => True
+      Just ac => case e.payload of
+        PRelationAsserted _ _ obj _ _ => delegationConjunctCOk l ac obj
+        _                             => True
     supersedeReason : RefusalReason
     supersedeReason = case e.supersedes of
       -- unreachable under the call contract (supersessionOkB is True on
@@ -1925,7 +3169,7 @@ boundaryReason l e =
       Nothing => RSupersedeLifecycleKind
       Just t  => case entryAt l t of
         (_ ** te) => case te.payload of
-          PWriteRefused _ _ _ _ _ _ => RSupersedeWriteRefused
+          PWriteRefused _ _ _ _ _ _ _ => RSupersedeWriteRefused
           PStandingDeclared _ _ _   => case e.payload of
             PStandingDeclared _ _ _   => RSupersedeLifecycleIdentity
             _                         => RSupersedeLifecycleKind
@@ -1935,6 +3179,9 @@ boundaryReason l e =
           PPrincipalRevoked _       => case e.payload of
             PPrincipalRevoked _       => RSupersedeLifecycleIdentity
             _                         => RSupersedeLifecycleKind
+          PMissiveSent _ _ _ _ _ _ _ _     => RSupersedeMissiveDiscipline
+          PMissiveReceived _ _ _ _ _ _ _ _ => RSupersedeMissiveDiscipline
+          PMissiveDisposed _ _             => RSupersedeMissiveDiscipline
           _                         => RSupersedeLifecycleKind
 
 ||| The composed decision: payload judgment then entry-level premises. (The
@@ -1965,20 +3212,20 @@ write j role l e = case checkEntry l e of
   Right (pv, bOk) => append l e pv bOk
   Left r =>
     l :< MkEntry e.session "write refused (journaled verdict)" j Nothing
-           Nothing Nothing Nothing []
+           Nothing Nothing Nothing [] Nothing
            (PWriteRefused Autoharn.pstate (refusalText r) (surfaceFor e.payload)
-              Autoharn.unmodeledDigest (Just e.actor) role)
+              Autoharn.unmodeledDigest (Just e.actor) role (attemptedKindFor e.payload))
 
 ||| Probes for the §7 fixtures: is the head row a journaled refusal, and at
 ||| which surface. Pattern-total: a Ledger (S n) is always (:<).
 headRefused : {n : Nat} -> Ledger (S n) -> Bool
 headRefused (l :< e) = case e.payload of
-  PWriteRefused _ _ _ _ _ _ => True
+  PWriteRefused _ _ _ _ _ _ _ => True
   _                         => False
 
 headSurface : {n : Nat} -> Ledger (S n) -> Maybe RefusalSurface
 headSurface (l :< e) = case e.payload of
-  PWriteRefused _ _ sf _ _ _ => Just sf
+  PWriteRefused _ _ sf _ _ _ _ => Just sf
   _                          => Nothing
 
 -- ===========================================================================
@@ -2139,7 +3386,7 @@ judge p l = decEq (p.sqlFloor l) (p.aspSide l)
 -- ===========================================================================
 
 mkE : PrincipalId -> Maybe (Fin n) -> Payload Recorded n -> Entry Recorded n
-mkE a sup p = MkEntry "" "" a Nothing sup Nothing Nothing [] p
+mkE a sup p = MkEntry "" "" a Nothing sup Nothing Nothing [] Nothing p
 
 -- world A: open a (row 0); deferred close a by actor 1 (row 1).
 worldA : Ledger 2
@@ -2366,7 +3613,12 @@ r33b = VClose Oh Oh
 
 ||| Draft-entry maker for the entry-level (boundaryOk) fixtures.
 mkD : PrincipalId -> Maybe (Fin n) -> Payload Draft n -> Entry Draft n
-mkD a sup p = MkEntry "" "" a Nothing sup Nothing Nothing [] p
+mkD a sup p = MkEntry "" "" a Nothing sup Nothing Nothing [] Nothing p
+
+||| s61 fixture-maker: mkD with an explicit signature_symmetry_witness (every other fixture leaves
+||| it Nothing via mkD, licensed on every kind but only ever consulted on a superseding write).
+mkDW : PrincipalId -> Maybe (Fin n) -> Maybe (Fin n) -> Payload Draft n -> Entry Draft n
+mkDW a sup wit p = MkEntry "" "" a Nothing sup Nothing Nothing [] wit p
 
 -- s36: standing decisions -- graded in-force decisions only, retraction drops.
 worldS36 : Ledger 2
@@ -2486,34 +3738,43 @@ worldR : Ledger 2
 worldR = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "human fixture" Oh))
              :< mkE 1 Nothing (PPrincipalRegistered 3 ACModel (MkNonEmptyText "model fixture" Oh))
 
--- s41 GREEN: a key binds to a HUMAN subject.
-k41a : ValidPayload Autoharn.worldR
-         (PKeyBound 2 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True)
-k41a = VKeyBound Oh
+-- s61: worldK extends worldR with a key-possession-verified row for the SAME fingerprint k41a
+-- binds -- a fresh key bind's mandatory possession proof (PossessionRefF True n = Fin n).
+worldK : Ledger 3
+worldK = worldR :< mkE 2 Nothing
+           (PKeyPossessionVerified (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh))
 
--- s41 RED: an agent key is refused (classOf = Just ACModel, So uninhabited).
+-- s41/s61 GREEN: a key binds to a HUMAN subject, with a matching possession proof (row 2).
+k41a : ValidPayload Autoharn.worldK
+         (PKeyBound 2 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True 2)
+k41a = VKeyBound Oh Oh
+
+-- s41 RED: an agent key is refused (classOf = Just ACModel, So uninhabited) -- the possession
+-- ref itself is irrelevant here (checkPayload's human premise is checked first), so an arbitrary
+-- Fin 2 index suffices against worldR.
 failing
   k41b : ValidPayload Autoharn.worldR
-           (PKeyBound 3 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True)
-  k41b = VKeyBound Oh
+           (PKeyBound 3 (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh) True 0)
+  k41b = VKeyBound Oh Oh
 
 -- s41 RED: a malformed fingerprint does not elaborate (shape refinement).
 failing
   k41c : Fingerprint
   k41c = MkFingerprint "abc" Oh
 
--- s41 GREEN: canonical same-natural-person (subject 2 < object 3).
-r41a : ValidPayload Autoharn.worldR (PRelationAsserted 2 SameNaturalPerson 3 True)
+-- s41 GREEN: canonical same-natural-person (subject 2 < object 3). SameNaturalPerson is not
+-- acts-for/dispatched-by, so DelegationConditionsF SameNaturalPerson True = () -- the unit value.
+r41a : ValidPayload Autoharn.worldR (PRelationAsserted 2 SameNaturalPerson 3 True ())
 r41a = VRelate Oh Oh
 
 -- s41 RED: the non-canonical ordering is refused (the kernel's plain CHECK).
 failing
-  r41b : ValidPayload Autoharn.worldR (PRelationAsserted 3 SameNaturalPerson 2 True)
+  r41b : ValidPayload Autoharn.worldR (PRelationAsserted 3 SameNaturalPerson 2 True ())
   r41b = VRelate Oh Oh
 
 -- s41 RED: a self-relation is refused for every relation value.
 failing
-  r41c : ValidPayload Autoharn.worldR (PRelationAsserted 2 Succeeds 2 True)
+  r41c : ValidPayload Autoharn.worldR (PRelationAsserted 2 Succeeds 2 True ())
   r41c = VRelate Oh Oh
 
 -- s41 GREEN: an active competence grant carries (band, basis) mandatorily.
@@ -2536,8 +3797,14 @@ failing
 b41a : boundaryOk Autoharn.worldR
          (mkD 1 Nothing (PRoleBound 3 (MkNonEmptyText "scout" Oh) False)) = False
 b41a = Refl
+-- s60: the actor is 2 here (not 1) -- worldR's own genesis principal (the FIRST-ever
+-- principal_registered row, entitlement_genesis_principal's raw read), which trivially reaches
+-- itself (s60 Element 6's own base case). Actor 1 (unregistered-legacy) is write-ALLOWED
+-- (s40 §3.6) but is a SEPARATE question from s60's entitlement conjunct (b) -- once a genesis
+-- principal exists, even a legacy actor's authority-bearing act must chain to it; this fixture
+-- exercises the ordinary (non-entitlement-refused) path, not that boundary.
 b41b : boundaryOk Autoharn.worldR
-         (mkD 1 (Just 0) (PRoleBound 3 (MkNonEmptyText "scout" Oh) False)) = True
+         (mkD 2 (Just 0) (PRoleBound 3 (MkNonEmptyText "scout" Oh) False)) = True
 b41b = Refl
 
 -- s41 D-6 (human-attested scoping): a managerial claim by a MODEL actor fails
@@ -2565,13 +3832,16 @@ worldWF = Lin :< mkE 1 Nothing (PProse KNote)
                                   (MkNonEmptyText "Ledger policy: refused" Oh)
                                   SurfLedger
                                   (MkNonEmptyText "deadbeef" Oh)
-                                  (Just 1) (MkNonEmptyText "bork" Oh))
+                                  (Just 1) (MkNonEmptyText "bork" Oh)
+                                  (Just (MkNonEmptyText "note" Oh)))
 
 -- s43 GREEN: the refusal payload judgment carries no premise of its own.
+-- s65: attemptedKind Nothing here -- SurfRegistration's own payload contract never admits a
+-- `kind` key (QUANTIFICATION UNIVERSE, s65's own closure statement).
 k43a : ValidPayload Autoharn.worldWF
          (PWriteRefused (MkNonEmptyText "23505" Oh) (MkNonEmptyText "dup" Oh)
             SurfRegistration (MkNonEmptyText "beef" Oh) Nothing
-            (MkNonEmptyText "bork" Oh))
+            (MkNonEmptyText "bork" Oh) Nothing)
 k43a = VWriteRefused
 
 -- s43 R6 RED: superseding the write_refused row (index 1) fails boundaryOk --
@@ -2638,7 +3908,25 @@ failing
 -- refused.
 b45d : boundaryOk Autoharn.worldRv (mkD 1 (Just 1) (PProse KNote)) = False
 b45d = Refl
-b45e : boundaryOk Autoharn.worldRv (mkD 1 (Just 1) (PPrincipalRevoked 3)) = True
+-- s60 FINDING, NAMED (met while extending this exact fixture, CLAUDE.md's hazard-in-reach
+-- corollary): the chain walk's own per-hop delegator-standing test (principal_standing(pr.object)
+-- = 'active', s60 Element 6, unedited by s64) applies to EVERY hop, including the hop landing ON
+-- genesis itself -- so once genesis is revoked, NO chain can reach it any longer, not even one
+-- established in advance (I5's "dies prospectively" cuts against the delegate here, not merely
+-- against acts credited through a since-severed link). A delegate cannot correct a revoked
+-- GENESIS's own record through the authority chain at all; only some OTHER, never-revoked root
+-- could. worldRv3 below therefore uses a SEPARATE genesis (5) who is never revoked, a corrector
+-- (1) chained to it, and demonstrates the corrector fixing a DIFFERENT principal's (3's) own
+-- revocation -- s45's identity-continuity point this fixture exists to make, now compatible with
+-- s60's entitlement conjunct (b).
+worldRv3 : Ledger 5
+worldRv3 = Lin :< mkE 1 Nothing (PPrincipalRegistered 5 ACHuman (MkNonEmptyText "genesis fixture" Oh))
+               :< mkE 5 Nothing (PPrincipalRegistered 1 ACHuman (MkNonEmptyText "corrector" Oh))
+               :< mkE 5 Nothing (PRelationAsserted 1 ActsFor 5 True
+                                   (MkDelegationConditions Nothing Nothing Nothing False))
+               :< mkE 5 Nothing (PPrincipalRegistered 3 ACModel (MkNonEmptyText "model fixture" Oh))
+               :< mkE 5 Nothing (PPrincipalRevoked 3)
+b45e : boundaryOk Autoharn.worldRv3 (mkD 1 (Just 4) (PPrincipalRevoked 3)) = True
 b45e = Refl
 b45f : boundaryOk Autoharn.worldRv (mkD 1 (Just 1) (PPrincipalRevoked 4)) = False
 b45f = Refl
@@ -2844,3 +4132,283 @@ w43d = Refl
 w43e : headSurface (write 9 Autoharn.wbRole Autoharn.worldP
                       (mkD 3 Nothing (PPrincipalSuspended 2 True))) = Just SurfRegistration
 w43e = Refl
+
+-- ---------------------------------------------------------------------------
+-- §7h  THE s53-s65 FIXTURES (this pass's own commission). Belief, obligation-
+--      revocation, missives, entitlement/delegation, signature symmetry, and
+--      the s65 attempted-kind journal, each both polarities where the
+--      mechanism admits one.
+-- ---------------------------------------------------------------------------
+
+-- s53: belief construction across the four Gated axes.
+worldBelBase : Ledger 1
+worldBelBase = Lin :< mkE 1 Nothing (PProse KNote)
+
+-- universal+observed: universe mandatory, witness forbidden (both () under BUniversal).
+beliefUniversal : Payload Recorded 1
+beliefUniversal = PBelief BUniversal BObserved (MkNonEmptyText "all inputs are validated" Oh)
+                    () () () Nothing Nothing Nothing
+
+-- existential+observed: witness MANDATORY (WitnessF BExistential BObserved = NonEmptyText).
+beliefExistentialObserved : Payload Recorded 1
+beliefExistentialObserved = PBelief BExistential BObserved () (MkNonEmptyText "saw it happen" Oh)
+                              () () Nothing Nothing Nothing
+
+-- existential+testimony: source MANDATORY (SourceF BTestimony n = Fin n), witness optional.
+beliefTestimony : Payload Recorded 1
+beliefTestimony = PBelief BExistential BTestimony () Nothing 0 () Nothing Nothing Nothing
+
+-- s53 RED (checked at checkPayload, not as a compile-time So proof -- see VBelief's own doc for
+-- why): a derived belief with an EMPTY premises list is refused (belief_premises_coupling's
+-- nonempty half).
+r53a : checkPayload Autoharn.worldBelBase
+         (PBelief BExistential BDerived () Nothing () [] Nothing Nothing Nothing)
+     = Left RBeliefPremisesEmpty
+r53a = Refl
+
+-- s53 GREEN: the same shape with a nonempty premises list is accepted.
+r53b : checkPayload Autoharn.worldBelBase
+         (PBelief BExistential BDerived () Nothing () [0] Nothing Nothing Nothing)
+     = Right VBelief
+r53b = Refl
+
+worldBelA : Ledger 1
+worldBelA = Lin :< mkE 1 Nothing (PBelief BUniversal BObserved (MkNonEmptyText "u" Oh) () () () Nothing Nothing Nothing)
+
+-- s53/s63 GREEN: a belief's own holder may supersede it (self-revision).
+b53a : boundaryOk Autoharn.worldBelA
+         (mkD 1 (Just 0) (PBelief BUniversal BObserved (MkNonEmptyText "u revised" Oh) () () () Nothing Nothing Nothing))
+     = True
+b53a = Refl
+
+-- s53/s63 RED: a DIFFERENT principal may not supersede someone else's belief (self-revision only;
+-- beliefSupersedeIdentityOk, §2f).
+b53b : boundaryOk Autoharn.worldBelA
+         (mkD 2 (Just 0) (PBelief BUniversal BObserved (MkNonEmptyText "u revised" Oh) () () () Nothing Nothing Nothing))
+     = False
+b53b = Refl
+
+worldBelC : Ledger 2
+worldBelC = worldBelA :< mkE 2 Nothing
+              (PBelief BUniversal BObserved (MkNonEmptyText "not-u" Oh) () () () Nothing (Just 0) Nothing)
+
+-- s53 RED: a self-contest is refused (beliefEdgeOk's own different-actor premise) -- actor 1
+-- contesting row 0, which IS held by actor 1.
+b53c : boundaryOk Autoharn.worldBelC
+         (mkD 1 Nothing (PBelief BUniversal BObserved (MkNonEmptyText "self-contest" Oh) () () () Nothing (Just 0) Nothing))
+     = False
+b53c = Refl
+
+-- s53 GREEN: a THIRD principal may contest row 0 (different actor, in-force, kind=belief).
+b53d : boundaryOk Autoharn.worldBelC
+         (mkD 3 Nothing (PBelief BUniversal BObserved (MkNonEmptyText "third contest" Oh) () () () Nothing (Just 0) Nothing))
+     = True
+b53d = Refl
+
+-- s57: an obligation-revoked event -- ordinary supersedable kind (maySupersede's catch-all, s57's
+-- own deliberate non-foreclosure), no special premise of its own.
+worldObl : Ledger 1
+worldObl = Lin :< mkE 1 Nothing (PObligationRevoked (MkNonEmptyText "milestone-x" Oh)
+                                   (MkNonEmptyText "superseded by milestone-y" Oh))
+b57a : boundaryOk Autoharn.worldObl
+         (mkD 2 (Just 0) (PObligationRevoked (MkNonEmptyText "milestone-x" Oh) (MkNonEmptyText "correction" Oh)))
+     = True
+b57a = Refl
+
+-- s58: missives. An xrow reference this model shape-checks (prefix only, §2f/PRESERVED-style
+-- simplification named at XRowRef's own doc) but never existence-checks (isolation is founding).
+msgXRow : XRowRef
+msgXRow = MkXRowRef "xrow:world-a:0:deadbeef" Oh
+
+worldMSent : Ledger 1
+worldMSent = Lin :< mkE 1 Nothing
+              (PMissiveSent (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-b" Oh)
+                 (MkNonEmptyText "thread-1" Oh) 1 MAssertion Nothing Nothing ())
+
+-- s58/s63 GREEN: a same-thread successor (a withdrawal here) supersedes a missive_sent row.
+b58a : boundaryOk Autoharn.worldMSent
+         (mkD 1 (Just 0) (PMissiveSent (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-b" Oh)
+                            (MkNonEmptyText "thread-1" Oh) 2 MWithdrawal msgXRow Nothing ()))
+     = True
+b58a = Refl
+
+-- s58/s63 RED: a DIFFERENT thread may not supersede a missive_sent row (Q7 ratified, spec §2.5).
+b58b : boundaryOk Autoharn.worldMSent
+         (mkD 1 (Just 0) (PMissiveSent (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-c" Oh)
+                            (MkNonEmptyText "thread-2" Oh) 1 MAssertion Nothing Nothing ()))
+     = False
+b58b = Refl
+
+-- s58 RED (checkPayload, dedup): the SAME (thread, seq) as an existing missive_sent row is refused.
+r58a : checkPayload Autoharn.worldMSent
+         (PMissiveSent (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-c" Oh)
+            (MkNonEmptyText "thread-1" Oh) 1 MAssertion Nothing Nothing ())
+     = Left RMissiveDup
+r58a = Refl
+
+-- s58 GREEN: a different seq in the same thread is a fresh (accepted) row.
+r58b : checkPayload Autoharn.worldMSent
+         (PMissiveSent (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-c" Oh)
+            (MkNonEmptyText "thread-1" Oh) 2 MAssertion Nothing Nothing ())
+     = Right (VMissiveSent Oh)
+r58b = Refl
+
+worldMRecv : Ledger 1
+worldMRecv = Lin :< mkE 9 Nothing
+              (PMissiveReceived (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-b" Oh)
+                 (MkNonEmptyText "thread-1" Oh) 1 MAssertion Nothing msgXRow Nothing)
+
+-- s58/s63 RED: a missive_received row may NEVER be superseded -- a receipt is unretractable
+-- history (the identical R6-shaped foreclosure PWriteRefused already carries).
+b58c : boundaryOk Autoharn.worldMRecv
+         (mkD 9 (Just 0) (PMissiveReceived (MkNonEmptyText "world-a" Oh) (MkNonEmptyText "world-b" Oh)
+                            (MkNonEmptyText "thread-1" Oh) 2 MAssertion Nothing msgXRow Nothing))
+     = False
+b58c = Refl
+
+-- s60/s62: worldEnt has exactly one registered principal (2), its OWN genesis (self-loop).
+worldEnt : Ledger 1
+worldEnt = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "genesis" Oh))
+
+-- s60 RED: a CHAINLESS actor's authority-bearing act (a fresh registration) is refused --
+-- conjunct (b), actor 1 does not chain-reach genesis (2).
+b60a : boundaryOk Autoharn.worldEnt
+         (mkD 1 Nothing (PPrincipalRegistered 3 ACHuman (MkNonEmptyText "new" Oh))) = False
+b60a = Refl
+
+-- s60 GREEN: genesis itself (actor 2) trivially reaches its own chain (the self-loop base case).
+b60b : boundaryOk Autoharn.worldEnt
+         (mkD 2 Nothing (PPrincipalRegistered 3 ACHuman (MkNonEmptyText "new" Oh))) = True
+b60b = Refl
+
+-- s62 round 2 RED: THE SELF-SERVABLE-LOOP CLOSURE -- a chainless actor cannot write themselves an
+-- acts-for edge to escape refusal (the hole row 1385 found and s62 closes): actor 1's OWN
+-- delegation_lifecycle act is itself authority-bearing, and the edge does not exist yet at
+-- write-time, so actor 1 still does not chain-reach genesis (2).
+b62a : boundaryOk Autoharn.worldEnt
+         (mkD 1 Nothing (PRelationAsserted 1 ActsFor 2 True
+                           (MkDelegationConditions Nothing Nothing Nothing False)))
+     = False
+b62a = Refl
+
+-- s64: a no-redelegate (depth 0) grant, then an attempt to redelegate further through it.
+worldDepth : Ledger 3
+worldDepth = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "genesis" Oh))
+                 :< mkE 2 Nothing (PPrincipalRegistered 3 ACHuman (MkNonEmptyText "delegate" Oh))
+                 :< mkE 2 Nothing (PRelationAsserted 3 ActsFor 2 True
+                                     (MkDelegationConditions (Just 0) Nothing Nothing False))
+
+-- s64 RED: principal 3's OWN redelegate budget is 0 (no-redelegate) -- a fresh grant naming 3 as
+-- the delegator (object) is refused, regardless of the WRITER's own entitlement (actor 2 is
+-- genesis, entitled outright).
+b64a : boundaryOk Autoharn.worldDepth
+         (mkD 2 Nothing (PRelationAsserted 4 ActsFor 3 True
+                           (MkDelegationConditions Nothing Nothing Nothing False)))
+     = False
+b64a = Refl
+
+-- s64 GREEN: genesis's OWN budget is unrestricted (Nothing, no inbound cap at all) -- the
+-- identical shape of grant succeeds when the delegator is genesis itself.
+b64b : boundaryOk Autoharn.worldEnt
+         (mkD 2 Nothing (PRelationAsserted 4 ActsFor 2 True
+                           (MkDelegationConditions Nothing Nothing Nothing False)))
+     = True
+b64b = Refl
+
+-- ---------------------------------------------------------------------------
+-- FIX WITNESS (fresh-context review of ee8a727, BLOCKS MERGE, one CRITICAL, now closed): the
+-- classification functions used to carry a wrong `active &&` guard in their PRelationAsserted
+-- arms (kernel/lineage/s64-principal-stamps-delegation-conditions.sql ~680-685/~741-743 have NO
+-- such guard -- a candidate/target classifies as delegation_lifecycle by relation ALONE). The
+-- defect: a RETRACTION (active=False) classified to Nothing, vacating delegationConditionsOk's
+-- conjuncts (c)/(d) entirely for exactly the write s64 Element 11b's own header says conjunct (d)
+-- "rides the whole chain" for -- the model was MORE PERMISSIVE than the kernel, the worst
+-- polarity. Closed by dropping the guard; witnessed both as a bare classification fact and as the
+-- practical consequence (a countersign-caveated principal can no longer sever their own
+-- delegation edge silently).
+-- ---------------------------------------------------------------------------
+
+-- r64c GREEN/Refl: a RETRACTION (active=False) acts-for assertion classifies to
+-- Just ACDelegationLifecycle on the CANDIDATE side, exactly like an active assertion would --
+-- BEFORE the fix this returned Nothing.
+r64c : entitlementActClassOf Autoharn.worldEnt
+         (mkD 1 Nothing (PRelationAsserted 1 ActsFor 2 False ()))
+     = Just ACDelegationLifecycle
+r64c = Refl
+
+-- r64d GREEN/Refl: the identical fact on the TARGET side (entitlement_act_class_of_target isn't
+-- even passed principal_binding_active in the SQL).
+worldDelRetract : Ledger 1
+worldDelRetract = Lin :< mkE 1 Nothing (PRelationAsserted 1 ActsFor 2 False ())
+r64d : entitlementActClassOfTarget Autoharn.worldDelRetract 0 = Just ACDelegationLifecycle
+r64d = Refl
+
+-- worldCountersign: genesis (2), delegate (3) chained to it via an acts-for edge that binds a
+-- must-countersign caveat (principal 5) -- s64 Element 11b conjunct (d) "rides the whole chain":
+-- ANY authority-bearing act by 3 (not merely a fresh delegation) needs 5's countersign.
+worldCountersign : Ledger 3
+worldCountersign = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "genesis" Oh))
+                       :< mkE 2 Nothing (PPrincipalRegistered 3 ACHuman (MkNonEmptyText "delegate" Oh))
+                       :< mkE 2 Nothing (PRelationAsserted 3 ActsFor 2 True
+                                           (MkDelegationConditions Nothing (Just 5) Nothing False))
+
+-- b64c RED: principal 3 tries to SEVER (retract) their OWN acts-for edge (row 2) with NO
+-- countersign witness. BEFORE the fix, the retraction classified to Nothing, delegationConditionsOk
+-- was vacuously True, and this write would have WRONGLY succeeded (actor 3 still chain-reaches
+-- genesis via the very edge it is retracting, which is read against the ledger BEFORE this write
+-- lands) -- the kernel's own conjunct (d) refuses it. AFTER the fix, the retraction classifies to
+-- Just ACDelegationLifecycle, conjunct (d) finds the must-countersign requirement (principal 5)
+-- along actor 3's own chain, and refuses the write for lacking a witness.
+b64c : boundaryOk Autoharn.worldCountersign
+         (mkD 3 (Just 2) (PRelationAsserted 3 ActsFor 2 False ()))
+     = False
+b64c = Refl
+
+-- worldCountersign2 adds the verified countersign attestation (by principal 5) b64d supplies as
+-- its witness.
+worldCountersign2 : Ledger 4
+worldCountersign2 = worldCountersign :< mkE 5 Nothing
+                       (PCommissionSignatureVerified 0 GBindingVerified
+                          (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh))
+
+-- b64d GREEN: the SAME retraction, now carrying a sigWitness (row 3) naming a
+-- commission_signature_verified row attested by the REQUIRED countersigner (5) -- conjunct (d)
+-- satisfied, the write succeeds.
+b64d : boundaryOk Autoharn.worldCountersign2
+         (mkDW 3 (Just 2) (Just 3) (PRelationAsserted 3 ActsFor 2 False ()))
+     = True
+b64d = Refl
+
+-- s61: signature symmetry. row 0 stands for an (unmodeled-in-detail) commission; row 1 is an
+-- independently-verified attestation of it.
+worldSig : Ledger 2
+worldSig = Lin :< mkE 1 Nothing (PProse KNote)
+               :< mkE 5 Nothing (PCommissionSignatureVerified 0 GBindingVerified
+                                   (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh))
+
+-- s61 RED: superseding a row that rests on a VERIFIED signature, with NO signature_symmetry_
+-- witness of one's own, is refused.
+b61a : boundaryOk Autoharn.worldSig (mkD 1 (Just 0) (PProse KNote)) = False
+b61a = Refl
+
+-- s61 GREEN: the SAME supersession, this time carrying a sigWitness naming the verified
+-- attestation (row 1) -- symmetry satisfied.
+b61b : boundaryOk Autoharn.worldSig (mkDW 1 (Just 0) (Just 1) (PProse KNote)) = True
+b61b = Refl
+
+-- s61 GREEN: a fresh key bind with a matching possession proof (worldK, k41a above).
+
+-- s65: the attempted-kind journal, both axes -- a ledger-surface refusal populates it verbatim
+-- (the payload IS already typed, unlike the SQL's untyped jsonb); a registration-surface refusal
+-- never carries a caller `kind` key at all (QUANTIFICATION UNIVERSE, s65's own closure statement).
+headAttemptedKind : {n : Nat} -> Ledger (S n) -> Maybe NonEmptyText
+headAttemptedKind (l :< e) = case e.payload of
+  PWriteRefused _ _ _ _ _ _ ak => ak
+  _                            => Nothing
+
+w65a : headAttemptedKind (write 9 Autoharn.wbRole Autoharn.worldA (mkD 1 Nothing (PWorkClaimed "a")))
+     = Just (MkNonEmptyText "work_claimed" Oh)
+w65a = Refl
+w65b : headAttemptedKind (write 9 Autoharn.wbRole Autoharn.worldP (mkD 3 Nothing (PPrincipalSuspended 2 True)))
+     = Nothing
+w65b = Refl

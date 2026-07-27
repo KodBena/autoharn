@@ -1,0 +1,35 @@
+{
+  "target": "contempprobe",
+  "verdict": "AGREE",
+  "only_asp": [],
+  "only_sql": [],
+  "asp_record": {
+    "engine": "clingo",
+    "version": "clingo version 5.8.0",
+    "config": [
+      "contemporaneity.lp",
+      "contemp_thresholds.lp"
+    ],
+    "input_basis": "edb-text (contemp EDB export, serialized; engine/contemp_edb.py)",
+    "input_hash": "e70f6f4ec41fa791255776a73963c6e0af054f2396a79f7bd78663cece5a82ca",
+    "program_hash": "4567a43182dd0ae6b08c60c13a24681be36a1b5baf7c9db038d4202f11c41960",
+    "output_hash": "98a1c1321c013742deee7e97511e67bc7833915d58053bdb386e24b659dc5540",
+    "target": "contempprobe",
+    "ts": "2026-07-27T18:10:15"
+  },
+  "sql_record": {
+    "engine": "postgres",
+    "version": "PostgreSQL 18.4",
+    "config": [
+      "contemp_floor.py::floor_atoms"
+    ],
+    "input_basis": "live-db ledger rows (toy) + independently re-read/re-parsed /tmp/contemp-fixture-skulsz0g/.claude/logs/*.jsonl journal files",
+    "input_hash": "77e80908f41a985a4cd929c7e6c4f1aa1a6b98a804b32149950e8dde341b39a3",
+    "program_hash": "026a40527f79bf16ee2377d646b5712d04128c97ae47d3f3bc463c0e50fa7ed6",
+    "output_hash": "98a1c1321c013742deee7e97511e67bc7833915d58053bdb386e24b659dc5540",
+    "target": "contempprobe",
+    "ts": "2026-07-27T18:10:15"
+  },
+  "asp_quarantine": null,
+  "sql_quarantine": null
+}
