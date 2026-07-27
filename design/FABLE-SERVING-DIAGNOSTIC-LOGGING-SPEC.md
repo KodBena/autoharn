@@ -3,7 +3,7 @@
 <!-- doc-attest-exempt: Fable-authored spec awaiting maintainer ratification 2026-07-27;
 the A:B:C loop runs on the build, not the proposal text. Removal condition: superseded by
 the build's merge record, or rejection. -->
-<!-- design-currency: status=in-build -->
+<!-- design-currency: status=discharged discharged-by=f5d4934ace5cf4d980e50772c1a1360874579f60 -->
 
 - **Status:** RATIFIED IN FULL 2026-07-27 (maintainer, same day as proposal: "As per
   your recommendation, then" — all four layers; ledger row records it). The L3 floor was

@@ -18,16 +18,14 @@ human-authored sentence's meaning manufactures exactly the false certainty this 
 counted once, honestly, in the one back-catalog line (check 5) — the back-catalog migrates on
 touch (the ADR-0017 Rule 4 precedent this spec explicitly invokes), never by sweep.
 
-STATUS TOKENS — AN HONEST DISCREPANCY, FLAGGED RATHER THAN SILENTLY RESOLVED (ADR-0002 Rule 3,
-"a config field the receiver cannot honor must not be silently accepted", applied here to the
-GOVERNING SPEC's own two sections disagreeing with each other). Spec §2 enumerates exactly EIGHT
-status tokens by name (proposed, ratified, in-build, discharged, superseded, rejected, evergreen,
-historical); spec §6's closure statement calls this "the closed nine-token set". This module
-implements the eight tokens §2 actually NAMES — the enumerated list is the operative grammar, a
-count in a closure-statement sentence is not a ninth definition — and this discrepancy is named
-in this build's own witness report rather than quietly picked one way. A status token outside
-this set of eight is an unknown-token grammar finding (check 4), never guessed at or silently
-accepted as some inferred ninth thing.
+STATUS TOKENS — EIGHT, SETTLED (spec §6, amended 2026-07-27). The governing spec originally had
+§2 enumerate exactly EIGHT status tokens by name (proposed, ratified, in-build, discharged,
+superseded, rejected, evergreen, historical) while §6's closure statement called the set "nine" —
+a self-inconsistency this module's first build flagged rather than silently resolved, implementing
+the eight §2 actually named. The spec's own 2026-07-27 amendment round corrected §6 to say eight,
+matching §2 — the builder's reading was right, and it is now the settled letter, not an open
+question this module works around. A status token outside this set of eight remains an
+unknown-token grammar finding (check 4), never guessed at.
 
 THE FIVE CHECKS:
   1. DISCHARGE VERIFICATION. `discharged-by=<sha>`: advisory if `<sha>` is not an ancestor of this
@@ -35,29 +33,30 @@ THE FIVE CHECKS:
      `--repo-root` can redirect it, the same redirection device every sibling gate in this
      directory offers, see MODES below). `superseded-by=<path>`: advisory if the named doc does
      not exist under the design dir, or its OWN status is not a live-or-historical token (live =
-     proposed/ratified/in-build, per check 2's own live-status set, plus historical — a successor
-     that was itself rejected leaves the predecessor un-superseded IN FACT, spec §3 item 1's own
-     parenthetical).
+     proposed/ratified/in-build, per check 2's own live-status set, plus historical AND
+     discharged — a successor that was itself rejected leaves the predecessor un-superseded IN
+     FACT, spec §3 item 1's own parenthetical; `discharged` is a SECOND, freshly-found letter-vs-
+     spirit broadening this module makes, NOT yet reflected in the spec's own text — see
+     LIVE_OR_HISTORICAL's own module-level comment below for the concrete specimen that forced it
+     and why `superseded` stays excluded as an unevidenced, conservative call).
   2. DEPENDENCY DRIFT. For every doc whose OWN status is live (proposed/ratified/in-build):
      advisory per `depends-on` target whose status is `superseded` or `rejected`, naming both
      paths and both statuses in one message (the maintainer's own dispatch-mechanics/serving-
      logging example this spec cites by name). A target that is `discharged` raises NOTHING —
      satisfaction, not drift (spec §5's own stated polarity: "a depends-on edge to a discharged
      doc raises NOTHING").
-  3. STALE-CURRENCY SMELL. Spec §3 item 3's literal text gates this on the doc's OWN status being
-     discharged/superseded/rejected. This module reads that literally AND ALSO fires when the
-     doc's status is something ELSE (historical, most plausibly) but the doc ALREADY carries a
-     verifiably-resolved `superseded-by`/`discharged-by` fact (i.e. check 1 above would find that
-     fact GENUINE, not itself an advisory) — because the spec's own motivating "live specimen"
-     (its §0 second bullet, LOGGING-DIRECTION-SURVEY-2026-07-27.md) is seeded at status=historical
-     (a survey is a point-in-time record, never itself "superseded" as a document — see §2's own
-     definition of `historical`) while ALSO carrying `superseded-by` naming its successor. Read
-     at the letter alone, check 3 would never fire for that exact doc; read at the spirit the
-     spec's own §0 states in plain words ("that condition came TRUE ... and nothing noticed. The
-     gate exists to notice exactly this"), it must. This is a deliberate, named broadening past
-     the literal three-token list — CLAUDE.md's own instruction where letter and spirit diverge
-     ("the spirit wins and you surface the divergence") — flagged here, not silently decided, and
-     restated in this build's witness report.
+  3. STALE-CURRENCY SMELL — SETTLED (spec §3 item 3, amended 2026-07-27). Fires when the doc's
+     OWN status is discharged/superseded/rejected, OR when its status is something ELSE
+     (historical, most plausibly) but the doc ALREADY carries a verifiably-resolved
+     `superseded-by`/`discharged-by` fact (i.e. check 1 above would find that fact GENUINE, not
+     itself an advisory). This module's first build found the spec's original three-token letter
+     missed its OWN motivating "live specimen" (§0's second bullet, LOGGING-DIRECTION-SURVEY-
+     2026-07-27.md, seeded status=historical — a survey is a point-in-time record, never itself
+     "superseded" as a document, per §2's own definition of `historical` — while ALSO carrying
+     `superseded-by` naming its successor) and made the spirit call CLAUDE.md's letter-vs-spirit
+     rule commands. The spec's own 2026-07-27 amendment ratified that call into §3 item 3's text
+     directly: the historical-plus-resolved-fact case is now the LETTER, not a broadening this
+     module carries alone.
      Once either gate above is satisfied, the check looks for a PRE-EXISTING, informal
      `<!-- doc-attest-exempt: ... Removal condition: ... -->` HTML comment (the convention
      gates/doc_attestation_presence.py's WAIVER_TOKEN already established for this codebase,
@@ -118,7 +117,25 @@ STATUS_TOKENS = frozenset({
     "rejected", "evergreen", "historical",
 })
 LIVE_STATUSES = frozenset({"proposed", "ratified", "in-build"})
-LIVE_OR_HISTORICAL = LIVE_STATUSES | {"historical"}
+# A SECOND, freshly-found letter-vs-spirit call (fix round on commit 4cbbb8e, 2026-07-27),
+# flagged here rather than silently decided, same discipline as the historical+superseded-by
+# call §3 item 3's spec text was itself amended to cover. Spec §3 item 1's literal text still
+# says a superseded-by TARGET must carry "a live/historical token" (unchanged by the 2026-07-27
+# amendment round) — read letter-strictly, a target that is `discharged` fails this test, which
+# is backwards: `discharged` is the STRONGEST possible confirmation a successor is real (built
+# AND merged), stronger evidence than merely `proposed`/`ratified`/`in-build`. The concrete case
+# that surfaced this: FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md moved from in-build to discharged
+# in this same fix round, and LOGGING-DIRECTION-SURVEY-2026-07-27.md's superseded-by names it —
+# the letter-strict read would advisory-flag the CLEANEST possible supersession as invalid. This
+# module therefore also accepts `discharged` as a valid successor status; `rejected` (the one
+# status the spec's own parenthetical names as invalidating — a successor that never actually
+# happened leaves the predecessor un-superseded in fact) and `superseded` (a successor that was
+# itself later replaced — left OUT of the valid set as a conservative, unevidenced judgment call:
+# no concrete specimen has forced a decision either way yet, and the spec's letter does not name
+# it, so this module does not silently widen further than the one gap a real doc just exposed)
+# remain invalid. Surfaced in this build's own report for the maintainer/spec author, not
+# silently decided.
+LIVE_OR_HISTORICAL = LIVE_STATUSES | {"historical", "discharged"}
 DISCHARGE_LIKE = frozenset({"discharged", "superseded", "rejected"})
 
 ALLOWED_KEYS = ("status", "discharged-by", "superseded-by", "depends-on")

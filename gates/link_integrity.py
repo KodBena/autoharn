@@ -54,10 +54,6 @@ would still need a human's eyes (this gate cannot distinguish "not installed yet
 the filename" for an untracked path), so the honest move is informational, not silent
 exclusion.
 
-GENERALIZED to ANY gitignored target, not just `/local/` (found authoring gates/
-design_currency.py, 2026-07-27: `../service.log`, `.gitignore`'s own entry, the identical shape).
-`is_gitignored()` below asks `git check-ignore` directly (ADR-0012 P1), not a hard-coded prefix.
-
 UNINITIALIZED SUBMODULES (found reproducing work_opened `worktree-submodule-link-integrity`,
 2026-07-19): a fresh `git worktree add` does NOT populate this repo's gitlink submodules
 (`tools/makespan-scheduler`, `tools/autoharn-panel`) -- the directory exists (git creates the
@@ -229,16 +225,6 @@ def under_submodule(rel_to_root: str, submodule_paths: set[str]) -> str | None:
     return None
 
 
-def is_gitignored(rel_to_root: str) -> bool:
-    """True iff `rel_to_root` is a path git would ignore (`git check-ignore`); False on any
-    inability to answer. Generalizes the `/local/` special-case above to any gitignored path."""
-    try:
-        r = run_git(["-C", ROOT, "check-ignore", "-q", rel_to_root], capture_output=True, timeout=15)
-    except (OSError, FileNotFoundError):
-        return False
-    return r.returncode == 0
-
-
 def strip_fences(text: str) -> str:
     """Blank out fenced code-block bodies (``` or ~~~) so a link-shaped code example is never
     mistaken for a real link — same device doc-legibility.py uses."""
@@ -341,8 +327,7 @@ def main() -> int:
                 # (DELETE-direction staged-vs-tree finding, 2026-07-26; see `staged_deletions()`).
                 if not os.path.exists(resolved) or rel_to_root in staged_deleted:
                     sm = under_submodule(rel_to_root, uninit_submodules)
-                    if (rel_to_root == "local" or rel_to_root.startswith("local" + os.sep)
-                            or is_gitignored(rel_to_root)):
+                    if rel_to_root == "local" or rel_to_root.startswith("local" + os.sep):
                         local_flags.append((rel, ln, m.group(1)))
                     elif sm is not None:
                         submodule_flags.append((rel, ln, m.group(1), sm))
@@ -367,9 +352,9 @@ def main() -> int:
             print(f"    ... +{len(anchor_flags) - 10} more")
 
     if local_flags:
-        print(f"\n  {len(local_flags)} link(s) into a gitignored target (operator/runtime "
-              f"evidence never tracked -- NOT a failure; a host missing the tooling/process "
-              f"that writes it won't have the target, by the project's own convention):")
+        print(f"\n  {len(local_flags)} link(s) into /local/ (gitignored operator evidence, "
+              f"never tracked -- NOT a failure; a host that has not locally installed the "
+              f"referenced tooling will not have the target, by the project's own convention):")
         for rel, ln, target in local_flags[:10]:
             print(f"    {rel}:{ln}  {target}")
         if len(local_flags) > 10:

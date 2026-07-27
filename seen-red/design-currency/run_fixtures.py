@@ -34,6 +34,13 @@ Cases:
                                   spirit broadening of check 3). --strict exit 1, same as a RED
                                   case mechanically, but asserted here as the POSITIVE detection
                                   this whole gate exists for.
+  green-superseded-by-discharged-successor -- regression guard for the fix-round bug found
+                                  2026-07-27 (real specimen: LOGGING-DIRECTION-SURVEY superseded-
+                                  by a spec that itself later turned `discharged`): a doc's
+                                  superseded-by target being `discharged` (built AND merged --
+                                  the STRONGEST confirmation a successor is real) must NOT raise
+                                  check 1's "not a live-or-historical token" advisory. --strict
+                                  exit 0.
 
 Usage: python3 seen-red/design-currency/run_fixtures.py
 Exit 0 if every case matches its expected polarity; 1 otherwise. Lazy imports banned."""
@@ -151,10 +158,21 @@ def main() -> int:
               and "unreconciled" in cp6.stdout,
               f"exit={cp6.returncode}, stdout={cp6.stdout.strip()[:300]!r}", failures)
 
+        # --- green-superseded-by-discharged-successor (fix-round regression guard) ---
+        d7 = tmp / "case7"
+        write(d7, "Old.md", "# Old\n\n<!-- design-currency: status=historical "
+                             "superseded-by=Built.md -->\n")
+        write(d7, "Built.md", "# Built\n\n<!-- design-currency: status=discharged "
+                               f"discharged-by={head} -->\n")
+        cp7 = run_gate(d7, strict=True)
+        check("green-superseded-by-discharged-successor",
+              cp7.returncode == 0 and "clean" in cp7.stdout,
+              f"exit={cp7.returncode}, stdout={cp7.stdout.strip()[:200]!r}", failures)
+
     if failures:
-        print(f"design-currency fixtures: {len(failures)}/6 case(s) FAILED: {failures}")
+        print(f"design-currency fixtures: {len(failures)}/7 case(s) FAILED: {failures}")
         return 1
-    print("design-currency fixtures: all 6 cases matched their expected polarity.")
+    print("design-currency fixtures: all 7 cases matched their expected polarity.")
     return 0
 
 
