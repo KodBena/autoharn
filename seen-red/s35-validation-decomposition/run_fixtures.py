@@ -59,6 +59,7 @@ Usage: python3 seen-red/s35-validation-decomposition/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -78,6 +79,20 @@ sys.path.insert(0, str(REPO / "filing"))
 import ledger_differential  # noqa: E402  (engine/ledger_differential.py -- run_layer_differential)
 import pghost_resolve  # noqa: E402 (filing/pghost_resolve.py -- never a literal host default)
 
+# sub-s43 fixture-family migration (ledger row 1471): the served `led` shim now unconditionally
+# refuses a deployment.json missing boundary_url/boundary_deployment -- every `led(...)` call
+# below drives the real dispatcher, so the classic scaffold this file deliberately keeps (s35 is
+# NOT wired into new-project.sh's own LINEAGE_CHAIN, per this family's own commission) needs a
+# real boundary_service standing over it. REUSE (ADR-0012 P1) serve_existing_world/stop_server --
+# same pattern seen-red/s26-row-hash-chain-deletion/run_fixtures.py already established -- rather
+# than reimplementing the served-boundary wiring here.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
 # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
 # environment before any subprocess is spawned -- inherited by the whole process tree
 # this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
@@ -86,6 +101,17 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 WORLD = "s35fxprobe"
 
+# sub-s43 fixture-family migration (ledger row 1471): this family's own docstring only names
+# s34 -- "a concurrent, disjoint delta this commission forbids depending on" -- as the deliberate
+# exclusion; it never claims s35-in-isolation-from-s36-onward is itself under test. Every case
+# a-p drives a REAL `led()` dispatcher write (register-principal, work open/claim/close/depends),
+# which since s43 only ever succeeds through the s43 write boundary + a served boundary_service --
+# so the chain is extended through the CURRENT head (mirroring bootstrap/new-project.sh's own
+# FULL_LINEAGE apply-list derivation: every kernel/lineage/sNN-*.sql, N>=20, sorted numerically,
+# .detect.sql/.verify.sql/.accommodate*.sql companions excluded), s34 remaining the ONE deliberate
+# gap. Nothing about s35's OWN semantic point (validate_work_item() as a thin dispatcher over four
+# leaf functions, independent of s34) is weakened by also carrying s36-s64 -- those deltas are
+# all later, disjoint, additive kernel history this family never claimed independence from.
 CHAIN = [
     "s15-schema.sql", "s17-stamp-mechanism.sql", "s17-independence-vocabulary.sql",
     "s19-trigger-search-path.sql", "s20-obligation-grants-and-view-refresh.sql",
@@ -96,6 +122,19 @@ CHAIN = [
     "s31-supersession-uniform-retraction.sql", "s32-edge-views-single-home.sql",
     "s33-composite-discharge.sql", "s35-validation-decomposition.sql",
     # s34 (validate_independence(), a concurrent, disjoint delta) deliberately EXCLUDED.
+    "s36-decision-grade.sql", "s37-violation-disposition.sql", "s38-bookkeeping-close.sql",
+    "s39-blocks-start.sql", "s40-principal-identity-events.sql",
+    "s41-principal-bindings-and-relations.sql", "s42-row-hash-full-coverage.sql",
+    "s43-typed-verdict-write-boundary.sql", "s44-model-identity-attestation.sql",
+    "s45-standing-lifecycle.sql", "s46-credited-views.sql", "s47-claim-on-closed-refusal.sql",
+    "s48-review-witness-existence.sql", "s49-journaler-overflow-guard.sql",
+    "s50-defeat-input-raw-domain.sql", "s51-artifact-store.sql",
+    "s52-artifact-witness-check.sql", "s53-belief-substrate.sql", "s54-belief-views.sql",
+    "s55-dispatch-grain-independence.sql", "s56-reservation-residue.sql",
+    "s57-obligation-revocation-event.sql", "s58-missive-substrate.sql",
+    "s59-missive-views.sql", "s60-entitlement-enforcement.sql",
+    "s61-signature-symmetry-and-key-binding.sql", "s62-delegation-lifecycle-gating.sql",
+    "s63-supersession-body-restoration.sql", "s64-principal-stamps-delegation-conditions.sql",
 ]
 
 # The s33-era error text, banked VERBATIM from kernel/lineage/s33-composite-discharge.sql, for
@@ -174,8 +213,170 @@ def psql_tuples(sql: str) -> str:
     return cp.stdout.strip()
 
 
-def scaffold_classic_s35(world: str) -> Path:
-    """CLASSIC MODE + manual s15..s33+s35 apply (s30/s31/s32/s33's own scaffold_classic idiom)."""
+def birth_sequence(schema: str, kern: str, role: str) -> None:
+    """Replicates bootstrap/new-project.sh's own s40/s43 (+ s60) birth sequence (that script's
+    "THE s40 BIRTH SEQUENCE" / "THE s60 BIRTH SEQUENCE" blocks, verbatim in effect) against a
+    MANUALLY-scaffolded classic schema -- --new-world/--profile tracker get this for free
+    (FULL_LINEAGE gate), classic --schema/--kern/--role mode does not (that script's own
+    comment: "classic mode applies no kernel lineage at all"). Once s43 is in this world's chain
+    (added to CHAIN above so the served `led` dispatcher has a write boundary to talk to at
+    all), every `ledger_write`/`registration_write` call -- success OR refusal -- requires this
+    exact birth data to already exist:
+      - the login role's `principal_standing_declared` (kernel/lineage/
+        s43-typed-verdict-write-boundary.sql line ~687: an omitted-actor write from a login role
+        with no standing declaration refuses UNCONDITIONALLY, even on the happy path), and
+      - the `write-boundary` tool principal registered (same file, ~line 722: the REFUSAL-
+        JOURNALING itself raises if this principal is absent -- every one of this fixture's own
+        refusal-polarity cases (b/c/d/f/g/i/j/k/l/n) would abort mid-journal, not merely fail its
+        assertion, without this).
+    Run as raw psql (SET ROLE, no served boundary needed -- new-project.sh's own birth sequence
+    is not routed through boundary_service either, it is a direct psql/SECURITY DEFINER call),
+    mirroring that script's own SQL text with schema/kern/role substituted for THIS scaffold's
+    own scratch names."""
+    login_role = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAc", "SELECT session_user;"]).stdout.strip()
+
+    # (1) author's principal_registered event -- genesis exception, self-attributed. No
+    # caller-supplied text here needs a bind (every string literal below is this file's own
+    # fixed prose). SQL is fed on STDIN (never -c): psql's :'var' bind-substitution below (steps
+    # 2/3-4) is a feature of its own input scanner, which -c bypasses (verified live -- `psql -c
+    # "SELECT :'x'"` raises a syntax error even with -v x=... set; stdin does not), so every one
+    # of these calls uses the same stdin-feed shape for consistency, matching bootstrap/
+    # new-project.sh's own heredoc (<<SQL) convention exactly.
+    r1 = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1"],
+            input=(
+             f'SET ROLE "{role}"; SET search_path = "{schema}", "{kern}"; '
+             f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+             f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+             f"'kind','principal_registered',"
+             f"'statement','principal ''author'' registered (class model) -- genesis exception: "
+             f"self-attributed (actor = author), the first identity event of this world (s40 "
+             f"birth sequence step 1)',"
+             f"'actor',(SELECT id FROM principal WHERE name='author'),"
+             f"'principal_subject',(SELECT id FROM principal WHERE name='author'),"
+             f"'principal_purpose','the scaffold connection principal: the identity this "
+             f"world''s granted role writes as by default'));"
+             f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION "
+             f"'birth sequence step 1 refused (SQLSTATE %): %', v.sqlstate, v.message; END IF; "
+             f"END $bw$;"))
+    if r1.returncode != 0:
+        raise RuntimeError(f"birth sequence step 1 FAILED ({schema}): {r1.stdout[-1500:]} {r1.stderr[-1500:]}")
+
+    # (2) dual standing declarations -- the granted role AND the login role. `drole` is
+    # caller/environment-derived (session_user), so it is passed via psql -v and referenced with
+    # the bind-quoted :'drole' form (never string-interpolated) -- the same discipline
+    # bootstrap/new-project.sh's own birth sequence uses for exactly this value.
+    for drole in (role, login_role):
+        r2 = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
+                 "-v", f"drole={drole}"],
+                input=(
+                 f'SET ROLE "{role}"; SET search_path = "{schema}", "{kern}"; '
+                 f"SELECT set_config('birth.drole', :'drole', false); "
+                 f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+                 f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+                 f"'kind','principal_standing_declared',"
+                 f"'statement',format('database role ''%s'' speaks for principal ''author'' by "
+                 f"default (standing declaration, s40 birth sequence step 2 / s43 Element 8''s "
+                 f"dual declaration)', current_setting('birth.drole')),"
+                 f"'actor',(SELECT id FROM principal WHERE name='author'),"
+                 f"'principal_subject',(SELECT id FROM principal WHERE name='author'),"
+                 f"'principal_db_role',current_setting('birth.drole'),"
+                 f"'principal_binding_active',true));"
+                 f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION "
+                 f"'birth sequence step 2 refused (SQLSTATE %): %', v.sqlstate, v.message; END IF; "
+                 f"END $bw$;"))
+        if r2.returncode != 0:
+            raise RuntimeError(f"birth sequence step 2 FAILED ({schema}, drole={drole}): "
+                                f"{r2.stdout[-1500:]} {r2.stderr[-1500:]}")
+
+    # (3/4) register reviewer (subagent), commissioner (human), write-boundary (tool). `ppurpose`
+    # carries an apostrophe ("principal's rows") -- passed via -v/:'ppurpose' for the same reason
+    # as (2), never string-interpolated into the SQL text.
+    for pname, pclass, ppurpose in (
+        ("reviewer", "subagent", "the standard second principal a run needs: countersigns the "
+                                  "author principal's rows"),
+        ("commissioner", "human", "the maintainer's own registered identity for FULL-mode "
+                                  "commission signing (s25)"),
+        ("write-boundary", "tool", "the kernel write boundary's own recording identity: every "
+                                   "write_refused meta-event is authored by this principal (s43)"),
+    ):
+        r3 = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
+                 "-v", f"pname={pname}", "-v", f"pclass={pclass}", "-v", f"ppurpose={ppurpose}"],
+                input=(
+                 f'SET ROLE "{role}"; SET search_path = "{schema}", "{kern}"; '
+                 f"SELECT set_config('birth.pname',:'pname',false), "
+                 f"set_config('birth.pclass',:'pclass',false), "
+                 f"set_config('birth.ppurpose',:'ppurpose',false); "
+                 f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+                 f"SELECT * INTO v FROM {kern}.registration_write(jsonb_build_object("
+                 f"'name',current_setting('birth.pname'),"
+                 f"'agent_class',current_setting('birth.pclass'),"
+                 f"'purpose',current_setting('birth.ppurpose'),"
+                 f"'statement',format('principal ''%s'' registered (class %s) -- s40 birth "
+                 f"sequence step 3/4, registrar: author', current_setting('birth.pname'), "
+                 f"current_setting('birth.pclass')),"
+                 f"'actor',(SELECT id FROM principal WHERE name='author')));"
+                 f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION "
+                 f"'birth sequence step 3/4 refused (SQLSTATE %): %', v.sqlstate, v.message; "
+                 f"END IF; END $bw$;"))
+        if r3.returncode != 0:
+            raise RuntimeError(f"birth sequence step 3/4 FAILED ({schema}, pname={pname}): "
+                                f"{r3.stdout[-1500:]} {r3.stderr[-1500:]}")
+
+    # (5) s60 birth: bind author to role 'authority' (CHAIN carries s60, entitlement_act_class
+    # exists -- unlike the classic-mode-with-no-lineage-at-all case new-project.sh guards for,
+    # this fixture's own manual CHAIN now always carries s60 through s64, so this act is
+    # unconditional here).
+    r5 = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1"],
+            input=(
+             f'SET ROLE "{role}"; SET search_path = "{schema}", "{kern}"; '
+             f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+             f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+             f"'kind','principal_role_bound',"
+             f"'statement','author bound to role ''authority'' (s60 birth sequence step 5)',"
+             f"'actor',(SELECT id FROM principal WHERE name='author'),"
+             f"'principal_subject',(SELECT id FROM principal WHERE name='author'),"
+             f"'principal_role_name','authority',"
+             f"'principal_binding_active',true));"
+             f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION "
+             f"'s60 birth sequence step 5 refused (SQLSTATE %): %', v.sqlstate, v.message; "
+             f"END IF; END $bw$;"))
+    if r5.returncode != 0:
+        raise RuntimeError(f"s60 birth sequence step 5 FAILED ({schema}): "
+                            f"{r5.stdout[-1500:]} {r5.stderr[-1500:]}")
+
+    # (6) configure the default act-class role map (five acts, all -> 'authority').
+    for actclass in ("principal_registered", "principal_role_bound", "standing_lifecycle",
+                     "milestone_closure", "gate_edge_supersession"):
+        r6 = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
+                 "-v", f"actclass={actclass}"],
+                input=(
+                 f'SET ROLE "{role}"; SET search_path = "{schema}", "{kern}"; '
+                 f"SELECT set_config('birth.actclass',:'actclass',false); "
+                 f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+                 f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+                 f"'kind','entitlement_class_configured',"
+                 f"'statement',format('act class ''%s'' requires role ''authority'' (s60 birth "
+                 f"sequence step 6)', current_setting('birth.actclass')),"
+                 f"'actor',(SELECT id FROM principal WHERE name='author'),"
+                 f"'entitlement_act_class',current_setting('birth.actclass'),"
+                 f"'principal_role_name','authority'));"
+                 f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION "
+                 f"'s60 birth sequence step 6 refused for act class % (SQLSTATE %): %', "
+                 f"current_setting('birth.actclass'), v.sqlstate, v.message; END IF; END $bw$;"))
+        if r6.returncode != 0:
+            raise RuntimeError(f"s60 birth sequence step 6 FAILED ({schema}, actclass={actclass}): "
+                                f"{r6.stdout[-1500:]} {r6.stderr[-1500:]}")
+
+
+def scaffold_classic_s35(world: str) -> tuple[Path, "subprocess.Popen"]:
+    """CLASSIC MODE + manual s15..s33+s35 apply (s30/s31/s32/s33's own scaffold_classic idiom),
+    THEN a served boundary stood up over that exact schema/kern/role (sub-s43 migration, ledger
+    row 1471) -- every `led(...)` call this file makes is a real dispatcher write and now needs
+    a boundary to talk to. Returns (world_dir, boundary_service proc); caller MUST
+    stop_server(proc) in its own teardown/finally -- this function does not own that lifecycle
+    beyond the one internal leak-guard below (any failure between serving and returning here
+    stops the process itself before propagating, the same try/except shape
+    seen-red/s26-row-hash-chain-deletion/run_fixtures.py's own scaffold() uses)."""
     tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
     world_dir = tmp / world
     schema, kern, role = world, f"{world}_kernel", f"{world}_rw"
@@ -206,7 +407,9 @@ def scaffold_classic_s35(world: str) -> Path:
     sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1",
         "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
               f"ON CONFLICT (only_one) DO NOTHING;"])
-    return world_dir
+    birth_sequence(schema, kern, role)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+    return world_dir, proc
 
 
 def state_of(schema: str, slug: str) -> str:
@@ -276,12 +479,16 @@ def main() -> int:
     teardown()
     failures: list[str] = []
     tmps: list[Path] = []
+    procs: list = []
     try:
-        print(f"== scaffolding classic world {WORLD} + manual s15..s33+s35 apply (s34 excluded) ==")
-        world_dir = scaffold_classic_s35(WORLD)
+        print(f"== scaffolding classic world {WORLD} + manual s15..s33+s35 apply (s34 excluded) "
+              f"+ served boundary ==")
+        world_dir, proc = scaffold_classic_s35(WORLD)
         tmps.append(world_dir.parent)
+        procs.append(proc)
         schema = WORLD
-        print(f"  scaffold OK (schema={schema}).\n")
+        kern = f"{WORLD}_kernel"
+        print(f"  scaffold + serve OK (schema={schema}).\n")
 
         led(world_dir, "register-principal", "reviewer2", "model")
 
@@ -355,32 +562,51 @@ def main() -> int:
         check("i-depends-cycle-refused", ok_i, f"exit={ri.returncode} excerpt={out_i.strip()[-200:]!r}", failures)
 
         # --- j: epoch-gated review disposition missing, EXACT text -----------------------------------
+        # PRE-s43, this case reached validate_work_item_close() with a bare raw INSERT (the
+        # granted role held INSERT directly). s43 REVOKES that grant unconditionally -- the raw
+        # INSERT below now fails "permission denied for table ledger" before ever reaching the
+        # trigger, a direct consequence of the very kernel delta this migration adds to CHAIN.
+        # The write boundary (kernel.ledger_write) is the only surviving path to the trigger for
+        # a payload shape `led work close` itself would refuse client-side first -- and per s43's
+        # own design (a refused write is "caught inside them ... returned as a typed verdict,
+        # never an abort") the trigger's teach-text survives VERBATIM in the returned verdict's
+        # `message` column, so the case's own byte-exact-text assertion still holds, just read
+        # from a query result instead of psql stderr.
         led(world_dir, "work", "open", "j-item", "JItem")
         led(world_dir, "work", "claim", "j-item")
-        rj = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1", "-c",
-                f"SET ROLE {WORLD}_rw; INSERT INTO {schema}.ledger(kind,work_slug,work_resolution,work_witness,statement) "
-                f"VALUES('work_closed','j-item','shipped','commit-j','x');"])
+        rj = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-v", "ON_ERROR_STOP=1", "-tA", "-F", "\x01"],
+                input=(f'SET ROLE "{WORLD}_rw"; '
+                       f"SELECT disposition, message FROM {kern}.ledger_write(jsonb_build_object("
+                       f"'kind','work_closed','work_slug','j-item','work_resolution','shipped',"
+                       f"'work_witness','commit-j','statement','x'));"))
         out_j = rj.stdout + rj.stderr
-        rid_epoch = row_id(schema, "true ORDER BY id DESC LIMIT 1")  # not used directly; text asserted structurally
-        ok_j = (rj.returncode != 0 and "carries no review disposition" in out_j
-                and "j-item" in out_j and f"{schema}.migration_epoch" in out_j)
-        check("j-epoch-gated-review-missing", ok_j, f"exit={rj.returncode} excerpt={out_j.strip()[-260:]!r}", failures)
+        disp_j, _, msg_j = out_j.strip().partition("\x01")
+        ok_j = (rj.returncode == 0 and disp_j == "refused"
+                and "carries no review disposition" in msg_j
+                and "j-item" in msg_j and f"{schema}.migration_epoch" in msg_j)
+        check("j-epoch-gated-review-missing", ok_j,
+              f"disposition={disp_j!r} excerpt={msg_j.strip()[-260:]!r}", failures)
 
         # --- k: strict + deferred refused, EXACT text ------------------------------------------------
         # `led work close` itself refuses --review-deferred+--strict client-side (its own s29
         # Element C mirror, a DIFFERENT text than the trigger's) before ever reaching the DB --
-        # so this polarity is exercised via raw psql, the same route the s22/s33 fixtures use for
-        # every leaf-level probe, to reach validate_work_item_close() itself.
+        # so this polarity is exercised via the write boundary directly (same s43 REVOKE reason
+        # as case j above -- a bare raw INSERT is no longer a legal path to validate_work_item_
+        # close() at all, only kernel.ledger_write is).
         led(world_dir, "work", "open", "k-item", "KItem")
         led(world_dir, "work", "claim", "k-item")
-        rk = sh(["psql", "-h", PGHOST, "-d", PGDB, "-c",
-                f"SET ROLE {WORLD}_rw; INSERT INTO {schema}.ledger"
-                f"(kind,work_slug,work_resolution,work_review_disposition,work_strict_close,statement) "
-                f"VALUES('work_closed','k-item','dropped','deferred',true,'x');"])
+        rk = sh(["psql", "-h", PGHOST, "-d", PGDB, "-q", "-tA", "-F", "\x01"],
+                input=(f'SET ROLE "{WORLD}_rw"; '
+                       f"SELECT disposition, message FROM {kern}.ledger_write(jsonb_build_object("
+                       f"'kind','work_closed','work_slug','k-item','work_resolution','dropped',"
+                       f"'work_review_disposition','deferred','work_strict_close',true,"
+                       f"'statement','x'));"))
         out_k = rk.stdout + rk.stderr
+        disp_k, _, msg_k = out_k.strip().partition("\x01")
         expect_k = S33_ERA_TEXT["strict_deferred"].format(slug="k-item")
-        ok_k = rk.returncode != 0 and expect_k in out_k
-        check("k-strict-deferred-refused", ok_k, f"exit={rk.returncode} exact_text_match={expect_k in out_k}", failures)
+        ok_k = rk.returncode == 0 and disp_k == "refused" and expect_k in msg_k
+        check("k-strict-deferred-refused", ok_k,
+              f"disposition={disp_k!r} exact_text_match={expect_k in msg_k}", failures)
 
         # --- l: strict + witnessed with unresolved blockers refused, names the blocker ---------------
         led(world_dir, "work", "open", "l-root", "LRoot")
@@ -421,10 +647,16 @@ def main() -> int:
         led(world_dir, "work", "open", "p-root", "PRoot", "--discharge", "composite")
         led(world_dir, "work", "open", "p-child", "PChild", "--parent", "p-root")
         led(world_dir, "work", "claim", "p-root")
-        rp = led(world_dir, "work", "close", "p-root", "shipped", "--review-witness", "ref-p")
+        # resolution=shipped requires a non-blank --witness client-side (bootstrap/templates/
+        # led.tmpl, cmd_work_close) regardless of --strict -- this case's own args were missing
+        # it (a pre-existing gap in this case, unrelated to the s43 migration: surfaced here
+        # because this is the first live run of this case against a working `led` dispatcher).
+        rp = led(world_dir, "work", "close", "p-root", "shipped",
+                  "--review-witness", "ref-p", "--witness", "commit-p")
         out_p = rp.stdout + rp.stderr
         ok_p = (rp.returncode != 0 and "p-child" in out_p and "obligation tree is unresolved" in out_p
-                and "--strict" not in " ".join(["work", "close", "p-root", "shipped", "--review-witness", "ref-p"]))
+                and "--strict" not in " ".join(["work", "close", "p-root", "shipped",
+                                                 "--review-witness", "ref-p", "--witness", "commit-p"]))
         check("p-composite-strict-by-type", ok_p,
               f"exit={rp.returncode} names_child={'p-child' in out_p} no_strict_flag_passed=True "
               f"excerpt={out_p.strip()[-220:]!r}", failures)
@@ -459,6 +691,8 @@ def main() -> int:
               f"only_sql={sorted(res.sql.atoms - res.asp.atoms)[:8]}", failures)
 
     finally:
+        for p in procs:
+            bs_fixtures.stop_server(p)
         teardown()
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)

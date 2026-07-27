@@ -71,3 +71,33 @@ under `SET ROLE dep.role`; on failure `main()` prints a typed CANNOT-HYDRATE ban
 naming the psql error verbatim, prints NOTHING to stdout, and exits 3. See
 seen-red/pickup-connection-failure-silent-empty/run_fixtures.py for the both-polarity live
 proof (4/4 cases pass against real infra).
+
+--------------------------------------------------------------------------------------------
+
+DATED CORRECTION (2026-07-27, per law/adr/0005 Rule 8 -- the text above is preserved verbatim
+as the point-in-time record of the ORIGINAL 2026-07-13 defect and its fix; this is an ADDED
+sibling note, not a retro-edit of it): ledger rows 1464/1471. The `pickup.tmpl` this file's
+original text describes was the direct-psql tool later renamed `legacy-pickup.tmpl` under the
+served-boundary CLI rebase (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 /
+design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md). `bootstrap/templates/pickup.tmpl` now names a
+DIFFERENT tool -- an HTTP client against `serving/boundary_service.py` -- the one every real
+`--new-world` scaffold's `./autoharn pickup` actually reaches today; `legacy-pickup.tmpl` (the
+tool this original record is about) is explicitly OUT OF SCOPE for ruling 4a ("legacy-
+pickup.tmpl is not guarded") and is untouched.
+
+`run_fixtures.py` in this same directory was RETARGETED (ledger row 1471, ruling 4a) at the
+CURRENT `bootstrap/templates/pickup.tmpl`, real served-boundary infra throughout. THE FINDING
+(read from source, then confirmed by running the retargeted fixture, not assumed): the current
+`pickup.tmpl` is ALREADY loud and typed on every "cannot even talk to the boundary" shape --
+a down boundary raises `BoundaryUnreachable` (exit 4, empty stdout, named stderr), a boundary
+that answers but refuses (e.g. an unrecognized `/d/{name}` segment) raises `BoundaryRefusal`
+(exit 3, empty stdout, named stderr) -- distinct codes, both loud, neither silent-empty. A
+genuine per-VIEW capability absence on an otherwise fully-healthy boundary (case e: a scratch
+world predating kernel/lineage/s36-decision-grade.sql) still hydrates the OTHER sections and
+exits 0, never conflated with a down/refusing boundary. Nothing in `pickup.tmpl` itself needed
+fixing; this is a LIVE DEFECT REPORT OF "none found" for the current served surface, banked as
+positive evidence the ratified contract (serving/boundary_cli_client.py's own EXIT-CODE
+CONVENTION) holds for `pickup` specifically. See `run_fixtures.py`'s own updated module
+docstring for the full case list (5/5 cases pass against real infra: a down boundary, a good-
+boundary control, a refusing-but-up boundary, the function-level `check_protocol_version()`
+proof, and the genuine-section-absence non-conflation proof).

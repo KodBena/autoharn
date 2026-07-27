@@ -3,7 +3,7 @@
   [ok] s40 detect sibling on an s39-head chain reads 'f' (expect f)
 
 === pre-s40-silent-default ===
-  [ok] WORLD A (pre-s40): NULL-actor `led note` exit=0, landed under 'author' with no refusal anywhere -- the undeclared silent fallback s40 forecloses, witnessed live
+  [ok] WORLD A (pre-s40): NULL-actor raw INSERT exit=0, landed under 'author' with no refusal anywhere -- the undeclared silent fallback s40 forecloses, witnessed live (direct role-scoped INSERT, not the now boundary-only `led` CLI -- see comment above)
 
 == scaffolding classic world s40fxb (chain ends s40-principal-identity-events.sql) ==
 === detect-t-on-s40 ===
@@ -12,8 +12,9 @@
 === bare-anchor-refused-at-commit ===
   [ok] exit=3; teach excerpt='s the anchor row and its registration event atomically (kernel/lineage/s40-principal-identity-events.sql Element 3).\nCONTEXT:  PL/pgSQL function principal_requires_registration_event() line 5 at RAISE'; no anchor row landed
 
+== scaffolding classic world s40fxb2 (chain ends s64-principal-stamps-delegation-conditions.sql) ==
 === undeclared-write-refused ===
-  [ok] exit=3; teach excerpt='age/s40-principal-identity-events.sql §3.6). Alternatively, supply an explicit actor for this one write (LED_ACTOR=<registered-principal-name>).\nCONTEXT:  PL/pgSQL function set_actor() line 8 at RAISE'
+  [ok] exit=1; teach excerpt='nts.sql §3.6, resolution on session_user since kernel/lineage/s43-typed-verdict-write-boundary.sql). Alternatively, supply an explicit actor for this one write (LED_ACTOR=<registered-principal-name>).'
 
 === declared-write-resolves ===
   [ok] NULL-actor write exit=0, resolved+marked 'author|declared-default' (expect author|declared-default)
@@ -22,25 +23,25 @@
   [ok] LED_ACTOR write exit=0, resolved+marked 'reviewer2|explicit' (expect reviewer2|explicit)
 
 === register-duplicate-same-class ===
-  [ok] exit=1; teach quotes purpose=True; excerpt=' ON CONFLICT DO NOTHING class, closed): if you meant this existing principal,\n  just use it (LED_ACTOR=reviewer2); if you meant a NEW identity, pick a new name.'
+  [FAIL] exit=1; teach quotes purpose=False; excerpt='refused row 10 -- the refusal itself is now a committed, hash-chained ledger record, s43):\n  duplicate key value violates unique constraint "principal_name_key"'
 
 === register-duplicate-class-mismatch ===
-  [ok] exit=1; excerpt='an s40-only kernel, file a decision row naming the successor instead\n  (./led decision "principal <new-name> succeeds reviewer2 (class change model -> human)").'
+  [FAIL] exit=1; excerpt='refused row 11 -- the refusal itself is now a committed, hash-chained ledger record, s43):\n  duplicate key value violates unique constraint "principal_name_key"'
 
-=== purpose-mandatory ===
-  [ok] exit=1; excerpt='/s40-principal-identity-events.sql).\nusage: led register-principal <name> <human|model|subagent|tool> --purpose "<why this identity exists>"'
+=== purpose-optional-with-placeholder ===
+  [ok] exit=0; purpose landed='registered via ./led register-principal' (expect the CLI's own placeholder text -- --purpose is optional by ratified, already-shipped design, bootstrap/templates/led.tmpl's own dated comment); excerpt='led: row 12 written.'
 
 === suspend-refuses-writes ===
-  [ok] exit=3; excerpt='-purpose "<why>", then record the succession (kernel/lineage/s40-principal-identity-events.sql, Element 4 / REINSTATEMENT).\nCONTEXT:  PL/pgSQL function set_actor() line 16 at RAISE'
+  [ok] exit=1; excerpt='ipal remains available too: ./led register-principal <new-name> <class> --purpose "<why>", then record the succession (kernel/lineage/s40-principal-identity-events.sql, Element 4).'
 
 === revoke-refuses-writes / successor-passes ===
-  [ok] revoked write exit=3 ('/s40-principal-identity-events.sql, Element 4 / REINSTATEMENT).\nCONTEXT:  PL/pgSQL function set_actor() line 16 at RAISE'); successor registration exit=0; successor write exit=0
+  [ok] revoked write exit=1 ('rpose "<why>", then record the succession (kernel/lineage/s40-principal-identity-events.sql, Element 4 / REINSTATEMENT).'); successor registration exit=0; successor write exit=0
 
 === precedence-both-orders ===
   [ok] suspend-then-revoke reads 'revoked', revoke-then-suspend reads 'revoked' (expect revoked/revoked -- strict severity ordering, both orders)
 
 === rotation ===
-  [ok] exit=0; principal_role now reads 's40fxb_rw|reviewer3' (expect exactly s40fxb_rw|reviewer3, one row); rotation notice printed
+  [ok] exit=0; principal_role (db_role='s40fxb2_rw') now reads 's40fxb2_rw|reviewer3' (expect exactly s40fxb2_rw|reviewer3, one row); rotation notice printed
 
 === anchor-append-only ===
   [ok] UPDATE exit=3, DELETE exit=3 (both refused)
@@ -53,6 +54,6 @@
 
 == REAL --new-world scaffold run (s40fxnw) ==
 === new-world-birth-sequence ===
-  [ok] scaffold exit=0; registration events=3 (author, reviewer, commissioner), standing declarations=1; first no-LED_ACTOR write exit=0, attributed 'author|declared-default' (expect author|declared-default -- strict-on, zero friction)
+  [ok] scaffold exit=0; registration events=4 (author, reviewer, commissioner, write-boundary), standing declarations=2 (granted role + login role -- s43's own dual declaration); first no-LED_ACTOR write exit=0, attributed 'author|declared-default' (expect author|declared-default -- strict-on, zero friction)
 
-ALL CASES OK -- s40 principal-identity-events both-polarity proof (detect t/f, bare-anchor commit refusal, strict attribution red+green, ceremony duplicate refusals both class polarities, suspend/revoke + successor, precedence both orders, rotation, anchor append-only, gates green, ./judge AGREE both layers, REAL --new-world birth sequence end-to-end), zero residue.
+FAILURES: ['register-duplicate-same-class', 'register-duplicate-class-mismatch']

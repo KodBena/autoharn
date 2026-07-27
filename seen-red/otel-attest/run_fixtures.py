@@ -37,8 +37,10 @@ Usage: python3 seen-red/otel-attest/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -61,22 +63,50 @@ import pghost_resolve  # noqa: E402
 # this fixture starts, so every repo-root verb invocation anywhere downstream carries it.
 os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 
+# ledger rows 1459/1464/1471 (sub-s43 fixture-family migration): the served `led` shim now
+# unconditionally refuses a deployment.json missing boundary_url/boundary_deployment --
+# world_main_check/world_f7_check's own `led()`/`led_stamped()` dispatcher writes below drive
+# the real dispatcher, so each scratch world now needs a real boundary_service standing over it.
+# REUSE (ADR-0012 P1) serve_existing_world/stop_server -- same pattern seen-red/
+# s26-row-hash-chain-deletion/run_fixtures.py's own sibling already established, imported via
+# importlib exactly as that file does (never re-implemented).
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
 PGHOST, PGDB = pghost_resolve.resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST"), "toy"
 
-CHAIN_B = [
-    "s15-schema.sql", "s17-stamp-mechanism.sql", "s17-independence-vocabulary.sql",
-    "s19-trigger-search-path.sql", "s20-obligation-grants-and-view-refresh.sql",
-    "s21-session-aware-distinctness.sql", "s22-work-item-ledger.sql",
-    "s23-per-invocation-stamp-token.sql", "s24-declared-event-time.sql",
-    "s25-commission-kind.sql", "s26-row-hash-chain.sql", "s27-chain-high-water.sql",
-    "s28-work-parent-edge.sql", "s29-obligation-item-key-and-typed-close.sql",
-    "s30-typed-dependency-edges.sql", "s31-supersession-uniform-retraction.sql",
-    "s32-edge-views-single-home.sql", "s33-composite-discharge.sql",
-    "s34-computed-grade-refusal.sql", "s35-validation-decomposition.sql",
-    "s36-decision-grade.sql", "s37-violation-disposition.sql",
-    "s38-bookkeeping-close.sql", "s39-blocks-start.sql",
-    "s40-principal-identity-events.sql", "s41-principal-bindings-and-relations.sql",
-]
+
+def _full_lineage_files() -> list[str]:
+    """Mirrors bootstrap/new-project.sh's own FULL_LINEAGE apply-list derivation LIVE from the
+    directory (that script's own comment: "this loop derives the list LIVE from the directory
+    every run"): high_watermark_1.sql, THEN every kernel/lineage/sNN-<slug>.sql with N >= 20
+    (excluding .detect.sql/.verify.sql/.accommodate*.sql companions), sorted NUMERICALLY by N.
+    cluster-1 fixture-repairs (ledger rows 1459/1464/1471): CHAIN_B (capped at s41) used to be
+    this family's own ceiling -- this module's docstring never claims s41 is a deliberate era
+    boundary (nothing here tests "otel-attest behavior specifically before some later
+    generation"), so the fix is the SAME full-chain migration every other family in this
+    commission uses, not a second capped chain."""
+    entries: list[tuple[int, Path]] = []
+    for f in LINEAGE.glob("s[0-9]*-*.sql"):
+        name = f.name
+        if name.endswith((".detect.sql", ".verify.sql", ".accommodate.sql", ".accommodate.verify.sql")):
+            continue
+        m = re.match(r"s(\d+)-", name)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if n < 20:
+            continue
+        entries.append((n, f))
+    entries.sort(key=lambda t: t[0])
+    return ["high_watermark_1.sql"] + [f.name for _, f in entries]
+
+
+CHAIN_FULL = _full_lineage_files()
 
 # The module under test, loaded directly (no .py extension) for the no-DB parser legs (L4),
 # exactly the pattern the adversarial review's own test scripts used
@@ -172,20 +202,59 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
 
 
 def birth_acts(world: str) -> None:
+    """cluster-1 fixture-repairs (ledger rows 1459/1464/1471): a full-chain scaffold carries
+    s43, which revokes the granted role's own INSERT grants -- a bare `INSERT INTO ledger`
+    (this function's own pre-migration body) now fails outright, so birth acts route through
+    the SECURITY DEFINER `ledger_write`/`registration_write` boundary functions instead, exactly
+    the shape seen-red/boundary-service/run_fixtures.py's own `birth_via_boundary` and seen-red/
+    deployment-pinning/run_fixtures.py's own `_apply_light_kernel` already establish. Also
+    live-witnessed here (same gap deployment-pinning's own fix pass hit): the served
+    boundary_service's own psql invocations connect as the OS session_user, NOT the world's
+    declared `{world}_rw` role -- s40's re-issued set_actor is STRICT, so standing must be
+    declared for BOTH (new-project.sh's own step-2 "dual declaration" note), or a real
+    `led`/`led_stamped` write below refuses with "login role '<os-user>' has no standing
+    declaration". `write-boundary` is also registered so a refusal (if one is ever hit, e.g.
+    L3's own delimiter-refusal leg) has an authoring identity to journal it under."""
     S, K, R = world, f"{world}_kernel", f"{world}_rw"
+    login_role = psql_tuples("SELECT session_user;")
+    standing_stmts = []
+    for drole in dict.fromkeys([R, login_role]):  # de-duped, order-preserving
+        standing_stmts.append(
+            f"DO $bw$ DECLARE v {K}.write_verdict; BEGIN "
+            f"SELECT * INTO v FROM {K}.ledger_write(jsonb_build_object("
+            f"'kind', 'principal_standing_declared', "
+            f"'statement', 'role {drole} -> author (fixture genesis exception, otel-attest fixture)', "
+            f"'actor', (SELECT id FROM principal WHERE name = 'author'), "
+            f"'principal_subject', (SELECT id FROM principal WHERE name = 'author'), "
+            f"'principal_db_role', '{drole}', "
+            f"'principal_binding_active', true)); "
+            f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'standing declaration refused for {drole} (%): %', v.sqlstate, v.message; END IF; "
+            f"END $bw$;\n")
     script = (
-        f"SET ROLE {R};\nSET search_path = {S}, {K};\n"
-        f"INSERT INTO ledger (kind, statement, actor, principal_subject, principal_purpose)\n"
-        f"VALUES ('principal_registered', 'author registered (fixture genesis exception)',\n"
-        f"        (SELECT id FROM principal WHERE name='author'),\n"
-        f"        (SELECT id FROM principal WHERE name='author'), 'fixture connection principal');\n"
-        f"INSERT INTO ledger (kind, statement, actor, principal_subject, principal_db_role)\n"
-        f"VALUES ('principal_standing_declared', 'role {R} -> author',\n"
-        f"        (SELECT id FROM principal WHERE name='author'),\n"
-        f"        (SELECT id FROM principal WHERE name='author'), '{R}');\n")
+        f"SET ROLE {R};\n"
+        f"SET search_path = {S}, {K};\n"
+        f"DO $bw$ DECLARE v {K}.write_verdict; BEGIN "
+        f"SELECT * INTO v FROM {K}.ledger_write(jsonb_build_object("
+        f"'kind', 'principal_registered', "
+        f"'statement', 'author registered (fixture genesis exception, otel-attest fixture)', "
+        f"'actor', (SELECT id FROM principal WHERE name = 'author'), "
+        f"'principal_subject', (SELECT id FROM principal WHERE name = 'author'), "
+        f"'principal_purpose', 'the scaffold connection principal for this fixture')); "
+        f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'birth step 1 refused (%): %', v.sqlstate, v.message; END IF; "
+        f"END $bw$;\n"
+        + "".join(standing_stmts) +
+        f"DO $bw$ DECLARE v {K}.write_verdict; BEGIN "
+        f"SELECT * INTO v FROM {K}.registration_write(jsonb_build_object("
+        f"'name', 'write-boundary', 'agent_class', 'tool', "
+        f"'purpose', 'the kernel write boundary''s own recording identity (fixture genesis exception, otel-attest fixture)', "
+        f"'statement', 'principal ''write-boundary'' registered (fixture genesis exception, otel-attest fixture)', "
+        f"'actor', (SELECT id FROM principal WHERE name = 'author'))); "
+        f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'write-boundary registration refused (%): %', v.sqlstate, v.message; END IF; "
+        f"END $bw$;\n"
+    )
     r = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1", "-f", "/dev/stdin"], input=script)
     if r.returncode != 0:
-        raise RuntimeError(f"birth acts failed ({world}): {r.stderr[-600:]}")
+        raise RuntimeError(f"birth acts failed ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
 
 
 def row_id_last(world: str, kind: str, statement: str) -> int:
@@ -316,121 +385,131 @@ def l4_parser_rejections(failures: list[str]) -> None:
 def world_main_check(failures: list[str], tmps: list[Path]) -> None:
     world = "s41oa"
     teardown(world)
-    print(f"== scaffolding classic world {world} (chain ends {CHAIN_B[-1]}) ==")
-    wdir = scaffold_classic(world, CHAIN_B)
+    print(f"== scaffolding classic world {world} (full current lineage, was capped at s41) ==")
+    wdir = scaffold_classic(world, CHAIN_FULL)
     tmps.append(wdir.parent)
     birth_acts(world)
-    register_sentry(wdir)
+    # cluster-1 fixture-repairs (ledger rows 1459/1464/1471): the served `led` shim now
+    # unconditionally refuses a deployment.json missing boundary_url/boundary_deployment --
+    # register_sentry/led_stamped below drive the real dispatcher, so this world needs a real
+    # boundary_service standing over it. CRITICAL (a closed review finding, s26's own pattern):
+    # everything from here to teardown is wrapped in try/except BaseException so a failure
+    # between serving and returning never leaks the boundary-service subprocess.
+    proc = bs_fixtures.serve_existing_world(wdir / "deployment.json", wdir.parent)
+    try:
+        register_sentry(wdir)
 
-    now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
 
-    # ---- L1 positive: exactly one candidate api_request brackets the matched tool call ----
-    t1_stmt = "L1-positive target row"
-    r = led_stamped(wdir, "decision", t1_stmt, session="SESS-L1-POS", invocation="INV-L1-POS",
-                     actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t1 = row_id_last(world, "decision", t1_stmt)
+        # ---- L1 positive: exactly one candidate api_request brackets the matched tool call ----
+        t1_stmt = "L1-positive target row"
+        r = led_stamped(wdir, "decision", t1_stmt, session="SESS-L1-POS", invocation="INV-L1-POS",
+                         actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t1 = row_id_last(world, "decision", t1_stmt)
 
-    # ---- L1 negative: TWO candidates bracket the same tool call and happen to AGREE on
-    # model -- must NOT grade exact-command (F3: "exactly one candidate", not "model
-    # agreement") ----
-    t2_stmt = "L1-negative (two agreeing candidates) target row"
-    r = led_stamped(wdir, "decision", t2_stmt, session="SESS-L1-NEG", invocation="INV-L1-NEG",
-                     actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t2 = row_id_last(world, "decision", t2_stmt)
+        # ---- L1 negative: TWO candidates bracket the same tool call and happen to AGREE on
+        # model -- must NOT grade exact-command (F3: "exactly one candidate", not "model
+        # agreement") ----
+        t2_stmt = "L1-negative (two agreeing candidates) target row"
+        r = led_stamped(wdir, "decision", t2_stmt, session="SESS-L1-NEG", invocation="INV-L1-NEG",
+                         actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t2 = row_id_last(world, "decision", t2_stmt)
 
-    # ---- L2 ambiguous, MISMATCH branch: every candidate model contradicts expected ----
-    t3_stmt = "L2-ambiguous-mismatch target row"
-    r = led_stamped(wdir, "decision", t3_stmt, session="SESS-L2-MISMATCH", actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t3 = row_id_last(world, "decision", t3_stmt)
+        # ---- L2 ambiguous, MISMATCH branch: every candidate model contradicts expected ----
+        t3_stmt = "L2-ambiguous-mismatch target row"
+        r = led_stamped(wdir, "decision", t3_stmt, session="SESS-L2-MISMATCH", actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t3 = row_id_last(world, "decision", t3_stmt)
 
-    # ---- L2 ambiguous, unevaluated branch: one candidate matches expected ----
-    t4_stmt = "L2-ambiguous-unevaluated target row"
-    r = led_stamped(wdir, "decision", t4_stmt, session="SESS-L2-UNEVAL", actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t4 = row_id_last(world, "decision", t4_stmt)
+        # ---- L2 ambiguous, unevaluated branch: one candidate matches expected ----
+        t4_stmt = "L2-ambiguous-unevaluated target row"
+        r = led_stamped(wdir, "decision", t4_stmt, session="SESS-L2-UNEVAL", actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t4 = row_id_last(world, "decision", t4_stmt)
 
-    # ---- L3: model value carries the '|' delimiter -- must be refused at write time ----
-    t5_stmt = "L3-delimiter-refusal target row"
-    r = led_stamped(wdir, "decision", t5_stmt, session="SESS-L3-DELIM", actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t5 = row_id_last(world, "decision", t5_stmt)
+        # ---- L3: model value carries the '|' delimiter -- must be refused at write time ----
+        t5_stmt = "L3-delimiter-refusal target row"
+        r = led_stamped(wdir, "decision", t5_stmt, session="SESS-L3-DELIM", actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t5 = row_id_last(world, "decision", t5_stmt)
 
-    tool_detail_pos = otlp_record(session_id="SESS-L1-POS", event_name="tool_result",
-                                   tool_parameters="app.vendor_invocation=INV-L1-POS", ts=now)
-    tool_detail_neg = otlp_record(session_id="SESS-L1-NEG", event_name="tool_result",
-                                   tool_parameters="app.vendor_invocation=INV-L1-NEG", ts=now)
-    records = [
-        tool_detail_pos,
-        otlp_record(session_id="SESS-L1-POS", event_name="api_request",
-                     model="claude-fable-5", query_source="sdk", ts=now + timedelta(seconds=1)),
-        tool_detail_neg,
-        otlp_record(session_id="SESS-L1-NEG", event_name="api_request",
-                     model="claude-fable-5", query_source="sdk", ts=now + timedelta(seconds=1)),
-        otlp_record(session_id="SESS-L1-NEG", event_name="api_request",
-                     model="claude-fable-5", query_source="sdk", ts=now - timedelta(seconds=1)),
-        otlp_record(session_id="SESS-L2-MISMATCH", event_name="api_request",
-                     model="claude-fake-1", query_source="sdk",
-                     expected_model="claude-real-model", ts=FAR_PAST),
-        otlp_record(session_id="SESS-L2-MISMATCH", event_name="api_request",
-                     model="claude-fake-2", query_source="sdk", ts=FAR_PAST + timedelta(seconds=5)),
-        otlp_record(session_id="SESS-L2-UNEVAL", event_name="api_request",
-                     model="claude-fake-1", query_source="sdk",
-                     expected_model="claude-fake-1", ts=FAR_PAST),
-        otlp_record(session_id="SESS-L2-UNEVAL", event_name="api_request",
-                     model="claude-fake-2", query_source="sdk", ts=FAR_PAST + timedelta(seconds=5)),
-        otlp_record(session_id="SESS-L3-DELIM", event_name="api_request",
-                     model="claude-x|evil-injection", query_source="sdk", ts=now),
-    ]
-    export_path = wdir.parent / "export.jsonl"
-    write_export(export_path, records)
+        tool_detail_pos = otlp_record(session_id="SESS-L1-POS", event_name="tool_result",
+                                       tool_parameters="app.vendor_invocation=INV-L1-POS", ts=now)
+        tool_detail_neg = otlp_record(session_id="SESS-L1-NEG", event_name="tool_result",
+                                       tool_parameters="app.vendor_invocation=INV-L1-NEG", ts=now)
+        records = [
+            tool_detail_pos,
+            otlp_record(session_id="SESS-L1-POS", event_name="api_request",
+                         model="claude-fable-5", query_source="sdk", ts=now + timedelta(seconds=1)),
+            tool_detail_neg,
+            otlp_record(session_id="SESS-L1-NEG", event_name="api_request",
+                         model="claude-fable-5", query_source="sdk", ts=now + timedelta(seconds=1)),
+            otlp_record(session_id="SESS-L1-NEG", event_name="api_request",
+                         model="claude-fable-5", query_source="sdk", ts=now - timedelta(seconds=1)),
+            otlp_record(session_id="SESS-L2-MISMATCH", event_name="api_request",
+                         model="claude-fake-1", query_source="sdk",
+                         expected_model="claude-real-model", ts=FAR_PAST),
+            otlp_record(session_id="SESS-L2-MISMATCH", event_name="api_request",
+                         model="claude-fake-2", query_source="sdk", ts=FAR_PAST + timedelta(seconds=5)),
+            otlp_record(session_id="SESS-L2-UNEVAL", event_name="api_request",
+                         model="claude-fake-1", query_source="sdk",
+                         expected_model="claude-fake-1", ts=FAR_PAST),
+            otlp_record(session_id="SESS-L2-UNEVAL", event_name="api_request",
+                         model="claude-fake-2", query_source="sdk", ts=FAR_PAST + timedelta(seconds=5)),
+            otlp_record(session_id="SESS-L3-DELIM", event_name="api_request",
+                         model="claude-x|evil-injection", query_source="sdk", ts=now),
+        ]
+        export_path = wdir.parent / "export.jsonl"
+        write_export(export_path, records)
 
-    # ---- run 1: everything attestable gets attested ----
-    r1 = run_otel_attest(wdir, export_path)
-    out1 = r1.stdout + r1.stderr
+        # ---- run 1: everything attestable gets attested ----
+        r1 = run_otel_attest(wdir, export_path)
+        out1 = r1.stdout + r1.stderr
 
-    check("L1-exact-command-single-candidate",
-          f"attested row {t1}: grade=exact-command" in out1 and "model='claude-fable-5'" in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
-    check("L1-two-agreeing-candidates-NOT-exact-command",
-          (f"attested row {t2}:" in out1) and (f"attested row {t2}: grade=exact-command" not in out1),
-          f"rc={r1.returncode}\n{out1}", failures)
+        check("L1-exact-command-single-candidate",
+              f"attested row {t1}: grade=exact-command" in out1 and "model='claude-fable-5'" in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
+        check("L1-two-agreeing-candidates-NOT-exact-command",
+              (f"attested row {t2}:" in out1) and (f"attested row {t2}: grade=exact-command" not in out1),
+              f"rc={r1.returncode}\n{out1}", failures)
 
-    check("L2-ambiguous-mismatch-writes-attestation",
-          f"attested row {t3}: grade=ambiguous verdict=MISMATCH model='unresolved'" in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
-    check("L2-ambiguous-mismatch-companion-finding",
-          f"attested row {t3}" in out1
-          and "companion finding row written for row {}".format(t3) in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
+        check("L2-ambiguous-mismatch-writes-attestation",
+              f"attested row {t3}: grade=ambiguous verdict=MISMATCH model='unresolved'" in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
+        check("L2-ambiguous-mismatch-companion-finding",
+              f"attested row {t3}" in out1
+              and "companion finding row written for row {}".format(t3) in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
 
-    check("L2-ambiguous-unevaluated-writes-attestation",
-          f"attested row {t4}: grade=ambiguous verdict=unevaluated model='unresolved'" in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
-    check("L2-ambiguous-unevaluated-companion-finding",
-          f"attested row {t4}" in out1
-          and "companion finding row written for row {}".format(t4) in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
+        check("L2-ambiguous-unevaluated-writes-attestation",
+              f"attested row {t4}: grade=ambiguous verdict=unevaluated model='unresolved'" in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
+        check("L2-ambiguous-unevaluated-companion-finding",
+              f"attested row {t4}" in out1
+              and "companion finding row written for row {}".format(t4) in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
 
-    check("L3-delimiter-refused-at-write-time",
-          "attestation write REFUSED for row {}".format(t5) in out1
-          and "field 'model'" in out1 and "'|' delimiter" in out1
-          and f"attested row {t5}:" not in out1,
-          f"rc={r1.returncode}\n{out1}", failures)
+        check("L3-delimiter-refused-at-write-time",
+              "attestation write REFUSED for row {}".format(t5) in out1
+              and "field 'model'" in out1 and "'|' delimiter" in out1
+              and f"attested row {t5}:" not in out1,
+              f"rc={r1.returncode}\n{out1}", failures)
 
-    # ---- run 2: idempotency (L5) -- every previously-attested target is skipped, nothing
-    # re-written; the still-uncovered delimiter row is retried (it was never attested, so it
-    # is NOT "already attested" -- it is attempted and refused again, which is correct: a
-    # refusal is not a skip) ----
-    r2 = run_otel_attest(wdir, export_path)
-    out2 = r2.stdout + r2.stderr
-    check("L5-idempotency-skips-already-attested",
-          all(f"row {t}: skipped (already attested; pass --re-attest to redo)" in out2
-              for t in (t1, t2, t3, t4))
-          and all(f"attested row {t}:" not in out2 for t in (t1, t2, t3, t4)),
-          f"rc={r2.returncode}\n{out2}", failures)
+        # ---- run 2: idempotency (L5) -- every previously-attested target is skipped, nothing
+        # re-written; the still-uncovered delimiter row is retried (it was never attested, so it
+        # is NOT "already attested" -- it is attempted and refused again, which is correct: a
+        # refusal is not a skip) ----
+        r2 = run_otel_attest(wdir, export_path)
+        out2 = r2.stdout + r2.stderr
+        check("L5-idempotency-skips-already-attested",
+              all(f"row {t}: skipped (already attested; pass --re-attest to redo)" in out2
+                  for t in (t1, t2, t3, t4))
+              and all(f"attested row {t}:" not in out2 for t in (t1, t2, t3, t4)),
+              f"rc={r2.returncode}\n{out2}", failures)
+    finally:
+        bs_fixtures.stop_server(proc)
 
     teardown(world)
 
@@ -444,62 +523,71 @@ def world_f7_check(failures: list[str], tmps: list[Path]) -> None:
     exists to make visible via a nonzero exit code."""
     world = "s41oaf7"
     teardown(world)
-    print(f"== scaffolding classic world {world} (chain ends {CHAIN_B[-1]}) ==")
-    wdir = scaffold_classic(world, CHAIN_B)
+    print(f"== scaffolding classic world {world} (full current lineage, was capped at s41) ==")
+    wdir = scaffold_classic(world, CHAIN_FULL)
     tmps.append(wdir.parent)
     birth_acts(world)
-    register_sentry(wdir)
+    # cluster-1 fixture-repairs (ledger rows 1459/1464/1471): same wiring gap as
+    # world_main_check -- stand a real boundary_service against this world BEFORE any
+    # register_sentry/led_stamped call below drives the real dispatcher. Everything from here
+    # to teardown is wrapped in try/except BaseException (the s26 leak-class guard) so a
+    # failure never leaks the boundary-service subprocess.
+    proc = bs_fixtures.serve_existing_world(wdir / "deployment.json", wdir.parent)
+    try:
+        register_sentry(wdir)
 
-    now = datetime.now(timezone.utc)
-    t_stmt = "L6-finding-write-failure target row"
-    r = led_stamped(wdir, "decision", t_stmt, session="SESS-L6", actor="author")
-    assert r.returncode == 0, r.stdout + r.stderr
-    t = row_id_last(world, "decision", t_stmt)
+        now = datetime.now(timezone.utc)
+        t_stmt = "L6-finding-write-failure target row"
+        r = led_stamped(wdir, "decision", t_stmt, session="SESS-L6", actor="author")
+        assert r.returncode == 0, r.stdout + r.stderr
+        t = row_id_last(world, "decision", t_stmt)
 
-    records = [
-        otlp_record(session_id="SESS-L6", event_name="api_request", model="claude-wrong-model",
-                     query_source="sdk", expected_model="claude-right-model", ts=now),
-    ]
-    export_path = wdir.parent / "export.jsonl"
-    write_export(export_path, records)
+        records = [
+            otlp_record(session_id="SESS-L6", event_name="api_request", model="claude-wrong-model",
+                         query_source="sdk", expected_model="claude-right-model", ts=now),
+        ]
+        export_path = wdir.parent / "export.jsonl"
+        write_export(export_path, records)
 
-    # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has a
-    # bare `wdir/led` shim to move-and-wrap -- the ONE dispatcher `wdir/autoharn` is moved
-    # instead. The wrapper's own interception logic (scan argv for a literal "finding" token)
-    # is UNCHANGED -- it still works with "led" now present as argv[0] ahead of the led-specific
-    # args, since the scan is a membership check, not a positional one -- and the non-
-    # intercepted forward path (`exec "$real_dispatcher_moved" "$@"`) is exactly correct too:
-    # `led_stamped`/`led` above now call `bash wdir/autoharn led <args...>`, so `"$@"` here is
-    # `("led", <args...>)`, precisely what the real (moved) dispatcher itself expects as argv.
-    real_dispatcher = wdir / "autoharn"
-    real_dispatcher_moved = wdir / "autoharn.real"
-    shutil.move(str(real_dispatcher), str(real_dispatcher_moved))
-    wrapper = wdir / "autoharn"
-    wrapper.write_text(
-        "#!/bin/bash\n"
-        "for a in \"$@\"; do\n"
-        "  if [ \"$a\" = \"finding\" ]; then\n"
-        "    echo 'F7 FIXTURE: simulated finding-row write failure' >&2\n"
-        "    exit 1\n"
-        "  fi\n"
-        "done\n"
-        f"exec \"{real_dispatcher_moved}\" \"$@\"\n",
-        encoding="utf-8")
-    wrapper.chmod(0o755)
+        # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): a scaffolded world no longer has a
+        # bare `wdir/led` shim to move-and-wrap -- the ONE dispatcher `wdir/autoharn` is moved
+        # instead. The wrapper's own interception logic (scan argv for a literal "finding" token)
+        # is UNCHANGED -- it still works with "led" now present as argv[0] ahead of the led-specific
+        # args, since the scan is a membership check, not a positional one -- and the non-
+        # intercepted forward path (`exec "$real_dispatcher_moved" "$@"`) is exactly correct too:
+        # `led_stamped`/`led` above now call `bash wdir/autoharn led <args...>`, so `"$@"` here is
+        # `("led", <args...>)`, precisely what the real (moved) dispatcher itself expects as argv.
+        real_dispatcher = wdir / "autoharn"
+        real_dispatcher_moved = wdir / "autoharn.real"
+        shutil.move(str(real_dispatcher), str(real_dispatcher_moved))
+        wrapper = wdir / "autoharn"
+        wrapper.write_text(
+            "#!/bin/bash\n"
+            "for a in \"$@\"; do\n"
+            "  if [ \"$a\" = \"finding\" ]; then\n"
+            "    echo 'F7 FIXTURE: simulated finding-row write failure' >&2\n"
+            "    exit 1\n"
+            "  fi\n"
+            "done\n"
+            f"exec \"{real_dispatcher_moved}\" \"$@\"\n",
+            encoding="utf-8")
+        wrapper.chmod(0o755)
 
-    r = run_otel_attest(wdir, export_path)
-    out = r.stdout + r.stderr
-    # One api_request event, no matching stamp_invocation (key 1 unavailable) -> the turn-
-    # bracketed leg (key 3) grades it: a single non-utility candidate within tolerance of the
-    # row's own ts. The grade itself is incidental to this leg (F7 is about the finding-row
-    # write failure, not the grade); asserting the concrete grade here still pins the
-    # end-to-end shape rather than a vaguer "some grade" check.
-    check("L6-verification-lands-finding-fails-nonzero-exit",
-          r.returncode != 0
-          and f"attested row {t}: grade=turn-bracketed verdict=MISMATCH" in out
-          and "F7 FIXTURE: simulated finding-row write failure" in out
-          and "finding-row write REFUSED for row {}".format(t) in out,
-          f"rc={r.returncode}\n{out}", failures)
+        r = run_otel_attest(wdir, export_path)
+        out = r.stdout + r.stderr
+        # One api_request event, no matching stamp_invocation (key 1 unavailable) -> the turn-
+        # bracketed leg (key 3) grades it: a single non-utility candidate within tolerance of the
+        # row's own ts. The grade itself is incidental to this leg (F7 is about the finding-row
+        # write failure, not the grade); asserting the concrete grade here still pins the
+        # end-to-end shape rather than a vaguer "some grade" check.
+        check("L6-verification-lands-finding-fails-nonzero-exit",
+              r.returncode != 0
+              and f"attested row {t}: grade=turn-bracketed verdict=MISMATCH" in out
+              and "F7 FIXTURE: simulated finding-row write failure" in out
+              and "finding-row write REFUSED for row {}".format(t) in out,
+              f"rc={r.returncode}\n{out}", failures)
+    finally:
+        bs_fixtures.stop_server(proc)
 
     teardown(world)
 

@@ -1,41 +1,69 @@
 #!/usr/bin/env python3
 """run_fixtures.py -- both-polarity proof for kernel/lineage/s32-edge-views-single-home.sql
 (vestigial_documentation/design/ORCH-CATEGORICAL-REFACTOR-CONSULT-2026-07-15.md, F3/F6 + plan step 3; ledger item
-edge-views-single-home). Real infra, no mocks: a CLASSIC-mode scaffold (explicit --schema/--kern/
---role, no automatic kernel apply -- s30/s31's own scaffold_classic idiom) followed by a MANUAL
-s15..s31 apply, in the TOY db, torn down before AND after so re-running leaves no residue.
+edge-views-single-home).
+
+sub-s43 fixture-family migration (ledger rows 1459/1464/1471, 2026-07-27): this file ORIGINALLY
+scaffolded classic mode (explicit --schema/--kern/--role, no automatic kernel apply) followed by
+a MANUAL s15..s31 apply, then applied s32 IN PLACE and diffed output before/after -- that
+methodology is no longer executable, and NOT merely by a wiring gap. Two facts, both witnessed
+on this pass, jointly foreclose it:
+  (1) the served `led` CLI is now the ONLY sanctioned write path (legacy direct-SQL `led` is a
+      teaching-refusal stub; a raw INSERT workaround is dead once s43 applies) -- confirmed live:
+      serving a classic s15..s31 world and calling `led work close ...` on it now returns HTTP 409
+      disposition='capability_absent', message "This world carries no s43 write boundary
+      (kernel.ledger_write absent)".
+  (2) s43's own prerequisite chain cannot skip s32: `grep -l work_edge_parent kernel/lineage/*.sql`
+      shows s33/s37/s39/s59 all reference the edge views THIS delta creates, so applying s33 (a
+      s43 prerequisite) without s32 already installed fails outright (undefined relation). A
+      schema capped at s31 (the pre-s32 generation case (a)'s isolated diff structurally needs)
+      can therefore NEVER simultaneously have real write capability -- "before s32, with a real
+      served led write" is not a reachable state on the current tree, not something --new-world
+      papers over.
+Hand-rolling the "before" dataset via raw SQL INSERT instead of the served CLI was considered and
+rejected: `led work open/depends/close` (bootstrap/templates/led.tmpl) embed CLIENT-SIDE gates
+with no DB-level equivalent (e.g. cmd_work_close's claim-before-close check, review-witness
+violation checks reading /views/work_item_current) -- reimplementing those by hand risks silently
+producing a ledger shape the real CLI could never have produced, which would make the "before"
+snapshot dishonest evidence, worse than an honest UNEXERCISED mark. Per the sub-s43 migration
+brief's carve-out for a case whose assertion GENUINELY depends on an earlier kernel generation
+than the current head: case (a) is converted below to an explicit UNEXERCISED-by-design era
+witness, not forced, not deleted, not silently left red. Cases (b)/(d), which do NOT need
+schema-generation isolation (b/d only need SOME full-capability s15..s32-or-later chain with a
+working served boundary), are migrated to `bootstrap/new-project.sh --new-world` +
+`seen-red/boundary-service/run_fixtures.py`'s `serve_existing_world` (REUSE, ADR-0012 P1), the
+same idiom seen-red/s26-row-hash-chain-deletion/ and seen-red/s31-supersession-uniform-retraction/
+already established for this cascade.
 
 Cases:
-  a-before-after-output-equality -- the load-bearing case. A varied fixture world is built on the
-                                     s15..s31 kernel (multiple work items, a parent tree, blocks-
-                                     close AND informs edges, a retracted parent open, a retracted
-                                     blocks-close edge, reviews with same- and distinct-actor
-                                     attest verdicts, deferred and witnessed closes, a strict
-                                     close). Every re-issued object's OUTPUT is captured (review_gap,
-                                     countersigned_in_force, work_review_gap, work_item_violations,
-                                     work_item_strict_blockers() for every open work-item slug, and
-                                     work_parent_would_cycle()/work_depends_on_would_cycle() over
-                                     every slug pair actually present). s32 is then applied ON THE
-                                     SAME SCHEMA and every capture is re-run byte-for-byte. Diff is
-                                     asserted EMPTY.
+  a-before-after-output-equality -- UNEXERCISED-by-design (see note above): the isolated
+                                     s31-vs-s32 diff this case's docstring originally promised
+                                     ("a varied fixture world is built on the s15..s31 kernel...
+                                     s32 is then applied ON THE SAME SCHEMA... diff asserted
+                                     EMPTY") can no longer be built with a genuine served `led`
+                                     write at the s31 generation -- see the module-level note.
   b-refusal-polarities-unchanged -- every pre-existing refusal this delta's re-issued functions
                                      participate in (dangling parent, self-parent, parent cycle,
                                      blocks-close self-edge/dangling-antecedent/cycle, strict-close
-                                     naming an unresolved leaf) is re-witnessed on a FULL s15..s32
-                                     birth chain, exit code and message TEXT unchanged from the
-                                     s28/s29/s30 fixtures' own banked expectations.
+                                     naming an unresolved leaf) is re-witnessed on a FULL current
+                                     kernel-lineage chain (via --new-world, s32 included), exit
+                                     code and message TEXT unchanged from the s28/s29/s30
+                                     fixtures' own banked expectations.
   c-allowlist-gate-both-polarities -- gates/ledger_reader_allowlist.py (extended in this same
                                      commit to chain through s32 and declare the two new raw edge
                                      views) exits 0 green on the real chain AND refuses a
                                      deliberately misfactored scratch view under --red.
   d-judge-agree-unaffected        -- the standing ./judge SQL/ASP differential still verdicts
-                                     AGREE on a full s15..s32 birth-chain world (s32 touches no
-                                     kind/status/supersedes fact judge derives T_now from).
+                                     AGREE on a full current kernel-lineage birth-chain world
+                                     (s32 touches no kind/status/supersedes fact judge derives
+                                     T_now from).
 
 Usage: python3 seen-red/s32-edge-views-single-home/run_fixtures.py
-Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
+Exit 0 if every case matches (case a UNEXERCISED-by-design does not count as a failure); 1
+otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -57,6 +85,18 @@ REPO = HERE.parents[1]
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 LINEAGE = REPO / "kernel" / "lineage"
 GATE = REPO / "gates" / "ledger_reader_allowlist.py"
+
+# sub-s43 fixture-family migration (ledger rows 1459/1464/1471): REUSE (ADR-0012 P1)
+# serve_existing_world/stop_server from seen-red/boundary-service/run_fixtures.py -- the served
+# `led` shim refuses every write until a deployment.json gains boundary_url/boundary_deployment,
+# and any write also needs the s43 write-boundary capability, which only a --new-world (full
+# current lineage) scaffold reliably carries.
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 
 PGHOST = fixture_pghost()
 PGDB = "toy"
@@ -151,9 +191,34 @@ def apply_s32(schema: str, kern: str, role: str) -> None:
         raise RuntimeError(f"s32 APPLY FAILED: {r.stdout[-1500:]} {r.stderr[-1500:]}")
 
 
+def scaffold_full_chain(world: str) -> tuple[Path, "subprocess.Popen"]:
+    """sub-s43 fixture-family migration: cases (b)/(d) don't need schema-generation isolation
+    (unlike case a), only SOME full-capability chain with a working served boundary -- migrate
+    to `--new-world` (applies the FULL current kernel lineage, s32 included) + serve_existing_world
+    (REUSE, ADR-0012 P1), same idiom as seen-red/s26-row-hash-chain-deletion/ and
+    seen-red/s31-supersession-uniform-retraction/. Caller MUST stop_server(...) the returned proc
+    in its own teardown/finally block -- this starts a real subprocess and does not own its
+    lifecycle beyond returning it."""
+    tmp = Path(tempfile.mkdtemp(prefix=f"{world}-seenred-"))
+    world_dir = tmp / world
+    r = sh(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", world,
+            "--db", PGDB, "--host", PGHOST])
+    if r.returncode != 0:
+        raise RuntimeError(f"FULL-CHAIN SCAFFOLD FAILED ({world}): {r.stdout[-1500:]} {r.stderr[-1500:]}")
+    for verb in ("autoharn",):
+        p = world_dir / verb
+        if p.exists():
+            p.chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmp)
+    return world_dir, proc
+
+
 # ---------------------------------------------------------------------------------------------
-# CASE a -- before/after output equality snapshot queries. Every query is a plain, deterministic
-# ORDER BY so a byte-diff is meaningful (no unordered-set ambiguity).
+# CASE a -- UNEXERCISED-by-design (see module docstring). The functions below (snapshot,
+# build_dataset) are KEPT, not deleted -- they document exactly what the isolated s31-vs-s32
+# before/after diff would run if that generation ever regained real write capability -- but are
+# no longer called from main(). Every query is a plain, deterministic ORDER BY so a byte-diff
+# would be meaningful (no unordered-set ambiguity) if this is ever un-shelved.
 # ---------------------------------------------------------------------------------------------
 def snapshot(schema: str) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -248,6 +313,7 @@ def build_dataset(world_dir: Path) -> None:
 def main() -> int:
     failures: list[str] = []
     tmps: list[Path] = []
+    procs: list = []
     world_a = "s32fxa"
     world_b = "s32fxb"
     world_j = "s32fxj"
@@ -255,30 +321,29 @@ def main() -> int:
     teardown(world_b)
     teardown(world_j)
     try:
-        # --- a: before/after output equality ------------------------------------------------
-        print(f"== case a: scaffolding classic world {world_a}, manual s15..s31 apply ==")
-        world_dir = scaffold_classic(world_a, CHAIN_S31)
-        tmps.append(world_dir.parent)
-        world_dir = world_dir.with_name(world_a)  # world_dir already == .../world_a; kept explicit
-        build_dataset(world_dir)
-        before = snapshot(world_a)
-        print(f"== applying s32 on top of the SAME schema {world_a} ==")
-        apply_s32(world_a, f"{world_a}_kernel", f"{world_a}_rw")
-        after = snapshot(world_a)
-        diffs = {k: (before[k], after[k]) for k in before if before[k] != after[k]}
-        ok_a = not diffs
-        detail = "every capture byte-identical before/after s32" if ok_a else \
-            "DIFFERED: " + "; ".join(f"{k}" for k in diffs)
-        check("a-before-after-output-equality", ok_a, detail, failures)
-        if diffs:
-            for k, (b, a) in diffs.items():
-                print(f"  --- {k} BEFORE ---\n{b}\n  --- {k} AFTER ---\n{a}\n")
+        # --- a: UNEXERCISED-by-design ----------------------------------------------------------
+        # (see module docstring for the full account). one-line reason: real `led` writes are
+        # now the only sanctioned write path and unconditionally require the s43 write boundary,
+        # but s43's own prerequisite chain cannot apply without s32 already installed (s33/s37/
+        # s39/s59 all reference s32's own edge views) -- so a schema "before s32" can never also
+        # have real write capability; the isolated before/after diff this case's docstring
+        # originally promised is not a reachable state on the current tree, confirmed live (a
+        # served classic s15..s31 world's `led work close` returns HTTP 409 capability_absent,
+        # "This world carries no s43 write boundary (kernel.ledger_write absent)"). NOT counted
+        # as a failure; not forced; not deleted; not silently left red.
+        print("== case a: UNEXERCISED-by-design -- see module docstring / this print ==")
+        print("  [UNEXERCISED-by-design] a-before-after-output-equality: real led writes require "
+              "s43 capability; s43's prerequisite chain (s33+) requires s32's own edge views "
+              "already installed (grep-confirmed); a schema capped at s31 can never simultaneously "
+              "have real write capability -- the isolated s31-vs-s32 diff is not reachable on the "
+              "current tree. Not counted as a failure.")
+        print()
 
-        # --- b: refusal polarities re-witnessed, unchanged text, on a FULL s15..s32 chain ----
-        print(f"== case b: scaffolding classic world {world_b}, manual s15..s32 apply ==")
-        chain_full = CHAIN_S31 + [S32]
-        wb = scaffold_classic(world_b, chain_full)
+        # --- b: refusal polarities re-witnessed, unchanged text, on a FULL current chain -------
+        print(f"== case b: scaffolding full-chain --new-world {world_b} ==")
+        wb, proc_b = scaffold_full_chain(world_b)
         tmps.append(wb.parent)
+        procs.append(proc_b)
 
         led(wb, "work", "open", "bp-root", "BPRoot")
         r_self = led(wb, "work", "open", "bp-self", "BPSelf", "--parent", "bp-self")
@@ -356,20 +421,39 @@ def main() -> int:
               f"teach_names_both_paths={'FACTOR THROUGH' in red_out and 'CLAIM THE HISTORY' in red_out}",
               failures)
 
-        # --- d: ./judge AGREE, unaffected on a full s15..s32 birth-chain world -----------------
-        print(f"== case d: scaffolding classic world {world_j}, manual s15..s32 apply, running ./judge ==")
-        wj = scaffold_classic(world_j, chain_full)
+        # --- d: ./judge AGREE, unaffected on a full current birth-chain world ------------------
+        print(f"== case d: scaffolding full-chain --new-world {world_j}, running ./judge ==")
+        wj, proc_j = scaffold_full_chain(world_j)
         tmps.append(wj.parent)
+        procs.append(proc_j)
         led(wj, "work", "open", "j-item", "JItem")
         led(wj, "decision", "record a decision so judge has T_now facts to derive")
         # §6 amendment (2026-07-26, rows 1357/1365/1366/1367): routed through the dispatcher now.
-        rj = sh(["bash", str(wj / "autoharn"), "judge"], cwd=str(wj))
+        # sub-s43 migration finding, flagged loudly (out of THIS commission's scope -- engine/ is
+        # off-limits): bare `./judge` (no --layer) auto-detects capability across EVERY
+        # engine/lp_registry.py LAYER, including 'entitlement' (born at s60, present on any
+        # current --new-world scaffold) -- but engine/ledger_differential.py's own
+        # layer_capability() has no detection branch for 'entitlement' (only tnow/work/defeat/
+        # belief are handled; anything else hits `raise NotImplementedError`), so bare judge on
+        # ANY current full-chain world crashes uncaught. Witnessed live on this pass. This is a
+        # standing engine/ defect, NOT an s32 regression (s32 touches no entitlement fact), and
+        # NOT fixable from this file (engine/ is out of this commission's scope) -- every OTHER
+        # family in this migration that runs bare `./judge` on a --new-world scaffold will hit
+        # the SAME crash; flagged here for the orchestrator, not routed around silently. This
+        # case's own actual claim was always about the 'tnow' layer specifically ("s32 touches
+        # no kind/status/supersedes fact judge derives T_now from") -- `--layer tnow` asks
+        # exactly that question directly, sidestepping the broken auto-detect path without
+        # weakening the assertion (an incapable target asked for BY NAME still QUARANTINES
+        # loudly per ledger_differential.py's own docstring; tnow is never declared incapable).
+        rj = sh(["bash", str(wj / "autoharn"), "judge", "--layer", "tnow"], cwd=str(wj))
         out_j = rj.stdout + rj.stderr
         ok_d = rj.returncode == 0 and ("AGREE" in out_j or "agree" in out_j.lower())
         check("d-judge-agree-unaffected", ok_d,
               f"exit={rj.returncode} tail={out_j.strip()[-300:]!r}", failures)
 
     finally:
+        for p in procs:
+            bs_fixtures.stop_server(p)
         teardown(world_a)
         teardown(world_b)
         teardown(world_j)
@@ -379,9 +463,11 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- s32 edge-views-single-home: before/after output equality on every "
-          "re-issued view/function, every pre-existing refusal polarity re-witnessed with "
-          "unchanged text, allowlist gate green+red, ./judge AGREE unaffected. Zero residue.")
+    print("ALL CASES OK -- s32 edge-views-single-home: case a UNEXERCISED-by-design (isolated "
+          "s31-vs-s32 diff no longer reachable, real writes now require s43 which itself "
+          "requires s32), every pre-existing refusal polarity re-witnessed on a full current "
+          "chain with unchanged text, allowlist gate green+red, ./judge AGREE unaffected. "
+          "Zero residue.")
     return 0
 
 

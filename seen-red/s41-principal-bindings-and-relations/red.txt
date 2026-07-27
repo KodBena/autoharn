@@ -3,9 +3,16 @@
   [ok] s41 detect on an s40-head chain reads 'f' (expect f)
 
 === s40-only-kernel-teach ===
-  [ok] exit=1; excerpt='ding/relation\n  events have no typed home here. These verbs work on a world whose birth chain\n  carries kernel/lineage/s41-principal-bindings-and-relations.sql.'
+  [ok] exit=1; excerpt=' binding/relation events have no typed home here. These verbs work on a world whose birth chain carries kernel/lineage/s41-principal-bindings-and-relations.sql.'
 
-== scaffolding classic world s41fxb (chain ends s41-principal-bindings-and-relations.sql) ==
+== scaffolding classic world s41fxc (chain ends s41-principal-bindings-and-relations.sql, s43 NOT applied -- hosts the raw-SQL-only s41 legs) ==
+=== d6-human-attested-scoping ===
+  [ok] managerial-by-model exit=3 (taught: 'no schema can witness'); technical-by-model exit=0; managerial-by-human exit=0
+
+=== acts-for-retired ===
+  [ok] exit=3; the retirement CHECK named
+
+== scaffolding classic world s41fxb (chain ends s61-signature-symmetry-and-key-binding.sql) ==
 === detect-t-on-s41 ===
   [ok] s41 detect on the s41 chain reads 't' (expect t)
 
@@ -13,19 +20,13 @@
   [ok] assert exit=0, retract exit=0; view now holds 0 acts-for rows (expect 0), raw history holds 2 (expect 2 -- assertion + terminal retraction, never thinner)
 
 === self-edges-refused ===
-  [ok] all four CLI self-edges refused=True; raw kernel-trigger self-edge exit=3 with the taught text
+  [ok] all four CLI self-edges refused=True (WORLD B); raw kernel-trigger self-edge (WORLD C) exit=3 with the taught text
 
 === snp-canonicalization ===
   [ok] CLI stored 'hume>botty' (expect hume>botty, reversed from the typed order, notice printed); the OTHER ordering refused as duplicate (1); a raw non-canonical INSERT refused by the kernel CHECK (3)
 
 === key-binding-polarity ===
-  [ok] model bind exit=3 (taught); human bind exit=0, view rows=1; malformed fingerprint exit=3 (kernel shape CHECK named)
-
-=== d6-human-attested-scoping ===
-  [ok] managerial-by-model exit=3 (taught: 'no schema can witness'); technical-by-model exit=0; managerial-by-human exit=0
-
-=== acts-for-retired ===
-  [ok] exit=3; the retirement CHECK named
+  [ok] model bind exit=1 (taught); human bind exit=0, view rows=1; malformed fingerprint exit=1 (kernel shape CHECK named); real throwaway key D030C5F5F1AA38CB885955716FAFDD25D9A629B0, possession row 10
 
 === competence-lifecycle ===
   [ok] grant OK (view: 'sql-review|B'); duplicate refused; empty band refused (1); re-band via --supersedes replaced (band now 'A'); stray --band on withdrawal refused; STALE supersession target refused; withdrawal OK (view 0 rows, raw 3 rows -- grant+re-band+terminal withdrawal); raw inactive-from-birth refused by the kernel CHECK
@@ -40,7 +41,7 @@
   [ok] ledger_reader_allowlist exit=0; kind_shape_manifest_gate exit=0
 
 === differential-agree-both-layers ===
-  [ok] tnow=AGREE work=AGREE with 8 distinct principal_* kinds live (expect AGREE/AGREE/8)
+  [ok] tnow=AGREE work=AGREE with 9 distinct principal_* kinds live (expect AGREE/AGREE/9 -- s40's four + s41's four + s61's principal_key_possession_verified from the attest-possession ceremony key-binding-polarity now performs)
 
 == REAL --new-world scaffold run (s41fxnw, chain s15..s41) ==
 === new-world-s41-birth ===
