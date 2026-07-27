@@ -386,8 +386,10 @@ def case_e_service_is_handled_directly() -> bool:
     if r.returncode != 0:
         print(f"e-service-is-handled-directly: FAIL -- exit {r.returncode}")
         return False
-    if "status" not in r.stdout or "start" not in r.stdout or "stop" not in r.stdout:
-        print("e-service-is-handled-directly: FAIL -- usage does not name status/start/stop")
+    if ("status" not in r.stdout or "start" not in r.stdout or "stop" not in r.stdout
+            or "restart" not in r.stdout):
+        print("e-service-is-handled-directly: FAIL -- usage does not name "
+              "status/start/stop/restart")
         return False
     print("e-service-is-handled-directly: PASS")
     return True

@@ -1,0 +1,94 @@
+Witnessed 2026-07-27, building seen-red/service-restart/run_fixtures.py -- both-polarity proof
+for design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md's new `autoharn service restart`
+(libexec/autoharn-service's `cmd_restart`).
+
+DEFECT 1 (discovered live while building this fixture, NOT a defect in `cmd_restart` itself): a
+first draft of every case below assumed, from serving/boundary_multiplex_config.py's own module
+docstring ("startup validates the config's shape, not the world's health") that `/d/{name}/health`
+never touches Postgres at all -- so a scratch world with a made-up, never-actually-provisioned
+pgdatabase/pguser/pgschema/pgkern would still answer /health once the process was merely up.
+Reproduction, driving `autoharn service start` against exactly such a made-up scratch config:
+
+$ ./autoharn service start   (PICKUP_DEPLOYMENT pointed at a scratch deployment.json/toml naming
+                              a role that was never created)
+autoharn service: REFUSED -- http://127.0.0.1:39123 is still unreachable after 10.0s. Spawned
+child (pid 2697462) is still running -- see /tmp/dbgworld/service.log for the diagnosis ...
+
+$ tail service.log
+boundary_service: UNCLASSIFIED FAILURE (GET /d/svctest/health): psql query failed (exit 3, NOT
+connection-level ...): psql:/dev/stdin:1: ERROR:  role "svctest_rw" does not exist
+
+THE FIX (to this fixture, not to product code): every case that needs a genuinely healthy hub
+now scaffolds a REAL, throwaway Postgres world via `bootstrap/new-project.sh --new-world` (the
+same birth-chain path every sibling seen-red fixture in this tree already uses) before standing
+a `serving.boundary_service` over it -- see `scaffold_world`/`teardown_world` in run_fixtures.py.
+
+DEFECT 2 (a fixture-construction bug, not a product defect): case d2's own first draft made
+`cmd_restart` hang for the FULL default 30s drain-timeout and then report the drained process
+"STILL RUNNING" even though the process log showed a clean, near-instant shutdown:
+
+$ python3 seen-red/service-restart/run_fixtures.py   (pre-fix _spawn_boundary_service_direct,
+                                                       no reaper thread)
+d2-adopted-divergence-white-box: FAIL -- rc=1, names_squatter=False, never_claims_success=True,
+mentions_adopt_divergence=True, combined="autoharn service: config at .../boundary-multiplex.toml
+validates -- the new process will serve ['svcrestart1...'].\nautoharn service: REFUSED -- pid
+2698908 did NOT exit within 30.0s of SIGTERM -- it is STILL RUNNING and still serving
+http://127.0.0.1:36319. Never escalating to SIGKILL unasked; re-run with --force-kill ...\n"
+
+$ tail service.log   (the SAME process, same run)
+2026-07-27T23:04:21+0200 INFO:     Shutting down
+2026-07-27T23:04:21+0200 INFO:     Waiting for application shutdown.
+2026-07-27T23:04:21+0200 INFO:     Application shutdown complete.
+2026-07-27T23:04:21+0200 INFO:     Finished server process [2699187]
+
+The process log proved a clean, sub-second shutdown while `_wait_for_pid_exit`'s own
+`os.path.exists(f"/proc/{pid}")` check kept reporting the pid alive for the entire 30s window.
+ROOT CAUSE: this fixture's own `_spawn_boundary_service_direct` (used by cases a/d2 to hand-start
+a process this SAME long-lived fixture process controls) never reaped the child -- `/proc/<pid>`
+still exists for a ZOMBIE process, and this fixture's own process (unlike a real `autoharn
+service start` invocation, which always exits immediately after spawning, letting init reparent
+and reap the child) stays alive across every case. THE FIX: a background daemon thread now calls
+`proc.wait()` immediately after every `_spawn_boundary_service_direct` spawn -- the SAME house
+rule seen-red/umbrella-cli-ensure-running/run_fixtures.py's own `_spawn_mock_boundary_service`
+already documents for exactly this reason. Post-fix, the full eight-case fixture (a, b, c, d, d2,
+e, f, g) passes reliably:
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/service-restart/run_fixtures.py
+-- scratch root: /tmp/service-restart-fixture-dd4vmkan --
+-- scaffolding real scratch worlds 'svcrestart12699271', 'svcrestart22699271' on 192.168.122.1 --
+a-no-pidfile-refuses-hub-undisturbed: PASS (RED case: exit 1, REFUSED, no pidfile; the
+hand-started hub is confirmed still alive and healthy afterward -- nothing was signaled)
+b-wrong-pid-refuses: PASS (RED case: decoy survives untouched, stale pidfile removed, refusal
+teaches -- verbatim `stop` posture)
+c-invalid-toml-refuses-old-still-serving: PASS (RED case: refused at leg 2, BEFORE any signal --
+the old process is confirmed the SAME pid, still alive, still answering /health, completely
+undisturbed)
+d-bind-race-lost-to-foreign: PASS (RED case: a raw dummy-socket squatter won the freed port;
+restart never claimed success -- exit 1, combined output names the failure)
+d2-adopted-divergence-white-box: PASS (a forced 'adopted' spawn outcome -- a genuinely
+protocol-compatible foreign winner, the shape `start` would treat as success per row 1165 -- is
+REFUSED by `restart` instead, naming the squatter's pid, never claiming success)
+e-drain-timeout-tiny-succeeds: PASS (GREEN: --drain-timeout 0.2 against a healthy, idle hub
+completes well under it -- no timeout refusal, no escalation)
+f-green-add-deployment-witnessed: PASS (GREEN: old pid 2700086 drained, new pid 2700148 up, BOTH
+svcrestart12699271 and svcrestart22699271 /health witnessed passing, summary line present --
+'autoharn service: restart: drained 2700086 in 0.2s, new pid 2700148, unserved window ~0.8s,
+2/2 deployments healthy.'; a request issued to the old process just before it exited also
+completed successfully, proving the drain was graceful)
+g-in-flight-across-sigterm: UNEXERCISED (stated blocker: a genuinely in-flight-across-SIGTERM
+request needs a handler slow enough to still be executing when SIGTERM lands; every endpoint in
+the unmodified serving/boundary_service.py -- spec §2, not touched -- returns near-instantly,
+and adding an artificial delay hook to force this would itself violate that non-goal). Witnessed
+instead: the drained process's own service.log carries BOTH uvicorn graceful-shutdown log lines
+('Waiting for application shutdown.', 'Application shutdown complete.') after SIGTERM, and case f
+above already proved a request issued just before this same process exited completed
+successfully -- the strongest witness available without touching the frozen service module.
+-- teardown --
+
+ALL CASES PASS
+
+Every scratch Postgres role/schema this fixture provisions is dropped in `finally`
+(`teardown_world`), and every scratch directory is removed via `shutil.rmtree` -- zero residue,
+verified by hand after this run (no `svcrestart*` schema/role left in the toy database, no
+leftover `/tmp/service-restart-fixture-*` directory, no leftover `serving.boundary_service`
+process).

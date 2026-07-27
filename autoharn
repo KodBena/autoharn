@@ -51,7 +51,7 @@ migrate	apply this repo's own migration steps (autoharn-repo-specific, not scaff
 asof-export	export a point-in-time snapshot of the ledger
 verify-chain	reconcile the row-hash chain and the refusal_seq completeness oracle
 courier	pull missives from each counterpart world's outbound feed and record receipts locally
-service	ensure-running control: status|start|stop the boundary service this world depends on
+service	ensure-running control: status|start|stop|restart the boundary service this world depends on
 fixture-sweep	read-only live re-execution sweep over every gates/fixture_census.py family (autoharn-repo-specific, not scaffolded into worlds)
 dispatch	mint-and-dispatch or close-and-retire a delegate principal for a sub-agent commission (autoharn-repo-specific, not scaffolded into worlds)
 EOF

@@ -505,7 +505,11 @@ BASELINE: dict[str, int] = {
     # merged registry carries them all; re-measured on the merged file to 437 below, the
     # union-of-independent-+1s class this file's own history already names for a merge-union
     # ratchet crossing).
-    "gates/fixture_census.py":                     437,
+    # bumped 437 -> 438 (one new REGISTRY row: service-restart, design/FABLE-SERVICE-DRAIN-
+    # RESTART-SPEC.md, row 1553 option A) -- the identical shape as every other one-row bump
+    # named above: witnessed growth from registering this build's own seen-red fixture, not
+    # unnoticed growth.
+    "gates/fixture_census.py":                     438,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -615,7 +619,10 @@ BASELINE: dict[str, int] = {
     # bounds-vocabulary-drift): every parent's bump comments kept verbatim above; the union is
     # re-measured on the merged file itself, the same merge-union ratchet-crossing class as
     # every reconciliation above.
-    "gates/max_lines.py":                          740,
+    # bumped 740 -> 747 (service-restart build): this gate's own BASELINE growing to carry the
+    # one entry this same commit bumps (gates/fixture_census.py, 437 -> 438) -- the same
+    # self-referential fixpoint as every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          747,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
