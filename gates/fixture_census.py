@@ -197,6 +197,7 @@ REGISTRY: dict[str, str] = {
     "s62-delegation-lifecycle-gating": "seen-red/s62-delegation-lifecycle-gating/run_fixtures.py",
     "s64-principal-stamps-delegation-conditions": "seen-red/s64-principal-stamps-delegation-conditions/run_fixtures.py",
     "s65-refusal-attempted-kind":      "seen-red/s65-refusal-attempted-kind/run_fixtures.py",
+    "s66-s67-journal-totality":        "seen-red/s66-s67-journal-totality/run_fixtures.py",
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "legacy-led-retirement-round1-fixes": "seen-red/legacy-led-retirement-round1-fixes/run_fixtures.py",
     "workflow-drive-dead-legacy-led-default": "seen-red/workflow-drive-dead-legacy-led-default/run_fixtures.py",

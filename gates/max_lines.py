@@ -218,7 +218,16 @@ BASELINE: dict[str, int] = {
     # MANIFEST with its five s64 delegation_* rows, the 2f/2h assert_manifest symmetry,
     # check-4 exemption) -- all genuinely new decision-boundary logic and its own
     # reasoning/precedent-citing prose, not padding.
-    "gates/kind_shape_manifest_gate.py":           1592,
+    # bumped 1592 -> 1605 (s67-refusal-digest-bound.sql: the CHAIN list gains s66/s67, and the
+    # refusal_payload_digest MANIFEST row is re-classified two-way -> one-way plus its own
+    # explanatory reason text) -- witnessed growth from a genuine new arity/citation, not
+    # unnoticed growth.
+    # bumped 1605 -> 1635 (s67 §2 AMENDMENT fix round, "NULL may not carry the meaning"): one
+    # new MANIFEST row (refusal_digest_disposition, two-way) plus one new
+    # CROSS_COLUMN_COUPLING_MANIFEST row (refusal_payload_digest_disposition_coupling) and the
+    # refusal_payload_digest MANIFEST row's own reason text extended to cite the new coupling --
+    # witnessed growth from two genuine new manifest entries, not unnoticed growth.
+    "gates/kind_shape_manifest_gate.py":           1635,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -489,7 +498,14 @@ BASELINE: dict[str, int] = {
     # backup/restore commission 2026-07-27) -- the identical shape as the two rows
     # immediately above, witnessed growth from registering this build's own seen-red
     # fixture, not unnoticed growth.
-    "gates/fixture_census.py":                     436,
+    # bumped 434 -> 435 on the s66/s67 worktree branch (one new REGISTRY row:
+    # s66-s67-journal-totality, design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md build) --
+    # landed independently of the two rows above; reconciled at the 2026-07-27 merge of that
+    # branch into main (all three parents' rows are ADDITIVE and non-overlapping, so the
+    # merged registry carries them all; re-measured on the merged file to 437 below, the
+    # union-of-independent-+1s class this file's own history already names for a merge-union
+    # ratchet crossing).
+    "gates/fixture_census.py":                     437,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -589,7 +605,17 @@ BASELINE: dict[str, int] = {
     # bumped 707 -> 714 (world-wiring build): this gate's own BASELINE growing to carry the
     # one entry this same commit bumps (gates/fixture_census.py, 435 -> 436) -- the same
     # self-referential fixpoint as every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          714,
+    # bumped 704 -> 712 on the s66/s67 worktree branch (design/
+    # FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md build): this gate's own BASELINE growing to carry
+    # the two entries that commit bumps (gates/kind_shape_manifest_gate.py 1592 -> 1605,
+    # gates/fixture_census.py 434 -> 435).
+    # bumped 727 -> 732 on the same branch (s67 §2 AMENDMENT fix round): carrying
+    # gates/kind_shape_manifest_gate.py's 1605 -> 1635.
+    # Reconciled at the 2026-07-27 merge of that branch into main (s66/s67 x world-wiring x
+    # bounds-vocabulary-drift): every parent's bump comments kept verbatim above; the union is
+    # re-measured on the merged file itself, the same merge-union ratchet-crossing class as
+    # every reconciliation above.
+    "gates/max_lines.py":                          740,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

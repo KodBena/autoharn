@@ -26,7 +26,17 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s65.
+||| AS-OF: kernel chain through s65. LAGGING: s66-forged-stamp-journal-totality.sql and
+||| s67-refusal-digest-bound.sql (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md) landed after
+||| this model's last transcription sweep -- both are refusal-journal totality fixes (one
+||| trigger branch on kernel.set_stamp gated on NEW.kind='write_refused', one payload-size bound
+||| inside kernel.journal_write_refusal plus a CHECK arity widening on refusal_payload_digest),
+||| neither of which this model currently renders at all (set_stamp/journal_write_refusal are
+||| kernel-internal trigger/journaler mechanics, not part of the PWriteRefused/checkPayload
+||| surface this model transcribes) -- named here rather than silently bumped on faith. A future
+||| pass pays this down by transcribing both (or confirming, as s65's own sweep did for its
+||| six non-model-visible deltas, that neither changes any premise this model states) and
+||| dropping this LAGGING suffix.
 ||| THE s53-s65 SWEEP (this pass, one transcription sweep across all thirteen deltas, per-delta,
 ||| not bumped on faith -- gates/idris_model_freshness.py, previously WARN on the s53-s57 lag,
 ||| now clean): what each delta became here, or why nothing model-visible resulted.
