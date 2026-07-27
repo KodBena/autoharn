@@ -59,9 +59,18 @@
 --      parameter is by definition already a valid jsonb value by the time PL/pgSQL runs the
 --      function body -- a syntactically malformed JSON literal never reaches this function AS
 --      jsonb at all; it fails at the earlier cast/parse boundary, which is not this function's
---      surface). The digest computation (encode(sha256(convert_to(p_payload::text,'utf8')),
---      'hex')) is BYTE-IDENTICAL to s49's own -- the new column is additional, never a
---      substitute, and reads no smaller a slice of the payload than before.
+--      surface). LENGTH BOUND (amendment 2026-07-27, spec §5): a found text value longer than
+--      256 bytes ALSO yields NULL, checked by octet_length before extraction -- the refusal path
+--      is precisely where a caller who is already being refused arrives, so an oversized/hostile
+--      `kind` string must be assumed rather than ruled out (the first build's premise that a
+--      long string would already have been refused by ledger_kind_check was FALSIFIED in review:
+--      that CHECK guards ACCEPTED rows, never the refused payload this function journals). The
+--      SAME 256-byte bound is carried table-level (refusal_attempted_kind_length CHECK below),
+--      so the invariant holds independent of this function's own care. The digest computation
+--      (encode(sha256(convert_to(p_payload::text,'utf8')), 'hex')) is BYTE-IDENTICAL to s49's
+--      own -- the new column is additional, never a substitute, and reads no smaller a slice of
+--      the payload than before (the length bound narrows only what is STORED in the new column,
+--      never what is digested).
 --   3. compute_row_hash RE-ISSUED (s42's law, self-applied) to cover the new column -- 98
 --      columns, the one new column appended in catalog ordinal order, before the predecessor
 --      link, every other rendering byte-identical to s64's own 97-column body.
@@ -86,14 +95,17 @@
 -- permanent record. The maintainer ratified THIS SPECIFIC revelation in his own words (row
 -- 1487); `kind` is a closed, low-sensitivity vocabulary token (twenty-four members as of s43,
 -- widened by later deltas -- never free text the caller could smuggle payload content through:
--- the column carries exactly the STRING the caller supplied at the `kind` key, verbatim, but
--- that string's LEGITIMATE domain is a short kernel-defined vocabulary; an caller supplying a
--- long/adversarial string there is itself refused loudly BEFORE reaching this delta's own
--- extraction, at the very same CHECK ledger_kind_check enforces on every accepted row -- a
+-- the column carries exactly the STRING the caller supplied at the `kind` key, verbatim up to
+-- 256 bytes (amendment 2026-07-27, spec §5), but that string's LEGITIMATE domain is a short
+-- kernel-defined vocabulary; ledger_kind_check only guards ACCEPTED rows, so a caller supplying
+-- a long/adversarial string at the refused path is NOT refused before reaching this extraction
+-- (the first build's premise to the contrary was falsified in review, witnessed storing a 2 MiB
+-- string verbatim) -- the 256-byte bound below is what now keeps that case from ever reaching
+-- storage, journaling NULL instead, strictly fewer bytes revealed than the ratified reading. A
 -- write_refused row's own refusal_attempted_kind can therefore carry an arbitrary caller-chosen
--- string when the refusal's OWN cause is an invalid kind value, which is precisely the
--- rows-1474/1476 incident shape this delta exists to make legible, not a new privacy leak
--- beyond what the refusal's own SQLSTATE/message already disclose).
+-- string UP TO THE BOUND when the refusal's OWN cause is an invalid kind value, which is
+-- precisely the rows-1474/1476 incident shape this delta exists to make legible, not a new
+-- privacy leak beyond what the refusal's own SQLSTATE/message already disclose).
 --
 -- CLASS ROUTING (spec §2, resolved, no residual routing question): fail-safe-additive by the
 -- 2026-07-09 ruling read plainly -- one nullable column, one narrowing (one-way) CHECK, and
@@ -188,14 +200,21 @@
 --     census keys BOTH governed namespaces, schema AND kern); lineage-reissue-lineage (CHECK 1
 --     citation + CHECK 2 prior-body-sha256, both satisfied for compute_row_hash against its true
 --     immediately-prior re-issue, kernel/lineage/s64-principal-stamps-delegation-conditions.sql;
---     journal_write_refusal's own citation/hash lines are carried in this file's own header/
+--     journal_write_refusal's AND ledger_write's own citation/hash lines (Elements 4 and 5,
+--     added fix round 2 for the MINOR finding) are both carried in this file's own header/
 --     Element-window text as a matter of this codebase's house idiom, even though that gate's
 --     mechanical CREATE_FN_RE does not parse a `:"kern".`-qualified re-issue at all -- named
 --     here rather than silently relied upon).
 --   - DENOMINATION: the attempted kind in the SAME closed vocabulary ledger_kind_check already
 --     enforces on every accepted row (no new vocabulary minted by this delta); "not extractable"
---     in NULL, never a sentinel string; no bound is a bare round literal (this delta adds no
---     numeric bound at all).
+--     in NULL, never a sentinel string. AMENDMENT 2026-07-27 (spec §5): this delta DOES add one
+--     numeric bound, 256 (bytes, octet_length), on the extracted/stored token -- not a bare round
+--     literal chosen for roundness, but the same "generous multiple of any real vocabulary token"
+--     reasoning as s51's 1048576-byte artifact_too_large cap, stated at the scale of a single
+--     kind word rather than a KB-scale document; ledger_kind_check's own longest member is a
+--     handful of bytes, so 256 is not a tight fit, it is a hostile-input backstop. Enforced BOTH
+--     inside kernel.journal_write_refusal (belt) and as the table-level refusal_attempted_kind_
+--     length CHECK (suspenders) -- see Element 1.
 --
 -- FAIL-SAFE CLASSIFICATION (CLAUDE.md ORCHESTRATION decision tree): NOT CLASS-RATIFIED
 -- FAIL-SAFE, stated plainly (s43/s49's own precedent for this same honesty requirement): this
@@ -215,11 +234,15 @@
 --     (today: `ledger_write` only) -- named above (QUANTIFICATION UNIVERSE), not a defect, since
 --     the other five surfaces' kind is always structurally implied by which function was
 --     called, never ambiguous in the way this column exists to disambiguate.
---   - The column carries the caller's RAW string at the `kind` key verbatim -- it is NOT
---     validated against ledger_kind_check's own vocabulary (a write_refused row's whole POINT
---     is to record an attempt that may have failed EXACTLY that validation); a reader must not
---     assume every value in this column is a legal kind, only that it is what the caller wrote
---     at that key.
+--   - The column carries the caller's RAW string at the `kind` key verbatim, UP TO 256 BYTES
+--     (amendment 2026-07-27) -- it is NOT validated against ledger_kind_check's own vocabulary
+--     (a write_refused row's whole POINT is to record an attempt that may have failed EXACTLY
+--     that validation); a reader must not assume every value in this column is a legal kind,
+--     only that it is what the caller wrote at that key, when that string was 256 bytes or
+--     fewer. A `kind` string LONGER than 256 bytes journals NULL, indistinguishable in this
+--     column alone from any other "not extractable" case (no `kind` key, a non-text value) --
+--     a reader who needs to know WHICH "not extractable" reason applied has no way to recover
+--     that from this column alone; the refusal's own SQLSTATE/message may still disclose it.
 --   - This delta does not change what happens when the JOURNAL INSERT itself fails (s43's own
 --     named, disclosed limit, untouched here) or the attempted-actor cast's own s49 guard
 --     (unchanged, unrelated code path in the same function).
@@ -267,7 +290,9 @@ ALTER TABLE :"schema".ledger ADD COLUMN IF NOT EXISTS refusal_attempted_kind tex
 COMMENT ON COLUMN :"schema".ledger.refusal_attempted_kind IS
   'The refused write''s ATTEMPTED `kind` token, extracted from the refused payload before it is
    digested (s43''s R4 digest-only discipline over the payload AS A WHOLE is unchanged) --
-   legitimately NULL when the payload carried no `kind` key, a non-text `kind` value, or the
+   legitimately NULL when the payload carried no `kind` key, a non-text `kind` value, a `kind`
+   value longer than 256 bytes (amendment 2026-07-27: the refusal path is where hostile/oversized
+   input arrives, so this is CHECKed table-level too, refusal_attempted_kind_length), or the
    refusing surface''s own payload contract never admits a `kind` key at all (review/
    registration/obligation/artifact/obligation_revoke -- their kind is structurally implied by
    which boundary function was called). NULL means "not extractable", NEVER "not attempted" --
@@ -288,6 +313,22 @@ ALTER TABLE :"schema".ledger ADD CONSTRAINT refusal_attempted_kind_kind_shape CH
 ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS refusal_attempted_kind_nonempty;
 ALTER TABLE :"schema".ledger ADD CONSTRAINT refusal_attempted_kind_nonempty CHECK (
     refusal_attempted_kind IS NULL OR btrim(refusal_attempted_kind) <> '');
+
+-- length CHECK (amendment 2026-07-27, spec §5 and §1 item 2): the refusal journal is exactly
+-- where a caller who is ALREADY BEING REFUSED arrives -- adversarial payloads are expected here,
+-- not the exception (the review that added this CHECK witnessed a 2 MiB string supplied as
+-- `kind` stored VERBATIM before this bound existed). 256 bytes is the same "generous multiple of
+-- any real vocabulary token" reasoning s51's artifact_too_large cap uses at a different scale
+-- (1 MiB there, for KB-scale artifacts; 256 bytes here, for single-word kind tokens no legal
+-- kind ever approaches -- ledger_kind_check's own longest member is a handful of bytes). The
+-- bound is stated TABLE-LEVEL, not merely inside the extracting function, so the invariant holds
+-- against ANY future writer of this column, not only kernel.journal_write_refusal as it exists
+-- today (the s42-law self-application precedent: the table itself, not caller trust, carries
+-- the guarantee). octet_length (bytes), matching s51's own denomination choice for the same
+-- reason: a caller-supplied string's byte length, never its lying self-reported strlen.
+ALTER TABLE :"schema".ledger DROP CONSTRAINT IF EXISTS refusal_attempted_kind_length;
+ALTER TABLE :"schema".ledger ADD CONSTRAINT refusal_attempted_kind_length CHECK (
+    refusal_attempted_kind IS NULL OR octet_length(refusal_attempted_kind) <= 256);
 
 -- ============================================================================================
 -- ELEMENT 2 -- s42'S LAW SELF-APPLIED: compute_row_hash RE-ISSUED TO 98 COLUMNS (the one new
@@ -538,7 +579,18 @@ BEGIN
   -- the bigint cast three lines above). Only a JSON STRING value at the `kind` key extracts;
   -- anything else (key absent, JSON null, a non-string value) yields NULL -- "not extractable",
   -- never "not attempted". The digest computation below is UNAFFECTED (still the whole payload).
-  IF jsonb_typeof(p_payload->'kind') = 'string' THEN
+  --
+  -- LENGTH BOUND (amendment 2026-07-27, spec §5 and §1 item 2): the refusal path is precisely
+  -- where a hostile/oversized `kind` arrives (the caller is already being refused; nothing
+  -- upstream of this function validated the string's length). A found value longer than 256
+  -- bytes is treated exactly like "not extractable" -- NULL, never a truncated fragment (a
+  -- truncated fragment would be a NEW, function-invented value never actually supplied; NULL
+  -- states plainly "not recorded" instead). Checked here in addition to the table-level
+  -- refusal_attempted_kind_length CHECK below, so a malformed extraction never even reaches an
+  -- INSERT that the CHECK would then have to catch -- belt (function) and suspenders (CHECK),
+  -- the s42-law self-application idiom of trusting the table over the caller.
+  IF jsonb_typeof(p_payload->'kind') = 'string'
+     AND octet_length(p_payload->>'kind') <= 256 THEN
     v_attempted_kind := p_payload->>'kind';
   ELSE
     v_attempted_kind := NULL;
@@ -565,10 +617,118 @@ COMMENT ON FUNCTION :"kern".journal_write_refusal(text, jsonb, text, text) IS
    refusal_seq oracle FIRST (non-transactional), then journals: actor = the write-boundary tool
    principal; the attempted identity in refusal_attempted_* (s49: the actor cast is TOTAL); the
    attempted `kind` token in refusal_attempted_kind, extracted from the refused payload, TOTAL,
-   NULL when not extractable (s65: kernel/lineage/s65-refusal-attempted-kind.sql); the payload
+   NULL when not extractable, including when the found value exceeds 256 bytes (s65:
+   kernel/lineage/s65-refusal-attempted-kind.sql, amendment 2026-07-27); the payload
    as a SHA-256 digest only (R4). If the journal INSERT itself fails the exception propagates --
    a loud abort, a counted sequence gap, the server log as residual coverage (fail-safe on
    both legs, unchanged by s49/s65). kernel/lineage/s43-typed-verdict-write-boundary.sql;
    kernel/lineage/s49-journaler-overflow-guard.sql; kernel/lineage/
    s65-refusal-attempted-kind.sql.';
+-- ============================================================================================
+
+-- ============================================================================================
+-- ELEMENT 5 -- kernel.ledger_write RE-ISSUED: extend the SERVER-OWNED payload-key blocklist
+-- (s58 Element 7B, kernel/lineage/s58-missive-substrate.sql -- the TRUE immediately-prior
+-- re-issue of this function; grepped across every tracked kernel/lineage/sNN-*.sql file: only
+-- s43 (birth) and s58 re-issue kernel.ledger_write, s59-s64 never touch it, so s58 is the head
+-- at this delta's own authoring time -- the s61 lesson, verified rather than assumed) with the
+-- ONE new key this delta mints, refusal_attempted_kind. Body otherwise BYTE-IDENTICAL to s58's
+-- own text (base = kernel/lineage/s58-missive-substrate.sql's own text, itself base = s43's own
+-- text plus the ADR-0021 Rule B translation -- unedited by s59 through s64). MINOR finding (fix
+-- round 2): refusal_attempted_kind is a column ONLY the boundary's own journaler
+-- (kernel.journal_write_refusal, Element 4 above) may populate -- a caller-supplied value at
+-- this key would be exactly the lying channel s43 Element 4.2's own blocklist exists to close,
+-- one column over from its five siblings. This gate lives HERE (ledger_write's own payload-key
+-- validation, called on every generic write attempt) rather than in journal_write_refusal
+-- itself (which only ever WRITES this column, from its own local extraction, never reads it FROM
+-- a caller-supplied payload) -- the SAME separation of concerns the five existing refusal_*
+-- blocklist entries already observe.
+-- kernel.ledger_write is `:"kern".`-namespaced, OUTSIDE gates/lineage_reissue_lineage.py's own
+-- `:"schema".`-anchored citation-check universe (per that gate's own docstring; the SAME
+-- disclosed exemption journal_write_refusal's own re-issue above already names) -- the citation/
+-- hash below is carried as a matter of this codebase's house idiom, not gate-enforced, exactly
+-- like Element 4's.
+-- prior-body-sha256: 2df2e77a8d7ddcd07cb6a9d709cabd85cb4cffc2977d46660110f623c0e9ad39 (s58-missive-substrate.sql)
+-- ============================================================================================
+CREATE OR REPLACE FUNCTION :"kern".ledger_write(payload jsonb)
+    RETURNS :"kern".write_verdict LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = :"schema", :"kern", pg_temp AS $fn$
+DECLARE
+  k text;
+  cols text := '';
+  vals text := '';
+  v_id bigint;
+  v_state text; v_msg text; v_refusal bigint; v_constraint text; v_friendly text;
+BEGIN
+  BEGIN
+    -- payload validation (spec §4.2): every key a ledger column; no server-owned key; no
+    -- minted refusal row. Refused loudly AS A VERDICT (RAISE inside the guarded block ->
+    -- journaled under class P0), never silently dropped.
+    FOR k IN SELECT jsonb_object_keys(payload) LOOP
+      IF NOT EXISTS (SELECT 1 FROM pg_attribute a
+                     WHERE a.attrelid = 'ledger'::regclass
+                       AND a.attname = k AND a.attnum > 0 AND NOT a.attisdropped) THEN
+        RAISE EXCEPTION 'write boundary: payload key ''%'' is not a ledger column (kernel/lineage/s43-typed-verdict-write-boundary.sql §4.2) -- payload keys are ledger column names, exactly.', k;
+      END IF;
+      IF k IN ('id', 'ts', 'row_hash', 'stamp_session', 'stamp_agent', 'stamp_ts',
+               'stamp_hmac', 'stamp_verified', 'stamp_invocation',
+               'principal_actor_resolution',
+               'refusal_sqlstate', 'refusal_message', 'refusal_surface',
+               'refusal_payload_digest', 'refusal_attempted_actor',
+               'refusal_attempted_role', 'refusal_attempted_kind') THEN
+        RAISE EXCEPTION 'write boundary: payload key ''%'' is SERVER-OWNED (id/ts default server-side; stamps and actor-resolution are trigger-computed; refusal_* columns are minted only by the boundary''s own journaler) -- a writer-supplied value would be a lying channel, refused (s43 §4.2). Declared event time rides event_declared_ts (s24); everything else here is the kernel''s to write.', k;
+      END IF;
+      IF k = 'kind' AND payload->>'kind' = 'write_refused' THEN
+        RAISE EXCEPTION 'write boundary: kind ''write_refused'' is minted ONLY by the boundary''s own refusal journaler -- a caller-supplied refusal row is the forgery channel, closed at this same trust boundary (s43 §4.2; the refusal_seq oracle''s count>sequence FAIL is the tripwire behind it).';
+      END IF;
+      cols := cols || CASE WHEN cols = '' THEN '' ELSE ', ' END || quote_ident(k);
+      vals := vals || CASE WHEN vals = '' THEN '' ELSE ', ' END || 'r.' || quote_ident(k);
+    END LOOP;
+    IF cols = '' THEN
+      RAISE EXCEPTION 'write boundary: empty payload -- nothing to write (s43 §4.2).';
+    END IF;
+    -- per-type casting DERIVED from the rowtype (P1): values pass through
+    -- jsonb_populate_record(NULL::ledger, payload); absent keys fall to column defaults.
+    EXECUTE format('INSERT INTO ledger (%s) SELECT %s FROM jsonb_populate_record(NULL::ledger, $1) r RETURNING id',
+                   cols, vals)
+      USING payload INTO v_id;
+    SET CONSTRAINTS ALL IMMEDIATE;
+    RETURN ('accepted', v_id, NULL, NULL, NULL)::write_verdict;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT,
+                            v_constraint = CONSTRAINT_NAME;
+    IF v_state = '23505' THEN
+      -- ADR-0021 Rule B: translate a raced ELEMENT 3B unique-violation to the SAME teaching
+      -- text the sequential-case EXISTS trigger would have produced, from the surviving
+      -- `payload` argument -- never a raw 23505 reaching the caller.
+      v_friendly := missive_dedup_race_text(v_constraint, payload);
+      IF v_friendly IS NOT NULL THEN v_msg := v_friendly; END IF;
+    END IF;
+    IF v_state LIKE '22%' OR v_state LIKE '23%' OR v_state LIKE 'P0%' THEN
+      v_refusal := journal_write_refusal('ledger', payload, v_state, v_msg);
+      RETURN ('refused', NULL, v_refusal, v_state, v_msg)::write_verdict;
+    END IF;
+    RAISE;   -- infrastructure classes (40/53/57/XX/...): not a denied attempt -- re-raised.
+  END;
+END; $fn$;
+REVOKE ALL ON FUNCTION :"kern".ledger_write(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION :"kern".ledger_write(jsonb) TO :"role";
+
+COMMENT ON FUNCTION :"kern".ledger_write(jsonb) IS
+  'The generic single-row write boundary (s43 §4.2): payload keys are ledger column names,
+   values cast via the rowtype (jsonb_populate_record), absent keys fall to defaults;
+   server-owned keys and a caller-minted write_refused are refused; a policy/integrity/data
+   refusal (SQLSTATE 22*/23*/P0*) is journaled as a committed write_refused row and returned
+   as a typed verdict, never an abort; infrastructure classes re-raise. The ONLY generic
+   write path -- the granted role holds no ledger INSERT. RE-ISSUED (kernel/lineage/
+   s58-missive-substrate.sql ELEMENT 7B, strengthened-tier review, ADR-0021 Rule B): a raced
+   ELEMENT 3B unique-violation (SQLSTATE 23505 on missive_sent_dedup_uq/missive_received_
+   dedup_uq) is translated to the SAME teaching text validate_missive_dedup''s sequential-case
+   EXISTS check produces, via missive_dedup_race_text(). RE-ISSUED AGAIN (kernel/lineage/
+   s65-refusal-attempted-kind.sql Element 5, fix round 2): refusal_attempted_kind joins the
+   SERVER-OWNED blocklist alongside its five refusal_* siblings -- minted only by
+   kernel.journal_write_refusal''s own extraction, never caller-suppliable. Every other
+   SQLSTATE/kind is byte-identical to s58''s own path.
+   kernel/lineage/s43-typed-verdict-write-boundary.sql; kernel/lineage/s58-missive-substrate.sql;
+   kernel/lineage/s65-refusal-attempted-kind.sql.';
 -- ============================================================================================

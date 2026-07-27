@@ -210,7 +210,15 @@ BASELINE: dict[str, int] = {
     # ledger row 1487): one new MANIFEST row (refusal_attempted_kind, one-way, mirroring
     # refusal_attempted_actor's own shape) -- a visible ratchet bump with rationale,
     # sanctioned per this gate's own convention, not silently absorbed.
-    "gates/kind_shape_manifest_gate.py":           1458,
+    # bumped 1458 -> 1592 (s65 fix round 2, BLOCKS MERGE review): CHAIN extended through
+    # s63/s64/s65 (was stuck at s62, the gate's own CRITICAL finding); the classifier's
+    # bare `"kind" in defn` substring test replaced with a word-boundary regex
+    # (_BARE_KIND_RE) plus its own explanatory comment; a genuinely NEW, EIGHTH kind-shape
+    # idiom, ELIGIBILITY-GATED ONE-WAY (regex, classifier branch, ELIGIBILITY_ONE_WAY_
+    # MANIFEST with its five s64 delegation_* rows, the 2f/2h assert_manifest symmetry,
+    # check-4 exemption) -- all genuinely new decision-boundary logic and its own
+    # reasoning/precedent-citing prose, not padding.
+    "gates/kind_shape_manifest_gate.py":           1592,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -560,7 +568,10 @@ BASELINE: dict[str, int] = {
     # 1487): this gate's own BASELINE growing to carry the two entries this same commit bumps
     # (gates/kind_shape_manifest_gate.py, gates/fixture_census.py) -- the same self-referential
     # fixpoint as every prior bump above, re-measured after writing.
-    "gates/max_lines.py":                          685,
+    # bumped 685 -> 696 (s65 fix round 2, BLOCKS MERGE review): this gate's own BASELINE
+    # growing to carry the one entry this same commit bumps (gates/kind_shape_manifest_
+    # gate.py, 1458 -> 1592) -- the same self-referential fixpoint as every prior bump.
+    "gates/max_lines.py":                          696,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

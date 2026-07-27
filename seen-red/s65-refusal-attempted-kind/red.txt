@@ -49,3 +49,56 @@ CPU Time     : 0.002s
 
 
 ALL GREEN
+
+-- Dated update, 2026-07-27 (ADR-0005 Rule 8: the ALL GREEN record above is a true record of
+-- its own date, fc7f5d5's build, and stands verbatim; this append records fix round 2's
+-- CURRENT state). The fresh-context review of fc7f5d5 returned BLOCKS MERGE (2 CRITICAL,
+-- 1 MINOR): a 2 MiB `kind` stored verbatim (no length bound existed); kind_shape_manifest_gate
+-- broken live on this branch's own commit; ledger_write's SERVER-OWNED blocklist not extended
+-- with refusal_attempted_kind. This run_fixtures.py was amended: three new GREEN-LENGTH-BOUND-*
+-- cases (256-byte boundary both sides, the 2 MiB specimen itself, all journaling correctly
+-- NULL/verbatim per the new table-level+function-level bound), and
+-- RED-NON-WRITE-REFUSED-CARRYING-KIND-refused's own expectation corrected: a caller-supplied
+-- refusal_attempted_kind is now refused EARLIER, at ledger_write's own SERVER-OWNED payload-key
+-- gate (SQLSTATE P0001), never reaching the kind-shape CHECK at all -- superseding round 1's
+-- expectation of a 23514 kind-shape refusal, exactly the MINOR finding's witness requirement.
+-- Witnessed live this date, exit 0, ALL GREEN (all thirteen cases, including the three new
+-- ones and the corrected RED case):
+--
+-- === RED-NON-WRITE-REFUSED-CARRYING-KIND-refused ===
+--   [ok] kind='note' payload additionally supplying refusal_attempted_kind directly -- refused
+--   by ledger_write's own SERVER-OWNED blocklist (Element 5), exactly like its five refusal_*
+--   siblings, BEFORE reaching the kind-shape CHECK at all -- verdict={'row_id': None, 'message':
+--   "write boundary: payload key 'refusal_attempted_kind' is SERVER-OWNED (id/ts default
+--   server-side; stamps and actor-resolution are trigger-computed; refusal_* columns are minted
+--   only by the boundary's own journaler) -- a writer-supplied value would be a lying channel,
+--   refused (s43 §4.2). Declared event time rides event_declared_ts (s24); everything else here
+--   is the kernel's to write.", 'sqlstate': 'P0001', 'refusal_id': 5, 'disposition': 'refused'}
+--
+-- === GREEN-LENGTH-BOUND-256-VERBATIM ===
+--   [ok] ledger_write with kind = 256 'x' bytes (exactly AT the bound) -- REFUSED (invalid kind
+--   vocabulary), journaled VERBATIM (detail len=256, expect 256) -- verdict={'row_id': None,
+--   'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"',
+--   'sqlstate': '23514', 'refusal_id': 9, 'disposition': 'refused'}
+--
+-- === GREEN-LENGTH-BOUND-257-NULL ===
+--   [ok] ledger_write with kind = 257 'x' bytes (ONE byte over the bound) -- REFUSED, journaled
+--   NULL (never a 257-byte or truncated fragment) -- detail='ledger|23514|<NULL>' --
+--   verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check
+--   constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 11, 'disposition':
+--   'refused'}
+--
+-- === GREEN-LENGTH-2MIB-NULL-never-stored-verbatim ===
+--   [ok] ledger_write with a 2 MiB kind (fc7f5d5's own witnessed defect specimen) -- REFUSED,
+--   journaled NULL, NEVER stored verbatim -- detail='ledger|23514|<NULL>' -- verdict
+--   disposition='refused' sqlstate='23514'
+--
+-- === VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+--   [ok] ./autoharn verify-chain after eight refusals -- exit=0, INTACT+ORACLE-CONFIRMED in
+--   output=True, oracle count=8 == sequence=8
+--
+-- === AGREE-sql-asp-differential ===
+--   [ok] symmetric_difference=[]
+--
+--
+-- ALL GREEN (round 2, fix round for the BLOCKS MERGE review)

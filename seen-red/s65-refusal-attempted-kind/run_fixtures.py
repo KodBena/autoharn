@@ -273,14 +273,25 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
         author = birth_via_boundary(world_main)
 
         # ---- RED: a non-write_refused row tries to carry refusal_attempted_kind directly ----
+        # (fix round 2, MINOR finding: refusal_attempted_kind now joins ledger_write's own
+        # SERVER-OWNED payload-key blocklist alongside its five refusal_* siblings, Element 5 --
+        # so this is now caught at the EARLIER boundary gate, SQLSTATE P0001, exactly like a
+        # caller trying to supply refusal_attempted_actor/refusal_sqlstate/etc. directly, never
+        # reaching the INSERT/kind-shape CHECK at all. Round 1's own expectation -- that this
+        # would be caught by the kind-shape CHECK, 23514 -- is superseded: a caller-supplied
+        # value at this key is now refused/stripped exactly as the sibling keys are, the MINOR
+        # finding's own witness requirement.)
         v_forge = bw_call(world_main, "ledger_write",
                            {"kind": "note", "statement": "forged attempted-kind attempt",
                             "actor": author, "refusal_attempted_kind": "row"})
         check("RED-NON-WRITE-REFUSED-CARRYING-KIND-refused",
-              v_forge["disposition"] == "refused" and v_forge["sqlstate"] == "23514"
-              and "refusal_attempted_kind_kind_shape" in v_forge["message"],
+              v_forge["disposition"] == "refused" and v_forge["sqlstate"] == "P0001"
+              and "refusal_attempted_kind" in v_forge["message"]
+              and "SERVER-OWNED" in v_forge["message"],
               f"kind='note' payload additionally supplying refusal_attempted_kind directly -- "
-              f"refused by the new one-way kind-shape CHECK -- verdict={v_forge}", failures)
+              f"refused by ledger_write's own SERVER-OWNED blocklist (Element 5), exactly like "
+              f"its five refusal_* siblings, BEFORE reaching the kind-shape CHECK at all -- "
+              f"verdict={v_forge}", failures)
 
         # ---- GREEN-INVALID-KIND-INCIDENT-SPECIMEN: kind='row' (the incident's own specimen) ----
         v_row = bw_call(world_main, "ledger_write",
@@ -292,6 +303,46 @@ def main() -> int:  # noqa: C901 -- one straight-line witness script, matching s
               f"ledger_write with kind='row' (not a member of ledger_kind_check's vocabulary) -- "
               f"REFUSED, journaled row detail (surface|sqlstate|attempted_kind)={row_detail!r} "
               f"(expect 'ledger|23514|row') -- verdict={v_row}", failures)
+
+        # ---- GREEN-LENGTH-BOUND (amendment 2026-07-27, fix round 2): the fresh-context review
+        # of round 1 (fc7f5d5) witnessed a 2 MiB string supplied as `kind` stored VERBATIM --
+        # the length bound this round adds. Re-witnessed here on scratch, both boundary sides
+        # plus the adversarial specimen itself. ----
+        v_256 = bw_call(world_main, "ledger_write",
+                         {"kind": "x" * 256, "statement": "s65 fixture: exactly 256 bytes",
+                          "actor": author})
+        detail_256 = refusal_row(world_main, v_256["refusal_id"]) if v_256["refusal_id"] else "N/A"
+        check("GREEN-LENGTH-BOUND-256-VERBATIM",
+              v_256["disposition"] == "refused" and v_256["sqlstate"] == "23514"
+              and detail_256 == f"ledger|23514|{'x' * 256}",
+              f"ledger_write with kind = 256 'x' bytes (exactly AT the bound) -- REFUSED "
+              f"(invalid kind vocabulary), journaled VERBATIM (detail len="
+              f"{len(detail_256.split('|', 2)[-1]) if detail_256 != 'N/A' else -1}, expect 256) "
+              f"-- verdict={v_256}", failures)
+        v_257 = bw_call(world_main, "ledger_write",
+                         {"kind": "x" * 257, "statement": "s65 fixture: 257 bytes, one over",
+                          "actor": author})
+        detail_257 = refusal_row(world_main, v_257["refusal_id"]) if v_257["refusal_id"] else "N/A"
+        check("GREEN-LENGTH-BOUND-257-NULL",
+              v_257["disposition"] == "refused" and v_257["sqlstate"] == "23514"
+              and detail_257 == "ledger|23514|<NULL>",
+              f"ledger_write with kind = 257 'x' bytes (ONE byte over the bound) -- REFUSED, "
+              f"journaled NULL (never a 257-byte or truncated fragment) -- detail={detail_257!r} "
+              f"-- verdict={v_257}", failures)
+        v_2mib = bw_call(world_main, "ledger_write",
+                          {"kind": "x" * (2 * 1024 * 1024),
+                           "statement": "s65 fixture: the fresh-context review's own 2 MiB "
+                                        "specimen (fc7f5d5's witnessed defect)",
+                           "actor": author})
+        detail_2mib = (refusal_row(world_main, v_2mib["refusal_id"])
+                       if v_2mib["refusal_id"] else "N/A")
+        check("GREEN-LENGTH-2MIB-NULL-never-stored-verbatim",
+              v_2mib["disposition"] == "refused" and v_2mib["sqlstate"] == "23514"
+              and detail_2mib == "ledger|23514|<NULL>",
+              f"ledger_write with a 2 MiB kind (fc7f5d5's own witnessed defect specimen) -- "
+              f"REFUSED, journaled NULL, NEVER stored verbatim -- detail={detail_2mib!r} "
+              f"-- verdict disposition={v_2mib['disposition']!r} sqlstate={v_2mib['sqlstate']!r}",
+              failures)
 
         # ---- GREEN-MISSING-KIND-NULL: no `kind` key at all ----
         v_missing = bw_call(world_main, "ledger_write",

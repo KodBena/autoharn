@@ -30,7 +30,11 @@ build, not the proposal text. Removal condition: superseded by the s65 merge rec
    non-text kind, a malformed payload — all journal with `refusal_attempted_kind NULL`
    and never abort the refusal recording (more refusals recorded, never fewer). The
    digest computation is byte-identical to before — the column is additional, not a
-   substitute.
+   substitute. **Length bound (amendment, see §5):** the extracted token is stored
+   verbatim only up to 256 bytes; a longer kind journals as NULL (same "not
+   extractable" meaning — a real vocabulary token is never that long, and the refusal
+   path is precisely where hostile input arrives). The kind-shape CHECK carries the
+   same bound so the invariant is table-level, not function-trust.
 3. **`compute_row_hash` re-issued** to cover the new column, under the s42 law
    (full-column coverage; `gates/hash_coverage_gate.py` must pass), with its own
    lineage citations.
@@ -76,6 +80,20 @@ valid kind / missing kind / non-text kind / malformed jsonb — all four witness
 refused-as-expected. Not covered, stated honestly: refusals that never reach the
 kernel (service-layer 409/422/timeouts) journal nothing, before and after — that is
 the logging direction's territory (row 1486), not this delta's.
+
+## 5. Amendment 2026-07-27 — the unbounded-storage premise was falsified in review
+
+The fresh-context review of the first build (fc7f5d5) witnessed a 2 MiB string
+supplied as `kind` stored VERBATIM in the journal column. The Basis section's framing
+of the attempted kind as "a single, low-sensitivity vocabulary token" implicitly
+assumed oversized/hostile strings would be refused before extraction; that is
+backwards — refusal IS the path that reaches this extraction, so the refusal journal
+is exactly where adversarial payloads arrive. Contrast s51's `artifact_too_large`
+bound (1 MiB) on the artifact path. The maintainer's ratification (row 1487) was
+given on the unamended text; this amendment narrows the delta (bounded verbatim
+storage, NULL beyond the bound — strictly fewer bytes revealed than the ratified
+reading), so it stays inside the fail-safe-additive class and the ratified privacy
+envelope. Surfaced to the maintainer on the record at amendment time.
 
 ## License
 
