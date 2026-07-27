@@ -1,11 +1,5 @@
 # s46 defeat-input exclusion — one quantification domain (raw history)
 
-**VESTIGIAL (moved 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90):**
-superseded as a whole by `kernel/lineage/s50-defeat-input-raw-domain.sql`, the shipped
-lineage delta that implements exactly this spec's build basis (RATIFICATION ledger row
-1647) and is entered in `bootstrap/new-project.sh`'s `LINEAGE_CHAIN`. Content preserved
-verbatim below; git history preserved via `git mv`.
-
 <!-- doc-attest-exempt: build-basis spec; attestation rides witnessed delivery -->
 
 **Status: Fable-authored 2026-07-18, build basis for one kernel lineage delta (next
@@ -14,7 +8,7 @@ free sNN at build time). Ratification: maintainer-delegated adjudication, ledger
 2026-07-11 vocabulary note. Provenance: the divergence was named by s46's own header
 (`kernel/lineage/s46-credited-views.sql`, the defeat-input-exclusion domain note at
 approximately lines 55-70) and re-surfaced by the 2026-07-18 model consult
-([design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md](FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md),
+([design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md](../vestigial_documentation/design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md),
 Part 2 item 4, moved to vestigial 2026-07-23 as a settled, fully-adjudicated consult record). Per runs-are-linear, the delta is a file + scratch witnesses; it
 reaches reality in the NEXT world's birth chain, and entry into
 `bootstrap/new-project.sh`'s LINEAGE_CHAIN remains the maintainer's act.**
