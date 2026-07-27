@@ -64,6 +64,8 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 from __future__ import annotations
 
 import json
+import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -210,6 +212,79 @@ def load_served_config(deployment_path: str | Path) -> ServedConfig:
     return ServedConfig(record)
 
 
+# ================================================================================================
+# IDENTITY FORWARDING (design/FABLE-DISPATCH-MECHANICS-SPEC.md §1, ledger rows 1463/1467/1468/
+# 1471): "the CLI reads the identity material already present in its own process environment,
+# and forwards it as request headers on every boundary call." This module is the ONE choke
+# point every rebased shim's HTTP call passes through (`_http`, below) -- so reading the
+# identity material here, once, forwards it for `led`/`pickup`/`asof-export`/
+# `distance-to-clean` alike, with ZERO change to any of their own call sites (ADR-0004).
+#
+# VENDOR STAMP: `hooks/stamp_intercept.py`, in a WIRED world, rewrites every Bash command to
+# `export PGOPTIONS='-c app.vendor_session=... -c app.vendor_agent=... -c app.vendor_ts=... \
+# -c app.vendor_hmac=... -c app.vendor_invocation=...'; <original command>` -- so by the time
+# THIS process (a rebased shim, itself invoked as part of that same Bash command) runs, its own
+# `PGOPTIONS` env var already carries exactly the material the vendor-stamp headers need. This
+# regex mirrors that hook's own construction (`hooks/stamp_intercept.py`'s `pgopts = (f"-c
+# app.vendor_session={session} -c app.vendor_agent={agent} ...")`) rather than inventing a
+# second format.
+_PGOPTIONS_VENDOR_RE = re.compile(r"-c\s+app\.(vendor_(?:session|agent|ts|hmac|invocation))=(\S+)")
+
+
+def _read_vendor_stamp_from_env() -> dict[str, str] | None:
+    """Absent material -> no headers -> anonymous (never empty-string headers, per the spec's
+    own words) -- returns None when PGOPTIONS is unset/empty or carries none of the five
+    app.vendor_* assignments this process's own hook-rewritten Bash command would have set."""
+    pgoptions = os.environ.get("PGOPTIONS", "")
+    if not pgoptions:
+        return None
+    found = dict(_PGOPTIONS_VENDOR_RE.findall(pgoptions))
+    if not found:
+        return None
+    return found
+
+
+# MINTED-PRINCIPAL STAMP: design/FABLE-DISPATCH-MECHANICS-SPEC.md §3's own dispatch verb
+# (`libexec/autoharn/dispatch mint`) exports this env var into the dispatched child session's
+# own environment, carrying the minted principal's numeric id -- ordinary subprocess env
+# inheritance (the SAME mechanism `LED_ACTOR` already relies on, `tools/dispatch_principal.py`'s
+# own module docstring), read here so every rebased shim call this child session makes forwards
+# it, again with zero change to any shim's own call sites.
+MINTED_PRINCIPAL_ENV_VAR = "AUTOHARN_MINTED_PRINCIPAL"
+
+
+# serving/boundary_service.py's own IDENTITY_HEADER_VENDOR_* constants, DISCLOSED DUPLICATION
+# (this thin urllib-only CLI client has no business importing that FastAPI-dependent module just
+# to share five string literals -- the same reasoning `boundary_cli_client.py`'s own module
+# docstring already gives for `_CLIENT_WIRE_PROTOCOL_VERSION`'s identical duplication of
+# `boundary_models.WIRE_PROTOCOL_VERSION`). Kept in sync by hand; a fixture in
+# seen-red/boundary-service/run_fixtures.py exercises both ends of this same wire shape.
+_VENDOR_HEADER_NAMES: dict[str, str] = {
+    "vendor_session": "X-Autoharn-Vendor-Session",
+    "vendor_agent": "X-Autoharn-Vendor-Agent",
+    "vendor_ts": "X-Autoharn-Vendor-Ts",
+    "vendor_hmac": "X-Autoharn-Vendor-Hmac",
+    "vendor_invocation": "X-Autoharn-Vendor-Invocation",
+}
+
+
+def _identity_headers() -> dict[str, str]:
+    """The ONE place this module builds the identity headers for an outgoing boundary call
+    (ADR-0012 P1) -- absent material contributes no header at all (never an empty-string
+    header, spec §1's own words)."""
+    headers: dict[str, str] = {}
+    vendor = _read_vendor_stamp_from_env()
+    if vendor:
+        for k, v in vendor.items():
+            name = _VENDOR_HEADER_NAMES.get(k)
+            if name is not None:
+                headers[name] = v
+    minted = os.environ.get(MINTED_PRINCIPAL_ENV_VAR, "")
+    if minted:
+        headers["X-Autoharn-Minted-Principal"] = minted
+    return headers
+
+
 def _http(method: str, url: str, payload: dict | None = None, timeout: float = 65.0) -> tuple[int, Any]:
     """The ONE choke point every HTTP call in this module passes through (ADR-0012 P1) --
     `timeout` is deliberately a hair over `serving/boundary_service.py`'s own
@@ -218,7 +293,7 @@ def _http(method: str, url: str, payload: dict | None = None, timeout: float = 6
     `BoundaryUnreachable` (exit 4) on a connection-level failure -- never lets `urllib`'s own
     exception classes leak past this module's boundary."""
     data = None
-    headers = {}
+    headers = _identity_headers()  # design/FABLE-DISPATCH-MECHANICS-SPEC.md §1: every call
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"

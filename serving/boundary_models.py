@@ -230,6 +230,55 @@ class UnknownView(BaseModel):
     message: str = Field(description="teach-text naming the unknown view and the known set")
 
 
+class IdentityHeaderInvalid(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §1 (ledger row 1471's dispatch-mechanics build):
+    the identity conduit's own typed refusal -- an oversized (> `IDENTITY_HEADER_MAX_BYTES` =
+    256 bytes, the s65 house precedent) or malformed (non-hex HMAC, non-integer ts, non-integer
+    principal id) identity header on the vendor-stamp or minted-principal channel, refused
+    BEFORE any kernel call (spec §1, verbatim: "an oversized or malformed identity header draws
+    a typed, teaching refusal ... never truncation, never pass-through"). This is a
+    SERVICE-level disposition (mirrors `CapabilityAbsent`'s own posture) -- there was no kernel
+    call to verdict; the conduit refused before ever reaching `_psql`."""
+
+    disposition: str = "identity_header_invalid"
+    header: str = Field(description="the offending header's name")
+    message: str = Field(description="teach-text: which header, why it was refused, the bound")
+
+
+class AnonymousWriteRefused(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c ("anonymous
+    sessions keep NO write surface beyond journaled refusals"): rung (a) of the two-rung
+    enforcement plan -- THIS service refuses an authority-bearing write (any `/write/*` or
+    `/artifacts` POST) carrying neither a vendor stamp nor a minted-principal header, but ONLY
+    once the multiplex TOML's `identity_enforcement` key is `"enforce"` (default `"grace"`,
+    which accepts an anonymous write unchanged -- byte-identical -- so the operator surface is
+    never broken mid-migration, per the spec's own ordering: CLI forwarding must work FIRST,
+    witnessed, before this refusal turns on)."""
+
+    disposition: str = "anonymous_write_refused"
+    message: str = Field(description="teach-text: no vendor stamp or minted-principal header "
+                                      "was present on this authority-bearing write, and this "
+                                      "deployment's identity_enforcement posture is 'enforce'")
+
+
+class MintedActorConflict(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §2 ("declared, never silent"), fresh-context
+    review CRITICAL (ledger row 1525): a write payload carrying an EXPLICIT `actor` value that
+    DISAGREES with the request's own `X-Autoharn-Minted-Principal` header refuses -- typed,
+    teaching, before any kernel call -- rather than silently overriding the payload's claim.
+    "Minted governs" (spec §2) resolves which identity WINS when the payload is silent or
+    agrees; it never licenses discarding an explicit, conflicting claim with no record anywhere
+    (the diagnostic log is diagnostic-grade, never evidentiary -- maintainer principle
+    2026-07-11 -- so 'logged' cannot stand in for 'declared'; a refusal the caller must resolve
+    is the only shape that leaves no evidentiary gap). A payload with NO `actor`, or one equal
+    to the minted principal, proceeds with the minted attribution as before."""
+
+    disposition: str = "minted_actor_conflict"
+    minted_principal: int = Field(description="the X-Autoharn-Minted-Principal header's validated principal id")
+    payload_actor: str = Field(description="the payload's own explicit `actor` value, rendered as text (it may not be an integer)")
+    message: str = Field(description="teach-text: both values, the resolution rule, and what the caller should do (drop the payload actor, or drop the minted header)")
+
+
 class MetaResponse(BaseModel):
     """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's third new route, `GET /d/{deployment}/meta`
     -- the capability surface a rebased CLI shim decides its own behavior from, replacing the

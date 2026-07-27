@@ -411,6 +411,78 @@ question above (a registered-but-not-yet-declared-standing principal is a legiti
 in-between state, and `/health` says so honestly rather than conflating "registered" with
 "is the writing identity").
 
+## Identity conduit (design/FABLE-DISPATCH-MECHANICS-SPEC.md, RATIFIED 2026-07-27 — ledger rows
+1463/1467/1468/1471)
+
+The gap the section above names — vendor stamps never reached this service's own connections
+(no `app.vendor_*` GUC concept existed here at all) — is closed by this build. **The trust
+property, stated once:** this service is a CONDUIT, never an authority. It never holds key
+material, never computes or verifies an HMAC, never rewrites an identity value it did not
+itself construct from a bounded, validated header.
+
+**Header names** (this build's own choice, matching the GUC names verbatim so the
+correspondence needs no lookup table):
+
+| Header | Carries | Threads into |
+| --- | --- | --- |
+| `X-Autoharn-Vendor-Session` | `app.vendor_session` | `_psql`'s per-request GUC preamble |
+| `X-Autoharn-Vendor-Agent` | `app.vendor_agent` | ditto |
+| `X-Autoharn-Vendor-Ts` | `app.vendor_ts` | ditto |
+| `X-Autoharn-Vendor-Hmac` | `app.vendor_hmac` | ditto |
+| `X-Autoharn-Vendor-Invocation` (optional) | `app.vendor_invocation` (s23, capture-only) | ditto |
+| `X-Autoharn-Minted-Principal` | a registered principal id | this write's `actor` field (see below) |
+
+**Bound:** every header value is capped at 256 bytes (`IDENTITY_HEADER_MAX_BYTES`, the s65 house
+precedent) — oversized or malformed (a non-hex HMAC, a non-integer ts/principal id, a partial
+vendor stamp missing one of session/agent/ts/hmac) refuses typed HTTP 422
+`identity_header_invalid`, BEFORE any kernel call — never truncated, never passed through.
+
+**A finding, stated honestly rather than routed around** (the commission's own instruction: "derive
+the exact GUC names from the kernel lineage, never invent"): no `current_setting()`-consulting
+GUC for a MINTED principal's identity exists anywhere in `kernel/lineage/*.sql` — `s40`/`s41`/
+`s64` attribute a write's `actor` column either from the connecting DB role (`principal_role`/
+`set_actor`) or from an explicit `actor` value the caller supplies on the write payload; `s64`'s
+own delegation-condition columns are consulted via the `principal_relations` chain walk, keyed
+on that same `actor` column, never a GUC. The vendor stamp's five `app.vendor_*` GUCs are the
+ONLY per-request GUC channel this kernel lineage actually reads. The minted-principal identity
+therefore threads through the EXISTING, already-accepted `actor` JSON field on write payloads
+(the section above) — `X-Autoharn-Minted-Principal`, once validated, lets the SERVICE itself set
+that field from a validated fact rather than trusting whatever the caller's own JSON body
+claims.
+
+**Resolution order** (closed three cases, recorded on the diagnostic log's `RequestContext` as
+`resolution_case`): (1) minted-principal header present → `"minted"`, this write's `actor` is
+overridden to the header's principal id; (2) else a complete vendor stamp (all four of
+session/agent/ts/hmac) present → `"vendor"`, threaded into `_psql`'s per-request GUC preamble;
+(3) else → `"anonymous"`. Both present is not a fourth case: the minted stamp governs `actor`,
+and the vendor stamp still rides along to its own GUCs (disjoint kernel-side columns — nothing
+merges).
+
+**Anonymous-write refusal (rung a).** One new OPTIONAL multiplex-TOML key,
+`identity_enforcement` (`"grace"` default, or `"enforce"`), validated whole-file exactly like
+`log_level`. `"grace"` accepts an anonymous authority-bearing write (`/write/*`, `/artifacts`)
+unchanged, byte-identical. `"enforce"` refuses it with typed HTTP 403
+`anonymous_write_refused` — the maintainer flips this at rollout, once the CLI forwarding below
+is demonstrably working.
+
+**CLI forwarding** (`serving/boundary_cli_client.py`): every rebased shim call reads the vendor
+stamp back out of its OWN `PGOPTIONS` env var (the exact string `hooks/stamp_intercept.py`
+already exports onto a wired Bash command) and the minted-principal id out of
+`AUTOHARN_MINTED_PRINCIPAL` (the env var `./autoharn dispatch mint` exports into a dispatched
+child session) — forwarding both as the headers above on every boundary call, with zero change
+to any shim's own call sites. Absent material contributes no header at all (never an
+empty-string header) — an unwired or non-dispatched session is `"anonymous"`, unchanged.
+
+**Dispatch verbs** (`./autoharn dispatch mint|close`, design spec §3): `mint <name>
+<commission-row-id>[,...] [--depth N] [--purpose ...] [--independent-verification]` registers
+the delegate principal, writes its `dispatched-by` edge (carrying the commission row ids and
+`s64`'s delegation caveats — `--depth` defaults to 0, no-redelegate always), and prints the
+child env's stamp material (`export AUTOHARN_MINTED_PRINCIPAL=...`, `export LED_ACTOR=...`).
+`close <name>` retires it via the existing `s45` standing-lifecycle machinery. The next `mint`
+run reports, loudly (never a refusal), any previously-dispatched principal still showing
+`active` standing — the session-gap this build does not close (no `SessionEnd` hook; see
+`design/FABLE-DISPATCH-MECHANICS-SPEC.md` §3/§4).
+
 ## Transport (a choice the spec left open — flagged)
 
 This service connects to Postgres via a `psql` **subprocess**, `-v name=value` /
@@ -643,7 +715,23 @@ GREEN, a refused write's `refusal_id` joins to the scratch world's own journaled
 ledger row. **W35**: contextvar propagation under 20 concurrent requests (10 each to `/health`
 and `/rows/current`) against the real, already-running `WORLD B` server — asserted directly on
 the captured log: every request_id's own events agree on exactly one `route` (no
-cross-contamination).
+cross-contamination). **W36** (design/FABLE-DISPATCH-MECHANICS-SPEC.md, ledger rows
+1463/1467/1468/1471 — the identity conduit): **(a-e)** RED, each of an oversized header, a
+malformed HMAC, a malformed ts, a partial vendor stamp, and a malformed minted-principal id
+refuses typed `identity_header_invalid`, before any kernel call; **(f)** a structurally-valid
+but cryptographically-wrong vendor HMAC — OBSERVED shape recorded honestly (differs from this
+spec's own witness-plan text, which assumed a `stamp_verified=false` landing): `s17`'s
+`set_stamp` trigger RAISES on a fully-present-but-invalid stamp (that landing shape is the
+UNSTAMPED case, (d) above), and that exception is not caught by `kernel.ledger_write`'s own
+exception handling, so it surfaces as this service's own typed `unclassified_failure` (500) —
+never a verified stamp, never an untyped crash, flagged for the maintainer as a kernel-lineage
+question this build does not touch; **(g)** GREEN, the acceptance criterion itself — two
+real, valid vendor stamps (a genuinely distinct agent id under one session) land
+`stamp_verified=true` on both a row and a review regarding it, and
+`review_stamp_distinctness` returns a real `(same_invocation=false, both_stamped=true)` pair —
+THE FIRST ever formed on a served world (ledger row 1467); **(h)** both `identity_enforcement`
+postures — `"grace"` (default, byte-identical accept) and `"enforce"` (typed
+`anonymous_write_refused`) — on the same scratch world via two independent server instances.
 
 **Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
 pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.

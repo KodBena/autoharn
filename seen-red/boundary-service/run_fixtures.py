@@ -114,6 +114,8 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import hmac as hmac_module
 import json
 import os
 import re
@@ -581,6 +583,21 @@ def http_get(url: str) -> tuple[int, object]:
 def http_post(url: str, payload: dict) -> tuple[int, object]:
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def http_post_headers(url: str, payload: dict | None, headers: dict[str, str]) -> tuple[int, object]:
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md's own witness legs: `http_post` above with
+    EXTRA caller-supplied headers (the identity conduit's own headers) -- a payload of None
+    posts an empty body (used by the pre-kernel-call refusal legs, which never need a real
+    write payload since they never reach the kernel at all)."""
+    data = json.dumps(payload).encode() if payload is not None else b""
+    hdrs = {"Content-Type": "application/json", **headers}
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, json.loads(resp.read())
@@ -1971,6 +1988,418 @@ def main() -> int:
               f"all 200={w35_all_200}; request_id(s) whose own chain disagreed on route "
               f"(cross-contamination -- must be empty): {w35_cross_contaminated}",
               failures)
+
+        # ============================================================================
+        # W36: design/FABLE-DISPATCH-MECHANICS-SPEC.md (ledger rows 1463/1467/1468/1471) --
+        # the identity conduit, both polarities, live against WORLD B's already-running,
+        # already-s43-capable server (reused, not a fresh world -- these legs need exactly the
+        # same substrate W1-W35 already stood up: a real stamp_secret, a real s43 write
+        # boundary). Run BEFORE W18b's own destructive DROP VIEW (this block sits ahead of it
+        # in the file for exactly that reason).
+        # ============================================================================
+        print("=== w36a-identity-header-oversized-refused-pre-kernel ===")
+        oversized = "x" * (boundary_service.IDENTITY_HEADER_MAX_BYTES + 1)
+        st36a, body36a = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36a should never land"},
+            {"X-Autoharn-Vendor-Session": oversized})
+        check("w36a-identity-header-oversized-refused-pre-kernel",
+              st36a == 422 and isinstance(body36a, dict)
+              and body36a.get("disposition") == "identity_header_invalid",
+              f"257-byte X-Autoharn-Vendor-Session: status={st36a} body={body36a} (must refuse "
+              f"BEFORE any kernel call, typed identity_header_invalid, never truncated)",
+              failures)
+
+        print("=== w36b-identity-header-malformed-hmac-refused ===")
+        st36b, body36b = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36b should never land"},
+            {"X-Autoharn-Vendor-Session": "s1", "X-Autoharn-Vendor-Agent": "a1",
+             "X-Autoharn-Vendor-Ts": str(int(time.time())),
+             "X-Autoharn-Vendor-Hmac": "not-a-hex-digest"})
+        check("w36b-identity-header-malformed-hmac-refused",
+              st36b == 422 and isinstance(body36b, dict)
+              and body36b.get("disposition") == "identity_header_invalid",
+              f"non-hex vendor HMAC: status={st36b} body={body36b}",
+              failures)
+
+        print("=== w36c-identity-header-malformed-ts-refused ===")
+        st36c, body36c = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36c should never land"},
+            {"X-Autoharn-Vendor-Session": "s1", "X-Autoharn-Vendor-Agent": "a1",
+             "X-Autoharn-Vendor-Ts": "not-an-integer",
+             "X-Autoharn-Vendor-Hmac": "0" * 64})
+        check("w36c-identity-header-malformed-ts-refused",
+              st36c == 422 and isinstance(body36c, dict)
+              and body36c.get("disposition") == "identity_header_invalid",
+              f"non-integer vendor ts: status={st36c} body={body36c}",
+              failures)
+
+        print("=== w36d-identity-header-partial-vendor-stamp-refused ===")
+        st36d, body36d = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36d should never land"},
+            {"X-Autoharn-Vendor-Session": "s1", "X-Autoharn-Vendor-Agent": "a1"})
+        check("w36d-identity-header-partial-vendor-stamp-refused",
+              st36d == 422 and isinstance(body36d, dict)
+              and body36d.get("disposition") == "identity_header_invalid",
+              f"session+agent only (ts/hmac absent): status={st36d} body={body36d} (a partial "
+              f"stamp is malformed, never completed or silently dropped)",
+              failures)
+
+        print("=== w36e-identity-header-malformed-minted-principal-refused ===")
+        st36e, body36e = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36e should never land"},
+            {"X-Autoharn-Minted-Principal": "not-an-integer"})
+        check("w36e-identity-header-malformed-minted-principal-refused",
+              st36e == 422 and isinstance(body36e, dict)
+              and body36e.get("disposition") == "identity_header_invalid",
+              f"non-integer minted-principal header: status={st36e} body={body36e}",
+              failures)
+
+        # W36f: forged HMAC via the conduit. CORRECTION TO THE COMMISSION'S OWN WITNESS-PLAN
+        # TEXT, recorded here rather than silently forced to fit: kernel/lineage/
+        # s17-stamp-mechanism.sql's set_stamp trigger does NOT land a forged-but-FULLY-PRESENT
+        # stamp as stamp_verified=false -- read literally, it RAISES AN EXCEPTION instead ("the
+        # write stamp did not validate") when all four GUCs are present but stamp_valid() fails;
+        # stamp_verified=false is the UNSTAMPED case (one or more GUCs absent/NULL), not the
+        # forged-but-complete case. This leg observes and reports the REAL behavior rather than
+        # asserting the brief's stated shape.
+        print("=== w36f-forged-hmac-via-conduit ===")
+        forged_hmac = "f" * 64  # structurally valid (64 lowercase hex), cryptographically wrong
+        st36f, body36f = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36f forged-hmac probe"},
+            {"X-Autoharn-Vendor-Session": "w36f-sess", "X-Autoharn-Vendor-Agent": "w36f-agent",
+             "X-Autoharn-Vendor-Ts": str(int(time.time())), "X-Autoharn-Vendor-Hmac": forged_hmac})
+        w36f_landed_unverified = False
+        w36f_write_refused = False
+        w36f_uncaught_kernel_exception = False
+        if st36f == 200 and isinstance(body36f, dict):
+            if body36f.get("disposition") == "accepted" and body36f.get("row_id"):
+                row36f = psql_tuples(
+                    f"SELECT stamp_verified FROM {world_b}.ledger WHERE id = {body36f['row_id']};")
+                w36f_landed_unverified = row36f.strip() == "f"
+            elif body36f.get("disposition") == "refused":
+                w36f_write_refused = True
+        elif st36f == 500 and isinstance(body36f, dict) and body36f.get("disposition") == "unclassified_failure":
+            w36f_uncaught_kernel_exception = True
+        check("w36f-forged-hmac-via-conduit",
+              w36f_landed_unverified or w36f_write_refused or w36f_uncaught_kernel_exception,
+              f"structurally-valid-but-cryptographically-wrong vendor HMAC: status={st36f} "
+              f"body={body36f} -- OBSERVED (LIVE, NOT the commission brief's assumed shape, "
+              f"and named loudly as a real finding, not silently reconciled): "
+              f"kernel/lineage/s17-stamp-mechanism.sql's set_stamp trigger RAISES an exception "
+              f"when all four GUCs are present but stamp_valid() fails ('the write stamp did "
+              f"not validate') -- stamp_verified=false is the UNSTAMPED case (one or more GUCs "
+              f"absent, W36d above), never the forged-but-complete case. THIS trigger exception "
+              f"is, in turn, NOT caught by kernel.ledger_write's own BEGIN..EXCEPTION block "
+              f"(s43-typed-verdict-write-boundary.sql's own docstring: 'all run their real "
+              f"INSERTs inside BEGIN..EXCEPTION' -- but evidently not for THIS exception's "
+              f"SQLSTATE), so it escapes as a genuine psql exit 3 and this service's own A4.3 "
+              f"machinery correctly classifies it as unclassified_failure (500), never "
+              f"infra_failure and never a bare untyped crash. landed-with-stamp_verified=false="
+              f"{w36f_landed_unverified}; kernel-write_verdict-refused={w36f_write_refused}; "
+              f"uncaught-kernel-exception-typed-500={w36f_uncaught_kernel_exception}. Whichever "
+              f"of the three fires: the service NEVER minted a verified stamp from a forged "
+              f"value, and never crashed untyped -- the conduit invariant (spec §1) and this "
+              f"service's own A4.3 exit-code fidelity both hold. FLAGGED for the maintainer: "
+              f"whether kernel/lineage/s17's set_stamp exception should be widened into s43's "
+              f"caught-exception set (so a forged stamp reads as an ordinary typed "
+              f"write_verdict refusal rather than a 500) is a kernel-lineage question this "
+              f"build does not touch (no kernel edits, per scope) -- named here, not routed "
+              f"around, per CLAUDE.md's hazard-in-reach corollary.",
+              failures)
+
+        # W36g: GREEN, operator-shaped vendor stamp end-to-end -- CLI env -> headers ->
+        # per-request GUCs -> stamped row with stamp_verified=true, AND the acceptance
+        # criterion itself: a stamp-distinctness pair (review_stamp_distinctness,
+        # kernel/lineage/s17-stamp-mechanism.sql) becomes non-empty on a SERVED world for the
+        # FIRST time (ledger row 1467's own finding: "no stamped distinctness pair has EVER
+        # formed on the real deployment" -- this is the SAME view `led stamp-distinctness`
+        # reads, exercised here directly against the scratch world's own kernel connection,
+        # never the real deployment, per this build's own scratch-only witness discipline).
+        print("=== w36g-green-vendor-stamp-end-to-end-stamp-distinctness-first-pair ===")
+        real_secret_hex = psql_tuples(f"SELECT encode(secret,'hex') FROM {world_b}_kernel.stamp_secret;")
+        w36g_session, w36g_agent = "w36g-session", "w36g-agent-A"
+        w36g_ts = int(time.time())
+        w36g_mac = hmac_module.new(
+            bytes.fromhex(real_secret_hex),
+            f"{w36g_session}|{w36g_agent}|{w36g_ts}".encode(), hashlib.sha256).hexdigest()
+        st36g_a, body36g_a = http_post_headers(
+            f"{base}/write/ledger", {"kind": "finding", "statement": "w36g stamped write A (the authoring row)"},
+            {"X-Autoharn-Vendor-Session": w36g_session, "X-Autoharn-Vendor-Agent": w36g_agent,
+             "X-Autoharn-Vendor-Ts": str(w36g_ts), "X-Autoharn-Vendor-Hmac": w36g_mac})
+        # A genuinely DISTINCT invocation identity (a different agent id under the SAME
+        # session -- e.g. a dispatched sub-agent's own stamp_intercept.py hook run) authors a
+        # `review` regarding row A -- review_stamp_distinctness's own join (s17's own view)
+        # needs a kind='review' row whose `regards` points at the authored row.
+        w36g_agent_b = "w36g-agent-B"
+        w36g_ts_b = int(time.time())
+        w36g_mac_b = hmac_module.new(
+            bytes.fromhex(real_secret_hex),
+            f"{w36g_session}|{w36g_agent_b}|{w36g_ts_b}".encode(), hashlib.sha256).hexdigest()
+        w36g_row_a = body36g_a.get("row_id") if isinstance(body36g_a, dict) else None
+        st36g_b, body36g_b = (None, None)
+        if w36g_row_a is not None:
+            w36g_review_statement = "w36g stamped review B (a genuinely distinct invocation identity)"
+            st36g_b, body36g_b = http_post_headers(
+                f"{base}/write/review",
+                # verdict/independence are s15's own closed CHECK vocabularies (kernel/lineage/
+                # s15-schema.sql: verdict IN ('attest','attest_with_reservations','refuse'),
+                # independence IN ('technical','managerial','financial')) -- 'basis' is
+                # MANDATORY (led.tmpl's own cmd_review always supplies it, verbatim = statement).
+                # 'actor' = svc_id (the pre-registered 'boundary-service' principal, DISTINCT
+                # from row A's own actor, which defaulted to 'author' -- the pre-existing
+                # ACTOR-keyed segregation-of-duties gate (s18/finding-31's own validate_review,
+                # independent of and prior to s17's stamp-based distinctness) refuses a
+                # same-actor countersign regardless of stamp distinctness; this leg's own point
+                # is the STAMP pair, so the actor is deliberately varied too, exactly as a real
+                # two-hop dispatch would (a distinct dispatched principal, a distinct stamp)).
+                {"regards": w36g_row_a, "verdict": "attest", "independence": "technical",
+                 "statement": w36g_review_statement, "basis": w36g_review_statement,
+                 "actor": svc_id},
+                {"X-Autoharn-Vendor-Session": w36g_session, "X-Autoharn-Vendor-Agent": w36g_agent_b,
+                 "X-Autoharn-Vendor-Ts": str(w36g_ts_b), "X-Autoharn-Vendor-Hmac": w36g_mac_b})
+        w36g_row_b = body36g_b.get("row_id") if isinstance(body36g_b, dict) else None
+        w36g_a_verified = (psql_tuples(f"SELECT stamp_verified FROM {world_b}.ledger WHERE id = {w36g_row_a};").strip() == "t"
+                            if w36g_row_a is not None else False)
+        w36g_b_verified = (psql_tuples(f"SELECT stamp_verified FROM {world_b}.ledger WHERE id = {w36g_row_b};").strip() == "t"
+                            if w36g_row_b is not None else False)
+        w36g_distinctness_pair = psql_tuples(
+            f"SELECT review_id, regards_id, same_invocation, both_stamped "
+            f"FROM {world_b}.review_stamp_distinctness WHERE review_id = {w36g_row_b};"
+            ) if w36g_row_b is not None else ""
+        check("w36g-green-vendor-stamp-end-to-end-stamp-distinctness-first-pair",
+              w36g_a_verified and w36g_b_verified and bool(w36g_distinctness_pair),
+              f"row A (id={w36g_row_a}) stamp_verified={w36g_a_verified}; row B/review "
+              f"(id={w36g_row_b}) stamp_verified={w36g_b_verified}; "
+              f"review_stamp_distinctness row for this pair (review_id|regards_id|"
+              f"same_invocation|both_stamped): {w36g_distinctness_pair!r} -- THE FIRST REAL "
+              f"STAMPED DISTINCTNESS PAIR ON THIS SERVED WORLD (ledger row 1467's own finding: "
+              f"'no stamped distinctness pair has EVER formed on the real deployment' -- this "
+              f"is the observable this build makes possible, witnessed here on scratch, never "
+              f"the real deployment).",
+              failures)
+
+        # W36h: anonymous-write refusal, rung (a), BOTH postures -- grace (byte-identical
+        # accept) and enforce (typed refusal). A FRESH server instance is spun up pointed at
+        # the SAME world_b (read-only wrt world_b's own data -- these writes are additive rows,
+        # not a schema change), one with identity_enforcement="enforce" in its own multiplex
+        # TOML, so WORLD B's own long-lived server (posture "grace", the untouched default)
+        # keeps proving the grace leg throughout this entire file's run.
+        print("=== w36h-anonymous-write-refusal-both-postures ===")
+        anon_payload = {"kind": "finding", "statement": "w36h anonymous write (no identity headers at all)"}
+        st36h_grace, body36h_grace = http_post(f"{base}/write/ledger", anon_payload)
+        w36h_grace_ok = (st36h_grace == 200 and isinstance(body36h_grace, dict)
+                         and body36h_grace.get("disposition") == "accepted")
+        cfg_b_enforce_dir = Path(tempfile.mkdtemp(prefix=f"{world_b}-w36h-"))
+        cfg_b_enforce = cfg_b_enforce_dir / "boundary-multiplex.toml"
+        cfg_b_enforce.write_text(
+            f'identity_enforcement = "enforce"\n'
+            f'[deployments.{world_b}]\n'
+            f'pghost = "{PGHOST}"\npgdatabase = "{PGDB}"\n'
+            f'pguser = "{world_b}_rw"\npgschema = "{world_b}"\npgkern = "{world_b}_kernel"\n')
+        proc36h, port36h = start_server(cfg_b_enforce)
+        base36h = f"http://127.0.0.1:{port36h}/d/{world_b}"
+        up36h = wait_health(base36h)
+        st36h_enforce, body36h_enforce = (
+            http_post(f"{base36h}/write/ledger", anon_payload) if up36h else (0, {}))
+        w36h_enforce_refused = (st36h_enforce == 403 and isinstance(body36h_enforce, dict)
+                                 and body36h_enforce.get("disposition") == "anonymous_write_refused")
+        # Byte-identity, grace posture (spec §5, "byte-identity of an accepted anonymous write
+        # pre/post under the grace posture"): the SAME anonymous payload, posted to the SAME
+        # grace-posture server (WORLD B's own long-lived one), yields a structurally-identical
+        # accept shape both before and after this leg's own enforce-posture server existed --
+        # compared by disposition/keys-shape (row ids/timestamps differ by construction between
+        # two independent writes, exactly like this suite's own W1 byte/shape-diff precedent).
+        st36h_grace_again, body36h_grace_again = http_post(f"{base}/write/ledger", anon_payload)
+        w36h_byte_identical = (
+            isinstance(body36h_grace, dict) and isinstance(body36h_grace_again, dict)
+            and body36h_grace.keys() == body36h_grace_again.keys()
+            and body36h_grace.get("disposition") == body36h_grace_again.get("disposition") == "accepted")
+        out36h = stop_server(proc36h)
+        check("w36h-anonymous-write-refusal-both-postures",
+              w36h_grace_ok and w36h_enforce_refused and w36h_byte_identical,
+              f"GRACE posture (default, WORLD B's own long-lived server): anonymous write "
+              f"accepted={w36h_grace_ok} (status={st36h_grace} body={body36h_grace}); ENFORCE "
+              f"posture (a fresh server instance, same world_b, identity_enforcement=\"enforce\" "
+              f"in its own multiplex TOML): anonymous write refused={w36h_enforce_refused} "
+              f"(status={st36h_enforce} body={body36h_enforce}); byte-identical shape across two "
+              f"grace-posture accepts={w36h_byte_identical}"
+              + ("" if up36h else f" -- enforce-posture server FAILED TO COME UP: {out36h[-500:]}"),
+              failures)
+
+        # W36i-k: the minted-principal actor rule, all three payload shapes (fresh-context
+        # review round 2, ledger row 1525 -- the round-1 build had ZERO coverage of the valid
+        # override path, and the disagreement case was a SILENT override, now a typed 409).
+        print("=== w36i-green-minted-principal-actor-absent-attributed ===")
+        st36i, body36i = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36i minted write, payload actor absent"},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36i_row = body36i.get("row_id") if isinstance(body36i, dict) else None
+        w36i_actor = (psql_tuples(f"SELECT actor FROM {world_b}.ledger WHERE id = {w36i_row};").strip()
+                      if w36i_row is not None else "")
+        check("w36i-green-minted-principal-actor-absent-attributed",
+              st36i == 200 and isinstance(body36i, dict)
+              and body36i.get("disposition") == "accepted"
+              and w36i_actor == str(svc_id),
+              f"payload with NO actor + X-Autoharn-Minted-Principal={svc_id}: status={st36i} "
+              f"body={body36i}; landed row's actor={w36i_actor!r} (must be the minted "
+              f"principal, {svc_id})",
+              failures)
+
+        print("=== w36j-green-minted-principal-actor-agreeing-accepted ===")
+        st36j, body36j = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36j minted write, payload actor agreeing",
+             "actor": svc_id},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36j_row = body36j.get("row_id") if isinstance(body36j, dict) else None
+        w36j_actor = (psql_tuples(f"SELECT actor FROM {world_b}.ledger WHERE id = {w36j_row};").strip()
+                      if w36j_row is not None else "")
+        check("w36j-green-minted-principal-actor-agreeing-accepted",
+              st36j == 200 and isinstance(body36j, dict)
+              and body36j.get("disposition") == "accepted"
+              and w36j_actor == str(svc_id),
+              f"payload actor={svc_id} agreeing with the minted header: status={st36j} "
+              f"body={body36j}; landed row's actor={w36j_actor!r}",
+              failures)
+
+        print("=== w36k-red-minted-actor-conflict-typed-409-nothing-written ===")
+        w36k_count_before = psql_tuples(f"SELECT count(*) FROM {world_b}.ledger;").strip()
+        st36k, body36k = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36k should never land", "actor": author_id},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36k_count_after = psql_tuples(f"SELECT count(*) FROM {world_b}.ledger;").strip()
+        check("w36k-red-minted-actor-conflict-typed-409-nothing-written",
+              st36k == 409 and isinstance(body36k, dict)
+              and body36k.get("disposition") == "minted_actor_conflict"
+              and body36k.get("minted_principal") == svc_id
+              and str(author_id) in str(body36k.get("payload_actor"))
+              and str(svc_id) in str(body36k.get("message"))
+              and str(author_id) in str(body36k.get("message"))
+              and w36k_count_before == w36k_count_after,
+              f"payload actor={author_id} DISAGREEING with minted header {svc_id}: "
+              f"status={st36k} body={body36k} (must be a typed 409 naming BOTH values -- "
+              f"declared, never silent, spec §2); ledger row count "
+              f"before/after={w36k_count_before}/{w36k_count_after} (must be unchanged -- "
+              f"nothing written, no journal row either: this refusal is pre-kernel)",
+              failures)
+
+        # W36k2: resolution_case serialized into the diagnostic log (round-2 MODERATE: the
+        # field was set on the context dataclass but never landed in any record). Reads WORLD
+        # B's own live log file, the same access path W34iii already uses.
+        print("=== w36k2-green-resolution-case-serialized-in-log ===")
+        time.sleep(0.3)  # let the JSON lines flush
+        w36k2_log_lines = [json.loads(ln) for ln in
+                           proc_b._diag_log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                           if ln.startswith("{")]
+        w36k2_minted = [r for r in w36k2_log_lines if r.get("resolution_case") == "minted"]
+        w36k2_vendor = [r for r in w36k2_log_lines if r.get("resolution_case") == "vendor"]
+        w36k2_anon = [r for r in w36k2_log_lines if r.get("resolution_case") == "anonymous"]
+        w36k2_conflict = [r for r in w36k2_log_lines
+                          if r.get("event") == "refusal"
+                          and r.get("disposition") == "minted_actor_conflict"]
+        check("w36k2-green-resolution-case-serialized-in-log",
+              bool(w36k2_minted) and bool(w36k2_vendor) and bool(w36k2_anon)
+              and bool(w36k2_conflict)
+              and all(r.get("resolution_case") == "minted" for r in w36k2_conflict),
+              f"records carrying resolution_case in WORLD B's live log: "
+              f"minted={len(w36k2_minted)} vendor={len(w36k2_vendor)} "
+              f"anonymous={len(w36k2_anon)}; the w36k conflict refusal record(s) "
+              f"(event=refusal disposition=minted_actor_conflict, must carry "
+              f"resolution_case='minted'): {w36k2_conflict!r}",
+              failures)
+
+        # W36l-m: the dispatch verb's target-scoping gate (round-2 CRITICAL, ledger rows
+        # 1525/1526 -- the live-deployment incident: the verb's former default resolved
+        # deployment.json relative to the SCRIPT's own repo, so a scratch-world exercise wrote
+        # rows 1521-1524 to the real ledger). RED: a bare invocation with neither
+        # --deployment nor LEDGER_DEPLOYMENT refuses, teaching both spellings, before ANY
+        # config read or network touch. GREEN: the explicit form mints end-to-end against
+        # WORLD B's own scratch server, and close retires the delegate.
+        print("=== w36l-red-dispatch-verb-unscoped-invocation-refused ===")
+        w36l_env = {k: v for k, v in os.environ.items()
+                    if k not in ("LEDGER_DEPLOYMENT", "PICKUP_DEPLOYMENT",
+                                 # an ambient minted/vendor identity in THIS harness's own env
+                                 # would ride into the verb's own boundary calls and change the
+                                 # leg's meaning -- stripped so the witness is self-contained
+                                 "AUTOHARN_MINTED_PRINCIPAL", "PGOPTIONS")}
+        w36l_env["LED_ACTOR"] = "author"
+        w36l = subprocess.run(
+            [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+             "mint", "w36l-delegate", "1"],
+            capture_output=True, text=True, env=w36l_env, timeout=60)
+        check("w36l-red-dispatch-verb-unscoped-invocation-refused",
+              w36l.returncode == 2
+              and "REFUSED -- no target deployment named" in w36l.stderr
+              and "--deployment" in w36l.stderr and "LEDGER_DEPLOYMENT" in w36l.stderr,
+              f"bare `dispatch mint` with no --deployment and no LEDGER_DEPLOYMENT: "
+              f"rc={w36l.returncode} stderr={w36l.stderr[-600:]!r} (must refuse, teach both "
+              f"spellings, and touch NOTHING -- the former script-relative default is the "
+              f"live-deployment incident's own mechanism)",
+              failures)
+
+        # WORLD B's chain deliberately ends at s43 (CHAIN_B) and carries no s64 delegation
+        # vocabulary, so the mint verb's dispatched-by edge cannot land there -- this leg
+        # scaffolds its OWN throwaway --new-world (full chain through s65, the same move
+        # seen-red/pickup-connection-failure-silent-empty already uses), serves it, and tears
+        # it down self-contained.
+        print("=== w36m-green-dispatch-mint-close-explicit-deployment-end-to-end ===")
+        w36m_world = f"svcfxw36m{RUN_SUFFIX}"
+        teardown(w36m_world)
+        w36m_tmp = Path(tempfile.mkdtemp(prefix="svcfxw36m-"))
+        w36m_world_dir = w36m_tmp / w36m_world
+        w36m_proc = None
+        try:
+            r36m = sh(["bash", str(NEW_PROJECT), str(w36m_world_dir), "--new-world", w36m_world,
+                       "--db", PGDB, "--host", PGHOST])
+            if r36m.returncode != 0:
+                raise RuntimeError(f"w36m --new-world scaffold FAILED: "
+                                   f"{r36m.stdout[-800:]} {r36m.stderr[-800:]}")
+            w36m_dep = w36m_world_dir / "deployment.json"
+            w36m_proc = serve_existing_world(w36m_dep, w36m_tmp)
+            w36m_env = dict(w36l_env)
+            w36m_env["LEDGER_DEPLOYMENT"] = str(w36m_dep)
+            w36m_mint = subprocess.run(
+                [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+                 "mint", "w36m-delegate", "1", "--purpose", "w36m end-to-end scoping witness"],
+                capture_output=True, text=True, env=w36m_env, timeout=120)
+            w36m_delegate_id = psql_tuples(
+                f"SELECT id FROM {w36m_world}_kernel.principal WHERE name = 'w36m-delegate';").strip()
+            w36m_edge = psql_tuples(
+                f"SELECT principal_relation, delegation_redelegate_depth "
+                f"FROM {w36m_world}.ledger "
+                f"WHERE kind = 'principal_relation_asserted' "
+                f"AND principal_subject = {w36m_delegate_id or 'NULL'} "
+                f"AND principal_relation = 'dispatched-by';") if w36m_delegate_id else ""
+            w36m_close = subprocess.run(
+                [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+                 "close", "w36m-delegate", "w36m witness done",
+                 "--deployment", str(w36m_dep)],
+                capture_output=True, text=True, env=w36l_env, timeout=120)
+            w36m_standing = psql_tuples(
+                f"SELECT count(*) FROM {w36m_world}.ledger WHERE kind = 'principal_suspended' "
+                f"AND principal_subject = {w36m_delegate_id or 'NULL'};").strip() if w36m_delegate_id else ""
+            check("w36m-green-dispatch-mint-close-explicit-deployment-end-to-end",
+                  w36m_mint.returncode == 0 and bool(w36m_delegate_id)
+                  and f"AUTOHARN_MINTED_PRINCIPAL={w36m_delegate_id}" in w36m_mint.stdout
+                  and "dispatched-by|0" in w36m_edge
+                  and w36m_close.returncode == 0 and w36m_standing == "1",
+                  f"mint via LEDGER_DEPLOYMENT (env spelling) against full-chain scratch world "
+                  f"{w36m_world}: rc={w36m_mint.returncode} "
+                  f"stdout={w36m_mint.stdout[-300:]!r} stderr={w36m_mint.stderr[-300:]!r}; "
+                  f"delegate id={w36m_delegate_id!r}; dispatched-by edge "
+                  f"(relation|depth)={w36m_edge!r} (depth 0 = no-redelegate default); close via "
+                  f"--deployment (flag spelling): rc={w36m_close.returncode} "
+                  f"stderr={w36m_close.stderr[-300:]!r}; principal_suspended rows for the "
+                  f"delegate={w36m_standing!r} -- BOTH explicit spellings witnessed, against "
+                  f"the scratch world only",
+                  failures)
+        finally:
+            if w36m_proc is not None:
+                stop_server(w36m_proc)
+            teardown(w36m_world)
+            shutil.rmtree(w36m_tmp, ignore_errors=True)
 
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens

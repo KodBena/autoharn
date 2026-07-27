@@ -126,6 +126,36 @@ class RequestContext:
     client_addr: str | None
     deployment: str | None = None
     principal: str | None = None
+    # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2 (ledger row 1471's dispatch-mechanics build):
+    # the identity resolution case this request settled on, recorded so the diagnostic log's L1
+    # context carries "which §2 resolution case fired" (the spec's own words) -- one of
+    # "minted", "vendor", or "anonymous" (see `bind_identity` below); `None` before identity
+    # parsing has run (never observed on a completed request -- `_diagnostic_logging_middleware`
+    # calls `bind_identity` unconditionally, on every request, before `call_next`).
+    resolution_case: str | None = None
+    # The vendor stamp's own five GUC values (app.vendor_session/agent/ts/hmac/invocation),
+    # forwarded to `_psql`'s per-request preamble when present -- `None` when this request
+    # carried no (or an incomplete) vendor stamp. Kept as a single dict rather than five
+    # top-level fields: `_psql` only ever needs "is there a vendor stamp, and if so its whole
+    # value set", never a single GUC in isolation.
+    vendor_stamp: dict[str, str] | None = None
+
+
+def bind_identity(resolution_case: str, *, principal: str | None = None,
+                   vendor_stamp: dict[str, str] | None = None) -> None:
+    """Mutates the CURRENT request's own `RequestContext` in place (the SAME `bind_deployment`
+    pattern this module already established -- see its own docstring for why mutating the
+    shared object, never `REQUEST_CONTEXT.set()` from inside a threadpool, is the safe way to
+    extend context after the async middleware has already minted it). Called from
+    `serving/boundary_service.py`'s identity-parsing pass, itself called from the SAME async
+    middleware that mints `RequestContext` -- before `call_next`, so every downstream route
+    handler and every `_psql` call sees the resolved identity. A no-op when no request context
+    is bound (a direct, non-HTTP call site)."""
+    ctx = REQUEST_CONTEXT.get()
+    if ctx is not None:
+        ctx.resolution_case = resolution_case
+        ctx.principal = principal
+        ctx.vendor_stamp = vendor_stamp
 
 
 REQUEST_CONTEXT: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
@@ -341,6 +371,12 @@ def log_event(event: str, *, level: str = "INFO", **fields: Any) -> None:
             merged["deployment"] = ctx.deployment
         if ctx.principal is not None:
             merged["principal"] = ctx.principal
+        # Which spec-§2 identity resolution case fired (fresh-context review MODERATE, ledger
+        # row 1525: the field was set on the context but never landed in any record) --
+        # enriched here, the one home, so every event a bound-identity request emits carries it
+        # and `jq 'select(.resolution_case=="minted")'` works across the whole series.
+        if ctx.resolution_case is not None:
+            merged["resolution_case"] = ctx.resolution_case
     merged.update(fields)  # explicit call-site fields always win over context enrichment
 
     required = EVENT_REQUIRED_FIELDS[event]

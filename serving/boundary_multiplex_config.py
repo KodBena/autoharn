@@ -60,6 +60,12 @@ validation pass every other axis of this file already goes through -- before the
 binds (spec §3's own "the WHOLE file validates before the socket binds", extended to the one
 new key rather than carving out an exception for it).
 
+IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c):
+one new OPTIONAL top-level key, `identity_enforcement` -- "grace" (default) or "enforce", the
+anonymous-authority-bearing-write refusal's own posture. Same whole-file validation pass,
+same before-the-socket-binds discipline, same import-the-vocabulary-don't-duplicate-it
+relationship this module already has with `boundary_diagnostic_log.LEVELS` for `log_level`.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -92,10 +98,22 @@ _DEPLOYMENT_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 # `pgschema`/`pgkern` join the spec's own three-key example.
 _REQUIRED_ENTRY_KEYS: frozenset[str] = frozenset({"pghost", "pgdatabase", "pguser", "pgschema", "pgkern"})
 
-# The ONLY two top-level keys this file recognizes, as of the diagnostic-logging spec's
-# `log_level` addition -- named ONCE (ADR-0012 P1), consulted by `load_multiplex_config`'s own
-# unknown-top-level-key check below rather than an inline literal `{"deployments"}` set.
-_TOP_LEVEL_KEYS: frozenset[str] = frozenset({"deployments", "log_level"})
+# The ONLY three top-level keys this file recognizes, as of the dispatch-mechanics spec's
+# `identity_enforcement` addition -- named ONCE (ADR-0012 P1), consulted by
+# `load_multiplex_config`'s own unknown-top-level-key check below rather than an inline literal
+# `{"deployments"}` set.
+_TOP_LEVEL_KEYS: frozenset[str] = frozenset({"deployments", "log_level", "identity_enforcement"})
+
+# IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c,
+# "rung (a)"): the anonymous-write refusal's own posture, a two-member closed vocabulary --
+# "grace" (accepts an anonymous authority-bearing write unchanged, byte-identical -- the
+# DEFAULT, so the operator surface is never broken mid-migration) or "enforce" (refuses an
+# anonymous authority-bearing write with a typed, teaching disposition). Named here, once
+# (ADR-0012 P1), so `serving/boundary_service.py` imports the vocabulary rather than carrying a
+# second copy that could drift -- the same relationship this module already has with
+# `boundary_diagnostic_log.LEVELS`.
+IDENTITY_ENFORCEMENT_POSTURES: frozenset[str] = frozenset({"grace", "enforce"})
+DEFAULT_IDENTITY_ENFORCEMENT = "grace"
 
 
 class MultiplexConfigError(Exception):
@@ -118,7 +136,7 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     that also needs the resolved log level (`serving/boundary_service.py`'s own `main()`) calls
     `load_multiplex_config_with_log_level` instead, rather than this file growing a second,
     diverging validation path."""
-    deployments, _log_level = _load_and_validate(path)
+    deployments, _log_level, _identity_enforcement = _load_and_validate(path)
     return deployments
 
 
@@ -130,13 +148,29 @@ def load_multiplex_config_with_log_level(
     `load_multiplex_config` above (never a second, independent parse of the same file), also
     returning the resolved `log_level` (already validated against
     `boundary_diagnostic_log.LEVELS`, defaulted to `boundary_diagnostic_log.DEFAULT_LEVEL` when
-    the TOML omits the key entirely)."""
+    the TOML omits the key entirely). Kept byte-for-byte backward compatible (discards the
+    dispatch-mechanics spec's `identity_enforcement` half) for every EXISTING caller; a caller
+    that also needs that posture calls `load_multiplex_config_with_diagnostics` instead."""
+    deployments, log_level, _identity_enforcement = _load_and_validate(path)
+    return deployments, log_level
+
+
+def load_multiplex_config_with_diagnostics(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str]:
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §3's own entry point -- SAME single validation
+    pass as the two loaders above (never a second, independent parse of the same file), also
+    returning the resolved `identity_enforcement` posture (already validated against
+    `IDENTITY_ENFORCEMENT_POSTURES`, defaulted to `DEFAULT_IDENTITY_ENFORCEMENT` -- "grace" --
+    when the TOML omits the key entirely). `serving/boundary_service.py`'s `main()` calls this
+    one (superseding its prior call to `load_multiplex_config_with_log_level`, which stays for
+    any other caller that has not yet been touched by this build)."""
     return _load_and_validate(path)
 
 
 def _load_and_validate(
     path: str | Path,
-) -> tuple[dict[str, deployment_record.DeploymentRecord], str]:
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str]:
     """The ONE home (ADR-0012 P1) both public loaders above route through -- every validation
     axis (unknown top-level key, missing/unknown/malformed `deployments` entry, an
     unrecognized `log_level` value) runs in this SAME whole-file pass, before either public
@@ -174,6 +208,15 @@ def _load_and_validate(
             f"FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2 -- unknown values refuse loudly, "
             f"before the socket ever binds; omit the key entirely for the default, "
             f"{boundary_diagnostic_log.DEFAULT_LEVEL!r}).")
+
+    identity_enforcement = raw.get("identity_enforcement", DEFAULT_IDENTITY_ENFORCEMENT)
+    if not isinstance(identity_enforcement, str) or identity_enforcement not in IDENTITY_ENFORCEMENT_POSTURES:
+        raise MultiplexConfigError(
+            f"boundary-multiplex config at {p}: 'identity_enforcement' = "
+            f"{identity_enforcement!r} is not one of {sorted(IDENTITY_ENFORCEMENT_POSTURES)} "
+            f"(design/FABLE-DISPATCH-MECHANICS-SPEC.md §3 -- unknown values refuse loudly, "
+            f"before the socket ever binds; omit the key entirely for the default, "
+            f"{DEFAULT_IDENTITY_ENFORCEMENT!r}).")
 
     if "deployments" not in raw:
         raise MultiplexConfigError(
@@ -221,4 +264,4 @@ def _load_and_validate(
         result[name] = deployment_record.DeploymentRecord(
             db=entry["pgdatabase"], host=entry["pghost"], schema=entry["pgschema"],
             kern=entry["pgkern"], role=entry["pguser"], name=name)
-    return result, log_level
+    return result, log_level, identity_enforcement

@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""dispatch — the umbrella-CLI entry point for `autoharn dispatch` (design/
+FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger rows 1463/1467/1468/1471). An autoharn-repo-specific
+operator verb (same footing as `migrate`/`fixture-sweep`/`attest-tags`: it mints/retires THIS
+repo's OWN dispatched-agent principals against THIS repo's own deployment.json — a fresh
+scaffolded world gets its own dispatch verb only if a future scaffold-migration pass adds it;
+not attempted here).
+
+ALL THE ACTUAL LOGIC lives in tools/dispatch_mechanics.py — see that module's own docstring.
+This file's only jobs, mirroring libexec/autoharn/fixture-sweep's own shape (the established
+precedent for a Python-native, non-.tmpl-delegating repo-root verb): the fixture-sandbox check,
+then pass argv through unmodified.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Two levels up from libexec/autoharn/ to the repo root — same climb every relocated verb uses.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "filing"))
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py — the Python-side fixture-sandbox check)
+sys.path.insert(0, str(_REPO_ROOT / "tools"))
+import dispatch_mechanics  # noqa: E402  (tools/dispatch_mechanics.py — the actual mint/close logic)
+
+
+def main(argv: list[str]) -> int:
+    # EXEMPTION, narrow and precedented (see ./autoharn's own _fixture_sandbox_gate comment and
+    # libexec/autoharn/fixture-sweep's identical exemption): a bare --help/-h/no-args never
+    # touches a ledger or a deployment — dispatch_mechanics.main prints its own usage and
+    # returns, so it is exempt from the marker check exactly like every other repo-root verb's
+    # --help.
+    if argv not in ([], ["--help"], ["-h"], ["help"]):
+        fixture_sandbox.check("libexec/autoharn/dispatch " + " ".join(argv))
+    return dispatch_mechanics.main(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
