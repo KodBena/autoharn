@@ -682,6 +682,21 @@ def main() -> int:
               f"server tail: {out_pre[-300:] if not up else '(server came up cleanly)'}",
               failures)
 
+        # W33 (row 1489's tracked deferral, landed post-merge of the uvicorn ISO-timestamp
+        # change): every uvicorn startup line in the captured server output must carry the
+        # `_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP` prefix (%(asctime)s with
+        # datefmt %Y-%m-%dT%H:%M:%S%z). Asserted on the WORLD PRE server's tail -- the config
+        # is applied at launch, before any deployment/capability logic, so the pre-s43 world
+        # is as good a witness as any. Guarded against vacuity: the startup lines must exist.
+        ts_prefix = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4} ")
+        startup_lines = [ln for ln in out_pre.splitlines()
+                         if "Uvicorn running on" in ln or "Application startup complete" in ln]
+        check("w33-uvicorn-log-lines-carry-iso-timestamp",
+              len(startup_lines) >= 2 and all(ts_prefix.match(ln) for ln in startup_lines),
+              f"startup lines found={len(startup_lines)}; "
+              f"specimens={startup_lines[:2] if startup_lines else out_pre[-300:]!r}",
+              failures)
+
         # ============================= WORLD B (s43 head) =============================
         print(f"== scaffolding classic world {world_b} (chain ends {CHAIN_B[-1]}) ==")
         wb = scaffold_classic(world_b, CHAIN_B)
@@ -2126,7 +2141,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W32 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W33 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

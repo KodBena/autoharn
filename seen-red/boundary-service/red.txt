@@ -286,3 +286,15 @@ x2, W14, W27 x3); W8 and the W9 streaming-abort leg UNEXERCISED, named as always
 lines in the full run's own output. Scratch worlds (svcfxpre/svcfxb/svcfxnocap/svcfxw7ok,
 pid-suffixed) confirmed absent from `pg_namespace` after teardown.
 `HARNESS_PGHOST=192.168.122.1 python3 seen-red/boundary-service/run_fixtures.py` exit 0.
+
+2026-07-27 -- W33 added (ledger row 1489's tracked deferral, landed after the kind-teach merge
+confirmed no overlap with the uvicorn-timestamps change): every uvicorn startup line in the
+captured WORLD PRE server output must carry the `_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP` prefix
+(%(asctime)s, datefmt %Y-%m-%dT%H:%M:%S%z), vacuity-guarded (>=2 startup lines must exist).
+WITNESSED green same day, specimens from the run:
+  2026-07-27T16:15:51+0200 INFO:     Application startup complete.
+  2026-07-27T16:15:51+0200 INFO:     Uvicorn running on http://127.0.0.1:56325 (...)
+Full-bank run ALL CASES OK, exit 0 (W1-W7, W9-W33 live; W8 and the W9 streaming-abort leg
+UNEXERCISED, named as always). No RED leg exists for this case by construction: the timestamp
+prefix is a launch-time log_config, and its absence-shape (the pre-change format) is exactly
+what the check refutes -- reverting serving/boundary_service.py's log_config is the red.
