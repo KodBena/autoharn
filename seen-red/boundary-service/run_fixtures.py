@@ -208,6 +208,15 @@ EXPECTED_ROUTES = {
     ("POST", "/d/{deployment}/write/obligation_revoke"),
     ("GET", "/d/{deployment}/artifacts/{hash}"), ("GET", "/d/{deployment}/artifacts/{hash}/stat"),
     ("POST", "/d/{deployment}/artifacts"),
+    # design/FABLE-MISSIVES-KERNEL-SPEC.md (kernel/lineage/s58-missive-substrate.sql, ledger row
+    # 1263): the seventh s43-family write surface, shipped wired into WRITE_SURFACES but never
+    # added to THIS set -- a second pre-existing hazard fixed here in passing (same reasoning as
+    # the read-surface amendment's own comment immediately above: this delta already touches this
+    # exact file's EXPECTED_ROUTES for an unrelated reason, and CLAUDE.md's engineering-
+    # responsibility rule does not let a hazard in reach of that touch go unfixed).
+    ("POST", "/d/{deployment}/write/missive_dispose"),
+    # Ledger row 1480 (this commission): the valid-kinds teaching restoration's own new route.
+    ("GET", "/d/{deployment}/kinds"),
 }
 
 

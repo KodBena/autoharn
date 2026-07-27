@@ -247,6 +247,25 @@ class MetaResponse(BaseModel):
     authn_mode: str = Field(default=AUTHN_MODE, description="see HealthResponse.authn_mode")
 
 
+class KindsResponse(BaseModel):
+    """Ledger row 1480 (maintainer ruling on finding row 1479): restoring, on the SERVED
+    transport, the valid-kinds TEACHING the legacy direct-psql `led` gave on a
+    `ledger_kind_check` refusal -- a fresh small read surface, not a `/meta` field, because the
+    fact it reports (the kernel's `ledger_kind_check` CHECK constraint's live vocabulary) is
+    neither a VIEW_REGISTRY-shaped relation (no natural key, nothing to paginate) nor one of
+    `/meta`'s three existing v1-scoped facts (which the read-surface amendment's own spec fixed
+    at three, deliberately not superset-friendly -- see MetaResponse's own docstring). SSOT
+    discipline (row 1480, verbatim): "never a hardcoded copy anywhere" -- `kinds` is queried
+    LIVE from `pg_get_constraintdef` every request (no caching, matching this whole service's
+    §5 discipline), never a Python-side literal list that could drift from a later lineage
+    delta's own re-issue of the constraint (s22, s25 both widened it additively)."""
+
+    kinds: list[str] = Field(description="ledger_kind_check's live vocabulary, in the order the constraint definition itself lists them (never sorted, never hardcoded) -- empty if the constraint could not be found under this exact name on this deployment's own ledger table (an honest empty list, not an error: a caller sees zero valid kinds and can decide for itself whether that is surprising)")
+    boundary_version: str = Field(description="see MetaResponse.boundary_version -- the same service-owned fact, repeated here so a caller that only calls /kinds still gets it")
+    protocol_version: str = Field(default=WIRE_PROTOCOL_VERSION, description="see HealthResponse.protocol_version")
+    authn_mode: str = Field(default=AUTHN_MODE, description="see HealthResponse.authn_mode")
+
+
 class LedgerWriteIntFields(BaseModel):
     """A5.2's enumeration authority for `POST /write/ledger` (`kernel.ledger_write`): the
     bigint-typed `ledger` columns a payload MAY name (kernel/lineage/s15-schema.sql's

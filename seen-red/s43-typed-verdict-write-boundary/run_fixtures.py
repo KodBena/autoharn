@@ -574,11 +574,16 @@ def main() -> int:
             if rnw.returncode == 0 else None
         rrefuse = led(nwdir, "bogus_kind", "x") if rnw.returncode == 0 else None
         refuse_out = (rrefuse.stdout + rrefuse.stderr) if rrefuse else ""
-        # cli-rebase-fixture-repairs (row 1170): the boundary's own refusal text no longer
-        # includes a friendly "valid kinds" list -- it passes through the raw postgres
+        # cli-rebase-fixture-repairs (row 1170) recorded the boundary's own refusal text as no
+        # longer including a friendly "valid kinds" list -- it passed through the raw postgres
         # CHECK-violation text ("... violates check constraint \"ledger_kind_check\"") verbatim
-        # instead. Wording drift, not a functional regression: the write is still refused, still
-        # attributed to the kernel write boundary, still names the CHECK that fired.
+        # instead, a wording drift rather than a functional regression (the write was still
+        # refused, still attributed to the kernel write boundary, still named the CHECK that
+        # fired). 2026-07-27 RESTORED (ledger row 1480, maintainer ruling on row 1479's finding):
+        # the "valid kinds" list is back, served via GET /d/{deployment}/kinds plus
+        # boundary_cli_client.py's own re-teach pass (see seen-red/contemporaneity-audit's case l
+        # for the dedicated witness) -- asserted here too, this fixture's own real led invocation
+        # already exercising exactly this path.
         check("new-world-s43-birth",
               rnw.returncode == 0 and det_nw == "t"
               and principals == "author,reviewer,commissioner,write-boundary"
@@ -586,7 +591,8 @@ def main() -> int:
               and rfirst is not None and rfirst.returncode == 0
               and rrefuse is not None and rrefuse.returncode != 0
               and "REFUSED by the kernel write boundary" in refuse_out
-              and "ledger_kind_check" in refuse_out,
+              and "ledger_kind_check" in refuse_out
+              and "valid kinds" in refuse_out,
               f"scaffold exit={rnw.returncode}; detect={det_nw!r}; principals="
               f"{principals!r} (write-boundary birth-registered); {login_decl} standing "
               f"declarations (role + login, the s43 dual declaration); first ordinary "

@@ -406,6 +406,7 @@ from boundary_models import (  # noqa: E402
     DeploymentSaturated,
     HealthResponse,
     InfraFailure,
+    KindsResponse,
     LedgerWriteIntFields,
     MetaResponse,
     MissiveDisposeWriteIntFields,
@@ -428,7 +429,21 @@ from boundary_models import (  # noqa: E402
 # table -- no route-table growth of its own kind, just a new dict entry; GET /artifacts/{hash},
 # GET /artifacts/{hash}/stat, POST /artifacts -- genuinely new route SHAPES, unlike
 # VIEW_REGISTRY's own registry-only growths, which this version deliberately does NOT track).
-BOUNDARY_SERVICE_VERSION = "1.2.0"
+# Bumped AGAIN to 1.3.0 for TWO route-shape additions this build found sitting on top of each
+# other, both fixed here rather than only the one this commission named (CLAUDE.md's hazard-in-
+# reach rule -- this exact version comment and the route table below were already being touched):
+# (a) design/FABLE-MISSIVES-KERNEL-SPEC.md's `POST /write/missive_dispose` (kernel/lineage/
+# s58-missive-substrate.sql, ledger row 1263) shipped wired into WRITE_SURFACES but this version
+# literal, this comment, and `seen-red/boundary-service/run_fixtures.py`'s own W12 EXPECTED_ROUTES
+# were never updated for it -- a real, pre-existing doc/fixture drift, not touched by this
+# route's own build, found and closed here since this build already has this exact file, this
+# exact comment block, and that exact fixture's EXPECTED_ROUTES set open; (b) `GET
+# /d/{deployment}/kinds` (ledger row 1480: the maintainer's ruling restoring the legacy direct-
+# psql `led`'s dropped valid-kinds TEACHING on the SERVED transport, this commission) -- a
+# genuinely new route SHAPE, not a VIEW_REGISTRY-style registry growth (see `KindsResponse`'s own
+# docstring in boundary_models.py for why this earns a dedicated route rather than a `/meta`
+# field or a VIEW_REGISTRY entry).
+BOUNDARY_SERVICE_VERSION = "1.3.0"
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -1063,6 +1078,46 @@ def _lineage_head(cfg: BoundaryConfig) -> str | None:
             break
         head = stem
     return head
+
+
+def _kind_vocabulary(cfg: BoundaryConfig) -> list[str]:
+    """`GET /d/{deployment}/kinds` (ledger row 1480, restoring the legacy direct-psql `led`'s own
+    `_led_kind_refusal_teach` re-query -- see that function's own comment, bootstrap/templates/
+    legacy-led.tmpl at the pre-retirement commit 1ddb66a, for the query this mirrors exactly): the
+    kernel's `ledger_kind_check` CHECK constraint on `{cfg.schema}.ledger`, read back via
+    `pg_get_constraintdef` and parsed with the SAME `regexp_matches(..., '''([a-z_]+)''::text',
+    'g')` pattern the legacy tool used -- never a hardcoded Python-side copy of the vocabulary
+    (s22/s25 have each additively widened this constraint once already; a literal list here would
+    silently drift out of sync with the next such delta, exactly the class the legacy tool's own
+    comment names as the reason it re-queries live rather than hand-maintaining a second copy).
+
+    `WITH ORDINALITY` + `array_agg(... ORDER BY ord)` preserves the constraint text's own member
+    order (the same order the legacy tool's `string_agg` produced) -- this is a presentation
+    nicety, not a semantic one (CHECK ... IN (...) membership has no order), but a stable,
+    reproducible order over an arbitrary one is the honest smaller choice.
+
+    Returns an EMPTY list if no constraint named exactly `ledger_kind_check` is found on
+    `{cfg.schema}.ledger` -- not an error: `ledger_kind_check` has carried this exact name since
+    s15 (Postgres's own default naming for a single-column CHECK, `<table>_<column>_check`,
+    already produces it un-renamed), so every world this service could possibly be pointed at
+    carries it; an empty result names a genuinely unexpected deployment shape rather than
+    manufacturing a capability-absent refusal for a constraint that is, in practice, always
+    present. The caller (this route's own handler) reports the empty list as-is; a rebased CLI
+    shim's own re-teach helper (serving/boundary_cli_client.py) treats an empty list as "could
+    not determine the vocabulary" and says so honestly rather than printing a teach block with
+    nothing in it."""
+    rows = _query_json(
+        cfg,
+        f"SELECT coalesce(jsonb_agg(t.k ORDER BY t.ord), '[]'::jsonb) FROM "
+        f"(SELECT m.k[1] AS k, m.ord FROM pg_catalog.pg_constraint con "
+        f"JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid "
+        f"JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace "
+        f"CROSS JOIN LATERAL regexp_matches(pg_get_constraintdef(con.oid), "
+        f"'''([a-z_]+)''::text', 'g') WITH ORDINALITY AS m(k, ord) "
+        f"WHERE con.conname = 'ledger_kind_check' AND con.contype = 'c' "
+        f"AND ns.nspname = '{cfg.schema}' AND rel.relname = 'ledger') t;",
+    )
+    return list(rows) if isinstance(rows, list) else []
 
 
 def _regclass_exists(cfg: BoundaryConfig, qualified_name: str) -> bool:
@@ -2124,6 +2179,26 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         return MetaResponse(
             known_views=sorted(VIEW_REGISTRY),
             lineage_head=_lineage_head(cfg),
+            boundary_version=BOUNDARY_SERVICE_VERSION,
+        )
+
+    @app.get("/d/{deployment}/kinds", response_model=KindsResponse)
+    def kinds(deployment: str) -> Response:
+        # Ledger row 1480 (maintainer ruling on row 1479's finding): restores, on THIS served
+        # transport, the valid-kinds TEACHING the legacy direct-psql `led` gave on a
+        # `ledger_kind_check` refusal -- SSOT is the kernel's own live constraint (see
+        # `_kind_vocabulary`'s own docstring for the exact query and why this is a dedicated
+        # route rather than a VIEW_REGISTRY entry or a `/meta` field). No capability gate: unlike
+        # `/credited` (s44) or `/standing/principals` (s40), `ledger_kind_check` has carried this
+        # exact name since s15 (this repo's very first lineage delta with a `ledger` table) --
+        # every deployment this service could serve carries it, so there is no "world predates
+        # this delta" leg to gate on; `_kind_vocabulary`'s own empty-list fallback is the honest
+        # answer for the deployment shape that somehow lacks it, not a capability_absent refusal.
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        return KindsResponse(
+            kinds=_kind_vocabulary(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
         )
 
