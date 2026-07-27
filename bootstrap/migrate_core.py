@@ -876,25 +876,35 @@ def _confirm(dep: DeploymentRecord, missing: list[str]) -> None:
 
 def _record_in_deployment_ledger(deployment_dir: Path, missing: list[str], backup_path: Path,
                                   chain_note: str) -> None:
-    led = deployment_dir / "led"
-    if not led.is_file():
-        print(f"migrate: NOTE -- {led} does not exist, so the migration decision was NOT "
-              f"recorded in this deployment's own ledger (this deployment predates the led "
-              f"shim, or is not a scaffolded autoharn world). Record it by hand if this "
-              f"deployment keeps a ledger elsewhere.", file=sys.stderr)
+    # root-shim-pruning residue sweep (ledger row 1357, 2026-07-27): a bare per-verb `led` shim
+    # only exists next to deployment.json for a world scaffolded BEFORE the §6 amendment (rows
+    # 1365/1366/1367) -- "a world scaffolded before this migration keeps its ten shims
+    # untouched" (CLAUDE.md). A world scaffolded on/after that amendment has ONE `autoharn`
+    # dispatcher instead -- a migration target may be either shape, so detect rather than assume.
+    led_bare = deployment_dir / "led"
+    led_dispatcher = deployment_dir / "autoharn"
+    if led_bare.is_file() and os.access(led_bare, os.X_OK):
+        led_argv, led_label = [str(led_bare)], str(led_bare)
+    elif led_dispatcher.is_file() and os.access(led_dispatcher, os.X_OK):
+        led_argv, led_label = [str(led_dispatcher), "led"], f"{led_dispatcher} led"
+    else:
+        print(f"migrate: NOTE -- neither {led_bare} nor {led_dispatcher} exists, so the "
+              f"migration decision was NOT recorded in this deployment's own ledger (this "
+              f"deployment predates either shim shape, or is not a scaffolded autoharn world). "
+              f"Record it by hand if this deployment keeps a ledger elsewhere.", file=sys.stderr)
         return
     statement = (
         f"migrate: applied {len(missing)} kernel delta(s) [{', '.join(missing)}] via "
         f"bootstrap/migrate.sh -- rehearsal PASS, live apply PASS, post-apply re-verify PASS "
         f"({chain_note}); backup={backup_path}"
     )
-    proc = subprocess.run([str(led), "decision", statement], capture_output=True, text=True)
+    proc = subprocess.run([*led_argv, "decision", statement], capture_output=True, text=True)
     if proc.returncode != 0:
         print(f"migrate: WARNING -- the migration succeeded, but recording it in this "
               f"deployment's own ledger failed:\n{proc.stderr.strip()}\n"
-              f"Record it by hand: {led} decision \"{statement}\"", file=sys.stderr)
+              f"Record it by hand: {led_label} decision \"{statement}\"", file=sys.stderr)
     else:
-        print(f"migrate: recorded in this deployment's own ledger via {led} decision.")
+        print(f"migrate: recorded in this deployment's own ledger via {led_label} decision.")
 
 
 # --------------------------------------------------------------------------------------------

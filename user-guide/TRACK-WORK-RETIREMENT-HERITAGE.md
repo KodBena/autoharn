@@ -80,8 +80,8 @@ Ensure-running removed the ceremony, so the tension dissolved rather than resolv
 bootstrap/new-project.sh <project-dir> --profile tracker --name <name> --db <db> --host <host> \
     [--schema <schema>] [--kern <kern>] [--role <role>] [--force]
 cd <project-dir>
-./led work open first-item "Describe the first thing to track"   # boundary auto-spawns
-./pickup
+./autoharn led work open first-item "Describe the first thing to track"   # boundary auto-spawns
+./autoharn pickup
 ```
 
 Point for point, what changed and what survived:

@@ -65,8 +65,8 @@ today (in that project) only by the README paragraph a reader has to already kno
 The two statements below are that same boundary, declared structurally instead:
 
 ```sh
-./led decision "taxon: license | mit-derivative | backend/qeubo/** | upstream qEUBO derivative"
-./led decision "interface: license | backend/qeubo/__init__.py | the documented public surface"
+./autoharn led decision "taxon: license | mit-derivative | backend/qeubo/** | upstream qEUBO derivative"
+./autoharn led decision "interface: license | backend/qeubo/__init__.py | the documented public surface"
 ```
 
 Read as English: *under the `license` taxonomy, everything matching `backend/qeubo/**` is class
@@ -110,7 +110,7 @@ audit engine, unbuilt as of this page, so a `PATTERNS` field is accepted on shap
 example (a `arch-layer` taxonomy, distinguishing a domain layer from its adapters):
 
 ```sh
-./led decision "taxon: arch-layer | domain | src/domain/** | pure business logic, no I/O and no framework imports"
+./autoharn led decision "taxon: arch-layer | domain | src/domain/** | pure business logic, no I/O and no framework imports"
 ```
 
 ### `interface:` — declaring a sanctioned crossing point
@@ -135,7 +135,7 @@ names. `GLOSS` is free text, non-empty, naming what the interface is for a human
 Copy-paste example (continuing the `arch-layer` taxonomy above):
 
 ```sh
-./led decision "interface: arch-layer | src/domain/ports.py | the only module an adapter may import from the domain layer"
+./autoharn led decision "interface: arch-layer | src/domain/ports.py | the only module an adapter may import from the domain layer"
 ```
 
 ## Both grammars are validated at write time, before anything is stored

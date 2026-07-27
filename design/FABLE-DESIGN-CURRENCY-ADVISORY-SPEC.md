@@ -4,6 +4,7 @@
 ("when a design is fully discharged or superseded, it should automatically raise an
 advisory about its possible non-actuality"); the A:B:C loop runs on the build, not the
 proposal text. Removal condition: superseded by the build's merge record, or rejection. -->
+<!-- design-currency: status=in-build -->
 
 This document specifies a small advisory mechanism for the `design/` directory: a
 machine-readable currency header that design documents adopt when touched, and a gate
@@ -60,14 +61,22 @@ mechanical, none heuristic:
 
 1. **Discharge verification:** `discharged-by=<sha>` — advisory if the sha is not an
    ancestor of HEAD. `superseded-by=<path>` — advisory if the target does not exist or
-   its own status is not a live/historical token (a successor that was itself rejected
-   leaves the predecessor un-superseded in fact).
+   its own status is not a live, historical, or `discharged` token (amended 2026-07-27:
+   the build exposed that excluding `discharged` was backwards — a built-and-merged
+   successor is stronger confirmation than a merely-ratified one; `rejected` and
+   `superseded` successors stay excluded — a successor that was itself rejected leaves
+   the predecessor un-superseded in fact, and a superseded successor means the header
+   should point at the END of the chain).
 2. **Dependency drift:** for every doc with a live status (`proposed`/`ratified`/
    `in-build`), advisory per `depends-on` target whose status is `superseded` or
    `rejected` (with both paths and both statuses in the message).
 3. **Stale-currency smell:** a doc whose status is `discharged`/`superseded`/`rejected`
-   but which still carries a `doc-attest-exempt` "Removal condition" marker — the
-   condition is due for action (the live specimen's exact shape).
+   — or `historical` while carrying a genuinely-resolved `superseded-by`/`discharged-by`
+   fact (amended 2026-07-27: the build surfaced that this spec's own live specimen is
+   seeded `historical`, so the original three-token letter missed it; the builder made
+   the spirit call and this amendment makes the letter match) — but which still carries
+   a `doc-attest-exempt` "Removal condition" marker: the condition is due for action
+   (the live specimen's exact shape).
 4. **Grammar:** malformed header, unknown token, missing required field — advisory
    naming the doc and the grammar line (a refusal that teaches, applied to the header).
 5. **Back-catalog honesty, one line, no per-doc noise:** "N of M design docs carry no
@@ -100,7 +109,9 @@ for headerless docs; exit 0 at commit polarity.
 
 Quantification universe, per
 [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Rule 2(a):
-the docs checked are exactly `design/*.md`; the statuses are the closed nine-token set;
+the docs checked are exactly `design/*.md`; the statuses are the closed EIGHT-token set
+§2 enumerates (this line originally said "nine", contradicting §2's own enumeration —
+the builder caught the inconsistency and implemented the eight; corrected 2026-07-27);
 the checks are the enumerated five. Not covered, stated honestly: docs outside design/
 (law/ has its own regime; user-guide/ is evergreen by construction); truth of a header
 against the LEDGER's record (the header is self-declared — a doc that lies about its

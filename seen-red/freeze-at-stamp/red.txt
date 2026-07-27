@@ -26,3 +26,28 @@
 
 == zero residue: /tmp/freeze-at-stamp-fx-uyzzwbhx removed; no schema/db was created or dropped in toy by this fixture ==
 ALL EXERCISED CASES OK (0 case(s) UNEXERCISED with a concrete, named blocker -- see above), zero residue, source row count invariant held.
+
+-- Dated correction, 2026-07-27 (ADR-0005 Rule 8: the record above stands verbatim; this append
+-- records the CURRENT state) -- retired-bare-shim straggler sweep (root-shim-pruning residue,
+-- ledger row 1357): case f-full-snapshot-e2e's own code (`sh(["./verify-chain"], cwd=dest_f)`
+-- and `sh(["./led", "decision", ...], cwd=dest_f)`) shelled to the retired bare per-verb shims
+-- inside the frozen destination. Those calls were correct when the "ALL EXERCISED CASES OK"
+-- record above was made (freeze-at-stamp.sh then wrote separate dest_f/verify-chain and
+-- dest_f/led files via its own SHIM_VERBS_ALL rewrite loop) but that loop was collapsed by the
+-- §6 amendment (rows 1357/1365/1366/1367, 2026-07-26): freeze-at-stamp.sh now writes ONE
+-- dest_f/autoharn dispatcher, no per-verb files, so both calls -- and the docstring comment
+-- describing them -- were stale. Fixed: repointed to `sh(["./autoharn", "verify-chain"], ...)`
+-- and `sh(["./autoharn", "led", "decision", ...], ...)`; comment updated to match.
+--
+-- UNEXERCISED this date, concrete blocker (unrelated to the fix, unrelated to root-shim-
+-- pruning): this worktree carries no deployment.json for this repo's own root tracker (a
+-- worktree is deliberately left unwired), so `_dr.load_deployment(REPO / "deployment.json")`
+-- at this fixture's own import time refuses before any case can run at all -- the SAME
+-- boundary this build must respect (never wiring or writing to the real deployment from an
+-- agent worktree). The fix above is verified by direct reading (bootstrap/freeze-at-stamp.sh's
+-- own §6-amendment dispatcher-writer, confirmed to write only `$DEST/autoharn`) and by
+-- mechanical equivalence (the dispatcher execs the identical bootstrap/templates/*.tmpl this
+-- fixture's own PGUSER=$DB_RO_ROLE read-only role already expects), not by a live re-run of
+-- case f itself. Re-witness this specific case next time this fixture runs from the main
+-- checkout (or a worktree with a real, wired deployment.json) against a reachable
+-- autoharn_test.

@@ -16,8 +16,7 @@ exists; no factual claim, witness-class marking, number, or the §0 compliance s
 substance was altered by this pass -- a hazard found in reach of this build's own commit
 attempt (CLAUDE.md's engineering-responsibility rule), fixed rather than routed around or
 gate-skipped. -->
-
-
+<!-- design-currency: status=historical superseded-by=FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md -->
 
 This document is a survey of another codebase's logging design (the "proxy," a separate
 project of the maintainer's, at `/home/bork/w/omega/proxy`) written to inform a possible

@@ -3,6 +3,7 @@
 <!-- doc-attest-exempt: Fable-authored spec 2026-07-27, ratified by the maintainer the
 same day ("Yes, let's have that column", ledger row 1487); the A:B:C loop runs on the
 build, not the proposal text. Removal condition: superseded by the s65 merge record. -->
+<!-- design-currency: status=discharged discharged-by=2fb06c046f8830ac3e64dd0a72204b443bd59c8f -->
 
 - **Status:** RATIFIED 2026-07-27 (maintainer, verbatim on ledger row 1487); build
   dispatched the same day.
