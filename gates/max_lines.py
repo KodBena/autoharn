@@ -227,7 +227,14 @@ BASELINE: dict[str, int] = {
     # CROSS_COLUMN_COUPLING_MANIFEST row (refusal_payload_digest_disposition_coupling) and the
     # refusal_payload_digest MANIFEST row's own reason text extended to cite the new coupling --
     # witnessed growth from two genuine new manifest entries, not unnoticed growth.
-    "gates/kind_shape_manifest_gate.py":           1635,
+    # bumped 1635 -> 1716 (s68, kernel/lineage/s68-typed-absence-dispositions.sql): two new
+    # MANIFEST rows (refusal_attempted_kind_disposition, refusal_attempted_actor_disposition,
+    # both two-way) plus two new CROSS_COLUMN_COUPLING_MANIFEST rows, PLUS the classifier itself
+    # gaining a genuinely new capability -- _CROSS_COLUMN_COUPLING_RE now captures a comparator
+    # (`=` or `<>`) instead of assuming `=`, since the kind-disposition coupling's own four-member
+    # vocabulary needs the inequality form (three of four members mean NULL, not one) -- witnessed
+    # growth from two new manifest entries plus one classifier capability, not unnoticed growth.
+    "gates/kind_shape_manifest_gate.py":           1716,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -505,7 +512,11 @@ BASELINE: dict[str, int] = {
     # merged registry carries them all; re-measured on the merged file to 437 below, the
     # union-of-independent-+1s class this file's own history already names for a merge-union
     # ratchet crossing).
-    "gates/fixture_census.py":                     437,
+    # bumped 437 -> 438 (one new REGISTRY row: s68-typed-absence-dispositions, design/
+    # FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md build) -- the identical shape as the rows
+    # immediately above, witnessed growth from registering this build's own seen-red fixture,
+    # not unnoticed growth.
+    "gates/fixture_census.py":                     438,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -615,7 +626,11 @@ BASELINE: dict[str, int] = {
     # bounds-vocabulary-drift): every parent's bump comments kept verbatim above; the union is
     # re-measured on the merged file itself, the same merge-union ratchet-crossing class as
     # every reconciliation above.
-    "gates/max_lines.py":                          740,
+    # bumped 740 -> 755 (s68, kernel/lineage/s68-typed-absence-dispositions.sql build): this
+    # gate's own BASELINE growing to carry the two entries this same commit bumps
+    # (gates/kind_shape_manifest_gate.py 1635 -> 1716, gates/fixture_census.py 437 -> 438) --
+    # the same self-referential fixpoint as every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          755,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
