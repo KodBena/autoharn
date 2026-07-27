@@ -259,14 +259,20 @@ def main() -> int:
 
     dep, dep_path = _load_deployment()
     project_dir = dep_path.parent
-    led_path = project_dir / "led"
-    if not led_path.is_file() or not os.access(led_path, os.X_OK):
+    # root-shim-pruning residue (row 1357): pre-§6 worlds keep a bare `led` shim; newer ones have only `autoharn` -- detect shape, assume neither.
+    led_bare = project_dir / "led"
+    led_dispatcher = project_dir / "autoharn"
+    if led_bare.is_file() and os.access(led_bare, os.X_OK):
+        led_path, led_prefix = led_bare, []
+    elif led_dispatcher.is_file() and os.access(led_dispatcher, os.X_OK):
+        led_path, led_prefix = led_dispatcher, ["led"]
+    else:
         _refuse(
-            f"no executable './led' found at {led_path}. Every accepted bump in this tool re-issues "
-            f"THROUGH the led CLI (never a raw INSERT -- the stamp/validation machinery lives "
-            f"there); the deployment's own led shim must sit next to its deployment.json (the "
-            f"bootstrap/new-project.sh scaffold's own layout). Scaffold this project first, or "
-            f"point PICKUP_DEPLOYMENT/LEDGER_DEPLOYMENT at the right deployment.json.")
+            f"no executable './led' shim and no executable './autoharn' dispatcher found next to "
+            f"{dep_path}. Every accepted bump in this tool re-issues THROUGH the led CLI (never a "
+            f"raw INSERT); one of the two must sit next to its deployment.json (the bootstrap/"
+            f"new-project.sh scaffold's own layout, either shape). Scaffold this project first, "
+            f"or point PICKUP_DEPLOYMENT/LEDGER_DEPLOYMENT at the right deployment.json.")
 
     if not _has_column(dep, dep.schema, "ledger", "decision_grade"):
         _refuse(
@@ -352,7 +358,7 @@ def main() -> int:
                   f"recorded, but the SessionStart hook / ./pickup / ./led standing will not "
                   f"surface it until apparatus.json's grade list is updated to include it.")
 
-        cmd = [str(led_path), "--supersedes", row_id]
+        cmd = [str(led_path), *led_prefix, "--supersedes", row_id]
         if refs:
             if refs_supported:
                 cmd += ["--refs", refs]
