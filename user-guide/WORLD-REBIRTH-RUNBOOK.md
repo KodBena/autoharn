@@ -96,6 +96,12 @@ boundary-multiplex.toml`). Do NOT stand up a per-project service; that shape is 
   fix the cause, then carry ONLY the items whose outcome line says DROPPED-for-that-cause
   — by hand through `led`, or by a manifest copy pruned to those items (it needs a fresh
   review line; pruning is a content change).
+- **Hand-carries must carry the grade.** The tool passes `--grade` on its own
+  re-asserts; a hand-carried decision without `--grade <its manifest grade>` lands
+  OUTSIDE the standing view (witnessed 2026-07-27). Likewise expect the
+  garbage-statement guard to refuse statements that deliberately quote CLI flags —
+  that is its false-positive shape; the override is
+  `--statement-really-contains-cli-text`, used per-row, never wholesale.
 
 ## Step 6 — verify what landed
 
