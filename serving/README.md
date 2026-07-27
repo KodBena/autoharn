@@ -422,6 +422,123 @@ not otherwise use"). A Python DB driver (`psycopg`) happens to already be presen
 host's `venvs/generic`, but introducing it here would be a **second** transport for the same
 project — flagged as the smallest honest choice, not a spec mandate.
 
+## Diagnostic logging (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, RATIFIED IN FULL
+2026-07-27 — ledger row 1500)
+
+**No new routes.** This build adds `serving/boundary_diagnostic_log.py`, one new *optional*
+`log_level` key in the existing multiplex TOML, and typed call sites inside the existing
+handlers/exception handlers — the twenty-route table above is unchanged, and every existing
+response's client-visible bytes are unchanged (witnessed: a scratch-world byte/shape diff
+between this build and its immediate predecessor across `/health`, `/rows/current`, `/kinds`,
+and `/write/ledger` found no difference other than the world name and autoincrement
+ids/timestamps, which differ by construction between two independently-scaffolded worlds).
+
+**Standing line:** this layer is DIAGNOSTIC-grade, never evidentiary — no fact here is a
+substitute for the kernel's own s43 refusal journal, through the ledger, which stays the sole
+evidentiary basis (maintainer principle 2026-07-11). This is provenance breadcrumbs, not proof.
+
+**What it is, in one paragraph.** One JSON object per line, written to this service's EXISTING
+stderr capture (`serving/ensure_running.py`'s own `<world>/service.log` redirect — destination,
+rotation, and how the service is operated are all unchanged), beside the pre-existing human
+stderr lines (unchanged). Every record carries `request_id` — minted once per request by an
+ASYNC middleware (`@app.middleware("http")`, never a plain-`def` dependency — see
+`boundary_diagnostic_log.py`'s own docstring for the witnessed reason: a plain-`def`
+dependency's own `ContextVar.set()` from inside Starlette's threadpool is silently lost on
+write-back, while an async middleware's context correctly propagates into every plain-`def`
+route handler this service already uses). Eight events, closed by construction
+(`boundary_diagnostic_log.Event`): `request_start`, `request_end`, `kernel_call`,
+`write_verdict`, `refusal`, `infra_failure`, `unclassified_failure`, `startup`. Emitting an
+unknown event, or omitting one of an event's own required fields, raises `LogContractError`
+(ADR-0002 applied to the log's own contract) — BEFORE any level filter, so a validation defect
+can never hide behind an operator's chosen log level.
+
+**One shape per field name, everywhere** (fresh-context review finding (a), fixed post-f450019
+— a jq query grouping or filtering on a field name must see the SAME kind of value under that
+name on every event that carries it, or it silently splits what should be one coherent series).
+Two corollaries: `route` is ALWAYS the bare request path (never method-prefixed) on every event
+that carries it, including `infra_failure`/`unclassified_failure` (which used to log a combined
+`"METHOD /path"` string under `route` — now split into `route` + its own `method` field, the
+same shape `request_start`/`request_end` already used); `surface` is ALWAYS the short
+write-surface label (`ledger`/`review`/`registration`/`obligation`/`obligation_revoke`/
+`missive_dispose`/`artifact` — `write_verdict`'s own vocabulary, matching
+`boundary_service.WRITE_SURFACES`'s keys) — `kernel_call` used to overload `surface` with the
+full route path; it now carries that fact under `route` instead (identical to the value
+`request_start`/`request_end` already log for the same request).
+
+**The `refusal` event's disposition vocabulary is DERIVED, never a parallel list** — every
+`serving/boundary_models.py` response model carrying a `disposition: str = "..."` field default
+(`capability_absent`, `payload_too_large`, `server_saturated`, `deployment_saturated`,
+`unknown_deployment`, `unknown_view`, `body_read_timeout`) is logged from its OWN model
+instance's `.disposition` field, at the exact builder function that already constructs the HTTP
+response — one enumeration, so a disposition added later gets its log event by construction.
+`infra_failure`/`unclassified_failure` keep their own dedicated top-level events (spec §2 L2)
+rather than folding into `refusal` — they are this build's migration of the THREE pre-existing
+call sites the spec's L4 names (`_log_infra_failure`, `_log_unclassified_failure`, the startup
+banner), beside their existing human stderr lines, never instead of them.
+
+**The join anchor is `refusal_id`, never a payload digest.** Row 1498's own witness (spec §1
+point 1) found the kernel's canonical-jsonb-text digest and this service's own `json.dumps`
+digest UNEQUAL by mechanism (key-order normalization differs) — so `write_verdict` events log
+`refusal_id`/`row_id` verbatim from the kernel's own verdict shape
+(`kernel/lineage/s43-typed-verdict-write-boundary.sql`'s `write_verdict` type), and a refused
+write's `refusal_id` joins directly to the ledger row the kernel's own journaler committed
+(`kind = 'write_refused'`) — witnessed live on scratch (see the build report).
+
+**Reconstructing one request** (an operator recipe — `service.log` interleaves this JSON
+stream with uvicorn's own pre-existing human access/error lines, so filter to JSON lines
+first):
+
+```sh
+grep '^{' <world>/service.log | jq -c 'select(.request_id=="<the id>")'
+```
+
+**Config.** One new optional top-level TOML key, `log_level` (`DEBUG`/`INFO`/`WARNING`/`ERROR`,
+default `INFO`), validated in the SAME whole-file pass every other config axis already goes
+through (`serving/boundary_multiplex_config.py`) — an unrecognized value refuses loudly, by
+name, before the socket ever binds. No environment variable — the multiplex TOML remains this
+service's one config channel.
+
+**The fail-loud/never-500-a-request tension.** A mis-authored call site (an unknown event, a
+missing required field) is a defect in THIS SERVICE'S OWN CODE and raises loudly — it is
+deterministic per code path, so it is caught at review/CI/first exercise, never silently against
+production traffic. Past that contract check, rendering and writing the line runs inside one
+broad exception guard: a log line is diagnostic-grade, so a defect in emitting it (or an
+environment failure — a full disk, a closed fd) must never become the reason the request it was
+merely describing fails. See `boundary_diagnostic_log.py`'s own docstring for the full
+reasoning.
+
+**Witnessed** (scratch, both polarities, all committed as `seen-red/boundary-service/
+run_fixtures.py`'s `W34`/`W35` — see the build report for the full enumeration and observed
+output): RED — an unknown event name, a missing required field, and an unrecognized
+`log_level` value each refuse loudly, before any level filter / before the socket binds
+(`W34i`/`W34ii`). GREEN — a served accept-leg write and a served refuse-leg write each yield a
+`jq`-reconstructable `request_start → kernel_call → write_verdict → request_end` chain sharing
+one `request_id` (`W34iii`), with every field carrying its one coherent shape across that chain
+— `group_by(.route)` groups the request's own `request_start`/`kernel_call`/`write_verdict`/
+`request_end` together (never splitting `kernel_call` off under a mangled value), and
+`select(.surface=="ledger")` returns only the `write_verdict` record, never a `kernel_call` one
+(`W34iiiv`); the refuse leg's `refusal_id` joins to the scratch world's own journaled
+`write_refused` row (`W34iv`); contextvar propagation holds under 20 concurrent requests (10
+each to two distinct routes) on the REAL, already-running app — zero request_id whose own
+chain disagreed on `route` (`W35`; a smaller, committed N than an earlier ad hoc 60-request
+probe — the point is a re-runnable witness, not a specific number).
+
+**A hazard this build's own log-volume increase exposed, found and fixed in passing
+(CLAUDE.md's engineering-responsibility rule):** `seen-red/boundary-service/run_fixtures.py`'s
+own server-spawning helpers redirected a live server's stdout+stderr to an anonymous
+`subprocess.PIPE` never drained while the server kept running — harmless at the OLD, low log
+volume, but this build's own JSON-lines volume increase filled the OS pipe buffer mid-suite,
+blocking the server's own `stderr.write()` call and hanging every subsequent request. Fixed by
+redirecting to a real scratch file instead (`_spawn_boundary_service`, no fixed buffer wall —
+the same reason `serving/ensure_running.py`'s own production redirect targets a file, never a
+pipe). Named here because the same undrained-`PIPE` pattern exists in several SIBLING
+`seen-red/` suites this build did not touch (`boundary-multiplex`, `legacy-led-retirement-part-
+ab-boundary`, `legacy-led-retirement-round1-fixes`, `led-garbage-statement-guard`, `umbrella-
+cli-ensure-running`, `workflow-drive-dead-legacy-led-default`) — each carries the same LATENT
+hazard now that this service's own log volume is higher; whether any of them run long/high-
+volume enough to trip it is unexercised by this build (a follow-up sweep, not silently
+deferred).
+
 ## `audit_served.py` — the served-vs-kernel spot differential
 
 Ships WITH the service (spec §5, sentry-class treatment):
@@ -465,8 +582,8 @@ mocks. Run:
 HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/boundary-service/run_fixtures.py
 ```
 
-Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19 plus A5's W20–W23,
-all live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
+Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19 plus A5's W20–W23
+plus the diagnostic-logging spec's W34–W35, all live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
 lives in the separate autoharn-panel repository, which this build never touches, per the spec's
 own §10.4 ("panel-side is a separate session's item citing this spec"). A2's additions: **W9**
 an oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
@@ -512,7 +629,21 @@ generous margin, never waiting for the trickle to finish; **W23** pagination on
 multi-row result on both routes (proving the pre-A5 silent-no-op is closed), an out-of-range
 `limit`/`after_id` is a typed 422 on both, and `/work/items`' id-less synthetic-ordinal fallback
 (`row_number() OVER (ORDER BY slug)`) is exercised directly by opening two fixture work items
-through the boundary first.
+through the boundary first. **W34** (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, ledger row
+1500): the diagnostic JSON-lines log layer, both polarities — **(i)** RED, an unknown event name
+and a missing required field each raise `LogContractError`, in-process, against
+`boundary_diagnostic_log.log_event` directly; **(ii)** RED, an unrecognized `log_level` value in
+the multiplex TOML refuses loudly before the socket ever binds; **(iii)** GREEN, an accepted
+write yields a `request_start → kernel_call → write_verdict → request_end` chain sharing one
+`request_id`, reconstructed from WORLD B's own live log file; **(iiiv)** GREEN, field-shape
+coherence over that SAME chain — every record carrying `route` carries the bare path (never
+method-prefixed), the `kernel_call` record(s) carry `route` (never `surface`), and the
+`write_verdict` record carries `surface` as the short write-surface label (`"ledger"`); **(iv)**
+GREEN, a refused write's `refusal_id` joins to the scratch world's own journaled `write_refused`
+ledger row. **W35**: contextvar propagation under 20 concurrent requests (10 each to `/health`
+and `/rows/current`) against the real, already-running `WORLD B` server — asserted directly on
+the captured log: every request_id's own events agree on exactly one `route` (no
+cross-contamination).
 
 **Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
 pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.
