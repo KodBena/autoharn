@@ -1541,10 +1541,11 @@ pass is only this entry's worked, witnessed example.
    defects across 7 classes in the A-side pre-review, and left the two subsequent blind rounds
    only 5 findings between them (2 in round 1, 3 in round 2, one of those three against the
    pre-reviewer's OWN repair prose — the same discipline applies recursively) — against the
-   commissioning brief's own stated baseline of 9 blind-round findings on a comparable document
-   that had no pre-review pass run against it first (this recipe's own drafting pass could not
-   independently re-trace which specific document that comparison names — disclosed here rather
-   than silently assumed). **Report this kind of number honestly as a single datum, the way this
+   commissioning brief's own stated baseline of 9 blind-round findings (5 in round 1, 4 in
+   round 2, per its own attestation record) on a comparable document that had no pre-review
+   pass run against it first —
+   [design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](../design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md),
+   traced to its record in the attestation ledger at adjudication time. **Report this kind of number honestly as a single datum, the way this
    entry just did, never as a proven law**: one comparison is a data point, not a calibrated
    rate, and the honest-limits paragraph below narrows what this specific datum does and does
    not license you to assume.
@@ -1561,7 +1562,10 @@ pass is only this entry's worked, witnessed example.
    found it.
 
 **Honest limits — read this before assuming the doc-side efficiency gain transfers to code
-review.** The maintainer's own caveat, carried verbatim because its consequence matters more
+review.** First, the commissioning words this entry exists to answer, verbatim: *"This review
+findings thing is something autoharn projects probably will want generally, can we add it do
+USER-RECIPES-FAQ along with rationale?"* — and, attached to that same request, the maintainer's
+own caveat, carried verbatim because its consequence matters more
 than any paraphrase of it would: *"I'll note a kind of caveat of my own: that the documentation
 reviews were done against ADR-0017 which is, in some sense, strongly specified."* Spelled out:
 the +A:B:C efficiency numbers above come from documentation reviews judged against
@@ -1588,22 +1592,6 @@ consume the `discovered_by` field). If you cannot name who reads your findings l
 they decide from it, do not start one — a findings ledger nobody mines and nobody uses to
 decide anything is exactly the cargo-cult shape the named-consumer test was built to catch.
 
-<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- this section ("The
-findings-ledger / mined-checklist / +A:B:C pattern") ran the full +A:B:C pipeline on itself
-(A-side self-pass logged to attestations/pre-review-log.jsonl, 2026-07-27T14:30:00Z entry;
-blind round 1: fresh Agent a213b9cb471d6d31a, DEFECT x2, both repaired before round 2; blind
-round 2: fresh Agent ad7cef92653b52012, DEFECT x1 -- a stale forward-reference in the
-"honest limits" paragraph's own opening sentence) and hit the two-round cap still DEFECT.
-Per this session's own commission, an escalated result at the cap is REPORTED, not
-self-adjudicated: round 2's finding is left unfixed and unresolved here, and no
-doc-attestation/2 record was written for this section (writing one escalated:true would
-require supplying the adjudication this session is not authorized to make). The gate
-currently reads CLEAN for this file only because of the pre-existing, unrelated waiver
-below (the reservation-residue Q&A) and this file's own second waiver above (the setup-TUI
-usability-review touch) -- neither covers this section's content, a limitation both of
-those markers already name (the gate is per-file, not per-paragraph). Removal condition: a
-coordinator/maintainer adjudicates round 2's finding (fix-and-close or accept-and-disclose)
-and records a real doc-attestation/2 entry for this section's content hash. -->
 
 ## Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)
 
