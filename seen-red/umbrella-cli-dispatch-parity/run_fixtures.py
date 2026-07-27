@@ -179,6 +179,10 @@ _EXPECTED_VERBS = {
     # independent on-disk census does not silently drift the moment a new verb lands (the whole
     # reason this census is hand-typed separately from the dispatch table it checks).
     "fixture-sweep",
+    # dispatch (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger rows 1463/1467/1468/1471): a
+    # thirteenth autoharn-repo-specific verb, same footing as fixture-sweep/migrate/attest-tags
+    # -- mint-and-dispatch / close-and-retire a delegate principal for a sub-agent commission.
+    "dispatch",
 }
 
 # Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
@@ -218,6 +222,10 @@ _USAGE_MARKERS = {
     # generated usage line, distinctive (no other verb is named "courier").
     "courier": "usage: courier [-h] [--courier-toml COURIER_TOML]",
     "fixture-sweep": "usage: fixture-sweep [-h] [--only FAMILY] [--list] [--timeout SECONDS]",
+    # dispatch (design/FABLE-DISPATCH-MECHANICS-SPEC.md): tools/dispatch_mechanics.py's own
+    # docstring (printed verbatim by `main`'s bare --help/-h/no-args path) opens with this exact
+    # line -- distinctive, no other verb's own output could contain it.
+    "dispatch": "dispatch_mechanics -- the scripted `./autoharn dispatch` verb (design/",
 }
 
 # Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates

@@ -423,12 +423,14 @@ import boundary_diagnostic_log  # noqa: E402
 # disciplined service).
 import migrate_core  # noqa: E402  (bootstrap/migrate_core.py)
 from boundary_models import (  # noqa: E402
+    AnonymousWriteRefused,
     ArtifactWriteIntFields,
     BodyReadTimeout,
     CapabilityAbsent,
     CapabilityManifest,
     DeploymentSaturated,
     HealthResponse,
+    IdentityHeaderInvalid,
     InfraFailure,
     KindsResponse,
     LedgerWriteIntFields,
@@ -731,6 +733,202 @@ HISTORY_DEFAULT_LIMIT = 1000
 # inline literal at the one call site that checks it.
 MAX_AFTER_SLUG_BYTES = 512
 
+# ================================================================================================
+# IDENTITY CONDUIT (design/FABLE-DISPATCH-MECHANICS-SPEC.md, ledger rows 1463/1467/1468/1471) --
+# the one HTTP-borne identity plumbing serving both a human operator's vendor stamp and a
+# dispatched sub-agent's minted principal. §1's trust property, verbatim: this service is a
+# CONDUIT, never an authority -- it never holds key material, never computes or verifies an
+# HMAC, never rewrites a value it did not itself construct from a bounded, validated header.
+#
+# HEADER NAMES (this build's own choice, in the service's existing kebab-case idiom -- FastAPI/
+# Starlette lower-cases and hyphen-normalizes header names on read, so these are matched
+# case-insensitively regardless of how a client capitalizes them). The vendor-stamp headers name
+# is deliberately `X-Autoharn-Vendor-*`, mirroring the app.vendor_* GUC names verbatim
+# (kernel/lineage/s17-stamp-mechanism.sql, s23-per-invocation-stamp-token.sql) so the header <->
+# GUC correspondence is legible without a lookup table:
+IDENTITY_HEADER_VENDOR_SESSION = "x-autoharn-vendor-session"
+IDENTITY_HEADER_VENDOR_AGENT = "x-autoharn-vendor-agent"
+IDENTITY_HEADER_VENDOR_TS = "x-autoharn-vendor-ts"
+IDENTITY_HEADER_VENDOR_HMAC = "x-autoharn-vendor-hmac"
+IDENTITY_HEADER_VENDOR_INVOCATION = "x-autoharn-vendor-invocation"  # optional; s23, capture-only
+# The minted-principal channel. FINDING, STATED HONESTLY (this build's own reading of the
+# kernel lineage, per the commission's "derive the exact GUC names ... never invent"): no
+# current_setting()-consulting GUC for a MINTED principal's identity exists anywhere in
+# kernel/lineage/*.sql (grepped: s40/s41/s64 attribute a write's `actor` column either from the
+# CONNECTING DB ROLE via `principal_role`/`set_actor` -- kernel/lineage/
+# s40-principal-identity-events.sql Element 6 -- or from an explicit `actor` value the CALLER
+# supplies on the write payload; s64's own delegation-condition columns are consulted via the
+# `principal_relations` view/chain walk, keyed on that SAME `actor` column, never a GUC). The
+# vendor stamp's app.vendor_* GUCs (above) are the ONLY per-request GUC channel this kernel
+# lineage actually reads. The minted-principal identity therefore threads through the EXISTING,
+# already-accepted `actor` JSON field on write payloads (serving/README.md, "The write path --
+# attribution, honestly limited": "the service passes a write payload's actor key through
+# unchanged if the caller supplied one") -- this header lets the SERVICE itself set that field
+# from a validated identity fact, rather than trusting whatever the caller's own JSON body
+# claims, when a dispatched agent's own dispatch-mint stamp is present.
+IDENTITY_HEADER_MINTED_PRINCIPAL = "x-autoharn-minted-principal"
+
+# The s65 house precedent (design/FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md, the 256-byte bound
+# ratified for a comparably-shaped bounded-and-typed field): every identity header value is
+# bounded to 256 bytes, refused with IdentityHeaderInvalid BEFORE any kernel call -- never
+# truncated, never passed through (spec §1, verbatim).
+IDENTITY_HEADER_MAX_BYTES = 256
+
+# A vendor HMAC is a sha256 hex digest (kernel/lineage/s17-stamp-mechanism.sql's own
+# `stamp_valid`: `encode(hmac(..., 'sha256'), 'hex')`) -- exactly 64 lowercase hex characters.
+# This service never COMPUTES or VERIFIES the HMAC (the conduit invariant); this regex only
+# refuses a value that could not possibly BE one, before it ever reaches the kernel's own
+# verification (a malformed value would fail set_stamp's own hmac comparison anyway, landing
+# stamp_verified=false -- refusing it here is an earlier, more specific, typed teaching refusal,
+# not a second authority).
+_VENDOR_HMAC_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+class _IdentityRefusal(Exception):
+    """Raised by `_parse_identity_headers` for an oversized or malformed identity header --
+    caught in the ONE place (the diagnostic-logging middleware, which now also owns identity
+    parsing) that turns it into the typed `IdentityHeaderInvalid` response, BEFORE `call_next`
+    ever runs (so no route handler, and no `_psql` call, is ever reached)."""
+
+    def __init__(self, header: str, message: str) -> None:
+        super().__init__(message)
+        self.header = header
+        self.message = message
+
+
+def _bounded_header(headers, name: str) -> str | None:
+    """Reads one header, refusing (never truncating) a value over `IDENTITY_HEADER_MAX_BYTES`.
+    Returns None when the header is simply absent (the ordinary, unstamped case) -- absence is
+    never itself a refusal; only PRESENT-but-oversized is."""
+    v = headers.get(name)
+    if v is None:
+        return None
+    if len(v.encode("utf-8", "surrogatepass")) > IDENTITY_HEADER_MAX_BYTES:
+        raise _IdentityRefusal(
+            name, f"identity header {name!r} is {len(v.encode('utf-8', 'surrogatepass'))} "
+                  f"bytes -- exceeds the {IDENTITY_HEADER_MAX_BYTES}-byte bound (design/"
+                  f"FABLE-DISPATCH-MECHANICS-SPEC.md §1, the s65 house precedent). Refused "
+                  f"before any kernel call -- never truncated, never passed through.")
+    return v
+
+
+def _parse_identity_headers(headers) -> tuple[str, str | None, dict[str, str] | None]:
+    """The service-side half of the one identity conduit (spec §1/§2). Parses this request's
+    identity headers into the closed three-case resolution `boundary_diagnostic_log.bind_identity`
+    records: returns `(resolution_case, principal_id_or_None, vendor_stamp_dict_or_None)`.
+
+    Raises `_IdentityRefusal` for an oversized (`_bounded_header` above) or MALFORMED value --
+    a non-integer `x-autoharn-vendor-ts`, a vendor HMAC that is not 64 lowercase hex characters,
+    or a minted-principal header that is not a non-negative integer within `[0, MAX_ID]` -- BEFORE
+    any kernel call (spec §1, verbatim: "draws a typed, teaching refusal ... never truncation,
+    never pass-through"). This function never verifies the HMAC's cryptographic validity (the
+    conduit invariant, §1) -- only that the vendor-stamp headers are STRUCTURALLY the shape s17's
+    own trigger expects; a structurally-valid-but-forged stamp is a kernel-side question,
+    answered by `stamp_verified=false` (witnessed in this build's own report), never a
+    service-side one.
+
+    RESOLUTION ORDER (spec §2, closed three cases): minted-principal present -> ("minted", pid,
+    vendor-dict-or-None -- vendor rides along to its own GUCs even when minted governs, spec §2:
+    "the vendor stamp rides along to its own GUCs"); else vendor stamp present (all FOUR
+    mandatory GUC-bearing headers -- session/agent/ts/hmac; invocation is optional, s23's own
+    capture-only column) -> ("vendor", None, vendor-dict); else -> ("anonymous", None, None)."""
+    minted_raw = _bounded_header(headers, IDENTITY_HEADER_MINTED_PRINCIPAL)
+    principal_id: str | None = None
+    if minted_raw is not None:
+        try:
+            pid_int = int(minted_raw)
+        except ValueError:
+            raise _IdentityRefusal(
+                IDENTITY_HEADER_MINTED_PRINCIPAL,
+                f"identity header {IDENTITY_HEADER_MINTED_PRINCIPAL!r} = {minted_raw!r} is not "
+                f"an integer principal id.") from None
+        if pid_int < 0 or pid_int > MAX_ID:
+            raise _IdentityRefusal(
+                IDENTITY_HEADER_MINTED_PRINCIPAL,
+                f"identity header {IDENTITY_HEADER_MINTED_PRINCIPAL!r} = {pid_int} is outside "
+                f"the id domain 0 <= id <= {MAX_ID} (A4.2's own bound, applied here too).")
+        principal_id = str(pid_int)
+
+    session = _bounded_header(headers, IDENTITY_HEADER_VENDOR_SESSION)
+    agent = _bounded_header(headers, IDENTITY_HEADER_VENDOR_AGENT)
+    ts_raw = _bounded_header(headers, IDENTITY_HEADER_VENDOR_TS)
+    hmac_raw = _bounded_header(headers, IDENTITY_HEADER_VENDOR_HMAC)
+    invocation = _bounded_header(headers, IDENTITY_HEADER_VENDOR_INVOCATION)
+
+    vendor_present = {session, agent, ts_raw, hmac_raw} != {None}
+    vendor_stamp: dict[str, str] | None = None
+    if vendor_present:
+        missing = [n for n, v in (
+            (IDENTITY_HEADER_VENDOR_SESSION, session), (IDENTITY_HEADER_VENDOR_AGENT, agent),
+            (IDENTITY_HEADER_VENDOR_TS, ts_raw), (IDENTITY_HEADER_VENDOR_HMAC, hmac_raw),
+        ) if v is None]
+        if missing:
+            raise _IdentityRefusal(
+                missing[0],
+                f"a partial vendor stamp was presented -- {session and IDENTITY_HEADER_VENDOR_SESSION}, "
+                f"missing required header(s) {missing} (all four of session/agent/ts/hmac are "
+                f"mandatory together, spec §1/§2 -- a partial stamp is malformed, never "
+                f"completed or silently dropped).")
+        try:
+            int(ts_raw)
+        except ValueError:
+            raise _IdentityRefusal(
+                IDENTITY_HEADER_VENDOR_TS,
+                f"identity header {IDENTITY_HEADER_VENDOR_TS!r} = {ts_raw!r} is not an integer "
+                f"unix timestamp.") from None
+        if not _VENDOR_HMAC_RE.match(hmac_raw):
+            raise _IdentityRefusal(
+                IDENTITY_HEADER_VENDOR_HMAC,
+                f"identity header {IDENTITY_HEADER_VENDOR_HMAC!r} is not a 64-character lowercase "
+                f"hex sha256 digest (the shape kernel/lineage/s17-stamp-mechanism.sql's own "
+                f"stamp_valid expects) -- structurally malformed, refused before any kernel "
+                f"call (this service never verifies the HMAC itself, only its shape).")
+        vendor_stamp = {
+            "vendor_session": session, "vendor_agent": agent, "vendor_ts": ts_raw,
+            "vendor_hmac": hmac_raw,
+        }
+        if invocation is not None:
+            vendor_stamp["vendor_invocation"] = invocation
+
+    if principal_id is not None:
+        return "minted", principal_id, vendor_stamp
+    if vendor_stamp is not None:
+        return "vendor", None, vendor_stamp
+    return "anonymous", None, None
+
+
+# IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c
+# "rung (a)"): the anonymous-write refusal's own posture, set ONCE at startup from the multiplex
+# TOML (already validated against `boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES`) --
+# mirrors `boundary_diagnostic_log.configure_level`'s own construction-time-defense-in-depth
+# pattern exactly.
+_identity_enforcement_posture = boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT
+
+
+def configure_identity_enforcement(posture: str) -> None:
+    global _identity_enforcement_posture
+    if posture not in boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES:
+        raise ValueError(
+            f"boundary_service: REFUSED -- configure_identity_enforcement({posture!r}) is not "
+            f"one of {sorted(boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES)}.")
+    _identity_enforcement_posture = posture
+
+
+# The write-shaped routes the anonymous-write refusal (rung a) applies to -- every `/write/*`
+# surface plus the dedicated `/artifacts` POST (Part B's own separate route, not routed through
+# `/write/{surface}` -- see serving/README.md's own endpoint table). A GET is never
+# authority-bearing (spec §3: "anonymous sessions keep NO write surface beyond journaled
+# refusals" -- reads are not a write surface at all); the `/d/{deployment}` prefix is stripped
+# before this check runs (this is a route-SHAPE test, not a deployment-specific one).
+def _is_authority_bearing_write(method: str, path: str) -> bool:
+    if method != "POST":
+        return False
+    # Strip the mandatory /d/{deployment} segment (multiplex spec §2) before the shape test --
+    # e.g. "/d/autoharn1/write/ledger" -> "/write/ledger", "/d/autoharn1/artifacts" -> "/artifacts".
+    parts = path.split("/", 3)
+    rest = "/" + parts[3] if len(parts) > 3 else "/"
+    return rest.startswith("/write/") or rest == "/artifacts"
+
 # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `POST /d/{deployment}/artifacts`' own raw-
 # body buffering bound. NOT a second, independent judgment of "is this artifact too large" (the
 # spec's own P1 instruction: "kernel hash-verification is the refusal authority; no second size
@@ -914,8 +1112,24 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     args = ["psql", "-h", cfg.pg_host, "-d", cfg.db, "-tAq", "-v", "ON_ERROR_STOP=1"]
     for k, v in (extra_v or {}).items():
         args += ["-v", f"{k}={v}"]
-    args += ["-f", "/dev/stdin"]
     preamble = f"SET ROLE {cfg.role};\nSET search_path = {cfg.schema}, {cfg.kern};\n"
+    # design/FABLE-DISPATCH-MECHANICS-SPEC.md §1: the vendor stamp's own five GUCs, threaded
+    # into THIS request's per-request psql session -- the SAME GUCs kernel/lineage/
+    # s17-stamp-mechanism.sql's set_stamp trigger and s23-per-invocation-stamp-token.sql already
+    # read via current_setting(..., true). `-v` bound vars (never string-spliced -- this
+    # module's own house convention, matching every other injection-safe substitution here),
+    # SET on this connection ONLY (a fresh psql subprocess per call, never the server's own
+    # environment -- the exact confusion ledger row 1467 witnessed). A request with no vendor
+    # stamp (the ordinary, unstamped case) adds nothing here -- set_stamp's own
+    # current_setting(..., true) reads NULL for every app.vendor_* GUC exactly as it always has,
+    # landing stamp_verified=false, unchanged from this build's predecessor.
+    ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
+    if ctx is not None and ctx.vendor_stamp:
+        for guc, val in ctx.vendor_stamp.items():
+            var = f"_identity_{guc}"
+            args += ["-v", f"{var}={val}"]
+            preamble += f"SET app.{guc} = :'{var}';\n"
+    args += ["-f", "/dev/stdin"]
     env = dict(os.environ)
     env["PGCONNECT_TIMEOUT"] = str(PSQL_CONNECT_TIMEOUT_S)
     # Multiplex spec §4: the PER-DEPLOYMENT gate first -- a deployment already at its own
@@ -1852,6 +2066,43 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             boundary_diagnostic_log.Event.REQUEST_START, route=ctx.route, method=ctx.method)
         response: Response | None = None
         try:
+            # design/FABLE-DISPATCH-MECHANICS-SPEC.md §1/§2: identity parsing runs HERE, on
+            # every request, before `call_next` -- so a bounded/malformed-header refusal never
+            # reaches routing, and a resolved identity is on `REQUEST_CONTEXT` for every
+            # downstream route handler AND every `_psql` call this request makes. Oversized or
+            # malformed -> typed IdentityHeaderInvalid, BEFORE any kernel call (`call_next` is
+            # never invoked on this path).
+            try:
+                resolution_case, principal_id, vendor_stamp = _parse_identity_headers(request.headers)
+            except _IdentityRefusal as e:
+                body = IdentityHeaderInvalid(header=e.header, message=e.message)
+                boundary_diagnostic_log.log_event(
+                    boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition,
+                    header=e.header)
+                response = JSONResponse(status_code=422, content=body.model_dump())
+                return response
+            boundary_diagnostic_log.bind_identity(
+                resolution_case, principal=principal_id, vendor_stamp=vendor_stamp)
+            # rung (a) (spec §3, ledger row 1471 sub-item 4c): an ANONYMOUS authority-bearing
+            # write refuses once this deployment's identity_enforcement posture is "enforce" --
+            # "grace" (the default) accepts it unchanged, byte-identical, so the operator
+            # surface is never broken mid-migration. Checked here, not per-route (ADR-0012 P1:
+            # one gate, every /write/*+/artifacts route inherits it) -- deliberately BEFORE
+            # deployment resolution, since the posture is process-global (mirrors log_level's
+            # own scope), not per-deployment.
+            if (resolution_case == "anonymous"
+                    and _identity_enforcement_posture == "enforce"
+                    and _is_authority_bearing_write(request.method, request.url.path)):
+                body = AnonymousWriteRefused(
+                    message="this write carries neither a vendor stamp nor a minted-principal "
+                            "identity header, and this deployment's identity_enforcement "
+                            "posture is 'enforce' (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, "
+                            "ledger row 1471 sub-item 4c: 'anonymous sessions keep NO write "
+                            "surface beyond journaled refusals'). Nothing was written.")
+                boundary_diagnostic_log.log_event(
+                    boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
+                response = JSONResponse(status_code=403, content=body.model_dump())
+                return response
             response = await call_next(request)
             return response
         finally:
@@ -2414,6 +2665,19 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
 
+            # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3: a MINTED-PRINCIPAL identity
+            # (resolution case "minted") sets this write's `actor` field from the conduit's own
+            # validated fact, overriding whatever the caller's JSON body claimed (never merged,
+            # never left to the caller's own say-so -- serving/README.md's pre-existing
+            # "attribution honestly limited" posture, sharpened here: a caller presenting a
+            # minted-principal header no longer gets to also claim a DIFFERENT `actor` in its
+            # body). "Both-present = minted governs" (spec §2) applies to `actor` specifically;
+            # the vendor stamp, if also present, still rides along to its own GUCs via `_psql`
+            # above, entirely independent of this override.
+            ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
+            if ctx is not None and ctx.resolution_case == "minted" and ctx.principal is not None:
+                payload["actor"] = int(ctx.principal)
+
             # A5.2: the write-body id-domain closure -- every integer-typed field this
             # surface's payload contract declares (boundary_models.py's *WriteIntFields models)
             # is bounded 0 <= v <= MAX_ID, BEFORE psql's own bigint cast ever sees it.
@@ -2615,6 +2879,12 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if not isinstance(payload, dict):
             return JSONResponse(status_code=422, content={
                 "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
+        # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3: same minted-principal `actor` override
+        # as `make_write_route` above (ADR-0012 P1's own reasoning applies here too -- one rule,
+        # not a per-route dialect that could silently diverge).
+        ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
+        if ctx is not None and ctx.resolution_case == "minted" and ctx.principal is not None:
+            payload["actor"] = int(ctx.principal)
         int_field_oor = _bound_write_payload_ints("artifact", payload)
         if int_field_oor is not None:
             return int_field_oor
@@ -2734,7 +3004,7 @@ def main(argv: list[str] | None = None) -> int:
     # keys anywhere, a missing required key, or zero deployments each refuse loudly BY NAME,
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
-        records, log_level = boundary_multiplex_config.load_multiplex_config_with_log_level(args.config)
+        records, log_level, identity_enforcement = boundary_multiplex_config.load_multiplex_config_with_diagnostics(args.config)
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
         return 2
@@ -2742,6 +3012,9 @@ def main(argv: list[str] | None = None) -> int:
     # this point) by boundary_multiplex_config.py against boundary_diagnostic_log.LEVELS --
     # configure_level here is construction-time defense in depth, not the primary validation.
     boundary_diagnostic_log.configure_level(log_level)
+    # design/FABLE-DISPATCH-MECHANICS-SPEC.md §3: same construction-time-defense-in-depth
+    # pattern as log_level above -- already validated whole-file by boundary_multiplex_config.py.
+    configure_identity_enforcement(identity_enforcement)
     # Multiplex spec §4: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment
     # sub-bound is computed ONCE here (never re-derived per request) and PRINTED at startup
     # (spec §4, verbatim) so an operator can see what their own deployment count produced.
@@ -2758,6 +3031,7 @@ def main(argv: list[str] | None = None) -> int:
         max_inflight_kernel_calls=MAX_INFLIGHT_KERNEL_CALLS,
         max_inflight_per_deployment=per_dep_limit,
         log_level=log_level,
+        identity_enforcement=identity_enforcement,
     )
     configs: dict[str, BoundaryConfig] = {}
     for name, record in records.items():

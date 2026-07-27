@@ -230,6 +230,37 @@ class UnknownView(BaseModel):
     message: str = Field(description="teach-text naming the unknown view and the known set")
 
 
+class IdentityHeaderInvalid(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §1 (ledger row 1471's dispatch-mechanics build):
+    the identity conduit's own typed refusal -- an oversized (> `IDENTITY_HEADER_MAX_BYTES` =
+    256 bytes, the s65 house precedent) or malformed (non-hex HMAC, non-integer ts, non-integer
+    principal id) identity header on the vendor-stamp or minted-principal channel, refused
+    BEFORE any kernel call (spec §1, verbatim: "an oversized or malformed identity header draws
+    a typed, teaching refusal ... never truncation, never pass-through"). This is a
+    SERVICE-level disposition (mirrors `CapabilityAbsent`'s own posture) -- there was no kernel
+    call to verdict; the conduit refused before ever reaching `_psql`."""
+
+    disposition: str = "identity_header_invalid"
+    header: str = Field(description="the offending header's name")
+    message: str = Field(description="teach-text: which header, why it was refused, the bound")
+
+
+class AnonymousWriteRefused(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c ("anonymous
+    sessions keep NO write surface beyond journaled refusals"): rung (a) of the two-rung
+    enforcement plan -- THIS service refuses an authority-bearing write (any `/write/*` or
+    `/artifacts` POST) carrying neither a vendor stamp nor a minted-principal header, but ONLY
+    once the multiplex TOML's `identity_enforcement` key is `"enforce"` (default `"grace"`,
+    which accepts an anonymous write unchanged -- byte-identical -- so the operator surface is
+    never broken mid-migration, per the spec's own ordering: CLI forwarding must work FIRST,
+    witnessed, before this refusal turns on)."""
+
+    disposition: str = "anonymous_write_refused"
+    message: str = Field(description="teach-text: no vendor stamp or minted-principal header "
+                                      "was present on this authority-bearing write, and this "
+                                      "deployment's identity_enforcement posture is 'enforce'")
+
+
 class MetaResponse(BaseModel):
     """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's third new route, `GET /d/{deployment}/meta`
     -- the capability surface a rebased CLI shim decides its own behavior from, replacing the
