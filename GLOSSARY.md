@@ -126,7 +126,9 @@ the tag is that it *blocks promotion to confirmed*, not merely records.
 
 <a id="home-flip"></a>
 ### HOME-FLIP
-The maintainer-performed cutover recorded in `provenance/HOME-FLIP.md`: before the flip, the
+The maintainer-performed cutover recorded in
+[`vestigial_documentation/provenance/HOME-FLIP.md`](vestigial_documentation/provenance/HOME-FLIP.md)
+(a declared-history record; see [`VESTIGIAL-INDEX.md`](VESTIGIAL-INDEX.md)): before the flip, the
 two source repos this project consolidates (`claude_harness`, `epistemic-operator`) are
 authoritative and this repo holds migrated copies; after the flip, provenance direction
 reverses — this repo becomes the source of truth and the two source repos become read-only
@@ -285,22 +287,44 @@ One governed Claude Code session (or resumed chain of sessions) executing a task
 world. Runs are numbered; their worlds are named for them (`run5`, `run7`).
 
 ### birth chain
-The ordered kernel SQL a new world receives at scaffold time: `high_watermark_1.sql`
-(bundling s15 → s17-stamp → s17-independence → s19) → s20 → s21 → s22 → s23 → s24 → s25.
-There is no s16; s18 is deliberately excluded (experiment apparatus, not kernel). SSOT:
-[`kernel/lineage/README.md`](kernel/lineage/README.md) + [`bootstrap/new-project.sh`](bootstrap/new-project.sh).
+The ordered kernel SQL a new world receives at scaffold time:
+[`high_watermark_1.sql`](kernel/lineage/high_watermark_1.sql)
+(bundling s15 → s17-stamp → s17-independence → s19) plus every additive
+[delta](#delta-kernel-lineage-delta) after it, through the current lineage head (s64 as of
+this writing — this number moves; do not hand-copy it here a second time). There is no
+s16; s18 is deliberately excluded (experiment apparatus, not kernel). **Choosing scaffold
+capabilities never prunes this chain** — every `--new-world`/`--profile tracker` run applies
+the identical, full chain; scaffold options (the feature manifest, `--governed`, etc.) shape
+only which surrounding birth ACTS run (which principals get pre-registered, which optional
+docs get vendored, s60's own role-bind/entitlement-config birth acts if the schema carries
+s60), never which `sNN` files apply — see [s-history.md](s-history.md)'s own
+"Birth-selection" section for the verified, file:line answer. SSOT for the live apply order:
+[`kernel/lineage/README.md`](kernel/lineage/README.md) +
+[`bootstrap/new-project.sh`](bootstrap/new-project.sh) (`grep LINEAGE_CHAIN`); a one-synopsis-
+per-delta narrative (what each delta did, in plain words, and what "s" stands for) lives at
+[s-history.md](s-history.md).
 
 ### delta (kernel lineage delta)
-One additive lineage step. Authoring may be class-ratified (strictly fail-safe
-additions); it reaches reality by entering the birth chain, carried by the NEXT world's
-scaffold. Never applied to an existing world — runs are strictly linear and older worlds
-are settled evidence (maintainer ruling 2026-07-11; `bootstrap/apply-delta.sh` is
-demoted to history).
+One additive lineage step, named `sNN-<description>.sql` under
+[`kernel/lineage/`](kernel/lineage/) — see [s-history.md](s-history.md) for what "s" stands
+for (working reading: "schema" — not confirmed verbatim on the record) and a synopsis of
+every delta from s15 to the current head. Authoring may be **class-ratified** — this file's
+definition site for that term: a WHOLE CATEGORY of delta (strictly fail-safe additions that
+only add refusals/vocabulary/derived views, never loosen or change existing semantics) is
+pre-approved by standing maintainer ruling, so an individual delta of that shape enters
+without a fresh per-delta question; see [CLAUDE.md](CLAUDE.md)'s ORCHESTRATION section,
+"Class-ratified fail-safe deltas," for the exact rule — it
+reaches reality by entering the [birth chain](#birth-chain), carried by the NEXT world's
+scaffold. Never applied to an existing world — runs are strictly linear and older worlds are
+settled evidence (maintainer ruling 2026-07-11; `bootstrap/apply-delta.sh`, the old
+apply-to-an-existing-world script, has since been DELETED from this repository — see
+[CLAUDE.md](CLAUDE.md)'s ORCHESTRATION section, "Runs are strictly linear," for why it was
+retired rather than kept as dead code).
 
 <a id="toy-db"></a>
 ### the toy db
 The shared, non-production Postgres database (host: this deployment's own `deployment.json`
-`host` field — see README.md "Configuration"; database name `toy`) this
+`host` field — see [README.md](README.md) "Configuration"; database name `toy`) this
 project's own witness work runs against — as opposed to a scaffolded deployment's real subject
 database. Individual scratch/fixture schema pairs (e.g. `toycolors` / `toycolors_kernel`) live
 inside it; see [`ORCH-USE-MODE-ENGINE-WIRING.md`](vestigial_documentation/design/ORCH-USE-MODE-ENGINE-WIRING.md)'s
@@ -483,6 +507,25 @@ mechanism is vacuous in a world whose
 Banked evidence that a gate has actually REFUSED at least once (a dated fixture directory
 under `seen-red/`). A gate never seen red is a claim, not a guarantee.
 
+<a id="fixture"></a>
+### fixture
+One executable script (a `seen-red/<dir>/run_fixtures.py`, the established name) that PRODUCES
+the [seen-red](#seen-red) evidence above for one gate or mechanism "family": it births a
+scratch world or scratch schema, drives real commands against it, witnesses BOTH polarities —
+the case that should refuse (banking the red evidence `seen-red/<dir>/red.txt` records; a gate
+never proven to refuse is a claim, not a guarantee) and the case that should pass — then tears
+its scratch substrate down to zero residue. Every fixture is census-registered
+([`gates/fixture_census.py`](gates/fixture_census.py) — the [fixture census](#fixture-census)
+entry below), which checks red-evidence *presence* and fixture *existence* on every commit;
+census-registration is a STATIC check, not a live re-run. The corpus is re-executed LIVE on its
+own cadence (post-merge batches, not per-commit) by `autoharn fixture-sweep`
+([`libexec/autoharn/fixture-sweep`](libexec/autoharn/fixture-sweep) /
+[`gates/fixture_sweep.py`](gates/fixture_sweep.py)), which classifies every registered family as
+GREEN, RED, or UNEXERCISED (a declared environment prerequisite — typically a reachable Postgres
+host — is missing, checked before the subprocess is even spawned) — this is the acceptance-time
+complement to the cheap per-commit census, closing the gap where banked evidence from an earlier
+commit and the corpus's actual behavior NOW had drifted apart unnoticed.
+
 ### ephemera
 Local session transcripts and snapshots (`ephemera/session-<id>/`, gitignored). Never
 committed — upstream is public, transcripts are private (maintainer ruling 2026-07-09).
@@ -613,7 +656,7 @@ verb (`otel-watch`) is unbuilt as of this entry.
 
 <a id="fixture-census"></a>
 ### fixture census
-`gates/fixture_census.py`: the gate that keeps the [`seen-red`](#seen-red) corpus honest as
+[`gates/fixture_census.py`](gates/fixture_census.py): the gate that keeps the [`seen-red`](#seen-red) corpus honest as
 a *checked* property rather than a claim. It holds a registry mapping every
 `seen-red/<dir>` to the runnable fixture that both-polarity-proves it, and goes red on (1)
 a `seen-red/<dir>` with no banked red-shaped evidence, (2) an orphaned `seen-red/<dir>` not
@@ -624,9 +667,19 @@ is the separate acceptance-time re-verification, not run on every commit. **Hone
 (open work item, row 1503):** the census today verifies a registered fixture path exists
 on disk, not that it is **git-tracked** — an untracked file at that path satisfies the
 check, the witnessed false-green the row's s45-review finding named. The item also notes a
-mechanical root cause it will close: `seen-red/s45-standing-lifecycle/run_fixtures.py`
+mechanical root cause it will close:
+[`seen-red/s45-standing-lifecycle/run_fixtures.py`](seen-red/s45-standing-lifecycle/run_fixtures.py)
 lacks the fixture-census leg its own spec's gate enumeration listed but the harness never
 invoked. Filed, sequenced for "the next quiet window," not yet built — the current head is
 census-clean, so nothing is live-broken by the gap.
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Relocated to file bottom 2026-07-23 (usability review, ledger row 1180, finding 13 -- a reader on GitHub's "Raw" view or in an editor met this internal bookkeeping before the title; gates/doc_attestation_presence.py's own matcher scans the whole file for the token, not a fixed position, so this move needed no gate change). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link/position repair. -->
+<!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
+     doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated
+     removal condition ("strike this marker and run the real A:B:C loop next time this file is
+     touched for content, not just link/position repair") -- this file was touched for real
+     content in the S-HISTORY-GLOSSARY commission (new "fixture" entry; "delta"/"birth chain"
+     entries extended with the birth-selection answer), not merely a mechanical link/position
+     repair, so the waiver's own condition is met and it is removed rather than left standing
+     dishonestly. The real A:B:C loop was run (attestations/pre-review-log.jsonl +
+     doc-legibility-attestations.jsonl record this file's own loop) -- see that record for
+     status. -->
