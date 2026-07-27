@@ -1,0 +1,88 @@
+design-currency — banked RED/GREEN evidence (design/FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md,
+gates/design_currency.py). Captured 2026-07-27, SECOND FIX ROUND on commit a7781ce (base commit
+37747d56472eae85c2a1c3eb2629f6072d3c1e79), after a fresh-context review of a7781ce returned BLOCKS
+MERGE (two false-SILENT MODERATEs plus one stale-comment item; the five seeded headers, the three
+true positives, the reverts, and hygiene all independently re-executed clean). Merged main
+(c967fab or later), which carries 945f9ab -- the spec amendment settling the discharged-as-valid-
+successor call this build's PRIOR fix round made and could only claim as an unratified divergence
+at the time.
+
+FIXED THIS ROUND:
+  1. Duplicate design-currency headers (a doc carrying two headers parsed CLEAN on the first,
+     silently ignoring the second -- an ADR-0002 lying-signature shape) now a check-4 grammar
+     advisory naming the doc, header count, and every header's own status (parse_header uses
+     re.finditer, not .search).
+  2. Dangling depends-on (a target that does not exist read exactly like a healthy live
+     dependency) now its own advisory, "depends-on target missing", distinct from drift.
+     A target that EXISTS but is headerless stays silent -- documented as a deliberate asymmetry
+     (check 5's no-per-doc-noise rule applied to an edge), not an oversight.
+  3. LIVE_OR_HISTORICAL's comment updated to state the settled rule (spec §3 item 1 amended,
+     commit 945f9ab) rather than presenting the discharged-as-valid-successor call as this
+     module's own unratified divergence.
+  4. A THIRD bug, found live authoring this round's own fixtures (not asked for, fixed in
+     passing per the mother's-life-bar): HEADER_RE with no line-start anchor matched this spec's
+     OWN §2 illustrative grammar block (an INDENTED code-block quoting the header syntax) as a
+     second real header on the spec's own document -- a live false positive the first full-tree
+     run after Fix 1 caught immediately. Fixed by anchoring HEADER_RE to `^` (MULTILINE): a real
+     header is flush-left in every seeded doc; the grammar illustration is indented.
+
+=== 1. THE REAL REPO'S FIRST HONEST RUN AFTER THIS FIX ROUND (default polarity, always exit 0) ===
+design_currency: 3 finding(s) over 90 design doc(s):
+  !! ADVISORY — FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — LOGGING-DIRECTION-SURVEY-2026-07-27.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+design_currency: back-catalog — 85 of 90 design docs carry no currency header (adopt on touch)
+exit: 0
+
+Same three true positives as the prior fix round (survey doc, s65 spec, discharged logging spec)
+-- unchanged by this round's fixes, as expected: none of Fix 1/2/3 touch check 3's own logic.
+Zero check-1/check-2 false positives, and (new this round) zero false positive from
+FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md's own indented grammar illustration.
+
+=== 2. --strict on the same real tree (nonzero exactly because the three advisories above are real) ===
+design_currency: 3 finding(s) over 90 design doc(s):
+  !! ADVISORY — FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — LOGGING-DIRECTION-SURVEY-2026-07-27.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+design_currency: back-catalog — 85 of 90 design docs carry no currency header (adopt on touch)
+exit: 1
+
+=== 3. seen-red/design-currency/run_fixtures.py -- full both-polarity proof, synthetic docs only (12 cases, was 7) ===
+=== red-discharge-not-ancestor ===
+  [ok] exit=1, stdout='design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Bad.md: status=discharged names discharged-by=deadbeef00deadbeef00deadbeef00deadbeef0, which is not a verifiable ancestor of HEAD (i'
+
+=== red-dependency-drift ===
+  [ok] exit=1, stdout='design_currency: 1 finding(s) over 3 design doc(s):\n  !! ADVISORY — Live.md (status=ratified) depends-on=Old.md (status=superseded) — the dependency is drift, not satisfaction: Live.md leans on direction that has moved\ndesign_currency: back-catalog — 0 of 3 design docs carry no currency header (adop'
+
+=== red-malformed-grammar ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Malformed.md: line 3: unrecognized token 'foo=bar' (grammar is key=value, keys limited to status, discharged-by, superseded-by, depends-on)\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)"
+
+=== green-clean ===
+  [ok] exit=0, stdout='design_currency: clean — 1 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)'
+
+=== green-satisfaction ===
+  [ok] exit=0, stdout='design_currency: clean — 2 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 2 design docs carry no currency header (adopt on touch)'
+
+=== check3-fires-on-historical-plus-supersededby ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 2 design doc(s):\n  !! ADVISORY — Survey.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this mark"
+
+=== green-superseded-by-discharged-successor ===
+  [ok] exit=0, stdout='design_currency: clean — 2 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 2 design docs carry no currency header (adopt on touch)'
+
+=== red-duplicate-headers-both-valid ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Dup.md: line 3: multiple design-currency headers (2 found, statuses ['proposed', 'discharged']); only one is defined by the grammar\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)"
+
+=== red-duplicate-headers-first-valid-second-garbled ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — DupGarbled.md: line 3: multiple design-currency headers (2 found, statuses ['proposed', '<missing>']); only one is defined by the grammar\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)"
+
+=== red-dangling-depends-on ===
+  [ok] exit=1, stdout='design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Dangling.md (status=ratified) depends-on=NoSuchDoc.md — depends-on target missing (no such doc under /tmp/design-currency-fixtures-niu8urzc/case10)\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt o'
+
+=== green-depends-on-headerless-target-silent ===
+  [ok] exit=0, stdout='design_currency: clean — 2 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 1 of 2 design docs carry no currency header (adopt on touch)'
+
+=== green-indented-example-not-duplicate ===
+  [ok] exit=0, stdout='design_currency: clean — 1 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)'
+
+design-currency fixtures: all 12 cases matched their expected polarity.
+exit: 0

@@ -73,6 +73,31 @@ declared currency against the actual `kernel/lineage/*.sql` chain head and re-ve
 file still elaborates (type-checks), so a stale or broken model is caught mechanically rather
 than discovered by a reader who trusted it.
 
+`design/` itself holds around ninety documents (specs, surveys, decision records) whose
+free-prose `Status:` lines can quietly stop being true — a spec marked "ratified" whose build
+later gets superseded, a survey a later spec has already made non-actual. Rather than parse that
+prose (a heuristic that guesses a human sentence's meaning manufactures false certainty),
+`design/FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md` defines one machine-readable header a document
+adopts when touched:
+
+    <!-- design-currency: status=<token> [discharged-by=<sha>] [superseded-by=<path>]
+         [depends-on=<path>[,<path>...]] -->
+
+`status` is one of eight closed tokens (`proposed`, `ratified`, `in-build`, `discharged`,
+`superseded`, `rejected`, `evergreen`, `historical`) — `discharged` requires `discharged-by`
+(a commit sha), `superseded` requires `superseded-by` (a sibling doc path); `depends-on` names
+other docs this one leans on as live direction. `gates/design_currency.py` reads every header
+under `design/*.md` and raises `!! ADVISORY` lines — never a failure, exit 0 always by default,
+`--strict` for a human who wants a return code — when a `discharged-by`/`superseded-by` claim
+doesn't check out against git, a live doc depends on one that has since been superseded or
+rejected, an old free-text "Removal condition" marker sits unreconciled on a doc whose currency
+header shows the condition has actually been met, or a header is malformed. A doc with no header
+at all is not a violation — it is counted once in a single back-catalog line ("N of M design
+docs carry no currency header"), never per-doc noise; the header is adopted on touch, forward-
+only, never by a retroactive sweep. **Not yet wired into any hook** — it is runnable standalone
+today (`python3 gates/design_currency.py`); see the gate's own module docstring for where that
+wiring would go.
+
 ### Before you start
 
 Everything below assumes three things are already true. None of the four commands does any of

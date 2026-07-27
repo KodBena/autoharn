@@ -480,7 +480,11 @@ BASELINE: dict[str, int] = {
     # reconciliation above.
     # bumped 432 -> 433 (one new REGISTRY row: s65-refusal-attempted-kind, design/
     # FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md, ledger row 1487).
-    "gates/fixture_census.py":                     433,
+    # bumped 433 -> 434 (one new REGISTRY row: design-currency, design/
+    # FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md build) -- the identical shape as the row
+    # immediately above, witnessed growth from adding this build's own seen-red fixture bank
+    # to the registry, not unnoticed growth.
+    "gates/fixture_census.py":                     434,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -571,7 +575,11 @@ BASELINE: dict[str, int] = {
     # bumped 685 -> 696 (s65 fix round 2, BLOCKS MERGE review): this gate's own BASELINE
     # growing to carry the one entry this same commit bumps (gates/kind_shape_manifest_
     # gate.py, 1458 -> 1592) -- the same self-referential fixpoint as every prior bump.
-    "gates/max_lines.py":                          696,
+    # bumped 696 -> 704 (design/FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md build): this gate's own
+    # BASELINE growing to carry the one entry this same commit bumps (gates/fixture_census.py,
+    # 433 -> 434) -- the same self-referential fixpoint as every prior bump, re-measured after
+    # writing.
+    "gates/max_lines.py":                          704,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

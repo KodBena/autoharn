@@ -4,6 +4,7 @@
 ("when a design is fully discharged or superseded, it should automatically raise an
 advisory about its possible non-actuality"); the A:B:C loop runs on the build, not the
 proposal text. Removal condition: superseded by the build's merge record, or rejection. -->
+<!-- design-currency: status=in-build -->
 
 This document specifies a small advisory mechanism for the `design/` directory: a
 machine-readable currency header that design documents adopt when touched, and a gate
