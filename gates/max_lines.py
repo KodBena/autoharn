@@ -484,7 +484,8 @@ BASELINE: dict[str, int] = {
     # FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md build) -- the identical shape as the row
     # immediately above, witnessed growth from adding this build's own seen-red fixture bank
     # to the registry, not unnoticed growth.
-    "gates/fixture_census.py":                     434,
+    # bumped 434 -> 435 (one new REGISTRY row: bounds-vocabulary-drift, ledger row 1514 item 2).
+    "gates/fixture_census.py":                     435,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -579,7 +580,9 @@ BASELINE: dict[str, int] = {
     # BASELINE growing to carry the one entry this same commit bumps (gates/fixture_census.py,
     # 433 -> 434) -- the same self-referential fixpoint as every prior bump, re-measured after
     # writing.
-    "gates/max_lines.py":                          704,
+    # bumped 704 -> 707 (bounds-vocabulary single-home build): this gate's own BASELINE growing
+    # to carry the one entry this same commit bumps (gates/fixture_census.py, 434 -> 435).
+    "gates/max_lines.py":                          707,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
