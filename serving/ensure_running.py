@@ -105,8 +105,12 @@ def _pid_holding_port(port: int) -> int | None:
     """Ground truth, independent of any pidfile or /proc cmdline text match: the pid the KERNEL's
     own socket table (`ss`) reports as holding the LISTEN socket at 127.0.0.1:<port>, or None if
     nothing is listening there, `ss` is unavailable, or its output could not be parsed (round-4
-    review SEVERE-B item 2 -- used only to arbitrate a pidfile-vs-own-child disagreement in
-    `spawn_and_wait`'s poll loop; never trusted over an actual probe() success/failure)."""
+    review SEVERE-B item 2 -- originally used only to arbitrate a pidfile-vs-own-child
+    disagreement in `spawn_and_wait`'s own poll loop; a fresh-context review of the service-
+    restart build, 2026-07-27, CRITICAL-2, extended its use to `spawn_and_wait`'s EARLY
+    "persisted pidfile + probe already OK" return too -- that branch used to report a stale
+    pidfile's pid as the winner with no ground-truth check at all. Never trusted over an actual
+    probe() success/failure -- this only ever arbitrates WHO the already-established winner is)."""
     try:
         r = subprocess.run(["ss", "-H", "-ltnp"], capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.TimeoutExpired):
@@ -192,7 +196,32 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
     )
     outcome, _detail = probe(url, boundary_deployment)
     if outcome == OK:
-        return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=existing_pid,
+        # FRESH-CONTEXT REVIEW FINDING CRITICAL-2 (2026-07-27, service-restart build): this
+        # branch used to return `winner_pid=existing_pid` unconditionally -- the STALE pidfile
+        # content read moments ago, never checked against who actually holds the port RIGHT NOW.
+        # A caller like `autoharn service restart` reaches this exact branch after draining its
+        # OWN old process (which wrote `existing_pid` before it was ever signaled): if a foreign
+        # process wins the freed port during the drain, `existing_pid` still names the DRAINED,
+        # now-EXITED old pid -- reporting it as "the winner" is a live misdiagnosis (witnessed:
+        # a restart refusal that told the operator to "investigate" the very pid it had just
+        # confirmed dead, while the real foreign occupant went unnamed). Ground-truth it against
+        # `_pid_holding_port` (the kernel's own socket table, the SAME authority the poll loop a
+        # few lines below already trusts over any pidfile/cmdline text match) before ever
+        # reporting a winner: on agreement, `existing_pid` is confirmed still true; on
+        # disagreement (including `existing_pid is None`, e.g. no pidfile existed at all), report
+        # the actual port-holder if `ss` names one, or the honest "an unidentified process"
+        # fallback (`winner_pid=None`) rather than a stale, possibly-dead pid. This also fixes
+        # `start`'s own "adopted" reporting, which shares this exact code path (ADR-0012 P1: one
+        # home, one fix, not a restart-only patch of a defect the whole module carries).
+        ground_truth_pid = _pid_holding_port(port)
+        # `ss` is the kernel's own socket table -- when it names a holder, THAT is reported,
+        # regardless of what `existing_pid` claimed (agreement is simply the common case, not a
+        # precondition for trusting `ss`). When `ss` itself cannot name a holder (missing binary,
+        # a transient read failure, or a permissions gap), `existing_pid` is NOT asserted as a
+        # fallback -- it is exactly the stale value this fix exists to stop trusting on its own;
+        # the honest "an unidentified process" (`winner_pid=None`) is reported instead.
+        winner_pid = ground_truth_pid
+        return SpawnOutcome(status="adopted", proc_pid=None, winner_pid=winner_pid,
                              log_path=None, detail=None)
     # The probe FAILED -- regardless of what pid_is_boundary_service said. Even if
     # `pid_looks_like_boundary_service` is True (a real serving.boundary_service process for this

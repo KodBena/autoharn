@@ -328,6 +328,7 @@ REGISTRY: dict[str, str] = {
     # own repo, adopted back as a git submodule at tools/autoharn-panel — both-polarity
     # discipline continues to hold there, just no longer under this repo's seen-red/ registry.
     "bounds-vocabulary-drift":         "seen-red/bounds-vocabulary-drift/run_fixtures.py",  # row 1514 item 2
+    "service-restart":                "seen-red/service-restart/run_fixtures.py",  # design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md, row 1553
 }
 
 def _red_evidence_name(d: str) -> str | None:

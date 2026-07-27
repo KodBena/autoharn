@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """autoharn-service -- ensure-running control plane (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md
-§2, ledger rows 1151-1183). Invoked as `autoharn service status|start|stop` by the ./autoharn
-dispatcher (never invoked directly by a caller -- there is no `./service` alias, this is not one
-of the ten relocated verbs).
+§2, ledger rows 1151-1183). Invoked as `autoharn service status|start|stop|restart` by the
+./autoharn dispatcher (never invoked directly by a caller -- there is no `./service` alias, this
+is not one of the ten relocated verbs).
+
+RESTART (design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md, row 1553 option A): a drained, witnessed hub
+handover -- own-process check (verbatim `stop` posture), config pre-validation BEFORE any signal,
+bounded SIGTERM drain (--drain-timeout, --force-kill), spawn via the SAME `ensure_running.
+spawn_and_wait` `start` uses, a STRICTER handover contract than `start`'s adopt-is-success (a
+foreign winner is REFUSED, never adopted), then a per-deployment /health witness before the one-
+line summary. See `cmd_restart` below for the leg-by-leg implementation; `serving/
+boundary_service.py` itself is NOT modified by this verb (the spec's own §2 non-goal).
 
 WHAT THIS DOES, per the spec's own words:
   - PROBE: every invocation that needs the boundary resolves it -- reachable, use it, regardless
@@ -78,6 +86,10 @@ DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(AUTOHARN_ROOT / "
 # (BoundaryUnreachable/BoundaryRefusal/ProtocolVersionMismatch); ensure_running.py imports it.
 sys.path.insert(0, str(AUTOHARN_ROOT))
 from serving import ensure_running as er  # noqa: E402
+# design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md §1 leg 2: serving/boundary_multiplex_config.py is
+# THE ONE shape authority for boundary-multiplex.toml (ADR-0012 P1) -- `restart` imports it
+# rather than re-deriving or re-parsing the TOML's own shape a second time here.
+from serving import boundary_multiplex_config as bmc  # noqa: E402
 sys.path.insert(0, str(AUTOHARN_ROOT / "filing"))
 import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, design/FABLE-FIXTURE-SANDBOX-
 # RUNTIME-FORECLOSURE-SPEC.md §2 -- checked here too, defense-in-depth against a fixture that
@@ -160,6 +172,13 @@ _STOP_SIGKILL_TIMEOUT_S = 2.0   # confirmation window after SIGKILL -- SIGKILL i
 _STOP_POLL_INTERVAL_S = 0.1     # poll cadence for both windows above -- frequent enough that the
                                 # common case (process dies well within its window) resolves fast,
                                 # coarse enough not to hammer /proc.
+
+
+def _proc_alive(pid: int) -> bool:
+    """Ground-truth liveness, the same single fact `_wait_for_pid_exit` polls below -- named
+    once (ADR-0012 P1) rather than re-spelled inline at `cmd_restart`'s own re-verify-before-
+    SIGKILL check (fresh-context review finding CRITICAL-1)."""
+    return os.path.exists(f"/proc/{pid}")
 
 
 def _wait_for_pid_exit(pid: int, timeout_s: float, poll_interval_s: float) -> bool:
@@ -318,7 +337,248 @@ def cmd_stop(argv: list[str]) -> int:
     return 1
 
 
-_SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop}
+# RESTART (design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md, work item boundary-hub-restart-robustness,
+# row 1553 option A; ratification row 1557 item 2): a drained, witnessed hub handover.
+# `serving/boundary_service.py`'s own startup-fixed deployment enumeration (spec §2's own
+# rejection of hot-reload, row 1553 option C) means the ONLY way to add/retire a deployment is
+# stop-then-start -- today that is a hand-timed blip with no witness of how long it lasted, and
+# no confirmation the new process is actually healthy before the operator walks away. `restart`
+# makes the interval BOUNDED (a drain timeout, never an unbounded wait), DRAINED (SIGTERM, never
+# a bare kill, so in-flight requests complete), and WITNESSED (a probed health report plus a
+# measured one-line summary) -- never touching `serving/boundary_service.py` itself (spec §2).
+_DEFAULT_DRAIN_TIMEOUT_S = 30.0  # spec §1 leg 3's own stated default; --drain-timeout overrides.
+
+
+def _parse_restart_args(argv: list[str]) -> tuple[float, bool]:
+    """Hand-rolled (this file carries no argparse dependency elsewhere -- ADR-0012 P1, matching
+    this module's existing style rather than introducing a second parsing convention for one
+    verb). Returns (drain_timeout_s, force_kill). Raises ValueError, already formatted as
+    teaching text, on anything unrecognized -- the caller turns that into a REFUSED exit 2."""
+    drain_timeout = _DEFAULT_DRAIN_TIMEOUT_S
+    force_kill = False
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok == "--drain-timeout":
+            if i + 1 >= len(argv):
+                raise ValueError("--drain-timeout requires a value (seconds)")
+            try:
+                drain_timeout = float(argv[i + 1])
+            except ValueError as e:
+                raise ValueError(f"--drain-timeout value {argv[i + 1]!r} is not a number") from e
+            if drain_timeout <= 0:
+                raise ValueError(f"--drain-timeout must be > 0, got {drain_timeout!r}")
+            i += 2
+            continue
+        if tok == "--force-kill":
+            force_kill = True
+            i += 1
+            continue
+        raise ValueError(
+            f"unrecognized restart argument {tok!r} (known: --drain-timeout <seconds>, "
+            f"--force-kill)")
+    return drain_timeout, force_kill
+
+
+def cmd_restart(argv: list[str]) -> int:
+    try:
+        drain_timeout, force_kill = _parse_restart_args(argv)
+    except ValueError as e:
+        print(f"autoharn service: REFUSED -- {e}. Nothing was touched.", file=sys.stderr)
+        return 2
+
+    dep = _load_deployment()
+    url, port = _boundary_url_and_port(dep)
+    boundary_deployment = _boundary_deployment(dep)
+    world_dir = DEPLOYMENT_PATH.parent
+    toml_path = world_dir / "boundary-multiplex.toml"
+    pidfile = _pidfile_path()
+
+    # LEG 1 (spec §1.1): own-process check, verbatim posture to `stop` -- an adopted or
+    # hand-started hub is not ours to restart. Refuse, teach, signal nothing.
+    if not pidfile.is_file():
+        print(f"autoharn service: REFUSED -- no pidfile at {pidfile}. This tool has no record "
+              f"of having started the service at {url} itself (an operator's own manual start, "
+              f"or a different tool) -- restarting a process this tool never started is refused "
+              f"rather than guessed. Stop it where it was started, or run 'autoharn service "
+              f"start' to start fresh here. Nothing was signaled.", file=sys.stderr)
+        return 1
+    try:
+        old_pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError) as e:
+        print(f"autoharn service: REFUSED -- {pidfile} does not contain a readable pid "
+              f"({e.__class__.__name__}: {e}). Nothing was signaled.", file=sys.stderr)
+        return 1
+    if not er.pid_is_boundary_service(old_pid, toml_path):
+        # Verbatim posture to `stop` (spec §1.1) means the FULL behavior, not just the refusal
+        # text: `stop` removes a pidfile that fails this identity check (it no longer describes
+        # anything this tool should trust, PID REUSE) rather than leaving a provably-wrong pid on
+        # disk for the next invocation to trip over -- same here.
+        pidfile.unlink(missing_ok=True)
+        print(f"autoharn service: REFUSED -- pidfile named pid {old_pid}, which is not a "
+              f"serving.boundary_service process for this world's own boundary-multiplex.toml "
+              f"({toml_path}) -- PID REUSE can make a stale pidfile name an unrelated process; "
+              f"restarting it on trust risks signaling a bystander. The stale pidfile was "
+              f"removed; nothing was signaled. Stop it where it was started, or run 'autoharn "
+              f"service start' to start fresh here.", file=sys.stderr)
+        return 1
+
+    # LEG 2 (spec §1.2): config pre-validation BEFORE any signal -- an invalid config refuses
+    # HERE, with the old process untouched and still serving; a restart must never trade a
+    # working hub for a config-parse crash loop.
+    try:
+        records = bmc.load_multiplex_config(toml_path)
+    except bmc.MultiplexConfigError as e:
+        print(f"autoharn service: REFUSED -- {toml_path} does not validate ({e}). The old "
+              f"process (pid {old_pid}) was NOT signaled and keeps serving unchanged. Fix the "
+              f"config and run 'autoharn service restart' again.", file=sys.stderr)
+        return 1
+    print(f"autoharn service: config at {toml_path} validates -- the new process will serve "
+          f"{sorted(records.keys())}.")
+
+    # LEG 3 (spec §1.3): drain -- SIGTERM the old process (uvicorn's own graceful path: listen
+    # socket closes, in-flight requests complete), wait bounded. On timeout, REFUSE loudly with
+    # the pid still running -- never escalate to SIGKILL unasked; --force-kill is the operator's
+    # explicit, printed-as-such escalation (a stricter default than `stop`'s own auto-escalate,
+    # deliberate: `restart`'s whole contract is "bounded", never a silent unbounded hang, but
+    # also never an unasked kill of a process that may still be finishing real work).
+    t_sigterm = time.monotonic()
+    try:
+        os.kill(old_pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"autoharn service: pid {old_pid} (from {pidfile}) was already gone before SIGTERM "
+              f"-- proceeding to spawn.", file=sys.stderr)
+    except OSError as e:
+        print(f"autoharn service: REFUSED -- could not signal pid {old_pid} "
+              f"({e.__class__.__name__}: {e}). Nothing else was touched.", file=sys.stderr)
+        return 1
+    else:
+        if not _wait_for_pid_exit(old_pid, drain_timeout, _STOP_POLL_INTERVAL_S):
+            if not force_kill:
+                print(f"autoharn service: REFUSED -- pid {old_pid} did NOT exit within "
+                      f"{drain_timeout}s of SIGTERM -- it is STILL RUNNING and still serving "
+                      f"{url}. Never escalating to SIGKILL unasked; re-run with --force-kill to "
+                      f"explicitly authorize that escalation, or investigate pid {old_pid} by "
+                      f"hand (a slow in-flight request, or a hung shutdown handler).",
+                      file=sys.stderr)
+                return 1
+            # RE-VERIFY IDENTITY, IMMEDIATELY BEFORE SIGKILL (fresh-context review finding
+            # CRITICAL-1): leg 1's own /proc/<pid>/cmdline check ran ONCE, before the drain --
+            # `stop`'s own precedent (this file's `cmd_stop`) accepts an unverified window only
+            # at "seconds" scale (its 5.0s SIGTERM grace, disclosed explicitly as such); trusting
+            # that SAME single check across `restart`'s own drain_timeout (default 30s, and
+            # --drain-timeout carries NO upper bound at all -- an operator could pass an hour)
+            # would mean SIGKILL'ing whatever pid the OS has since handed old_pid to, with zero
+            # re-check. Re-run the identical `pid_is_boundary_service` check right here: if it
+            # still names OUR process, proceed to escalate; if not, two honest possibilities
+            # exist and neither is "signal it anyway" -- the process may have exited (and simply
+            # not been detected as such by `_wait_for_pid_exit`'s own bounded polling, a narrow
+            # timing gap: the pid disappeared from /proc but this check now finds NO /proc entry
+            # at all, so it is safe to treat as a clean, if late-detected, drain) or the pid was
+            # reused by an unrelated process while still alive (PID REUSE), in which case
+            # SIGKILL'ing it is exactly the bystander kill this verb must never commit. Refuse
+            # the reuse case, teaching, rather than guess; fall through to spawn on the clean-
+            # late-exit case rather than duplicating the spawn/witness/summary legs a second time.
+            if not er.pid_is_boundary_service(old_pid, toml_path):
+                if _proc_alive(old_pid):
+                    print(f"autoharn service: REFUSED -- pid {old_pid} is no longer a "
+                          f"serving.boundary_service process for this world's own "
+                          f"boundary-multiplex.toml ({toml_path}) -- PID REUSE can hand a dead "
+                          f"service's old pid to an unrelated process during a long drain "
+                          f"window. SIGKILL was NOT sent (signaling it on trust would risk "
+                          f"killing a bystander). Investigate pid {old_pid} by hand; the "
+                          f"original serving.boundary_service process may already be gone.",
+                          file=sys.stderr)
+                    return 1
+                print(f"autoharn service: pid {old_pid} is no longer present at all -- it "
+                      f"exited during the drain window, just past this tool's own bounded "
+                      f"poll. SIGKILL was NOT sent (nothing to signal); proceeding as a clean "
+                      f"drain.", file=sys.stderr)
+            else:
+                print(f"autoharn service: pid {old_pid} did NOT exit within {drain_timeout}s of "
+                      f"SIGTERM -- --force-kill was passed, ESCALATING to SIGKILL.", file=sys.stderr)
+                try:
+                    os.kill(old_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except OSError as e:
+                    print(f"autoharn service: REFUSED -- SIGKILL could not be sent to pid "
+                          f"{old_pid} ({e.__class__.__name__}: {e}). pid {old_pid} may still be "
+                          f"alive.", file=sys.stderr)
+                    return 1
+                if not _wait_for_pid_exit(old_pid, _STOP_SIGKILL_TIMEOUT_S, _STOP_POLL_INTERVAL_S):
+                    print(f"autoharn service: REFUSED -- pid {old_pid} is STILL ALIVE "
+                          f"{_STOP_SIGKILL_TIMEOUT_S}s after SIGKILL (likely stuck in "
+                          f"uninterruptible kernel sleep). Investigate pid {old_pid} by hand.",
+                          file=sys.stderr)
+                    return 1
+    drain_elapsed = time.monotonic() - t_sigterm
+    print(f"autoharn service: drained pid {old_pid} in {drain_elapsed:.1f}s.", file=sys.stderr)
+
+    # LEG 4 (spec §1.4): spawn -- the existing start path verbatim (bind-as-lock, child writes
+    # the pidfile after its own synchronous bind). `spawn_and_wait` re-probes and clears the now-
+    # stale pidfile itself (ADR-0012 P1: reuse ensure_running's structural resolution, no new
+    # race logic here).
+    result = er.spawn_and_wait(world_dir, url, port, boundary_deployment)
+
+    # LEG 5 (spec §1.5): handover deviation from `start`'s adopt-is-success, stated and
+    # deliberate -- if the bind race is lost to a FOREIGN process in the gap, `restart` REFUSES
+    # loudly naming the squatter instead of adopting (row 1165's adopt ruling governs `start`;
+    # `restart`'s contract is stricter -- the operator's intent was "my new config is now
+    # serving", and an adopted stranger structurally defeats that even if it answers /health).
+    if result.status == "adopted":
+        who = f"pid {result.winner_pid}" if result.winner_pid is not None else "an unidentified process"
+        print(f"autoharn service: REFUSED -- pid {old_pid} was drained, but {who} won the bind "
+              f"on {url} before this invocation's own spawn (pid {result.proc_pid}) could -- "
+              f"this looks like a foreign process racing the freed port, not this restart's own "
+              f"new config taking over. Refusing to report success over a squatter (restart's "
+              f"contract is stricter than 'start': adopting here would silently defeat the "
+              f"'my edited config is now serving' intent even though {who} answers its own "
+              f"/health). The hub is now served by {who}, NOT by the config this invocation "
+              f"just validated -- investigate immediately.", file=sys.stderr)
+        return 1
+    if result.status == "failed":
+        print(f"autoharn service: REFUSED -- pid {old_pid} was drained, but the new process "
+              f"never came up: {result.detail}", file=sys.stderr)
+        return 1
+    new_pid = result.proc_pid
+    t_reachable = time.monotonic()
+    # "unserved window" (spec §1.7) is measured from the SIGTERM send (the earliest instant the
+    # old process could plausibly have stopped accepting new connections -- uvicorn's own
+    # graceful path stops accepting near-instantly on SIGTERM, well before the process fully
+    # exits) through the new process's own first successful health probe inside spawn_and_wait's
+    # poll loop -- the honest upper bound on "how long could a new request have found nobody
+    # home", not merely the drain-wait or spawn-wait halves counted separately.
+    unserved_window = t_reachable - t_sigterm
+
+    # LEG 6 (spec §1.6): witness before reporting -- probe /d/{name}/health for EVERY deployment
+    # in the newly loaded config, version-compatibly (er.probe, never bare 200-counting -- the
+    # SEVERE-4 lesson). Report per deployment; exit nonzero if any fails, hub left running
+    # (partially-healthy is reported, not rolled back).
+    healthy: list[str] = []
+    unhealthy: list[str] = []
+    for name in sorted(records):
+        outcome, detail = er.probe(url, name)
+        if outcome == er.OK:
+            healthy.append(name)
+            print(f"autoharn service: SERVING {name}")
+        else:
+            unhealthy.append(name)
+            print(f"autoharn service: {name}: {detail or outcome}", file=sys.stderr)
+    if unhealthy:
+        print(f"autoharn service: {len(unhealthy)}/{len(records)} deployment(s) unhealthy after "
+              f"restart -- the new hub (pid {new_pid}) is left RUNNING, not rolled back (rollback "
+              f"is the operator re-editing the config and running 'autoharn service restart' "
+              f"again).", file=sys.stderr)
+
+    # LEG 7 (spec §1.7): one-line summary with the measured gap.
+    print(f"autoharn service: restart: drained {old_pid} in {drain_elapsed:.1f}s, new pid "
+          f"{new_pid}, unserved window ~{unserved_window:.1f}s, {len(healthy)}/{len(records)} "
+          f"deployments healthy.")
+    return 0 if not unhealthy else 1
+
+
+_SUBCOMMANDS = {"status": cmd_status, "start": cmd_start, "stop": cmd_stop, "restart": cmd_restart}
 
 
 def main(argv: list[str]) -> int:
@@ -344,18 +604,26 @@ def main(argv: list[str]) -> int:
         # fixed above is the sandbox check being skipped, not this file's own argument parsing.
         # Byte-identical NO-MARKER behavior is witnessed in
         # seen-red/fixture-sandbox-runtime-foreclosure/run_fixtures.py.
-        print("usage: autoharn service status|start|stop\n\n"
+        print("usage: autoharn service status|start|stop|restart [--drain-timeout <seconds>] "
+              "[--force-kill]\n\n"
               "  status   probe the boundary this world's deployment.json names; never writes\n"
               "  start    ensure-running: spawn a detached child if unreachable, or adopt\n"
               "           whichever process wins the bind race; a no-op if already reachable\n"
               "  stop     explicit stop -- only for a service THIS tool's own 'start' spawned\n"
               "           (tracked via a pidfile, and re-checked against /proc at stop time);\n"
-              "           refuses, never guesses, otherwise")
+              "           refuses, never guesses, otherwise\n"
+              "  restart  drained, witnessed hub handover (design/FABLE-SERVICE-DRAIN-RESTART-\n"
+              "           SPEC.md): validates the config, SIGTERMs the old process and waits\n"
+              "           (--drain-timeout, default 30s; --force-kill authorizes SIGKILL only\n"
+              "           after that wait is exceeded, never unasked), spawns the new process,\n"
+              "           REFUSES (does not adopt) if a foreign process wins the freed port,\n"
+              "           then probes every deployment's own /health before reporting the\n"
+              "           measured unserved window")
         return 0
     verb = argv[0]
     if verb not in _SUBCOMMANDS:
         print(f"autoharn service: REFUSED -- unrecognized subcommand '{verb}' (known: "
-              f"status, start, stop). Nothing was touched.", file=sys.stderr)
+              f"status, start, stop, restart). Nothing was touched.", file=sys.stderr)
         return 2
     return _SUBCOMMANDS[verb](argv[1:])
 

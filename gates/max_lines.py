@@ -516,7 +516,11 @@ BASELINE: dict[str, int] = {
     # FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md build) -- the identical shape as the rows
     # immediately above, witnessed growth from registering this build's own seen-red fixture,
     # not unnoticed growth.
-    "gates/fixture_census.py":                     438,
+    # bumped 437 -> 438 on the service-restart branch (one new REGISTRY row: service-restart,
+    # design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md, row 1553 option A) -- reconciled at the
+    # 2026-07-27 merge: both rows ADDITIVE and non-overlapping, union re-measured to 439, the
+    # same merge-union ratchet-crossing class as every reconciliation above.
+    "gates/fixture_census.py":                     439,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -630,7 +634,10 @@ BASELINE: dict[str, int] = {
     # gate's own BASELINE growing to carry the two entries this same commit bumps
     # (gates/kind_shape_manifest_gate.py 1635 -> 1716, gates/fixture_census.py 437 -> 438) --
     # the same self-referential fixpoint as every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          755,
+    # bumped 740 -> 747 on the service-restart branch (carrying its own fixture_census bump);
+    # reconciled at the 2026-07-27 merge: both parents' comments kept verbatim, the union
+    # re-measured on the merged file itself, the same merge-union class as above.
+    "gates/max_lines.py":                          762,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
