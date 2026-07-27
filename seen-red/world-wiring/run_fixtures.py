@@ -31,6 +31,11 @@ CASES:
                      already exists with DIFFERENT content, without --force, is refused (exit 1)
                      naming the conflicting file; the destination file is provably unchanged
                      afterward.
+  RED-SETUID-MODE        -- a crafted archive whose manifest declares mode 4755 (setuid) for a
+                     member is refused (exit 1), nothing written.
+  RED-DEST-SYMLINK       -- a destination containing a pre-planted symlinked directory component
+                     on a member's path is refused (exit 1); the symlink's target directory is
+                     provably untouched (nothing written THROUGH the link).
 
 Scratch-only: one throwaway schema/kern/role triple in the TOY db, one scratch boundary_service
 child process on a dynamically-chosen free loopback port -- both torn down after, UNLESS a case
@@ -254,6 +259,39 @@ def main() -> int:
                         f"other_files_absent={other_files_absent}")
     print(f"RED-CONFLICT-NO-FORCE: differing existing file refused by name, destination "
           f"untouched -- {'PASS' if ok else 'FAIL'}")
+
+    data = b"innocuous bytes under a privileged mode claim"
+    setuid_tar = red_dir / "setuid.tar.gz"
+    _craft_archive(setuid_tar, "somefile.txt", data,
+                   [{"path": "somefile.txt", "sha256": hashlib.sha256(data).hexdigest(),
+                     "mode": "4755", "size": len(data)}])
+    dst_suid = red_dir / "dst_setuid"
+    r = _run_tool("restore", str(setuid_tar), "--dest", str(dst_suid))
+    ok = r.returncode == 1 and "setuid" in r.stderr and not dst_suid.exists()
+    if not ok:
+        failures.append(f"RED-SETUID-MODE: exit={r.returncode} stderr={r.stderr!r} "
+                        f"dst_exists={dst_suid.exists()}")
+    print(f"RED-SETUID-MODE: manifest mode 4755 refused, nothing written -- "
+          f"{'PASS' if ok else 'FAIL'}")
+
+    data = b"bytes that must never cross the symlink"
+    symlink_tar = red_dir / "symlink_dest.tar.gz"
+    _craft_archive(symlink_tar, "sub/inner.txt", data,
+                   [{"path": "sub/inner.txt", "sha256": hashlib.sha256(data).hexdigest(),
+                     "mode": "0644", "size": len(data)}])
+    outside = red_dir / "outside_target"
+    outside.mkdir()
+    dst_sym = red_dir / "dst_symlink"
+    dst_sym.mkdir()
+    (dst_sym / "sub").symlink_to(outside)
+    r = _run_tool("restore", str(symlink_tar), "--dest", str(dst_sym))
+    wrote_through = any(outside.iterdir())
+    ok = r.returncode == 1 and "symlink" in r.stderr and not wrote_through
+    if not ok:
+        failures.append(f"RED-DEST-SYMLINK: exit={r.returncode} stderr={r.stderr!r} "
+                        f"wrote_through_symlink={wrote_through}")
+    print(f"RED-DEST-SYMLINK: pre-planted symlinked destination component refused, nothing "
+          f"written through it -- {'PASS' if ok else 'FAIL'}")
 
     # ------------------------------------------------------------------ GREEN-RESTORE-DOCTOR
     copy_dir = tmpdir / "copy"

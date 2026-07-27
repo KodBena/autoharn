@@ -1,8 +1,9 @@
 seen-red/world-wiring — banked RED evidence (both-polarity proof, fixture-census)
 
-tools/world_wiring.py's `restore` subcommand refuses WHOLESALE (nothing written) on four
+tools/world_wiring.py's `restore` subcommand refuses WHOLESALE (nothing written) on six
 distinct defect shapes. Real output, captured live from seen-red/world-wiring/run_fixtures.py
-(HARNESS_PGHOST=192.168.122.1, 2026-07-27):
+(HARNESS_PGHOST=192.168.122.1, 2026-07-27; the last two legs added the same day by the
+orchestrator's inline pass after the maintainer waived the fresh-context review):
 
 --- RED-NO-MANIFEST (a tarball whose first member is not manifest.json) ---
 $ python3 tools/world_wiring.py restore red/nomanifest.tar.gz --dest red/dst_nomanifest
@@ -40,8 +41,27 @@ exit: 1
 (e.g. features.json) was written into dst_conflict -- a partial write on a wholesale refusal
 would itself be a defect this same fixture checks for.
 
-Each of the four cases above is exercised programmatically (not just by hand, as transcribed
+Each of the six cases in this file (the four above plus the two appended below) is exercised
+programmatically (not just by hand, as transcribed
 here) by seen-red/world-wiring/run_fixtures.py, alongside the GREEN cases (manifest-hash
 independence, secrets exclusion, and a full backup/strip/restore/serve/doctor round trip against
 a live scratch boundary) -- gates/fixture_census.py REGISTRY entry "world-wiring" points at that
 file as the live, re-runnable proof of everything transcribed above.
+
+--- RED-SETUID-MODE (manifest declares mode 4755 -- setuid -- for a member) ---
+$ python3 tools/world_wiring.py restore red/setuid.tar.gz --dest red/dst_setuid
+world_wiring restore: REFUSED -- manifest mode '4755' for 'somefile.txt' carries
+setuid/setgid/sticky bits -- no wiring file legitimately needs them, and restore will not mint
+privileged binaries from an archive. Refused wholesale, nothing written.
+exit: 1
+`red/dst_setuid` was never created.
+
+--- RED-DEST-SYMLINK (a destination path component is a pre-planted symlink on disk) ---
+$ python3 tools/world_wiring.py restore red/symlink_dest.tar.gz --dest red/dst_symlink
+    # where red/dst_symlink/sub is a symlink to a directory OUTSIDE --dest
+world_wiring restore: REFUSED -- destination path component red/dst_symlink/sub is a symlink on
+disk -- restoring 'sub/inner.txt' would write THROUGH it to wherever it points, potentially
+outside --dest. Refused wholesale, nothing written. Remove or replace that symlink first if the
+restore is intended.
+exit: 1
+The symlink's target directory contained zero entries afterward -- nothing was written through it.

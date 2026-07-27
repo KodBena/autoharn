@@ -93,6 +93,12 @@ extract_context.py's own manifest-refusal posture):
     name it, per CLAUDE.md's engineering-responsibility bullet: a hazard in reach of this tool's
     own extraction path is fixed here, not routed around);
   * any member whose sha256 disagrees with the manifest's recorded hash for that path;
+  * any manifest mode carrying setuid/setgid/sticky bits (restore never mints privileged
+    binaries from an archive -- no wiring file legitimately needs them);
+  * any destination path component that is already a SYMLINK on disk (writing through it would
+    land bytes outside --dest -- the on-disk twin of the in-archive symlink refusal above;
+    found by the 2026-07-27 orchestrator inline pass after the maintainer waived the
+    fresh-context review, and closed per the same engineering-responsibility bullet);
   * an existing destination file that differs from the incoming one -- UNLESS --force, which
     overwrites and prints every such overwrite by name.
 

@@ -9,7 +9,10 @@ refusing wholesale (ADR-0012 P2: a boundary translates-and-validates, it never c
 malformed input into a plausible one) on: a missing/unparseable manifest.json, an absolute or
 path-escaping member, a non-regular-file member (symlink/hardlink/device -- the classic tar-
 extraction escape vector), a member absent from the manifest or a manifest entry absent from the
-archive, a sha256 mismatch, or a differing existing destination file without --force.
+archive, a sha256 mismatch, a manifest mode carrying setuid/setgid/sticky bits (restore never
+mints privileged binaries from an archive), a destination path component that is a symlink on
+disk (writing through it would escape --dest -- the on-disk twin of the in-archive symlink
+refusal above), or a differing existing destination file without --force.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import below is top-of-file.
 """
@@ -113,6 +116,29 @@ def _verify_archive(tf: tarfile.TarFile, dest: Path, force: bool) -> tuple[dict,
                 f"archive member {m.name!r} sha256 mismatch: manifest says {want}, archive bytes "
                 f"hash to {got} -- TAMPERED OR CORRUPT. Refused wholesale, nothing written.")
         contents[m.name] = data
+
+    for rel in contents:
+        entry = manifest_files[rel]
+        try:
+            mode = int(entry["mode"], 8)
+        except (KeyError, TypeError, ValueError):
+            raise RestoreRefused(
+                f"manifest entry for {rel!r} carries no parseable octal 'mode' field -- refused "
+                f"wholesale, nothing written.")
+        if mode & 0o7000:
+            raise RestoreRefused(
+                f"manifest mode {entry['mode']!r} for {rel!r} carries setuid/setgid/sticky bits -- "
+                f"no wiring file legitimately needs them, and restore will not mint privileged "
+                f"binaries from an archive. Refused wholesale, nothing written.")
+        cur = dest
+        for part in PurePosixPath(rel).parts:
+            cur = cur / part
+            if cur.is_symlink():
+                raise RestoreRefused(
+                    f"destination path component {cur} is a symlink on disk -- restoring {rel!r} "
+                    f"would write THROUGH it to wherever it points, potentially outside --dest. "
+                    f"Refused wholesale, nothing written. Remove or replace that symlink first if "
+                    f"the restore is intended.")
 
     conflicts = []
     for rel, data in contents.items():
