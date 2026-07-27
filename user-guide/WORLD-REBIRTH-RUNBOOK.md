@@ -110,16 +110,40 @@ drop that was NOT expected, quoted with its refusal text. No umbrella claims.
 ## Step 7 — **MAINTAINER**: dust disposal (destructive; operator-authority by design)
 
 Default doctrine keeps dust worlds queryable read-only forever. If the maintainer
-instead rules them defunct (drift risk), the evidence is preserved as a dump artifact
-FIRST, then the schemas drop — these are the maintainer's own commands (permission
-classifiers correctly refuse them to an agent):
+instead rules them defunct (drift risk), the evidence is preserved FIRST — and its
+capture is VERIFIED before any drop — then the schemas go. The drops are the
+maintainer's own commands (permission classifiers correctly refuse them to an agent);
+the capture is the orchestrator's, being read-only.
 
-    mkdir -p <somewhere-durable>/dust
-    pg_dump -h <db host> -d <db> -n <oldworld> -n <oldworld>_kernel | gzip \
-        > <somewhere-durable>/dust/<oldworld>-dust-$(date -I).sql.gz
-    gzip -t <somewhere-durable>/dust/<oldworld>-dust-*.sql.gz && echo DUMP-OK
+**Never `pg_dump | gzip` straight into a drop.** A pipe reports gzip's exit status,
+not pg_dump's — a failed dump yields a valid-gzip EMPTY file and a green `gzip -t`.
+Witnessed cost, 2026-07-27: the `experience` world's schemas were dropped against a
+20-byte empty dump; that evidence is unrecoverable outside host-level DB backups.
+The same incident's second lesson: a stray catalog orphan (a `pg_proc` row whose
+schema was dropped — leftover of some earlier interrupted CASCADE) makes `pg_dump`
+of the WHOLE database fail with `schema with OID <n> does not exist`, so pg_dump's
+success is never assumable on this database class. Capture accordingly:
+
+    # dump to a FILE with an explicit rc check -- no pipe:
+    pg_dump -h <db host> -d <db> -n <oldworld> -n <oldworld>_kernel \
+        -f <durable>/dust/<oldworld>-dust-$(date -I).sql \
+        && echo DUMP-RC-OK || echo DUMP-FAILED
+    grep -cE '^COPY|^CREATE TABLE' <durable>/dust/<oldworld>-dust-*.sql   # nonzero or it is NOT a dump
+
+    # if pg_dump fails (the catalog-orphan class): fall back to per-table \copy --
+    # the schema DDL is fully reproducible from kernel/lineage in git, so DATA is the
+    # evidence; export every base table EXCEPT stamp_secret (secrets never cross):
+    psql -h <db host> -d <db> -c "\copy (SELECT * FROM <schema>.<table>) TO
+        '<durable>/dust/<oldworld>-data/<schema>.<table>.csv' WITH (FORMAT csv, HEADER)"
+    # ...then cross-check: SELECT count(*) per table vs the COPY N output. Only after
+    # the counts agree does anything drop.
+
     echo '<oldworld>' | bash bootstrap/teardown-world.sh <oldworld> \
         --db <db> --host <db host> --force-non-scratch
+
+If the role drop refuses with "privileges for database <db> depend on it", the
+leftover is database-level grants: `DROP OWNED BY <oldworld>_rw;` (as a role with
+authority over them, usually the superuser) then `DROP ROLE <oldworld>_rw;`.
 
 After a drop: remove the world's table from the hub's `boundary-multiplex.toml` (restart
 the service), and note that any manifest/ledger text saying "the dust world remains
