@@ -477,7 +477,8 @@ file changed by this correction.)*
 *Facet (2026-07-16): second opinions are not front-loaded — [ADR-0018](0018-consults-are-not-front-loaded.md).*
 
 *(Dated amendment, 2026-07-23, per ADR-0005 Rule 8; maintainer-ratified from the
-retrospective ADR cross-check's closing synthesis — law/adr/RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md.)*
+retrospective ADR cross-check's closing synthesis — design/RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md
+(path retargeted 2026-07-27: the record moved out of law/adr/, layout ruling, ledger row 1469).)*
 
 **The external recurrence trigger.** A second defect report from an operator or
 ratifier against a surface already reported done fires a mandatory fresh-context

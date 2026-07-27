@@ -186,7 +186,8 @@ index cites it by filename to stay unambiguous in the meantime.
   safety-critical-logging brief this index does not duplicate).
 - `STANDARDS-REGISTRY.md` — the registry of external standards this project cites and how it
   treats each one (aim, not conformance claim, unless explicitly stated otherwise).
-- `RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md` — a dated cross-check record, not itself a rule.
+- `RETROSPECTIVE-ADR-CROSSCHECK-2026-07-23.md` — a dated cross-check record, not itself a rule;
+  relocated to `design/` 2026-07-27 (a record is not law — layout ruling, ledger row 1469).
 
 ## First-use glossary links: chocofarm
 

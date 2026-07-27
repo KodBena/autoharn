@@ -11,7 +11,7 @@ It enforces two of LAYOUT's claims mechanically and declares the third review-on
      RED.
   2. PER-DIRECTORY CURRENCY PATTERNS: for the directories whose currency is a strict file
      shape, every file matches the shape (stores/ = numbered DDL + fixtures; law/adr/ =
-     NNNN-*.md; kernel/lineage/ = *.sql + README; seen-red/ = per-gate dirs only, no loose
+     NNNN-*.md + README; kernel/lineage/ = *.sql + README; seen-red/ = per-gate dirs only, no loose
      files; runs/ = run-id dirs + README). A pattern breach is RED.
   3. SINGLE-CURRENCY JUDGMENT (declared REVIEW-ONLY, ADR-0011 Rule 1): whether a NEW file
      inside a currency directory (design/, judgment/, instruments/, …) actually belongs to
@@ -231,7 +231,11 @@ ROOT_DIRS = {
 #     A directory absent here is review-only (its single-currency claim is not regex-checkable).
 DIR_PATTERNS: dict[str, list[str]] = {
     "stores":        [r"^\d{3}_.*\.sql$", r"^.*_fixture\.py$", r"^test_.*\.py$"],
-    "law/adr":       [r"^\d{4}-.*\.md$"],
+    # README.md allowed beside the numbered ADRs (maintainer-ratified 2026-07-27, ledger row
+    # 1469: the catalog README is directory convention, same allowance kernel/lineage below
+    # already carries; renaming law files to satisfy a gate regex would be the gate wagging
+    # the law). Non-ADR RECORDS remain excluded -- the one specimen was relocated to design/.
+    "law/adr":       [r"^\d{4}-.*\.md$", r"^README\.md$"],
     "kernel/lineage": [r"^.*\.sql$", r"^README\.md$"],
     "runs":          [r"^README\.md$"],   # everything else under runs/ must live in a run-id subdir
 }

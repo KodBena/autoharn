@@ -1,7 +1,9 @@
 <!-- doc-attest-exempt: retrospective cross-check record, maintainer review pending; attestation follows ratification decisions. -->
 
 **Findings corpus:** the consolidated postmortem this cross-check reads against is
-archived at [history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md](history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md)
+archived at [law/adr/history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md](../law/adr/history/POSTMORTEM-SETUP-TUI-ARC-2026-07-23.md)
+(link retargeted 2026-07-27 when this record moved from law/adr/ to design/ — layout ruling,
+ledger row 1469; the record's content is otherwise untouched)
 (verbatim copy of the series directory's POSTMORTEM.md, secured in-repo at the
 maintainer's instruction, 2026-07-23).
 
