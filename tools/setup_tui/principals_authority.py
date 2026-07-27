@@ -335,11 +335,11 @@ def lineage_chain_note(dest: str) -> str:
 # authority-bearing by any merged/pending kernel delta -- there is no principled reason a
 # competence grant inside the SAME ceremony should be attributed to a different, non-chained
 # principal than its sibling acts; a future kernel delta that DOES gate competence grants (G13)
-# meets an already-correct actor here, not a second defect to re-discover. PROVISIONAL, per the
-# house pattern: this is the orchestrator's own reading of "who legitimately authors the founding
-# edges" (the maintainer/genesis principal, since the ceremony's real meaning is the maintainer's
-# own scaffold delegating identity into the world) -- marked for the maintainer's own review, not
-# silently assumed final.
+# meets an already-correct actor here, not a second defect to re-discover. RATIFIED by the
+# maintainer 2026-07-27 (rows 1555/1557; surfaced as PROVISIONAL, undersigned): founding edges
+# are authored AS the genesis-chained 'author' -- the ceremony IS the maintainer's scaffold
+# delegating identity into the world, and commissioner's registered purpose is FULL-mode
+# commission signing, not ceremony authorship. Re-readings route back through the maintainer.
 # ---------------------------------------------------------------------------------------------
 
 def _served_led(dest: str) -> tuple[str, str]:
