@@ -288,7 +288,15 @@ BASELINE: dict[str, int] = {
     "tools/watchdog_liveness.py":                       570,
     "engine/tests/test_ledger_marriage.py":             533,
     "hooks/posttooluse_error_recurrence.py":            530,
-    "engine/ledger_differential.py":                    529,
+    # bumped 529 -> 553 (design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md build, ledger row
+    # 1459 cluster-2's fix, 2026-07-27): `layer_capability` and `run_layer_differential`'s former
+    # `_LAYER_FLOOR_PREDS` if-chain became registry lookups (net line REDUCTION on that half), but
+    # the module docstring, `layer_capability`'s and `run_layer_differential`'s own docstrings,
+    # and `main`'s bare-path auto-detect loop all gained the closure spec's own reasoning for the
+    # new no-floor-layer disposition (why it QUARANTINEs vs REFUSES, and why -- the same
+    # provenance-carrying idiom this file's other docstrings already use), a net growth this
+    # build owns rather than trims for the ratchet's sake.
+    "engine/ledger_differential.py":                    553,
     "hooks/pretooluse_delegation_observer.py":          588,
     # Reconciled +63 to 588 (2026-07-26, delegation-observer Workflow-coverage review, moderate/
     # SILENT surrogate-hazard fix round): a lone UTF-16 surrogate in a journaled `script`/`prompt`
@@ -537,7 +545,12 @@ BASELINE: dict[str, int] = {
     # above; the union is re-measured on the merged file, this reconciliation comment and
     # its sibling above included (the usual self-referential fixpoint, settled by
     # re-measuring after writing).
-    "gates/max_lines.py":                          648,
+    # bumped 648 -> 675 (this gate's own BASELINE growing to carry the two entries this same
+    # commit adds/bumps -- engine/ledger_differential.py's ratchet bump and the new
+    # engine/lp_registry.py entry, design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md build --
+    # self-referential, checked here too, the usual fixpoint settled by re-measuring after
+    # writing, same idiom as every prior self-reference bump in this file's own history above).
+    "gates/max_lines.py":                          675,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
@@ -560,6 +573,20 @@ BASELINE: dict[str, int] = {
     # bumped 626 -> 643 (this gate's own BASELINE growing to carry the gates/fixture_sweep.py
     # entry immediately above plus this comment's own settling -- self-referential, checked
     # here too, same idiom as every prior self-reference bump in this file's own history above).
+    # NEW to BASELINE, 469 (design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md build, ledger row
+    # 1459's fix, 2026-07-27): was 289 lines, well under ceiling, before this build. Each `LAYERS`
+    # entry became a typed `LayerSpec` (program stack + capability probe + floor disposition,
+    # closure spec §2 item 1) instead of a bare program-name tuple, so the four pre-existing
+    # layers' capability checks MOVED here verbatim from engine/ledger_differential.py's deleted
+    # if-chain (byte-diffed in the build report, not retyped -- net new content, not duplication:
+    # the old copy is gone), a NEW entitlement capability probe + its byte-identical-shape
+    # provenance note, two small marker types (`NoFloor`/`FloorElsewhere`, each foreclosing a
+    # distinct representable-but-wrong state per ADR-0000 Rule 2(a) -- see their own docstrings
+    # for why they are not collapsed into one), and the import-time closure check
+    # (`_validate_layer_registry`) design item 1 mandates. Witnessed: a synthetic
+    # capability-missing LayerSpec raises RegistryError at validation (the closure spec §4
+    # negative-control leg) before this bump was taken; see build report.
+    "engine/lp_registry.py":                       469,
 }
 
 

@@ -190,9 +190,24 @@ def world_all_capable_check(failures: list[str], tmps: list[Path]) -> None:
     # on ANY schema, including this pre-s53 one, since its own capability check apparently needs
     # no belief-specific column (unlike tnow/work/defeat). Included in the expected set rather
     # than hardcoding the three-layer roster this fixture predates.
+    #
+    # design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md (RATIFIED 2026-07-27, ledger row 1459's
+    # fix): "entitlement" is a FIFTH registered layer now, and (unlike belief) its capability
+    # check IS gated on a real column (the s60 entitlement_act_class marker) -- CHAIN_B ends at
+    # s41, so this WORLD-ALL world is genuinely pre-s60 and 'entitlement' is declared INCAPABLE
+    # here. Its `## layer='entitlement'` header still prints (the header print is unconditional,
+    # not gated on capability -- main()'s own shape, untouched by this build), so `layers_run`
+    # now includes it too; and its ONE incapable line is now an EXPECTED member of
+    # `incapable_lines`, not an absence -- the assertion below names exactly that one line rather
+    # than requiring `incapable_lines` to be empty (which predates entitlement's registration).
+    entitlement_incapable = [ln for ln in incapable_lines if "layer='entitlement'" in ln]
+    other_incapable = [ln for ln in incapable_lines if "layer='entitlement'" not in ln]
     check("WORLD-ALL-every-layer-detected-and-run",
-          layers_run == {"tnow", "work", "defeat", "belief"} and not incapable_lines and exit_code == 0,
-          f"exit={exit_code}; layers_run={sorted(layers_run)}; incapable_lines={incapable_lines}",
+          layers_run == {"tnow", "work", "defeat", "belief", "entitlement"}
+          and len(entitlement_incapable) == 1 and "pre-s60 lineage" in entitlement_incapable[0]
+          and not other_incapable and exit_code == 0,
+          f"exit={exit_code}; layers_run={sorted(layers_run)}; "
+          f"entitlement_incapable={entitlement_incapable}; other_incapable={other_incapable}",
           failures)
     check("WORLD-ALL-tnow-AGREE",
           "  [OK ] " in out and "tnow" in out.split("## layer='work'")[0],
