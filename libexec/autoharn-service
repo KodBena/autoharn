@@ -479,6 +479,11 @@ def cmd_restart(argv: list[str]) -> int:
             # SIGKILL'ing it is exactly the bystander kill this verb must never commit. Refuse
             # the reuse case, teaching, rather than guess; fall through to spawn on the clean-
             # late-exit case rather than duplicating the spawn/witness/summary legs a second time.
+            # RESIDUAL WINDOW, QUANTIFIED (re-review 2026-07-27, MINOR -- the house convention
+            # serving/ensure_running.py's own "RESIDUAL WINDOW" comment sets): between the
+            # re-verify call below and the os.kill(SIGKILL) is one function return plus one
+            # print -- a handful of Python bytecodes, no sleep, no I/O wait -- orders of
+            # magnitude inside the seconds-scale acceptance `cmd_stop` discloses above.
             if not er.pid_is_boundary_service(old_pid, toml_path):
                 if _proc_alive(old_pid):
                     print(f"autoharn service: REFUSED -- pid {old_pid} is no longer a "
