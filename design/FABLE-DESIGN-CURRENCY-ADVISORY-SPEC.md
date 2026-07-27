@@ -66,8 +66,12 @@ mechanical, none heuristic:
    `in-build`), advisory per `depends-on` target whose status is `superseded` or
    `rejected` (with both paths and both statuses in the message).
 3. **Stale-currency smell:** a doc whose status is `discharged`/`superseded`/`rejected`
-   but which still carries a `doc-attest-exempt` "Removal condition" marker — the
-   condition is due for action (the live specimen's exact shape).
+   — or `historical` while carrying a genuinely-resolved `superseded-by`/`discharged-by`
+   fact (amended 2026-07-27: the build surfaced that this spec's own live specimen is
+   seeded `historical`, so the original three-token letter missed it; the builder made
+   the spirit call and this amendment makes the letter match) — but which still carries
+   a `doc-attest-exempt` "Removal condition" marker: the condition is due for action
+   (the live specimen's exact shape).
 4. **Grammar:** malformed header, unknown token, missing required field — advisory
    naming the doc and the grammar line (a refusal that teaches, applied to the header).
 5. **Back-catalog honesty, one line, no per-doc noise:** "N of M design docs carry no
@@ -100,7 +104,9 @@ for headerless docs; exit 0 at commit polarity.
 
 Quantification universe, per
 [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Rule 2(a):
-the docs checked are exactly `design/*.md`; the statuses are the closed nine-token set;
+the docs checked are exactly `design/*.md`; the statuses are the closed EIGHT-token set
+§2 enumerates (this line originally said "nine", contradicting §2's own enumeration —
+the builder caught the inconsistency and implemented the eight; corrected 2026-07-27);
 the checks are the enumerated five. Not covered, stated honestly: docs outside design/
 (law/ has its own regime; user-guide/ is evergreen by construction); truth of a header
 against the LEDGER's record (the header is self-declared — a doc that lies about its
