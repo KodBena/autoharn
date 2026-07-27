@@ -124,3 +124,23 @@ otel-attest: MISMATCH finding-row write REFUSED for row 5: F7 FIXTURE: simulated
 
 
 ALL OK
+
+-- Dated correction, 2026-07-27 (ADR-0005 Rule 8: the ALL OK record above is a true
+-- record of its own date and stands verbatim; this append records the CURRENT state) --
+-- Review finding on the sub-s43 migration merge (ledger rows 1482/1485): after the
+-- migration, 9 legs fail because the production otel-attest script still shells to the
+-- retired bare `<world>/led` per-verb shim (the retired-bare-shim straggler class,
+-- also affecting bootstrap/migrate_core.py, bootstrap/extract_context.py,
+-- tools/regrade_decisions.py). Witnessed live this date, exit 1:
+-- === L5-idempotency-skips-already-attested ===
+--   [FAIL] rc=1
+-- otel-attest: /tmp/s41oa-seenred-klwx9j7s/s41oa has no `led` verb -- not a world root
+-- 
+-- 
+-- == scaffolding classic world s41oaf7 (full current lineage, was capped at s41) ==
+-- === L6-verification-lands-finding-fails-nonzero-exit ===
+--   [FAIL] rc=1
+-- otel-attest: /tmp/s41oaf7-seenred-mra5piwh/s41oaf7 has no `led` verb -- not a world root
+-- 
+-- 
+-- FAILURES: ['L1-exact-command-single-candidate', 'L1-two-agreeing-candidates-NOT-exact-command', 'L2-ambiguous-mismatch-writes-attestation', 'L2-ambiguous-mismatch-companion-finding', 'L2-ambiguous-unevaluated-writes-attestation', 'L2-ambiguous-unevaluated-companion-finding', 'L3-delimiter-refused-at-write-time', 'L5-idempotency-skips-already-attested', 'L6-verification-lands-finding-fails-nonzero-exit']
