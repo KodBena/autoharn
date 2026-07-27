@@ -91,6 +91,15 @@
 |||     model's universe for the SAME ts-vs-id reason the PRESERVED list already gives -- named,
 |||     not silently dropped). principalRedelegateBudget is a genuine new derived function (running-
 |||     min-then-max-over-paths, fuel-bounded like every other recursive walk here).
+|||     POST-REVIEW FIX (fresh-context review of this pass's first commit, ee8a727, BLOCKS MERGE,
+|||     one CRITICAL): entitlementActClassOf/entitlementActClassOfTarget's PRelationAsserted arms
+|||     originally carried a wrong `active &&` guard the SQL does not have (both functions classify
+|||     acts-for/dispatched-by as delegation_lifecycle by RELATION alone, regardless of
+|||     principal_binding_active -- the target-side function is not even passed active). The guard
+|||     let a retraction vacate conjuncts (c)/(d) entirely, MORE PERMISSIVE than the kernel --
+|||     dropped; witnessed both as a bare classification fact (r64c/r64d) and as the practical
+|||     consequence (b64c/b64d: a countersign-caveated principal can no longer sever their own
+|||     delegation edge silently).
 |||   s61 (signature symmetry and key-binding) -- MODEL-VISIBLE, two premises. (1) Signed-
 |||     supersession symmetry: PCommissionSignatureVerified (a new kind; the kernel CANNOT verify
 |||     GPG signatures -- this buys falsifiability, never unforgeability, the same disclosed grade
@@ -2177,6 +2186,25 @@ targetIsBlocksStart l t = case entryAt l t of
 ||| s60 Element 7 / s62 round 1 / s64 Element 9: the CANDIDATE's own act class -- one-hop through
 ||| e.supersedes for gate_edge_supersession (reading what the candidate itself supersedes), s64's
 ||| widened acts-for/dispatched-by relation test, and the independent-verification carve-out.
+||| FIX (fresh-context review, BLOCKS MERGE, CRITICAL): the s64 SQL classifies a
+||| principal_relation_asserted row of relation acts-for/dispatched-by as delegation_lifecycle /
+||| independent_verification_delegation REGARDLESS of principal_binding_active -- there is no
+||| `active` test anywhere in entitlement_act_class_of's own principal_relation_asserted branch
+||| (kernel/lineage/s64-principal-stamps-delegation-conditions.sql ~680-685). An EARLIER rendering
+||| here wrongly gated this classification on `active`, which let a RETRACTION (active=False)
+||| classify to Nothing -- vacuously passing delegationConditionsOk and silently skipping conjuncts
+||| (c)/(d) (depth-budget, must-countersign) for exactly the write s64's own Element 11b header
+||| says conjunct (d) "rides the whole chain" for: a countersign-caveated or depth-exhausted
+||| principal could SEVER a delegation edge the kernel would refuse. The model being MORE
+||| permissive than the kernel is the worst polarity for a consumer relying on this doc -- fixed
+||| by dropping the `active` test entirely, matching the SQL exactly. hasIVPurpose is still called
+||| (never gated) -- it already answers False for every active=False row on its own (its
+||| definitional equations only produce True on the (ActsFor,True)/(DispatchedBy,True) arms, and a
+||| retraction's own DelegationConditionsF is () regardless), which is ITSELF the faithful reading:
+||| delegation_purpose is forced NULL on a retraction row by its own kind-shape CHECK, so the SQL
+||| ALSO never returns the IV token for an inactive row -- both sides agree delegation_lifecycle,
+||| never independent_verification_delegation, for active=False, with zero special-casing needed
+||| here.
 entitlementActClassOf : {n : Nat} -> Ledger n -> Entry Draft n -> Maybe ActClass
 entitlementActClassOf l e = case e.payload of
   PPrincipalRegistered _ _ _      => Just ACPrincipalRegistered
@@ -2191,7 +2219,7 @@ entitlementActClassOf l e = case e.payload of
                                           Just t  => if targetIsBlocksStart l t
                                                        then Just ACGateEdgeSupersession else Nothing
   PRelationAsserted _ rel _ active dc =>
-    if active && (rel == ActsFor || rel == DispatchedBy)
+    if rel == ActsFor || rel == DispatchedBy
       then if hasIVPurpose rel active dc
              then Just ACIndependentVerificationDelegation else Just ACDelegationLifecycle
       else Nothing
@@ -2201,6 +2229,10 @@ entitlementActClassOf l e = case e.payload of
 ||| (never chasing ITS OWN supersedes) -- "classify the target as if fresh". Uniformly
 ||| DelegationLifecycle, never the independent-verification token: s64's own named limit (target
 ||| classification never distinguishes the carve-out, since severance-protection is the only job).
+||| FIX (same review, same defect, target side): entitlement_act_class_of_target isn't even PASSED
+||| principal_binding_active (kernel/lineage/s64-principal-stamps-delegation-conditions.sql
+||| ~741-743, four scalar parameters, active never one of them) -- the `active` test dropped here
+||| too, matching exactly.
 entitlementActClassOfTarget : {n : Nat} -> Ledger n -> Fin n -> Maybe ActClass
 entitlementActClassOfTarget l t = case entryAt l t of
   (_ ** te) => case te.payload of
@@ -2213,8 +2245,8 @@ entitlementActClassOfTarget l t = case entryAt l t of
     PWorkClosed s _ _ _ _ _         => if isBlocksStartAntecedent l s then Just ACMilestoneClosure else Nothing
     PWorkDepends _ _ BlocksStart    => Just ACGateEdgeSupersession
     PWorkDepends _ _ _              => Nothing
-    PRelationAsserted _ rel _ active _ =>
-      if active && (rel == ActsFor || rel == DispatchedBy) then Just ACDelegationLifecycle else Nothing
+    PRelationAsserted _ rel _ _ _ =>
+      if rel == ActsFor || rel == DispatchedBy then Just ACDelegationLifecycle else Nothing
     _ => Nothing
 
 ||| s62 round 2's own rule: "severance is an act against the TARGET's class, not only the
@@ -4282,6 +4314,70 @@ b64b : boundaryOk Autoharn.worldEnt
                            (MkDelegationConditions Nothing Nothing Nothing False)))
      = True
 b64b = Refl
+
+-- ---------------------------------------------------------------------------
+-- FIX WITNESS (fresh-context review of ee8a727, BLOCKS MERGE, one CRITICAL, now closed): the
+-- classification functions used to carry a wrong `active &&` guard in their PRelationAsserted
+-- arms (kernel/lineage/s64-principal-stamps-delegation-conditions.sql ~680-685/~741-743 have NO
+-- such guard -- a candidate/target classifies as delegation_lifecycle by relation ALONE). The
+-- defect: a RETRACTION (active=False) classified to Nothing, vacating delegationConditionsOk's
+-- conjuncts (c)/(d) entirely for exactly the write s64 Element 11b's own header says conjunct (d)
+-- "rides the whole chain" for -- the model was MORE PERMISSIVE than the kernel, the worst
+-- polarity. Closed by dropping the guard; witnessed both as a bare classification fact and as the
+-- practical consequence (a countersign-caveated principal can no longer sever their own
+-- delegation edge silently).
+-- ---------------------------------------------------------------------------
+
+-- r64c GREEN/Refl: a RETRACTION (active=False) acts-for assertion classifies to
+-- Just ACDelegationLifecycle on the CANDIDATE side, exactly like an active assertion would --
+-- BEFORE the fix this returned Nothing.
+r64c : entitlementActClassOf Autoharn.worldEnt
+         (mkD 1 Nothing (PRelationAsserted 1 ActsFor 2 False ()))
+     = Just ACDelegationLifecycle
+r64c = Refl
+
+-- r64d GREEN/Refl: the identical fact on the TARGET side (entitlement_act_class_of_target isn't
+-- even passed principal_binding_active in the SQL).
+worldDelRetract : Ledger 1
+worldDelRetract = Lin :< mkE 1 Nothing (PRelationAsserted 1 ActsFor 2 False ())
+r64d : entitlementActClassOfTarget Autoharn.worldDelRetract 0 = Just ACDelegationLifecycle
+r64d = Refl
+
+-- worldCountersign: genesis (2), delegate (3) chained to it via an acts-for edge that binds a
+-- must-countersign caveat (principal 5) -- s64 Element 11b conjunct (d) "rides the whole chain":
+-- ANY authority-bearing act by 3 (not merely a fresh delegation) needs 5's countersign.
+worldCountersign : Ledger 3
+worldCountersign = Lin :< mkE 1 Nothing (PPrincipalRegistered 2 ACHuman (MkNonEmptyText "genesis" Oh))
+                       :< mkE 2 Nothing (PPrincipalRegistered 3 ACHuman (MkNonEmptyText "delegate" Oh))
+                       :< mkE 2 Nothing (PRelationAsserted 3 ActsFor 2 True
+                                           (MkDelegationConditions Nothing (Just 5) Nothing False))
+
+-- b64c RED: principal 3 tries to SEVER (retract) their OWN acts-for edge (row 2) with NO
+-- countersign witness. BEFORE the fix, the retraction classified to Nothing, delegationConditionsOk
+-- was vacuously True, and this write would have WRONGLY succeeded (actor 3 still chain-reaches
+-- genesis via the very edge it is retracting, which is read against the ledger BEFORE this write
+-- lands) -- the kernel's own conjunct (d) refuses it. AFTER the fix, the retraction classifies to
+-- Just ACDelegationLifecycle, conjunct (d) finds the must-countersign requirement (principal 5)
+-- along actor 3's own chain, and refuses the write for lacking a witness.
+b64c : boundaryOk Autoharn.worldCountersign
+         (mkD 3 (Just 2) (PRelationAsserted 3 ActsFor 2 False ()))
+     = False
+b64c = Refl
+
+-- worldCountersign2 adds the verified countersign attestation (by principal 5) b64d supplies as
+-- its witness.
+worldCountersign2 : Ledger 4
+worldCountersign2 = worldCountersign :< mkE 5 Nothing
+                       (PCommissionSignatureVerified 0 GBindingVerified
+                          (MkFingerprint "ABCDEF0123456789ABCDEF0123456789ABCDEF01" Oh))
+
+-- b64d GREEN: the SAME retraction, now carrying a sigWitness (row 3) naming a
+-- commission_signature_verified row attested by the REQUIRED countersigner (5) -- conjunct (d)
+-- satisfied, the write succeeds.
+b64d : boundaryOk Autoharn.worldCountersign2
+         (mkDW 3 (Just 2) (Just 3) (PRelationAsserted 3 ActsFor 2 False ()))
+     = True
+b64d = Refl
 
 -- s61: signature symmetry. row 0 stands for an (unmodeled-in-detail) commission; row 1 is an
 -- independently-verified attestation of it.
