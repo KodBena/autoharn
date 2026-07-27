@@ -5,6 +5,7 @@
 license fence per the commission's STEP 0, compliance statement in the report's own §0).
 The maintainer has not yet read it. Removal condition: superseded by a ratified logging
 spec that cites it. -->
+<!-- design-currency: status=historical superseded-by=FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md -->
 
 This document is a survey of another codebase's logging design (the "proxy," a separate
 project of the maintainer's, at `/home/bork/w/omega/proxy`) written to inform a possible

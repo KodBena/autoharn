@@ -3,6 +3,7 @@
 <!-- doc-attest-exempt: Fable-authored spec awaiting maintainer ratification 2026-07-27;
 the A:B:C loop runs on the build, not the proposal text. Removal condition: superseded by
 the build's merge record, or rejection. -->
+<!-- design-currency: status=ratified depends-on=FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md -->
 
 This is a build specification for autoharn's HTTP boundary service (the service that
 mediates database writes for the served path). It defines the one mechanism by which

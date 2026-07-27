@@ -231,6 +231,7 @@ REGISTRY: dict[str, str] = {
     "scaffold-orchlog-wrapper":     "seen-red/scaffold-orchlog-wrapper/run_fixtures.py",
     "kind-shape-manifest-gate":     "seen-red/kind-shape-manifest-gate/run_fixtures.py",
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
+    "design-currency":              "seen-red/design-currency/run_fixtures.py",
     "asof-export":                  "seen-red/asof-export/run_fixtures.py",  # RETIRED-SCAFFOLD
     "watchdog-liveness":            "seen-red/watchdog-liveness/run_fixtures.py",
     # gates-staged-vs-tree-blindness (ledger row 1234, this commission): the shared seen-red

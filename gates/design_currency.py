@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""design_currency — the design/FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md advisory gate.
+Modeled on gates/idris_model_freshness.py (the same ADVISORY polarity: it prints `!! ADVISORY`
+lines and always exits 0 at commit time; --strict is the human-facing flag that turns the same
+findings into a nonzero exit for someone who wants a return code, not a wall of text).
+
+WHAT THIS CHECKS (spec §3, five mechanical checks, none heuristic). `design/*.md` — non-
+recursive, exactly the 90 docs at this file's own top level (design/workflows/ and any other
+subdirectory is out of scope, same as `design/*.md`'s own glob) — may carry ONE machine-readable
+currency header, an HTML comment near the top:
+
+    <!-- design-currency: status=<token> [discharged-by=<sha>] [superseded-by=<path>]
+         [depends-on=<path>[,<path>...]] -->
+
+Free-prose `Status:` lines are NEVER parsed (spec §3 item 5) — a heuristic that guesses a
+human-authored sentence's meaning manufactures exactly the false certainty this project refuses
+(ADR-0000's two-biases ruling, ledger row 1887). Absence of a header is not a violation; it is
+counted once, honestly, in the one back-catalog line (check 5) — the back-catalog migrates on
+touch (the ADR-0017 Rule 4 precedent this spec explicitly invokes), never by sweep.
+
+STATUS TOKENS — AN HONEST DISCREPANCY, FLAGGED RATHER THAN SILENTLY RESOLVED (ADR-0002 Rule 3,
+"a config field the receiver cannot honor must not be silently accepted", applied here to the
+GOVERNING SPEC's own two sections disagreeing with each other). Spec §2 enumerates exactly EIGHT
+status tokens by name (proposed, ratified, in-build, discharged, superseded, rejected, evergreen,
+historical); spec §6's closure statement calls this "the closed nine-token set". This module
+implements the eight tokens §2 actually NAMES — the enumerated list is the operative grammar, a
+count in a closure-statement sentence is not a ninth definition — and this discrepancy is named
+in this build's own witness report rather than quietly picked one way. A status token outside
+this set of eight is an unknown-token grammar finding (check 4), never guessed at or silently
+accepted as some inferred ninth thing.
+
+THE FIVE CHECKS:
+  1. DISCHARGE VERIFICATION. `discharged-by=<sha>`: advisory if `<sha>` is not an ancestor of this
+     repo's HEAD (`git merge-base --is-ancestor`, run against THIS module's own repo root —
+     `--repo-root` can redirect it, the same redirection device every sibling gate in this
+     directory offers, see MODES below). `superseded-by=<path>`: advisory if the named doc does
+     not exist under the design dir, or its OWN status is not a live-or-historical token (live =
+     proposed/ratified/in-build, per check 2's own live-status set, plus historical — a successor
+     that was itself rejected leaves the predecessor un-superseded IN FACT, spec §3 item 1's own
+     parenthetical).
+  2. DEPENDENCY DRIFT. For every doc whose OWN status is live (proposed/ratified/in-build):
+     advisory per `depends-on` target whose status is `superseded` or `rejected`, naming both
+     paths and both statuses in one message (the maintainer's own dispatch-mechanics/serving-
+     logging example this spec cites by name). A target that is `discharged` raises NOTHING —
+     satisfaction, not drift (spec §5's own stated polarity: "a depends-on edge to a discharged
+     doc raises NOTHING").
+  3. STALE-CURRENCY SMELL. Spec §3 item 3's literal text gates this on the doc's OWN status being
+     discharged/superseded/rejected. This module reads that literally AND ALSO fires when the
+     doc's status is something ELSE (historical, most plausibly) but the doc ALREADY carries a
+     verifiably-resolved `superseded-by`/`discharged-by` fact (i.e. check 1 above would find that
+     fact GENUINE, not itself an advisory) — because the spec's own motivating "live specimen"
+     (its §0 second bullet, LOGGING-DIRECTION-SURVEY-2026-07-27.md) is seeded at status=historical
+     (a survey is a point-in-time record, never itself "superseded" as a document — see §2's own
+     definition of `historical`) while ALSO carrying `superseded-by` naming its successor. Read
+     at the letter alone, check 3 would never fire for that exact doc; read at the spirit the
+     spec's own §0 states in plain words ("that condition came TRUE ... and nothing noticed. The
+     gate exists to notice exactly this"), it must. This is a deliberate, named broadening past
+     the literal three-token list — CLAUDE.md's own instruction where letter and spirit diverge
+     ("the spirit wins and you surface the divergence") — flagged here, not silently decided, and
+     restated in this build's witness report.
+     Once either gate above is satisfied, the check looks for a PRE-EXISTING, informal
+     `<!-- doc-attest-exempt: ... Removal condition: ... -->` HTML comment (the convention
+     gates/doc_attestation_presence.py's WAIVER_TOKEN already established for this codebase,
+     scanned the same way — inside an HTML comment, never a bare substring match, so a doc that
+     merely QUOTES the marker in prose is not itself flagged) still sitting on the document —
+     advisory naming the doc, since a machine-verified resolution fact now coexists with an
+     unreconciled human-authored marker.
+  4. GRAMMAR. A malformed header — an unknown key, an unrecognized status token, a `discharged`
+     without `discharged-by`, a `superseded` without `superseded-by`, a duplicate key — is an
+     advisory naming the doc and the offending header text verbatim (a refusal that teaches,
+     ADR-0002's loudness hierarchy applied to a header rather than a runtime call).
+  5. BACK-CATALOG HONESTY. One line, no per-doc noise: "N of M design docs carry no currency
+     header (adopt on touch)".
+
+SCOPE, printed every run (same "never silent" convention gates/doc_attestation_presence.py's
+`_print_exclusions` and ADR-0017 Rule 2(b) both use): `design/*.md` only, non-recursive. Never
+edits a file, never deletes a marker (item 3 surfaces work; a human or a commissioned pass acts
+on it — spec §4). No ledger integration in v1 (spec §4): the header is the doc-local cache of a
+fact the ledger already records elsewhere; this gate checks the header against GIT, not the
+ledger.
+
+MODES:
+    python3 gates/design_currency.py [--design-dir PATH] [--repo-root PATH] [--strict]
+
+`--design-dir`/`--repo-root` are optional leading flags, either order, either or both — the same
+device gates/doc_attestation_presence.py's `--doc-root`/`--ledger` and
+gates/idris_model_freshness.py's `--idr-file`/`--lineage-dir` already establish, so a seen-red
+fixture (or a caller outside this exact invocation) can redirect every path this module reads
+without importing or monkeypatching it. `--strict` is the ONLY thing that changes the exit code:
+without it, this module ALWAYS exits 0 (spec §3: "always exits 0 at commit time"); with it, exit
+1 if any of checks 1-4 produced a finding, exit 0 if the run was fully clean (check 5's back-
+catalog line is never itself a --strict-triggering finding — it is an honest count, not an
+advisory about a specific document).
+
+Exit codes: 0 always (default) / 0 clean or 1 any finding (--strict); 2 usage error (design dir
+does not exist).
+
+Registered close/lint line id: `design-currency`. Not wired into hooks/pre-commit as part of this
+build (see this build's own witness report for why, and where the wiring would go if a future
+commission takes it up) — hooks/ is frozen during a live session (CLAUDE.md, "Never modify
+hooks/ ... while a live session runs there") and this gate is runnable standalone regardless.
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DESIGN_DIR = REPO_ROOT / "design"
+
+# Spec §2's eight NAMED status tokens (see module docstring's "AN HONEST DISCREPANCY" section —
+# §6's closure statement calls this set nine, the enumerated list here is what §2 actually names).
+STATUS_TOKENS = frozenset({
+    "proposed", "ratified", "in-build", "discharged", "superseded",
+    "rejected", "evergreen", "historical",
+})
+LIVE_STATUSES = frozenset({"proposed", "ratified", "in-build"})
+LIVE_OR_HISTORICAL = LIVE_STATUSES | {"historical"}
+DISCHARGE_LIKE = frozenset({"discharged", "superseded", "rejected"})
+
+ALLOWED_KEYS = ("status", "discharged-by", "superseded-by", "depends-on")
+
+HEADER_RE = re.compile(r"<!--\s*design-currency:(?P<body>.*?)-->", re.DOTALL)
+TOKEN_RE = re.compile(r"(status|discharged-by|superseded-by|depends-on)=(\S+)")
+# Any doc-attest-exempt HTML comment naming an (unreconciled) "Removal condition:" clause — the
+# same "must sit inside an HTML comment, never a bare substring" discipline
+# gates/doc_attestation_presence.py's WAIVER_TOKEN already established for this codebase.
+REMOVAL_MARKER_RE = re.compile(
+    r"<!--(?:(?!-->).)*?doc-attest-exempt:(?:(?!-->).)*?Removal condition:(?:(?!-->).)*?-->",
+    re.DOTALL,
+)
+
+
+class Header:
+    """One doc's parsed currency header, or the record of why it couldn't be parsed cleanly.
+    `issues` is non-empty exactly when the header is malformed (check 4); fields are populated
+    best-effort even when malformed, so a doc with (say) an unknown status token but a perfectly
+    fine depends-on list still participates in check 2 for its readable fields — a malformed
+    header is a teaching advisory about the SPECIFIC bad field, not a license to discard the rest."""
+
+    def __init__(self) -> None:
+        self.present = False
+        self.status: str | None = None
+        self.discharged_by: str | None = None
+        self.superseded_by: str | None = None
+        self.depends_on: list[str] = []
+        self.issues: list[str] = []
+        self.raw_line: int = 0
+
+
+def _line_of(text: str, pos: int) -> int:
+    return text.count("\n", 0, pos) + 1
+
+
+def parse_header(text: str) -> Header:
+    """Parses the FIRST `<!-- design-currency: ... -->` comment found (a second one is not a
+    grammar this spec defines; only the first is read, matching every other header-comment
+    convention in this codebase). Returns a Header with `.present = False` when no such comment
+    exists at all — that is NOT a grammar violation, it is the back-catalog case (check 5)."""
+    h = Header()
+    m = HEADER_RE.search(text)
+    if not m:
+        return h
+    h.present = True
+    h.raw_line = _line_of(text, m.start())
+    body = m.group("body")
+
+    seen_keys: set[str] = set()
+    consumed = 0
+    for tm in re.finditer(r"\S+", body):
+        token = tm.group(0)
+        km = TOKEN_RE.fullmatch(token)
+        if not km:
+            h.issues.append(f"unrecognized token {token!r} (grammar is key=value, keys "
+                             f"limited to {', '.join(ALLOWED_KEYS)})")
+            continue
+        key, val = km.group(1), km.group(2)
+        if key in seen_keys:
+            h.issues.append(f"duplicate field {key!r}")
+            continue
+        seen_keys.add(key)
+        consumed += 1
+        if key == "status":
+            if val not in STATUS_TOKENS:
+                h.issues.append(f"unknown status token {val!r} (closed set: "
+                                 f"{', '.join(sorted(STATUS_TOKENS))}) — an unrecognized token is "
+                                 f"never guessed at")
+            h.status = val
+        elif key == "discharged-by":
+            h.discharged_by = val
+        elif key == "superseded-by":
+            h.superseded_by = val
+        elif key == "depends-on":
+            h.depends_on = [p for p in val.split(",") if p]
+
+    if h.status is None:
+        h.issues.append("missing required field 'status'")
+    if h.status == "discharged" and h.discharged_by is None:
+        h.issues.append("status=discharged requires 'discharged-by'")
+    if h.status == "superseded" and h.superseded_by is None:
+        h.issues.append("status=superseded requires 'superseded-by'")
+    return h
+
+
+def has_removal_marker(text: str) -> bool:
+    return bool(REMOVAL_MARKER_RE.search(text))
+
+
+def is_ancestor(sha: str, repo_root: Path) -> bool:
+    """True iff `sha` is a valid, resolvable ancestor of `repo_root`'s HEAD. Any failure mode —
+    an invalid object name, a sha that exists but isn't an ancestor, no git repo at all — reads as
+    False here: this check only ever needs to distinguish 'verifiably an ancestor' from
+    everything else, and every 'everything else' case is the same honest advisory (spec §3 item
+    1), never a crash."""
+    try:
+        cp = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", sha, "HEAD"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return cp.returncode == 0
+
+
+def discover_docs(design_dir: Path) -> list[Path]:
+    return sorted(design_dir.glob("*.md"))
+
+
+def check_discharge_verification(rel: str, h: Header, headers: dict[str, Header],
+                                  repo_root: Path) -> list[str]:
+    out: list[str] = []
+    if h.discharged_by is not None:
+        if not is_ancestor(h.discharged_by, repo_root):
+            out.append(f"{rel}: status=discharged names discharged-by={h.discharged_by}, which "
+                       f"is not a verifiable ancestor of HEAD (invalid sha, or a real commit that "
+                       f"is not actually merged) — the discharge claim cannot be confirmed")
+    if h.superseded_by is not None:
+        target_path = DESIGN_DIR / h.superseded_by
+        if not target_path.exists():
+            out.append(f"{rel}: status=superseded names superseded-by={h.superseded_by}, which "
+                       f"does not exist under {DESIGN_DIR}")
+        else:
+            target_h = headers.get(h.superseded_by)
+            target_status = target_h.status if target_h is not None else None
+            if target_status not in LIVE_OR_HISTORICAL:
+                out.append(f"{rel}: superseded-by={h.superseded_by} names a successor whose own "
+                           f"status is {target_status!r}, not a live-or-historical token — a "
+                           f"successor that was itself rejected/discharged/superseded leaves "
+                           f"{rel} un-superseded in fact")
+    return out
+
+
+def check_dependency_drift(rel: str, h: Header, headers: dict[str, Header]) -> list[str]:
+    out: list[str] = []
+    if h.status not in LIVE_STATUSES:
+        return out
+    for dep in h.depends_on:
+        dep_h = headers.get(dep)
+        dep_status = dep_h.status if dep_h is not None else None
+        if dep_status in ("superseded", "rejected"):
+            out.append(f"{rel} (status={h.status}) depends-on={dep} (status={dep_status}) — "
+                       f"the dependency is drift, not satisfaction: {rel} leans on direction that "
+                       f"has moved")
+    return out
+
+
+def check_stale_currency_smell(rel: str, h: Header, text: str) -> list[str]:
+    """See module docstring's item-3 section for the deliberate letter-vs-spirit broadening this
+    implements: fires when status is literally discharged/superseded/rejected, OR when the doc's
+    own discharged-by/superseded-by fact is independently GENUINE (no advisory from check 1 for
+    that same field) regardless of the chosen status token (the historical+superseded-by shape
+    the spec's own live specimen uses)."""
+    if not has_removal_marker(text):
+        return []
+    resolved = h.status in DISCHARGE_LIKE
+    if not resolved and h.superseded_by is not None:
+        target_path = DESIGN_DIR / h.superseded_by
+        target_h = parse_header(target_path.read_text(encoding="utf-8")) if target_path.exists() else None
+        resolved = target_h is not None and target_h.status in LIVE_OR_HISTORICAL
+    if not resolved and h.discharged_by is not None:
+        resolved = is_ancestor(h.discharged_by, REPO_ROOT)
+    if not resolved:
+        return []
+    return [f"{rel}: status={h.status} is a resolved currency state (or names a genuinely "
+            f"resolved successor/discharge) but the document still carries an unreconciled "
+            f"'doc-attest-exempt ... Removal condition:' marker — the condition this marker "
+            f"names is due for action (retire/rewrite the doc, or strike the marker), not left "
+            f"standing silently"]
+
+
+def check_grammar(rel: str, h: Header) -> list[str]:
+    return [f"{rel}: line {h.raw_line}: {issue}" for issue in h.issues]
+
+
+def main(argv: list[str]) -> int:
+    global REPO_ROOT, DESIGN_DIR
+    argv = list(argv)
+    repo_root = REPO_ROOT
+    while len(argv) >= 2 and argv[0] in ("--design-dir", "--repo-root"):
+        flag, val = argv[0], argv[1]
+        if flag == "--design-dir":
+            DESIGN_DIR = Path(val).expanduser().resolve()
+        else:
+            repo_root = Path(val).expanduser().resolve()
+        argv = argv[2:]
+    strict = "--strict" in argv
+
+    if not DESIGN_DIR.is_dir():
+        print(f"design_currency: usage error — design dir does not exist: {DESIGN_DIR}",
+              file=sys.stderr)
+        return 2
+
+    docs = discover_docs(DESIGN_DIR)
+    headers: dict[str, Header] = {}
+    texts: dict[str, str] = {}
+    for p in docs:
+        rel = p.name
+        text = p.read_text(encoding="utf-8")
+        texts[rel] = text
+        headers[rel] = parse_header(text)
+
+    findings: list[str] = []
+    headerless = 0
+    for p in docs:
+        rel = p.name
+        h = headers[rel]
+        if not h.present:
+            headerless += 1
+            continue
+        if h.issues:
+            findings.extend(check_grammar(rel, h))
+            continue  # a malformed header's other fields are not trustworthy enough to check
+        findings.extend(check_discharge_verification(rel, h, headers, repo_root))
+        findings.extend(check_dependency_drift(rel, h, headers))
+        findings.extend(check_stale_currency_smell(rel, h, texts[rel]))
+
+    if findings:
+        print(f"design_currency: {len(findings)} finding(s) over {len(docs)} design doc(s):")
+        for f in findings:
+            print(f"  !! ADVISORY — {f}")
+    else:
+        print(f"design_currency: clean — {len(docs)} design doc(s) checked, 0 findings")
+    print(f"design_currency: back-catalog — {headerless} of {len(docs)} design docs carry no "
+          f"currency header (adopt on touch)")
+
+    if strict:
+        return 1 if findings else 0
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

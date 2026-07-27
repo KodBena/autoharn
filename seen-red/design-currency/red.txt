@@ -1,0 +1,47 @@
+design-currency — banked RED/GREEN evidence (design/FABLE-DESIGN-CURRENCY-ADVISORY-SPEC.md,
+gates/design_currency.py). Captured 2026-07-27, base commit 37747d56472eae85c2a1c3eb2629f6072d3c1e79
+(main fast-forwarded into worktree-agent-a7060f0b15e2b06b9), after seeding the five worked-example
+currency headers spec §4 names.
+
+=== 1. THE REAL REPO'S FIRST HONEST RUN (default polarity, always exit 0) ===
+design_currency: 2 finding(s) over 90 design doc(s):
+  !! ADVISORY — FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — LOGGING-DIRECTION-SURVEY-2026-07-27.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+design_currency: back-catalog — 85 of 90 design docs carry no currency header (adopt on touch)
+exit: 0
+
+Both advisories are the intended, GREEN behavior of check 3 (see gates/design_currency.py's own
+module docstring, "STALE-CURRENCY SMELL" section, for the letter-vs-spirit reasoning): the survey
+doc is the spec's own named live specimen (§0); the s65 spec is a second, independently-discovered
+instance of the same shape (a genuinely-discharged doc that still carries its old, unreconciled
+doc-attest-exempt "Removal condition" marker) — not itself part of the brief's named worked
+examples, but the identical class check 3 exists to catch, found live on the real tree.
+
+=== 2. --strict on the same real tree (nonzero exactly because the two advisories above are real) ===
+design_currency: 2 finding(s) over 90 design doc(s):
+  !! ADVISORY — FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md: status=discharged is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+  !! ADVISORY — LOGGING-DIRECTION-SURVEY-2026-07-27.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this marker names is due for action (retire/rewrite the doc, or strike the marker), not left standing silently
+design_currency: back-catalog — 85 of 90 design docs carry no currency header (adopt on touch)
+exit: 1
+
+=== 3. seen-red/design-currency/run_fixtures.py -- full both-polarity proof, synthetic docs only ===
+=== red-discharge-not-ancestor ===
+  [ok] exit=1, stdout='design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Bad.md: status=discharged names discharged-by=deadbeef00deadbeef00deadbeef00deadbeef0, which is not a verifiable ancestor of HEAD (i'
+
+=== red-dependency-drift ===
+  [ok] exit=1, stdout='design_currency: 1 finding(s) over 3 design doc(s):\n  !! ADVISORY — Live.md (status=ratified) depends-on=Old.md (status=superseded) — the dependency is drift, not satisfaction: Live.md leans on direction that has moved\ndesign_currency: back-catalog — 0 of 3 design docs carry no currency header (adop'
+
+=== red-malformed-grammar ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 1 design doc(s):\n  !! ADVISORY — Malformed.md: line 3: unrecognized token 'foo=bar' (grammar is key=value, keys limited to status, discharged-by, superseded-by, depends-on)\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)"
+
+=== green-clean ===
+  [ok] exit=0, stdout='design_currency: clean — 1 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 1 design docs carry no currency header (adopt on touch)'
+
+=== green-satisfaction ===
+  [ok] exit=0, stdout='design_currency: clean — 2 design doc(s) checked, 0 findings\ndesign_currency: back-catalog — 0 of 2 design docs carry no currency header (adopt on touch)'
+
+=== check3-fires-on-historical-plus-supersededby ===
+  [ok] exit=1, stdout="design_currency: 1 finding(s) over 2 design doc(s):\n  !! ADVISORY — Survey.md: status=historical is a resolved currency state (or names a genuinely resolved successor/discharge) but the document still carries an unreconciled 'doc-attest-exempt ... Removal condition:' marker — the condition this mark"
+
+design-currency fixtures: all 6 cases matched their expected polarity.
+exit: 0
