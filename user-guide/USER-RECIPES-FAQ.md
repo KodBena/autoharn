@@ -30,6 +30,7 @@ question-and-recipe entries.
 - [Trust ceremonies](#trust-ceremonies)
 - [Review discipline](#review-discipline)
 - [Classifying audit/diagnostic findings](#classifying-auditdiagnostic-findings)
+- [The findings-ledger / mined-checklist / +A:B:C pattern](#the-findings-ledger--mined-checklist--abc-pattern)
 - [Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)](#capturing-errors-so-they-cannot-quietly-recur-adr-0000--adr-0011)
 - [Drift backstops (one generic method for anything that goes quietly stale)](#drift-backstops-one-generic-method-for-anything-that-goes-quietly-stale)
 - [Documentation quality](#documentation-quality)
@@ -1475,6 +1476,122 @@ rather than patching each atom instance-by-instance. Full method, its adjudicati
 corpus, and its relation to
 [ADR-0000's typed-fix discipline](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md):
 [ORCH-FINDING-ATOMIZATION-RECIPE.md](ORCH-FINDING-ATOMIZATION-RECIPE.md).
+
+## The findings-ledger / mined-checklist / +A:B:C pattern
+
+**Every review pass we run — documentation, code, whatever — rediscovers the same handful of
+defect shapes from scratch. Is there a generic pattern for making review passes get cheaper
+over time instead of re-learning the same lessons forever?** Yes — this repository just ran
+the pattern on itself for documentation review, and the maintainer asked for it to be written
+up here as a generic recipe (his commissioning words are quoted verbatim in the honest-limits
+paragraph below, alongside the caveat he attached to the same request). "+A:B:C" in this
+section's title names the whole
+pattern: **A:B:C** is this project's own name for its fresh-context audit loop — one build (or
+draft) pass, then two independent, fresh-context blind review rounds checked against each other
+(the full grammar and its own worked examples: the
+[A:B:C fresh-context audit loop recipe](ORCH-ABC-AUDIT-LOOP-RECIPE.md)) — and the leading "+"
+names the one thing new here: a checklist-driven find-AND-fix pre-review bolted on in front of
+those blind rounds (move 3 below). It is four moves, each depending on the one before it, and
+it applies to any review discipline, not just this project's own ADR-0017 doc passes — that
+pass is only this entry's worked, witnessed example.
+
+1. **The findings-ledger move.** Every review pass, of any kind, appends its findings to one
+   append-only JSONL corpus — forward-only from the day you adopt this, never back-mined from
+   git history (mining history is a separate, larger, and noisier project than starting a
+   ledger). Each line names, at minimum: a grade, a free-form class slug (not a fixed taxonomy
+   — you don't know your own defect classes yet), the file/location, the discovering ROLE (see
+   move 4), and a disposition (fixed now, fixed later, filed, accepted). This project's own
+   two corpora are the worked shape:
+   [attestations/doc-legibility-attestations.jsonl](../attestations/doc-legibility-attestations.jsonl)
+   (documentation, running since 2026-07-11) and
+   [attestations/code-review-findings.jsonl](../attestations/code-review-findings.jsonl)
+   (code, started 2026-07-27 — its schema and rationale live in
+   [attestations/CODE-REVIEW-FINDINGS-README.md](../attestations/CODE-REVIEW-FINDINGS-README.md),
+   cited rather than duplicated here).
+2. **The mining move.** Once the corpus has accumulated enough rows to be worth reading, run
+   ONE model pass over it that clusters the free-form classes empirically — not against a
+   taxonomy anyone guessed in advance — and emits a ranked checklist: each class named, counted,
+   given a plain-language definition, and paired with a cheap detection hint (a grep pattern or
+   a one-line reading rule) a reviewer can apply without re-deriving the class from scratch.
+   This project's own witnessed instance:
+   [attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md), mined from
+   418 records / 1683 findings in the documentation corpus, ranked class 1 ("dangling
+   referent" — a coined term, code, or "the X" cited without ever being defined) at ≈818
+   findings, roughly 49% of the whole corpus by itself. **Honest limit, stated in the mined
+   file's own method note:** the clustering is keyword-based hand-sampled confirmation, not an
+   exhaustive per-finding hand read — treat the ranked counts as good-confidence estimates, not
+   exact tallies.
+3. **The +A:B:C move** (the maintainer's own coinage for the composite, 2026-07-27). Once a
+   mined checklist exists, a reviewer runs an **A-side find-AND-fix pre-review** against it
+   BEFORE any of the blind, fresh-context "B" rounds this project's
+   [A:B:C fresh-context audit loop](ORCH-ABC-AUDIT-LOOP-RECIPE.md) already ran — a find-only
+   pre-review pass would be waste, since these are exactly the classes that are both cheapest
+   to spot and cheapest to repair once spotted. The pre-review logs one JSONL line per document
+   pre-reviewed
+   ([attestations/pre-review-log.jsonl](../attestations/pre-review-log.jsonl): doc path,
+   before/after content hash, which model swept it, and a per-class fixed-count map), so the
+   efficiency question — did the pre-review actually earn its keep — reads later as a join
+   against the same corpus move 1 built, no new machinery. **The blind B rounds are never shown
+   the checklist** — showing it would anchor the "fresh eyes" round on the pre-reviewer's own
+   list and defeat the point of running a fresh-context round at all. This project's own first
+   full +A:B:C run
+   ([design/LOGGING-DIRECTION-SURVEY-2026-07-27.md](../design/LOGGING-DIRECTION-SURVEY-2026-07-27.md),
+   pre-reviewed 2026-07-27T13:39:13Z per its own
+   [attestations/pre-review-log.jsonl](../attestations/pre-review-log.jsonl) entry) absorbed 36
+   defects across 7 classes in the A-side pre-review, and left the two subsequent blind rounds
+   only 5 findings between them (2 in round 1, 3 in round 2, one of those three against the
+   pre-reviewer's OWN repair prose — the same discipline applies recursively) — against the
+   commissioning brief's own stated baseline of 9 blind-round findings (5 in round 1, 4 in
+   round 2, per its own attestation record) on a comparable document that had no pre-review
+   pass run against it first —
+   [design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](../design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md),
+   traced to its record in the attestation ledger at adjudication time. **Report this kind of number honestly as a single datum, the way this
+   entry just did, never as a proven law**: one comparison is a data point, not a calibrated
+   rate, and the honest-limits paragraph below narrows what this specific datum does and does
+   not license you to assume.
+4. **Role tracking.** Name the discovering role on every finding, not just the finding itself —
+   `builder`, `builder-self`, `fresh-context-reviewer`, `attestor-B`, `pre-reviewer-A`,
+   `diagnostician`, `verifier`, `orchestrator`, `maintainer`, and `gate:<name>` for a mechanical
+   discovery, are this project's own operational vocabulary; its single home, not duplicated
+   here, is
+   [attestations/CODE-REVIEW-FINDINGS-README.md](../attestations/CODE-REVIEW-FINDINGS-README.md#role-vocabulary-discovered_by--the-operational-roles-this-project-runs).
+   The rationale an adopter needs for bothering with this field at all: per-role discovery data
+   is what eventually tells you which review tiers are earning their cost and which defect
+   classes deserve a mechanical gate instead of a recurring model pass — a question move 1's
+   corpus cannot answer if every row just says "found it" with no attribution of who or what
+   found it.
+
+**Honest limits — read this before assuming the doc-side efficiency gain transfers to code
+review.** First, the commissioning words this entry exists to answer, verbatim: *"This review
+findings thing is something autoharn projects probably will want generally, can we add it do
+USER-RECIPES-FAQ along with rationale?"* — and, attached to that same request, the maintainer's
+own caveat, carried verbatim because its consequence matters more
+than any paraphrase of it would: *"I'll note a kind of caveat of my own: that the documentation
+reviews were done against ADR-0017 which is, in some sense, strongly specified."* Spelled out:
+the +A:B:C efficiency numbers above come from documentation reviews judged against
+[ADR-0017](../law/adr/0017-the-zero-context-reader.md) — a deliberately strongly-specified
+standard with enumerable rules (Rule 1(a) through Rule 2(c), each with a named failure shape).
+Code review has no equivalently crisp specification: "is this SQL injection-safe" or "does this
+handle the race correctly" does not decompose into ten enumerable, keyword-greppable rules the
+way "does every coined term get a gloss" does. The transfer of the pre-review gain from
+documentation to code is therefore a **HYPOTHESIS the code-findings corpus exists to test, not
+a demonstrated result** — `attestations/code-review-findings.jsonl` started 2026-07-27
+specifically to accumulate the data that would confirm or refute it. An adopter building this
+pattern for their own project should expect the documentation-side gain (it has a corpus and a
+ranked class list behind it) and treat any code-side gain as unproven until their own corpus,
+mined the same way, says otherwise.
+
+**The adoption gate, before you start a ledger at all: can you name your consumer?** Per the
+[named-consumer test](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md#anecdote--2026-07-22-a-rule-2b-answer-for-the-cargo-cult-class-the-named-consumer-question)
+— every record kept names the specific reader, process, or investigation that will open it and
+the decision it will inform when they do; a record whose consumer cannot be honestly named is
+ritual, and ritual gets deleted, not kept. This pattern's own two named consumers, stated
+plainly rather than left as "for the audit trail": the future mining pass (move 2 above, which
+only exists to consume move 1's corpus) and per-role efficiency (move 4, which only exists to
+consume the `discovered_by` field). If you cannot name who reads your findings ledger and what
+they decide from it, do not start one — a findings ledger nobody mines and nobody uses to
+decide anything is exactly the cargo-cult shape the named-consumer test was built to catch.
+
 
 ## Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)
 
