@@ -26,9 +26,44 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s67 (this pass pays down the prior LAGGING note, below, per
+||| AS-OF: kernel chain through s68 (this pass pays down the prior LAGGING note, below, per
 ||| gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics
 ||| genuinely catch up).
+||| THE s68 PASS (design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md, ledger rows 1541/1542 --
+||| the maintainer's own merge-hold answer, "As for the NUL sentinel, that shoulde be fixed",
+||| verbatim): MODEL-VISIBLE, the same DigestF idiom applied to the two remaining implicit-
+||| sentinel columns s67's own §2 AMENDMENT item 4 named as a visible, disclosed gap.
+|||   refusal_attempted_kind gains AttemptedKindDisposition/AttemptedKindF (below, one family over
+|||     from DigestF): a FOUR-member vocabulary (AKExtracted/AKAbsent/AKNotAString/AKOverBound)
+|||     where three of the four members all mean "the token is absent" -- so unlike DigestF's
+|||     two-member equality coupling, this family's own coupling reasoning is necessarily an
+|||     inequality (kdisp <> AKExtracted), the SQL's own `<> 'extracted'` shape rendered one
+|||     altitude up. `write`'s own construction (§3b) reads exactly attemptedKindFor's existing
+|||     surfaceFor split, so it CAN and DOES decide between AKExtracted (SurfLedger) and AKAbsent
+|||     (every other surface) -- unlike s67's digest bound, this leg of the disposition genuinely
+|||     is model-visible from `write` itself. AKNotAString/AKOverBound are NOT reachable from
+|||     `write`, named rather than silently unexercised: the identical s65/s67 "domain never sees
+|||     the adversarial input" judgment -- attemptedKindFor's domain is the closed, short,
+|||     already-typed kind-token vocabulary, never a caller's free-text/oversized jsonb value, so
+|||     nothing here can ever decide either of those two arms is reached. Both are representable
+|||     and exercised by dedicated fixtures (k68a/k68b below), the k67a precedent one family over.
+|||   refusal_attempted_actor gains AttemptedActorDisposition/AttemptedActorF (below): a
+|||     THREE-member vocabulary (AAResolvedExplicit/AAResolvedSessionDefault/AAUnresolvable) where
+|||     exactly one member (AAUnresolvable) means "the actor is absent" -- so this family's
+|||     coupling is the s67-shape equality-against-one-literal, not the kind family's inequality.
+|||     `write`'s own construction (§3b) always knows e.actor directly (PrincipalId = Nat,
+|||     unbounded, the header's own PRESERVED-list idealization) -- it has no separate notion of
+|||     "the session's own standing-declaration default" as distinct from the acting principal, so
+|||     it can only ever mint AAResolvedExplicit. AAResolvedSessionDefault and AAUnresolvable are
+|||     NOT reachable from `write`, named rather than silently unexercised -- both representable
+|||     and exercised by dedicated fixtures (k68c/k43a below; k43a's own pre-existing "unattributable
+|||     attempt" Nothing leg is the AAUnresolvable member, rendered here rather than replaced).
+|||   Both new dispositions are per-column, not consolidated (spec §2 item 5's own reasoning,
+|||   transcribed verbatim from the SQL header): a single consolidated disposition would itself be
+|||   a fuzzy vocabulary spanning two value domains, and the two columns' absence causes share no
+|||   member. Four `failing` blocks (k68d/k68e for the kind family, k68f/k68g for the actor
+|||   family) witness both directions of each coupling as unrepresentable, the k67b/k67c pattern
+|||   applied twice.
 ||| THE s66-s67 PASS (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md, ledger rows 1514/1519 --
 ||| both members of the s49 refusal-journal-totality family): per-delta disposition, read against
 ||| the SQL, not bumped on faith.
@@ -1013,6 +1048,45 @@ DigestF : RefusalDigestDisposition -> Type
 DigestF RDComputed  = NonEmptyText
 DigestF RDOverBound = ()
 
+||| s68 (kernel/lineage/s68-typed-absence-dispositions.sql, design/
+||| FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md §2 item 1): the closed, four-member
+||| refusal_attempted_kind_disposition vocabulary -- WHY a write_refused row's attempted-kind
+||| token holds the value it does. AKExtracted: the payload's own `kind` key held a JSON string
+||| <=256 bytes. AKAbsent: no `kind` key at all, or the payload was not a JSON object. AKNotAString:
+||| the `kind` key held a non-string JSON value. AKOverBound: a string value exceeded 256 bytes.
+||| Never extended past four members by this rendering (the SQL's own CHECK is equally closed).
+data AttemptedKindDisposition = AKExtracted | AKAbsent | AKNotAString | AKOverBound
+
+||| s68: the attempted-kind token is mandatory NonEmptyText exactly under AKExtracted, forbidden
+||| (unrepresentable) under the other three members -- the kind-guarded coupling CHECK
+||| (refusal_attempted_kind_disposition_coupling) rendered as unrepresentability, the DigestF
+||| precedent one family over -- here a THREE-vs-one split (AKAbsent/AKNotAString/AKOverBound all
+||| collapse to `()`) rather than DigestF's two-member split, matching the SQL's own coupling CHECK
+||| shape (an inequality against 'extracted', not an equality against one literal).
+AttemptedKindF : AttemptedKindDisposition -> Type
+AttemptedKindF AKExtracted  = NonEmptyText
+AttemptedKindF AKAbsent     = ()
+AttemptedKindF AKNotAString = ()
+AttemptedKindF AKOverBound  = ()
+
+||| s68 (kernel/lineage/s68-typed-absence-dispositions.sql §2 item 1): the closed, three-member
+||| refusal_attempted_actor_disposition vocabulary -- WHY a write_refused row's attempted-actor
+||| holds the value it does. AAResolvedExplicit: the payload's own `actor` key resolved to a
+||| registered principal id. AAResolvedSessionDefault: the explicit claim did not resolve, but the
+||| session's own standing-declaration default did. AAUnresolvable: neither resolved. Never
+||| extended past three members by this rendering (the SQL's own CHECK is equally closed).
+data AttemptedActorDisposition = AAResolvedExplicit | AAResolvedSessionDefault | AAUnresolvable
+
+||| s68: the attempted actor is mandatory PrincipalId under either resolved member, forbidden
+||| (unrepresentable) under AAUnresolvable -- the coupling CHECK
+||| (refusal_attempted_actor_disposition_coupling) rendered as unrepresentability, the DigestF-shape
+||| equality-against-one-literal split (exactly one of three members means "absent"), unlike
+||| AttemptedKindF's three-vs-one split.
+AttemptedActorF : AttemptedActorDisposition -> Type
+AttemptedActorF AAResolvedExplicit       = PrincipalId
+AttemptedActorF AAResolvedSessionDefault = PrincipalId
+AttemptedActorF AAUnresolvable           = ()
+
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
   ||| s36: a decision row with its writer-supplied durability grade (nullable,
@@ -1080,11 +1154,13 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   |||
   ||| s43: a refusal the write boundary caught, COMMITTED as an ordinary row
   ||| (the one event class the pre-s43 kernel destroyed by the refusal's own
-  ||| abort). Eight typed fields, the SQL's eight refusal_* columns (s67 adds the
-  ||| eighth): sqlstate and
+  ||| abort). Ten typed fields, the SQL's ten refusal_* columns (s67 adds the
+  ||| eighth, s68 the ninth and tenth): sqlstate and
   ||| digest are NonEmptyText here where the SQL refines further by regex
   ||| (^[0-9A-Z]{5}$ / 64-hex -- shape refinements below this rendering's
-  ||| altitude, named); the attempted actor is legitimately Maybe (an
+  ||| altitude, named); the attempted actor is disposition-indexed (s68,
+  ||| AttemptedActorF, below this note), no longer a bare Maybe -- the
+  ||| attempted ROLE always known regardless.
   ||| s67 (kernel/lineage/s67-refusal-digest-bound.sql, design/
   ||| FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 + its §2 AMENDMENT, ledger row 1514 item 1 "all
   ||| should go in" / merge-hold ruling "NULL as an implicit sentinel ... is not condonable"): the
@@ -1108,7 +1184,34 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   ||| (k67a below), never reachable from `write` itself, because `write`'s payload is already typed
   ||| Idris data, never the adversarial raw jsonb text whose size this bound polices at the SQL
   ||| altitude.
-  ||| unattributable attempt), the attempted ROLE always known. SINCE THE
+  ||| s68 (kernel/lineage/s68-typed-absence-dispositions.sql, design/
+  ||| FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md, ledger rows 1541/1542, maintainer verbatim "As
+  ||| for the NUL sentinel, that shoulde be fixed"): the SAME §2-AMENDMENT reasoning s67 just
+  ||| shipped for the digest, applied to the two remaining implicit-sentinel columns that
+  ||| AMENDMENT's own item 4 named as a visible gap. attemptedActor is no longer `Maybe
+  ||| PrincipalId` but AttemptedActorDisposition/AttemptedActorF-indexed (above): AAResolvedExplicit
+  ||| and AAResolvedSessionDefault both force an actual PrincipalId, AAUnresolvable forces (),
+  ||| unrepresentability rather than a bare nullable -- the coupling CHECK
+  ||| (refusal_attempted_actor_disposition_coupling) rendered exactly the DigestF way, one family
+  ||| over. `write`'s own construction (§3b) always knows e.actor directly and has no separate
+  ||| notion of a session-standing-default distinct from it, so it can only ever mint
+  ||| AAResolvedExplicit -- AAResolvedSessionDefault and AAUnresolvable are NOT reachable from
+  ||| `write`, named rather than silently unexercised, representable and exercised by dedicated
+  ||| fixtures (k68c GREEN for the session-default leg; k43a below already carries the
+  ||| AAUnresolvable leg, rendered here rather than replaced). attemptedKind is likewise no
+  ||| longer `Maybe NonEmptyText` but AttemptedKindDisposition/AttemptedKindF-indexed (above): only
+  ||| AKExtracted forces an actual NonEmptyText, the other three members all force () -- the
+  ||| coupling CHECK (refusal_attempted_kind_disposition_coupling) is therefore an INEQUALITY
+  ||| against 'extracted', not DigestF's equality against one literal, the SQL's own header
+  ||| reasoning rendered here. `write`'s own construction (§3b) reads exactly attemptedKindFor's
+  ||| existing surfaceFor split (below), so it CAN and DOES decide AKExtracted (SurfLedger) vs
+  ||| AKAbsent (every other surface) -- unlike the actor and digest dispositions, this leg of s68
+  ||| genuinely is model-visible from `write` itself. AKNotAString/AKOverBound are NOT reachable
+  ||| from `write`, named rather than silently unexercised -- the identical s65/s67 "domain never
+  ||| sees the adversarial input" judgment, attemptedKindFor's domain being the closed, short,
+  ||| already-typed kind-token vocabulary, never a caller's free-text/oversized jsonb value.
+  ||| Representable and exercised by dedicated fixtures (k68a/k68b below).
+  ||| SINCE THE
   ||| s44-s49 PARITY PASS the boundary's totality invariant ("a refusal
   ||| verdict cannot be delivered unjournaled", s43 §4.4) IS rendered --
   ||| §3b's `write` returns Ledger (S n) on both arms, the refusal arm
@@ -1125,15 +1228,19 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   ||| let's have that column" verbatim): attemptedKind is the refused
   ||| payload's OWN `kind` token, extracted before the digest (R4's
   ||| digest-only discipline over the payload AS A WHOLE is unchanged) --
-  ||| Maybe, and DELIBERATELY so: NULL is legitimate whenever the refused
-  ||| payload carried no `kind` key, a non-text value, a value over 256
-  ||| bytes (refusal_attempted_kind_length, the table CHECK; the SAME bound
-  ||| is ALSO enforced belt-and-suspenders inside journal_write_refusal
-  ||| itself), or the refusing surface's own payload contract never admits a
-  ||| `kind` key at all (every surface except SurfLedger, structurally -- the
-  ||| QUANTIFICATION UNIVERSE fact s65's own closure statement proves). NULL
-  ||| means "not extractable", NEVER "not attempted" -- the constructor's own
-  ||| existence already proves an attempt happened.
+  ||| AttemptedKindDisposition/AttemptedKindF-indexed since s68 (above), NOT
+  ||| a bare Maybe: absence is legitimate under AKAbsent/AKNotAString/
+  ||| AKOverBound (no `kind` key at all, a non-text value, or a value over
+  ||| 256 bytes respectively -- refusal_attempted_kind_length, the table
+  ||| CHECK; the SAME bound is ALSO enforced belt-and-suspenders inside
+  ||| journal_write_refusal itself), or the refusing surface's own payload
+  ||| contract never admits a `kind` key at all (every surface except
+  ||| SurfLedger, structurally -- the QUANTIFICATION UNIVERSE fact s65's own
+  ||| closure statement proves, rendered here as AKAbsent since this model's
+  ||| attemptedKindFor has no way to distinguish "no key" from "not a
+  ||| string" from "over bound" -- named at attemptedKindDispositionFor's own
+  ||| doc). Absence means "not extractable", NEVER "not attempted" -- the
+  ||| constructor's own existence already proves an attempt happened.
   ||| THE 256-BYTE BOUND, DECIDED (not re-derived as a refined/bounded type,
   ||| unlike CommitRef/Fingerprint's own shape-checked records): those two
   ||| refine a WRITER-SUPPLIED field whose shape gates an accepted row's own
@@ -1157,9 +1264,11 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   PWriteRefused : (sqlstate : NonEmptyText) -> (message : NonEmptyText)
                -> (surface : RefusalSurface)
                -> (disposition : RefusalDigestDisposition) -> (digest : DigestF disposition)
-               -> (attemptedActor : Maybe PrincipalId)
+               -> (actorDisp : AttemptedActorDisposition)
+               -> (attemptedActor : AttemptedActorF actorDisp)
                -> (attemptedRole : NonEmptyText)
-               -> (attemptedKind : Maybe NonEmptyText) -> Payload st n
+               -> (kindDisp : AttemptedKindDisposition)
+               -> (attemptedKind : AttemptedKindF kindDisp) -> Payload st n
   ||| s44: a model-identity attestation, the typed defeasible-claim shape.
   ||| target is Fin n -- the SQL's self-table FK (attest_row_id REFERENCES
   ||| ledger(id): "the target's existence is thereby structural, never
@@ -2600,7 +2709,7 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| channel) is boundary-side payload VALIDATION at the SECURITY DEFINER
   ||| trust line, an authorship fact this row algebra cannot see (named, not
   ||| hidden; the oracle's count>sequence FAIL is its mechanical tripwire).
-  VWriteRefused : ValidPayload l (PWriteRefused q m sf disp d aa ar ak)
+  VWriteRefused : ValidPayload l (PWriteRefused q m sf disp d adisp aa ar kdisp ak)
   ||| s40: the four identity events. Registration freshness by NAME lives on
   ||| the SQL anchor's UNIQUE(name) + the CLI ceremony -- this model's
   ||| PrincipalId is the id, not the name, so name-duplicate refusal is out of
@@ -2746,7 +2855,7 @@ recordPayload l st (PViolationDisposition c t r w) = PViolationDisposition c t r
 recordPayload l st (PReview r (MkReviewDetail v i b a ())) =
   let tgt = case entryAt l r of (_ ** e) => e.stamp
   in PReview r (MkReviewDetail v i b a (gradeLadder (stampPair st) (stampPair tgt)))
-recordPayload l st (PWriteRefused q m sf disp d aa ar ak) = PWriteRefused q m sf disp d aa ar ak
+recordPayload l st (PWriteRefused q m sf disp d adisp aa ar kdisp ak) = PWriteRefused q m sf disp d adisp aa ar kdisp ak
 recordPayload l st (PModelAttested t m g os jb he v ex) = PModelAttested t m g os jb he v ex
 recordPayload l st (PPrincipalRegistered s c p) = PPrincipalRegistered s c p
 recordPayload l st (PPrincipalSuspended s a)    = PPrincipalSuspended s a
@@ -2798,7 +2907,7 @@ recordPayload l st (PKeyPossessionVerified fp)  = PKeyPossessionVerified fp
 maySupersede : Payload Recorded m -> Payload Draft k -> Bool
 -- s43 R6 (RATIFIED): a write_refused row is UNRETRACTABLE -- it records a
 -- historical fact about a refused attempt and asserts nothing retractable.
-maySupersede (PWriteRefused _ _ _ _ _ _ _ _) _ = False
+maySupersede (PWriteRefused _ _ _ _ _ _ _ _ _ _) _ = False
 -- s45 §3.4, the conversion-found closure: the three standing-lifecycle kinds
 -- accept only SAME-KIND, IDENTITY-CONTINUOUS supersessors. A declaration's
 -- supersessor restates the SAME db_role always, and the SAME subject when it
@@ -3045,7 +3154,7 @@ payloadKindToken (PRelationAsserted _ _ _ _ _)   = MkNonEmptyText "principal_rel
 payloadKindToken (PRoleBound _ _ _)              = MkNonEmptyText "principal_role_bound" Oh
 payloadKindToken (PKeyBound _ _ _ _)             = MkNonEmptyText "principal_key_bound" Oh
 payloadKindToken (PCompetenceGranted _ _ _ _)    = MkNonEmptyText "principal_competence_granted" Oh
-payloadKindToken (PWriteRefused _ _ _ _ _ _ _ _) = MkNonEmptyText "write_refused" Oh
+payloadKindToken (PWriteRefused _ _ _ _ _ _ _ _ _ _) = MkNonEmptyText "write_refused" Oh
 payloadKindToken (PModelAttested _ _ _ _ _ _ _ _) = MkNonEmptyText "model_identity_attested" Oh
 payloadKindToken (PWorkOpened _ _ _ _)           = MkNonEmptyText "work_opened" Oh
 payloadKindToken (PWorkClaimed _)                = MkNonEmptyText "work_claimed" Oh
@@ -3064,6 +3173,20 @@ attemptedKindFor : Payload st n -> Maybe NonEmptyText
 attemptedKindFor p = case surfaceFor p of
   SurfLedger => Just (payloadKindToken p)
   _          => Nothing
+
+||| s68 (kernel/lineage/s68-typed-absence-dispositions.sql): the SAME surfaceFor split
+||| attemptedKindFor already reads, now producing BOTH halves of the coupled
+||| (kindDisp, attemptedKind) pair `write` mints -- a dependent pair (DPair, the keepLive/entryAt
+||| idiom already used elsewhere in this file) because AttemptedKindF's second component's TYPE
+||| depends on the first. `write`'s own construction can only ever decide AKExtracted (SurfLedger)
+||| or AKAbsent (every other surface, no caller-supplied `kind` key at all) -- AKNotAString/
+||| AKOverBound are unreachable from `write` for the identical reason RDOverBound is (this model's
+||| attemptedKindFor has no adversarial raw-jsonb input to begin with), named at PWriteRefused's
+||| own doc, not silently dropped -- exercised instead by dedicated fixtures (k68a/k68b below).
+attemptedKindDispositionFor : (p : Payload st n) -> (d : AttemptedKindDisposition ** AttemptedKindF d)
+attemptedKindDispositionFor p = case surfaceFor p of
+  SurfLedger => (AKExtracted ** payloadKindToken p)
+  _          => (AKAbsent ** ())
 
 ||| The teach-text, one literal per reason (each a compile-time-checked
 ||| NonEmptyText -- the SQL's message payload, at headline altitude).
@@ -3130,7 +3253,7 @@ checkPayload l (PProse k)                      = Right VProse
 checkPayload l (PDecision g)                   = Right VDecision
 checkPayload l (PViolationDisposition c t r w) = Right VViolationDisposition
 checkPayload l (PReview r d)                   = Right VReview
-checkPayload l (PWriteRefused q m sf disp d aa ar ak) = Right VWriteRefused
+checkPayload l (PWriteRefused q m sf disp d adisp aa ar kdisp ak) = Right VWriteRefused
 checkPayload l (PModelAttested t m g os jb he v ex) = Right VModelAttested
 checkPayload l (PPrincipalRegistered s c p)    = Right VPrincipalRegistered
 checkPayload l (PPrincipalSuspended s a)       = Right VPrincipalSuspended
@@ -3251,7 +3374,7 @@ boundaryReason l e =
       Nothing => RSupersedeLifecycleKind
       Just t  => case entryAt l t of
         (_ ** te) => case te.payload of
-          PWriteRefused _ _ _ _ _ _ _ _ => RSupersedeWriteRefused
+          PWriteRefused _ _ _ _ _ _ _ _ _ _ => RSupersedeWriteRefused
           PStandingDeclared _ _ _   => case e.payload of
             PStandingDeclared _ _ _   => RSupersedeLifecycleIdentity
             _                         => RSupersedeLifecycleKind
@@ -3293,25 +3416,33 @@ write : {n : Nat} -> (journaler : PrincipalId) -> (sessionRole : NonEmptyText)
 write j role l e = case checkEntry l e of
   Right (pv, bOk) => append l e pv bOk
   Left r =>
+    let (kd ** ak) = attemptedKindDispositionFor e.payload in
     l :< MkEntry e.session "write refused (journaled verdict)" j Nothing
            Nothing Nothing Nothing [] Nothing
            (PWriteRefused Autoharn.pstate (refusalText r) (surfaceFor e.payload)
               -- s67: this model carries no byte-length for a Payload value (see PWriteRefused's
               -- own doc), so `write`'s construction can never DECIDE the RDOverBound leg -- it
               -- always mints RDComputed with the same out-of-model digest literal as before.
-              RDComputed Autoharn.unmodeledDigest (Just e.actor) role (attemptedKindFor e.payload))
+              RDComputed Autoharn.unmodeledDigest
+              -- s68: `write` always knows e.actor directly (PrincipalId = Nat, unbounded) and has
+              -- no separate session-standing-default notion distinct from it, so it can only ever
+              -- mint AAResolvedExplicit -- see PWriteRefused's own doc.
+              AAResolvedExplicit e.actor role
+              -- s68: kd/ak decide AKExtracted/AKAbsent exactly as attemptedKindFor already did,
+              -- via attemptedKindDispositionFor's own dependent pair (above).
+              kd ak)
 
 ||| Probes for the §7 fixtures: is the head row a journaled refusal, and at
 ||| which surface. Pattern-total: a Ledger (S n) is always (:<).
 headRefused : {n : Nat} -> Ledger (S n) -> Bool
 headRefused (l :< e) = case e.payload of
-  PWriteRefused _ _ _ _ _ _ _ _ => True
-  _                           => False
+  PWriteRefused _ _ _ _ _ _ _ _ _ _ => True
+  _                               => False
 
 headSurface : {n : Nat} -> Ledger (S n) -> Maybe RefusalSurface
 headSurface (l :< e) = case e.payload of
-  PWriteRefused _ _ sf _ _ _ _ _ => Just sf
-  _                            => Nothing
+  PWriteRefused _ _ sf _ _ _ _ _ _ _ => Just sf
+  _                                => Nothing
 
 -- ===========================================================================
 -- §4  COMPOSITE DISCHARGE AS A READ OF THE §2b OBLIGATION CALCULUS. No new
@@ -3917,16 +4048,20 @@ worldWF = Lin :< mkE 1 Nothing (PProse KNote)
                                   (MkNonEmptyText "Ledger policy: refused" Oh)
                                   SurfLedger
                                   RDComputed (MkNonEmptyText "deadbeef" Oh)
-                                  (Just 1) (MkNonEmptyText "bork" Oh)
-                                  (Just (MkNonEmptyText "note" Oh)))
+                                  AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+                                  AKExtracted (MkNonEmptyText "note" Oh))
 
 -- s43 GREEN: the refusal payload judgment carries no premise of its own.
--- s65: attemptedKind Nothing here -- SurfRegistration's own payload contract never admits a
+-- s65: kindDisp AKAbsent here -- SurfRegistration's own payload contract never admits a
 -- `kind` key (QUANTIFICATION UNIVERSE, s65's own closure statement).
+-- s68: actorDisp AAUnresolvable -- the pre-s68 "unattributable attempt" Nothing leg, rendered
+-- here as its own typed disposition rather than replaced (never reachable from `write` itself,
+-- exercised only here -- PWriteRefused's own doc).
 k43a : ValidPayload Autoharn.worldWF
          (PWriteRefused (MkNonEmptyText "23505" Oh) (MkNonEmptyText "dup" Oh)
-            SurfRegistration RDComputed (MkNonEmptyText "beef" Oh) Nothing
-            (MkNonEmptyText "bork" Oh) Nothing)
+            SurfRegistration RDComputed (MkNonEmptyText "beef" Oh)
+            AAUnresolvable () (MkNonEmptyText "bork" Oh)
+            AKAbsent ())
 k43a = VWriteRefused
 
 -- s67 GREEN: the digest is legitimately ABSENT under RDOverBound -- the () argument is the
@@ -3937,7 +4072,8 @@ k43a = VWriteRefused
 k67a : ValidPayload Autoharn.worldWF
          (PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "Ledger policy: refused" Oh)
             SurfLedger RDOverBound ()
-            (Just 1) (MkNonEmptyText "bork" Oh) Nothing)
+            AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+            AKAbsent ())
 k67a = VWriteRefused
 
 -- s67 RED: RDComputed demands an actual digest -- () does not typecheck there (DigestF RDComputed
@@ -3946,7 +4082,8 @@ failing
   k67b : Payload Recorded 2
   k67b = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
            SurfLedger RDComputed ()
-           (Just 1) (MkNonEmptyText "bork" Oh) Nothing
+           AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+           AKAbsent ()
 
 -- s67 RED: RDOverBound forbids a populated digest -- a NonEmptyText literal does not typecheck
 -- there (DigestF RDOverBound = ()), the coupling's other direction made unrepresentable.
@@ -3954,7 +4091,77 @@ failing
   k67c : Payload Recorded 2
   k67c = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
            SurfLedger RDOverBound (MkNonEmptyText "deadbeef" Oh)
-           (Just 1) (MkNonEmptyText "bork" Oh) Nothing
+           AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+           AKAbsent ()
+
+-- s68 GREEN: attemptedActor's SESSION-DEFAULT leg -- never reachable from `write` itself (the
+-- model always knows e.actor directly, no separate session-standing-default notion; PWriteRefused's
+-- own doc) -- a dedicated fixture, the k67a precedent one family over.
+k68a : ValidPayload Autoharn.worldWF
+         (PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "Ledger policy: refused" Oh)
+            SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+            AAResolvedSessionDefault 1 (MkNonEmptyText "bork" Oh)
+            AKExtracted (MkNonEmptyText "note" Oh))
+k68a = VWriteRefused
+
+-- s68 GREEN: attemptedKind's NOT_A_STRING leg -- never reachable from `write` itself (this
+-- model's attemptedKindFor has no adversarial raw-jsonb input to begin with; PWriteRefused's own
+-- doc) -- a dedicated fixture, the k67a precedent one family over.
+k68b : ValidPayload Autoharn.worldWF
+         (PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "Ledger policy: refused" Oh)
+            SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+            AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+            AKNotAString ())
+k68b = VWriteRefused
+
+-- s68 GREEN: attemptedKind's OVER_BOUND leg -- likewise never reachable from `write` itself, the
+-- identical reasoning one member over.
+k68c : ValidPayload Autoharn.worldWF
+         (PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "Ledger policy: refused" Oh)
+            SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+            AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+            AKOverBound ())
+k68c = VWriteRefused
+
+-- s68 RED: AKExtracted demands an actual NonEmptyText token -- () does not typecheck there
+-- (AttemptedKindF AKExtracted = NonEmptyText, not Unit), the kind-disposition coupling's first
+-- direction made unrepresentable, the k67b precedent one family over.
+failing
+  k68d : Payload Recorded 2
+  k68d = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+           AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+           AKExtracted ()
+
+-- s68 RED: AKAbsent forbids a populated kind token -- a NonEmptyText literal does not typecheck
+-- there (AttemptedKindF AKAbsent = (), not NonEmptyText), the coupling's other direction made
+-- unrepresentable, the k67c precedent one family over.
+failing
+  k68e : Payload Recorded 2
+  k68e = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+           AAResolvedExplicit 1 (MkNonEmptyText "bork" Oh)
+           AKAbsent (MkNonEmptyText "note" Oh)
+
+-- s68 RED: AAResolvedExplicit demands an actual PrincipalId -- () does not typecheck there
+-- (AttemptedActorF AAResolvedExplicit = PrincipalId, not Unit), the actor-disposition coupling's
+-- first direction made unrepresentable.
+failing
+  k68f : Payload Recorded 2
+  k68f = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+           AAResolvedExplicit () (MkNonEmptyText "bork" Oh)
+           AKExtracted (MkNonEmptyText "note" Oh)
+
+-- s68 RED: AAUnresolvable forbids a populated attempted actor -- a PrincipalId literal does not
+-- typecheck there (AttemptedActorF AAUnresolvable = (), not PrincipalId), the coupling's other
+-- direction made unrepresentable.
+failing
+  k68g : Payload Recorded 2
+  k68g = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDComputed (MkNonEmptyText "deadbeef" Oh)
+           AAUnresolvable 1 (MkNonEmptyText "bork" Oh)
+           AKExtracted (MkNonEmptyText "note" Oh)
 
 -- s43 R6 RED: superseding the write_refused row (index 1) fails boundaryOk --
 -- the hiding is unrepresentable at the boundary, not merely traceable.
@@ -4513,10 +4720,13 @@ b61b = Refl
 -- s65: the attempted-kind journal, both axes -- a ledger-surface refusal populates it verbatim
 -- (the payload IS already typed, unlike the SQL's untyped jsonb); a registration-surface refusal
 -- never carries a caller `kind` key at all (QUANTIFICATION UNIVERSE, s65's own closure statement).
+-- s68: reads the (kindDisp, attemptedKind) pair rather than a bare Maybe -- only AKExtracted binds
+-- a real token (the getRedelegateDepth/getScopeClasses precedent, §2f: match the discriminator
+-- explicitly, let every other clause discard the dependent field without touching its value).
 headAttemptedKind : {n : Nat} -> Ledger (S n) -> Maybe NonEmptyText
 headAttemptedKind (l :< e) = case e.payload of
-  PWriteRefused _ _ _ _ _ _ _ ak => ak
-  _                            => Nothing
+  PWriteRefused _ _ _ _ _ _ _ _ AKExtracted ak => Just ak
+  _                                           => Nothing
 
 w65a : headAttemptedKind (write 9 Autoharn.wbRole Autoharn.worldA (mkD 1 Nothing (PWorkClaimed "a")))
      = Just (MkNonEmptyText "work_claimed" Oh)
