@@ -425,29 +425,35 @@ work-item pair, and `kernel/lineage/s15-schema.sql` for `question_status`.
 
 <a id="reservations_outstanding"></a>
 ### `reservations_outstanding`
-The tracked-residue surface for a `attest_with_reservations` countersign (kernel/lineage/
+`reservations_outstanding` is the tracked-residue surface for an
+`attest_with_reservations` countersign (kernel/lineage/
 s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md, maintainer-ratified
 2026-07-22). A reservation-carrying review discharges [`review_gap`](#review_gap)/
-`work_review_gap`/`work_item_strict_blockers` exactly as a plain `attest` does — the reviewer's
+`work_review_gap`/`work_item_strict_blockers` (the strict claim-time blocker function of
+the same closure-debt family, a kernel function since s30/s31) exactly as a plain `attest` does — the reviewer's
 verdict is final the moment it is written — but the concern itself does not vanish: it appears
 here (`review_id`, `regards`, `reviewer`, `basis`) until it is itself dispositioned, either by
 superseding the reservation-carrying review row or by a plain `attest` review regarding the
 reservation review's own row id. Before this delta the two attesting verdicts were
 indistinguishable in effect only by *staying stuck open*, which rewarded fabricating a clean
 `attest` to satisfy the gate rather than recording an honest concern — the specimen was the
-experience2 backflow finding (`AUTOHARN_BACKFLOW.md` 2026-07-22). See
+experience2 backflow finding (experience2: the autoharn-panel project's own tracker
+[world](#world), a sibling repository; its `AUTOHARN_BACKFLOW.md` — external to this tree,
+findings filed upstream — dated 2026-07-22). See
 [`review_verdicts`](#review-verdicts) for the general "what did this review actually say" read
 path, and [USER-RECIPES-FAQ.md](user-guide/USER-RECIPES-FAQ.md) for the worked recipe.
 
 <a id="review-verdicts"></a>
 ### `review_verdicts`
-The general review-legibility view (same delta as `reservations_outstanding` above): every
-`review` row, superseded or not, joined with its `review_detail` (`review_id`, `regards`,
-`reviewer`, `verdict`, `independence`, `basis`, `antecedent`, `superseded`). A declared
+`review_verdicts` is the general review-legibility view (same delta as
+`reservations_outstanding` above): it lists every `review` row, superseded or not, joined
+with its `review_detail` (`review_id`, `regards`, `reviewer`, `verdict`, `independence`,
+`basis`, `antecedent`, `superseded`). A declared
 raw/history reader by design (`gates/ledger_reader_allowlist.py`) — a superseded review must
 stay visible here, with its `superseded` flag named explicitly, never silently dropped by the
 in-force projection. This is the read path whose absence forced the experience2 finding to
-inspect the wrong column (`attest_verdict`, the s44 model-identity field) and mis-diagnose a
+inspect the wrong column (`attest_verdict`, the field the s44 model-identity-attestation
+delta added — see the parenthetical under [typed verdict](#typed-verdict)) and mis-diagnose a
 storage bug — verdict storage was already sound; the defect was semantic (a narrow discharge
 filter), not a storage failure.
 
@@ -583,7 +589,7 @@ entry is the write-boundary one, since that is what "write boundary" pairs it wi
 <a id="credited-view"></a>
 ### credited view
 The read surface that shows the ledger's current rows **minus** any row a
-[computed defeat](#model-defeated) has excluded. Designed as kernel views
+[computed defeat](#model-defeated) has excluded. It is designed as kernel views
 `credited_current` (column-identical to `ledger_current`) and `model_defeated_rows` (the
 with-cause surface: row id, attestation id, grant id, model, grade) in delta
 `s46-credited-views.sql`, view-only with zero new columns or kinds (a working name —
@@ -663,15 +669,15 @@ a `seen-red/<dir>` with no banked red-shaped evidence, (2) an orphaned `seen-red
 in the registry, or (3) a registry entry whose fixture file does not exist. Scope, declared
 by the gate's own header: it checks red-evidence *presence* and fixture *existence*
 statically, cheap enough for every commit; actually re-executing each fixture to a live red
-is the separate acceptance-time re-verification, not run on every commit. **Honest limit
-(open work item, row 1503):** the census today verifies a registered fixture path exists
-on disk, not that it is **git-tracked** — an untracked file at that path satisfies the
-check, the witnessed false-green the row's s45-review finding named. The item also notes a
-mechanical root cause it will close:
+is the separate acceptance-time re-verification, not run on every commit. **Former honest limit, since CLOSED
+(stale-claim correction 2026-07-27, caught by the s-history content review):** this entry
+previously said the census verifies only presence-on-disk, not git-tracking — true when
+written (open work item, row 1503), false at head: the git-tracked check is implemented
+and enforced in [`gates/fixture_census.py`](gates/fixture_census.py) (its own header and
+`main()` refuse an untracked file at a registered path, citing ledger row 1502 — an
+uncommitted proof is not a proof). The row-1503 item's other leg, the missing
 [`seen-red/s45-standing-lifecycle/run_fixtures.py`](seen-red/s45-standing-lifecycle/run_fixtures.py)
-lacks the fixture-census leg its own spec's gate enumeration listed but the harness never
-invoked. Filed, sequenced for "the next quiet window," not yet built — the current head is
-census-clean, so nothing is live-broken by the gap.
+census leg, is tracked on that work item, not restated here.
 
 <!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
      doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated

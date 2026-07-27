@@ -49,7 +49,10 @@ manifest — an honest unknown, not a confirmed fact.**
 
 Each entry below is sourced from that delta file's own header comment (DOC-SOURCED), compressed
 to plain words. `ls kernel/lineage/s*.sql` is the authoritative roster of what exists; this list
-was checked against it directly rather than assumed. Every synopsis links to its file.
+was checked against it directly rather than assumed. Every synopsis links to its file. The
+pre-`s15` standalone generations (`s10`–`s14`, plus the `s13` remediation file) are deliberately
+outside this synopsis's frame — superseded whole-kernel snapshots, not chain deltas; see
+[`kernel/lineage/README.md`](kernel/lineage/README.md) for their coverage.
 
 ### The `s15`/`s17`/`s18` base and its one-shot apply script
 
@@ -64,7 +67,8 @@ was checked against it directly rather than assumed. Every synopsis links to its
   top of `s15` adding **interception-stamped row provenance**: every write is bound to the
   actual invoking session/agent identity (an HMAC injected by a tool-interception hook, not
   typed by the writer), closing the gap where a writer-supplied `actor` field alone let one
-  context register a second "reviewer" principal and countersign its own work.
+  context register a second "reviewer" [principal](GLOSSARY.md#principal) (the kernel's
+  registered identity/actor concept — see the glossary entry) and countersign its own work.
 - **[`s17-independence-vocabulary.sql`](kernel/lineage/s17-independence-vocabulary.sql)** —
   lands the same day as the delta above: adds `self-review` as an honest value of the
   `independence` column, and makes the independence-CLAIMING values (`technical`/`managerial`/
@@ -201,7 +205,8 @@ plainly, and the numbering simply resumes at `s17`.
   verdict vocabularies, a self-referencing existence check), feeding the OpenTelemetry
   (OTel)-based sentry that watches for one model silently substituting for another mid-session.
 - **[`s46-credited-views.sql`](kernel/lineage/s46-credited-views.sql)** — adds a display layer
-  (`model_defeated_rows`, `credited_current`) surfacing which rows the defeat calculus treats
+  (`model_defeated_rows`, `credited_current`) surfacing which rows the
+  [defeat calculus](GLOSSARY.md#model-defeated) treats
   as discredited, purely additive derived views.
 - **[`s47-claim-on-closed-refusal.sql`](kernel/lineage/s47-claim-on-closed-refusal.sql)** —
   one new refusal: a work item cannot be claimed once its slug already carries an in-force
@@ -305,6 +310,15 @@ options shape only the surrounding birth ACTS, never which `sNN` deltas a new
   the current head (`s64` as of this writing) — the identical list regardless of which
   `--new-world` name, `--profile tracker` name, or any feature checkbox was chosen. There is no
   conditional branch inside that assignment keyed on any user-selected option.
+- Precision added 2026-07-27 (content-review finding): `LINEAGE_CHAIN` is the hand-authored
+  NARRATIVE of the chain, used for the printed provenance header — the code that actually
+  decides which files apply is a separate, GENERATED loop
+  ([`bootstrap/new-project.sh`](bootstrap/new-project.sh) ~lines 888-935, "THE APPLY LIST IS
+  GENERATED, not hand-typed") that globs `kernel/lineage/s[0-9]*-*.sql` live, unconditioned
+  on any option. The two are mechanically held together by
+  [`gates/lineage_chain_coverage.py`](gates/lineage_chain_coverage.py), which fails the
+  commit if the narrative and the directory diverge — so quoting either is safe, and the
+  no-selection conclusion above rests on the generated loop, not the narrative string.
 - The scaffold's separate, declarative **feature manifest** (`features.json`, produced by
   [`tools/setup_tui/steps_features.py`](tools/setup_tui/steps_features.py)) governs five
   unrelated axes — `portable_adrs`, `vendored_skills`, `panel_extension`, `makespan_tier`,
@@ -345,9 +359,9 @@ that chain is one fixed list, applied in full, every time a governed world is bo
 hand-copied enumeration of the lineage chain drifted stale within one day of being written.
 This document is a **narrative, point-in-time synopsis** — useful for understanding what each
 delta did and why, not for determining what a fresh world's kernel currently contains. For that
-question, the living source is always
-[`bootstrap/new-project.sh`](bootstrap/new-project.sh)'s own `LINEAGE_CHAIN` variable
-(`grep LINEAGE_CHAIN bootstrap/new-project.sh`) or, on disk, `ls kernel/lineage/s*.sql`. A
+question, the living source is always the directory itself (`ls kernel/lineage/s*.sql` — the
+generated apply loop in [`bootstrap/new-project.sh`](bootstrap/new-project.sh) globs exactly
+this, and its hand-authored `LINEAGE_CHAIN` narrative is gate-held to match it). A
 future delta should be added here as its own bullet in the appropriate range (opening a new
 range heading once a decade's worth accumulates), never by silently letting this file fall
 behind — but if it does fall behind, the file to trust is the one named in this paragraph, not
