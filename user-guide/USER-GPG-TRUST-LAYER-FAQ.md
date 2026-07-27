@@ -497,7 +497,7 @@ This was witnessed on both polarities (`seen-red/s26-row-hash-chain/red.txt`; al
 live on a real `--new-world` scaffold with the throwaway test key, real quoted output):
 
 ```
-$ ./autoharn verify-chain --head
+$ ./verify-chain --head
 {"world": "s26probe1", "max_id": 2, "head_hash": "50c017270073913fe2a8052b41f40a43dcba58f035450e42844430448b2ca63a", "utc": "2026-07-11T20:14:47Z"}
 $ gpg --detach-sign --armor /tmp/head.json
 $ gpg --verify .claude/head.json.asc .claude/head.json
@@ -508,14 +508,20 @@ And, on a chain where a historical row was surgically altered (a scratch schema,
 real detection):
 
 ```
-$ ./autoharn verify-chain
+$ ./verify-chain
 verify-chain: BROKEN -- first break at row id 1:
     stored:   c266b9dacbf6dee0277a9b6d3d015579cb4a1204e43fad21684a195526eb87d7
     expected: 7053046a90b56a06fad7fbba4593be7a3d2267b3102b457d920eafec6fcaa052
-$ ./autoharn verify-chain --head
+$ ./verify-chain --head
 verify-chain --head: REFUSED -- chain is not INTACT (status=BROKEN, ...); signing a head over a
 non-verified chain is refused, not attempted.
 ```
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: both transcripts above
+are dated 2026-07-11, eight+ days before the umbrella-CLI scaffold migration (rows 1365/1366/1367,
+2026-07-26) retired the bare `./verify-chain` shim this transcript typed — the transcript itself
+is left byte-for-byte as the dated record it is, never silently rewritten; the CURRENT equivalent
+invocation is `./autoharn verify-chain` / `./autoharn verify-chain --head`.)
 
 From the moment a head is signed, **any** retroactive alteration of that world's ledger —
 including by the database superuser, who can bypass every trigger — breaks the chain against a

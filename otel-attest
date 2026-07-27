@@ -344,20 +344,37 @@ def recent_rows(world: Path, n: int, *, kinds: set[str] | None = None) -> list[i
     longer exists. The served `led --recent` (bootstrap/templates/led.tmpl's cmd_recent) prints
     `[id] kind: statement` and already reads ONLY /rows/current (in-force rows; no raw/superseded
     route survives on the boundary at all, so the old "CURRENT rows only" filter is now the
-    server's own unconditional behavior, not something this parser needs to re-check)."""
+    server's own unconditional behavior, not something this parser needs to re-check).
+
+    DISCLOSED RESIDUAL (fix-round review, 2026-07-27, no live specimen found): `cmd_recent`
+    prints ONE line per row, but a statement containing an embedded newline still lands as
+    multiple physical lines in stdout -- a continuation line that happens to itself look like
+    `[N] kind: ...` (arbitrary statement text is never otherwise restricted) could in principle
+    be misread as a second, spoofed row rather than the first row's own continuation text. This
+    used to be architecturally impossible (the retired pipe format had no free-text line shape
+    to imitate); the current bracket format does. Defensive tightening, not a full fix: rows are
+    printed newest-first (`sorted(rows, key=lambda r: -r['id'])`, led.tmpl's own cmd_recent), so
+    a genuine id sequence is strictly decreasing -- a candidate line whose id is not strictly
+    less than the previous ACCEPTED id is dropped as a probable statement-body artifact rather
+    than trusted as a new row. This raises the bar (a forged line must also guess a plausible
+    id) without requiring a JSON-structured read path, which would be the general fix."""
     r = led(world, "--recent", str(n))
     if r.returncode != 0:
         print(r.stderr, file=sys.stderr)
         raise SystemExit(f"otel-attest: `led --recent {n}` failed in {world}")
     ids = []
+    prev_id = None
     for line in r.stdout.splitlines():
         m = _RECENT_LINE_RE.match(line)
         if not m:
             continue
-        row_id, kind = m.group(1), m.group(2).strip()
+        row_id, kind = int(m.group(1)), m.group(2).strip()
+        if prev_id is not None and row_id >= prev_id:
+            continue  # not strictly decreasing -- probable statement-body artifact, not a row
+        prev_id = row_id
         if kinds is not None and kind not in kinds:
             continue
-        ids.append(int(row_id))
+        ids.append(row_id)
     return ids
 
 

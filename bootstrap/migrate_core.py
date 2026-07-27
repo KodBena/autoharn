@@ -883,9 +883,9 @@ def _record_in_deployment_ledger(deployment_dir: Path, missing: list[str], backu
     # dispatcher instead -- a migration target may be either shape, so detect rather than assume.
     led_bare = deployment_dir / "led"
     led_dispatcher = deployment_dir / "autoharn"
-    if led_bare.is_file():
+    if led_bare.is_file() and os.access(led_bare, os.X_OK):
         led_argv, led_label = [str(led_bare)], str(led_bare)
-    elif led_dispatcher.is_file():
+    elif led_dispatcher.is_file() and os.access(led_dispatcher, os.X_OK):
         led_argv, led_label = [str(led_dispatcher), "led"], f"{led_dispatcher} led"
     else:
         print(f"migrate: NOTE -- neither {led_bare} nor {led_dispatcher} exists, so the "

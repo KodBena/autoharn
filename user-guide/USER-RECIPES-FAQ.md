@@ -1175,8 +1175,12 @@ fully visible in raw history, always shown together with its cause. **WITNESSED*
 read-only against this repository's own live world (2026-07-18):
 
 ```sh
-$ ./autoharn judge --layer defeat
+$ ./judge --layer defeat
 ```
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: dated 2026-07-18,
+eight days before the umbrella-CLI scaffold migration, rows 1365/1366/1367, 2026-07-26,
+retired the bare `./judge` shim this transcript typed — left as the dated record it is; the
+current equivalent invocation is `./autoharn judge --layer defeat`.)
 ```
 # marriage differential -- layer='defeat'
 #   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
@@ -2418,7 +2422,7 @@ Yes, as of `6677b2d` — every `led` write path prints `row <id> written.` on su
 review: row 42 written.`, `led register-principal: row 7 written.`), instead of leaving you to
 go find the id with a follow-up query. WITNESSED, against `autoharn1`:
 ```
-$ ./autoharn led decision "documentation witness probe (orchlog.d / FAQ authoring task): confirming the
+$ ./led decision "documentation witness probe (orchlog.d / FAQ authoring task): confirming the
   row-id echo on a live write path; no operational effect intended"
 SET
 SET
@@ -2438,7 +2442,7 @@ an incapable target asked for BY NAME still refuses loudly (`QUARANTINED`). WITN
 forms against `autoharn1` (a world with `s22` work but no `s41` identity, so the `defeat` layer
 has no grant substrate here):
 ```
-$ ./autoharn judge
+$ ./judge
 # marriage differential -- layer=None (auto-detect capable layers: ['tnow', 'work', 'defeat'])
 ## layer='tnow'
   [OK ] autoharn1 AGREE              asp=2991 sql=2991 atoms; Δasp=[] Δsql=[]
@@ -2450,7 +2454,7 @@ $ ./autoharn judge
        the 'defeat' layer has no grant substrate here, capability absent, not record-empty
 # DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
 
-$ ./autoharn judge --layer defeat
+$ ./judge --layer defeat
   [!! ] autoharn1 QUARANTINED        asp=0 sql=0 atoms; Δasp=[] Δsql=[]
           asp QUARANTINED: EDB export failed: CapabilityError: target 'autoharn1' did not
           emit trust_grant/n (capability absent): no principal_binding_active/
@@ -2460,6 +2464,13 @@ $ ./autoharn judge --layer defeat
 Exit is red only when a layer that actually RAN [`judge`](../GLOSSARY.md#judge)s
 `DIVERGE_DEFECT`/`QUARANTINED`; a declared-incapable layer never contributes to the exit code
 (the same "absence is not a defect" rule the work-item-violations check already applied).
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: both WITNESSED
+transcripts in this section cite commits/row 1553 that predate the umbrella-CLI scaffold
+migration, rows 1365/1366/1367, 2026-07-26, which retired the bare `./led`/`./judge` shims
+these transcripts typed — left as the dated record they are; the current equivalent
+invocations are `./autoharn led decision "..."`, `./autoharn judge`, `./autoharn judge --layer
+defeat`.)
 
 ## `led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)
 
@@ -2478,7 +2489,7 @@ generic unrecognized-flag refusal instead of the same usage-and-exit-0 teach eve
 subcommand's `--help` gets). WITNESSED, `autoharn1`, row count unchanged across all three forms
 (`--recent 1`'s leading id was `1567` before and after):
 ```
-$ ./autoharn led decision --help
+$ ./led decision --help
 usage: led [flags] <kind> <statement...>   (see top-of-file comment for the full flag list: ...)
        led --recent [N] | led current [N] | led show <id> | led question-status | ...
        ...
@@ -2493,7 +2504,7 @@ exit 0.)
 positionals are already present ahead of the token. WITNESSED, `autoharn1`, row count unchanged
 (`1567` before and after):
 ```
-$ ./autoharn led review --help
+$ ./led review --help
 usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
        verdict: attest|attest_with_reservations|refuse
        independence: self-review|technical|managerial|financial
@@ -2508,7 +2519,7 @@ guard (`bootstrap/templates/led.tmpl` ~line 2501) before `check_help_or_dash_fir
 count unchanged), but the exit code is **1**, not 0. The exit-0 path only fires once the three
 positionals precede the token:
 ```
-$ ./autoharn led review 1 attest self-review --help
+$ ./led review 1 attest self-review --help
 usage: led review <entry-id> <verdict> <independence> [--antecedent id] <statement...>
        verdict: attest|attest_with_reservations|refuse
        independence: self-review|technical|managerial|financial
@@ -2525,7 +2536,7 @@ It REFUSES, teaching, rather than silently committing the word as statement pros
 closure this item's title names. WITNESSED, `autoharn1`, row count unchanged (`1567` before and
 after):
 ```
-$ ./autoharn led note -weirdflag "rest of statement"
+$ ./led note -weirdflag "rest of statement"
 led: REFUSED -- the statement's first word '-weirdflag' is dash-leading, which reads as
   a misplaced or mistyped flag rather than intended statement prose (item
   led-help-token-closure -- the same shape refuse_flag_in_statement forecloses for
@@ -2568,11 +2579,11 @@ WITNESSED, `autoharn1`, all zero-write (row count `1567` before and after every 
 argument validation and the capability check both run before `kernel_write` is ever called, so
 none of these reach a place that could write):
 ```
-$ ./autoharn led --json bogus /tmp/whatever.json
+$ ./led --json bogus /tmp/whatever.json
 led --json: REFUSED -- usage: led --json <ledger|review|registration|obligation> <file|->
   '<surface>' selects which s43 boundary function ... Got: 'bogus'.
 
-$ ./autoharn led --json ledger /tmp/does-not-exist.json
+$ ./led --json ledger /tmp/does-not-exist.json
 led --json: REFUSED (capability_absent, naming s43) -- this world's kernel does not
   carry kernel/lineage/s43-typed-verdict-write-boundary.sql, mirroring the FastAPI
   boundary service's own pre-s43 refusal ... Use the ordinary prose CLI on this world instead.
@@ -2589,13 +2600,13 @@ row id) — that is the surface `run_fixtures.py` and the boundary-service spec 
 By default, just what is open or claimed — closed items are hidden, not deleted; nothing about
 the ledger itself changes. `--all` restores the full historical view. WITNESSED, `autoharn1`:
 ```
-$ ./autoharn led work list | tail -1
+$ ./led work list | tail -1
 (56 rows)
-$ ./autoharn led work list | grep -c '| closed'
+$ ./led work list | grep -c '| closed'
 0
-$ ./autoharn led work list --all | tail -1
+$ ./led work list --all | tail -1
 (242 rows)
-$ ./autoharn led work list --all | grep -c '| closed'
+$ ./led work list --all | grep -c '| closed'
 186
 ```
 56 + 186 = 242: `--all` adds exactly the closed rows back, nothing else changes. The choice is
@@ -2605,12 +2616,19 @@ work asof <timestamp>` and the raw ledger rows remain the complete, unfiltered r
 of which view `work list` shows you. An unrecognized flag refuses rather than silently falling
 through:
 ```
-$ ./autoharn led work list --bogus
+$ ./led work list --bogus
 usage: led work list [--all]
 $ echo $?
 1
 ```
 Delivery record for all three items: [orchlog.d/led-tmpl-trio.md](../orchlog.d/led-tmpl-trio.md).
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: every WITNESSED
+transcript in this section cites commit `abba0dd`/row 1562 and specific row counts (`1567`,
+`56`, `242`) captured against `autoharn1` before the umbrella-CLI scaffold migration, rows
+1365/1366/1367, 2026-07-26, which retired the bare `./led` shim these transcripts typed — left
+as the dated record they are; the current equivalent invocation is `./autoharn led ...` for
+every command shown above.)
 
 ## Ledger-wide as-of read and inspection-copy export (`asof-export`)
 
@@ -2633,10 +2651,10 @@ open/claimed/closed view. WITNESSED, this checkout's own world, a real supersess
 before the supersession still shows the superseded row in force, a moment after shows the
 superseding row instead, same row count either side:
 ```
-$ ./autoharn asof-export read --asof "2026-07-18 13:20:00" | grep -E "ledger id=158[34]|Row count"
+$ ./asof-export read --asof "2026-07-18 13:20:00" | grep -E "ledger id=158[34]|Row count"
 Row count    : 1501
 --- row 1501/1501 (ledger id=1583) ---
-$ ./autoharn asof-export read --asof "2026-07-18 13:25:00" | grep -E "ledger id=158[34]|Row count"
+$ ./asof-export read --asof "2026-07-18 13:25:00" | grep -E "ledger id=158[34]|Row count"
 Row count    : 1501
 --- row 1501/1501 (ledger id=1584) ---
 ```
@@ -2644,7 +2662,7 @@ The as-of filter is the row's own `ts` (system insert time, never writer-supplie
 `event_declared_ts`, which is honest only as far as the declaring writer is honest. A bad
 `--asof` value REFUSES loudly rather than returning an empty read, WITNESSED (exit 2):
 ```
-$ ./autoharn asof-export read --asof bogus-not-a-timestamp
+$ ./asof-export read --asof bogus-not-a-timestamp
 asof-export read: REFUSED -- as-of query failed: ERROR:  invalid input syntax for type timestamp with time zone: "bogus-not-a-timestamp"
 LINE 5:   WHERE l.ts <= 'bogus-not-a-timestamp'::timestamptz
                         ^
@@ -2658,7 +2676,7 @@ or just to keep?** Yes — `./asof-export export --asof <ts> --out <dir>` writes
 ledger — `export` is read-only against the ledger itself, its only writes are the three
 named files under the `--out` directory you give it):
 ```
-$ ./autoharn asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
 asof-export export: wrote /tmp/asof-demo/ledger-asof.txt, /tmp/asof-demo/ledger-asof.json, /tmp/asof-demo/manifest.sha256 (1501 row(s) as of 2026-07-18 13:25:00).
   Verify with: (cd /tmp/asof-demo && sha256sum -c manifest.sha256)
   Signing is DEFERRED (standing maintainer crypto ruling) -- this manifest is an UNSIGNED sha256 content hash only. It lets a copy be checked against the bytes it left as; it proves neither who exported it nor that a differently-regenerated copy wasn't substituted for it. No inert --sign flag is offered by this verb.
@@ -2669,7 +2687,7 @@ ledger-asof.json: OK
 Re-running `export` at the same `--out` REFUSES rather than silently clobbering an existing
 inspection copy — an evidentiary export is not overwritten by accident. WITNESSED:
 ```
-$ ./autoharn asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
+$ ./asof-export export --asof "2026-07-18 13:25:00" --out /tmp/asof-demo
 asof-export export: REFUSED -- 3 output file(s) already exist under /tmp/asof-demo: ['/tmp/asof-demo/ledger-asof.txt', '/tmp/asof-demo/ledger-asof.json', '/tmp/asof-demo/manifest.sha256']
   An inspection copy is not silently overwritten (ADR-0002). Pass --force to replace it deliberately, or choose a different --out.
 $ echo $?
@@ -2687,6 +2705,13 @@ under the standing crypto ruling — no `--sign` flag exists at all (an inert fl
 armed but wasn't would be its own lie), and both the `.txt` and the `.json` name this limit
 in their own header/`signing` field, so a reader of the inspection copy itself sees the same
 honest boundary the CLI output does.
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: every WITNESSED
+transcript in this section cites merge `1449e0c`/row 1585 and real 2026-07-18 row ids/
+timestamps (1583/1584/1592, 13:15:43-13:25:43) captured before the umbrella-CLI scaffold
+migration, rows 1365/1366/1367, 2026-07-26, which retired the bare `./asof-export` shim these
+transcripts typed — left as the dated record they are; the current equivalent invocation is
+`./autoharn asof-export ...` for every command shown above.)
 
 ## Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)
 
@@ -2853,7 +2878,7 @@ an earlier version wrongly folded the two together).
 All five were WITNESSED on a scratch deployment (`bootstrap/new-project.sh --new-world`, torn
 down after). The first case shows what happens with no commission row at all:
 ```sh
-$ ./autoharn verify-commission
+$ ./verify-commission
 ```
 ```
 verify-commission: no commission row found (any commission row) in faq11probe.ledger
@@ -2987,7 +3012,7 @@ Flipping the mode to `observe` (with the STALE probe-doc.md and four scaffold-sk
 NO-ATTESTATION docs from above still in place, plus one open+claimed work item added to also
 exercise the WORK-ITEMS line in the same pass) then produces:
 ```sh
-$ ./autoharn distance-to-clean
+$ ./distance-to-clean
 ```
 ```
 ### SECTION: DISTANCE-TO-CLEAN
@@ -3032,6 +3057,14 @@ filled-in sibling among its output, but a session-start hook-firing trace was no
 re-captured for this entry) — the concrete blocker is that observing every one of the nine
 attachments actually fire would need a live Claude Code session inside a scaffolded deployment
 exercising every matched tool type in turn, which this documentation pass did not run.
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: the "Verifying tags,
+signed commissions, and documentation debt" section above traces to the maintainer's 2026-07-18
+overnight batch, and its `verify-commission`/`distance-to-clean` WITNESSED transcripts (scratch
+deployment `faq11probe`, real row ids) predate the umbrella-CLI scaffold migration, rows
+1365/1366/1367, 2026-07-26, which retired the bare shims those transcripts typed — left as the
+dated record they are; the current equivalent invocations are `./autoharn verify-commission` /
+`./autoharn distance-to-clean`.)
 
 ## Recusal and independent RCA (a conflict-of-interest method harvested downstream)
 
@@ -3108,14 +3141,20 @@ same `faqwit0718` family this page's scratch demonstrations use (torn down after
 section](USER-SHAPED-RECIPES-FAQ.md#the-bookkeeping-close-pairing-convention) for the scaffold
 command this family of worlds is built with):
 ```
-$ ./autoharn led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
+$ ./led decision "FAQ-DEMO incident verdict: illustrative fact-finding-only record for the recusal-then-independent-RCA recipe transcript -- this specific scratch-world act, no systemic claim."
 led: row 18 written.
-$ ./autoharn led decision "FAQ-DEMO systemic question: illustrative record showing the split -- a policy question this incident surfaces, filed as its own row rather than folded into the incident verdict above, and routed to the owning authority rather than self-adjudicated."
+$ ./led decision "FAQ-DEMO systemic question: illustrative record showing the split -- a policy question this incident surfaces, filed as its own row rather than folded into the incident verdict above, and routed to the owning authority rather than self-adjudicated."
 led: row 19 written.
 ```
 Two separate, independently-citable rows — nothing here forces the split; it is the discipline
 described above, exercised by hand as ordinary `led decision` writes, not a distinct verb or
 constructor.
+
+(2026-07-27 correction, root-shim-pruning residue sweep, ledger row 1357: the two-row transcript
+above is a WITNESSED scratch-world act, `faqwit0718` family, with real row ids 18/19, predating
+the umbrella-CLI scaffold migration, rows 1365/1366/1367, 2026-07-26, which retired the bare
+`./led` shim it typed — left as the dated record it is; the current equivalent invocation is
+`./autoharn led decision "..."`.)
 
 **Honest limits.** This is a documented practice, not a mechanized one: no gate checks that a
 conflicted orchestrator actually recused, that a dispatched RCA was actually briefed
