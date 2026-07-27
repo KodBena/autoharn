@@ -1,0 +1,84 @@
+== scaffolding classic world s68fxpre (chain ends s67-refusal-digest-bound.sql, NO s68) ==
+=== RED-BASELINE-BARE-NULLS-NO-KIND ===
+  [ok] pre-s68 (s67-head) world: a refusal with no `kind` key journals with a bare NULL refusal_attempted_kind, and the world's own ledger table carries NO disposition column at all (cols_pre='') -- detail='ledger|23502|<NULL>|1'
+
+=== RED-BASELINE-BARE-NULLS-NONTEXT-KIND ===
+  [ok] pre-s68 world: a non-string `kind` (42) journals with the SAME bare NULL as the missing-key case -- indistinguishable (detail='ledger|23514|<NULL>|1' vs missing-key detail='ledger|23502|<NULL>|1') -- the conflation this delta closes
+
+=== RED-BASELINE-BARE-NULLS-OVERBOUND-KIND ===
+  [ok] pre-s68 world: a 300-byte `kind` (over the s65 256-byte bound) journals with the SAME bare NULL, a THIRD distinct defect reading identically to the first two (detail='ledger|23514|<NULL>|1')
+
+=== RED-BASELINE-BARE-NULL-UNRESOLVABLE-ACTOR ===
+  [ok] pre-s68 world: a refusal recorded by a role with NO principal_role binding at all (journal_as_unbound_role) journals refusal_attempted_actor as a bare NULL, no disposition column recording WHY -- detail='ledger|22000|<NULL>|<NULL>'
+
+== scaffolding classic world s68fxmain (chain ends s68-typed-absence-dispositions.sql) ==
+=== GREEN-KIND-ABSENT-DECLARED ===
+  [ok] no `kind` key -- refusal_attempted_kind NULL, disposition='absent' (detail='ledger|23502|<NULL>|absent|1|resolved_session_default')
+
+=== GREEN-KIND-NOT-A-STRING-DECLARED ===
+  [ok] `kind` a JSON number (42) -- NULL, disposition='not_a_string' (detail='ledger|23514|<NULL>|not_a_string|1|resolved_explicit')
+
+=== GREEN-KIND-OVER-BOUND-DECLARED ===
+  [ok] `kind` a 300-byte string (over the 256-byte bound) -- NULL, disposition='over_bound' (detail='ledger|23514|<NULL>|over_bound|1|resolved_explicit')
+
+=== GREEN-KIND-EXTRACTED-DECLARED ===
+  [ok] an ordinary valid `kind` string ('row') -- token populated, disposition='extracted' (detail='ledger|23514|row|extracted|1|resolved_explicit')
+
+=== GREEN-ACTOR-RESOLVED-EXPLICIT-DECLARED ===
+  [ok] the SAME row: payload actor=1 (a registered principal id) -- actor populated, disposition='resolved_explicit' (detail='ledger|23514|row|extracted|1|resolved_explicit')
+
+=== GREEN-ACTOR-RESOLVED-SESSION-DEFAULT-DECLARED ===
+  [ok] the GREEN-KIND-ABSENT row: no explicit `actor` key in the payload, but this world's own login role is bound to author (birth_via_boundary) -- the session default resolves, disposition='resolved_session_default' (detail='ledger|23502|<NULL>|absent|1|resolved_session_default')
+
+=== GREEN-ACTOR-UNRESOLVABLE-DECLARED ===
+  [ok] a refusal recorded by a role with NO principal_role binding at all (journal_as_unbound_role) -- actor NULL, disposition='unresolvable' (detail='ledger|22000|note|extracted|<NULL>|unresolvable')
+
+=== GREEN-ACCEPTED-WRITE-BYTE-IDENTICAL ===
+  [ok] an ordinary (kind='decision') write's verdict shape is IDENTICAL pre-s68 vs post-s68-birth: pre={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, post={'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RED-COUPLING-REJECTS-KIND-NULL-WITH-EXTRACTED ===
+  [ok] a write_refused row claiming disposition='extracted' but refusal_attempted_kind NULL is REFUSED by the table CHECK itself (stderr tail='ull, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, payload_over_bound, extracted, unresolvable).')
+
+=== RED-COUPLING-REJECTS-KIND-POPULATED-WITH-ABSENT ===
+  [ok] a write_refused row claiming disposition='absent' but a populated refusal_attempted_kind is REFUSED by the table CHECK itself (stderr tail='ll, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, somekind, payload_over_bound, absent, unresolvable).')
+
+=== RED-COUPLING-REJECTS-ACTOR-NULL-WITH-RESOLVED-EXPLICIT ===
+  [ok] a write_refused row claiming disposition='resolved_explicit' but refusal_attempted_actor NULL is REFUSED by the table CHECK itself (stderr tail='l, null, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, payload_over_bound, absent, resolved_explicit).')
+
+=== RED-COUPLING-REJECTS-ACTOR-POPULATED-WITH-UNRESOLVABLE ===
+  [ok] a write_refused row claiming disposition='unresolvable' but a populated refusal_attempted_actor is REFUSED by the table CHECK itself (stderr tail='ger, null, 1, fx, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, payload_over_bound, absent, unresolvable).')
+
+=== RED-KIND-STILL-FORBIDDEN-OFF-KIND ===
+  [ok] a non-write_refused ('note') row carrying a populated refusal_attempted_kind is STILL refused by its own retained one-way kind-shape CHECK (stderr tail=' null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, row, null, null, null).')
+
+=== RED-ACTOR-STILL-FORBIDDEN-OFF-KIND ===
+  [ok] a non-write_refused ('note') row carrying a populated refusal_attempted_actor is STILL refused by its own retained one-way kind-shape CHECK (stderr tail='l, null, null, null, null, null, 1, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null).')
+
+== scaffolding classic world s68fxbirth (chain ends s68-typed-absence-dispositions.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s68 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=5 == sequence=5
+
+  [clingo raw stdout]
+clingo version 5.8.0
+Reading from ...e5107624a5cf1/engine/lp/ledger_tnow.lp ...
+Solving...
+Answer: 1 (Time: 0.002s)
+reaches_genesis(1) reaches_genesis_scoped(1,"principal_registered") reaches_genesis_scoped(1,"principal_role_bound") reaches_genesis_scoped(1,"standing_lifecycle") reaches_genesis_scoped(1,"milestone_closure") reaches_genesis_scoped(1,"gate_edge_supersession") reaches_genesis_scoped(1,"entitlement_class_configured") reaches_genesis_scoped(1,"delegation_lifecycle") reaches_genesis_scoped(1,"independent_verification_delegation")
+SATISFIABLE
+
+Models       : 1
+Calls        : 1
+Time         : 0.002s (Solving: 0.00s 1st Model: 0.00s Unsat: 0.00s)
+CPU Time     : 0.002s
+
+  [clingo raw stderr]
+
+
+=== AGREE-sql-asp-differential ===
+  [ok] SQL principal_authority_chain_reaches_genesis(pid) vs ASP reaches_genesis/1 on the s68-head world -- a non-regression sanity check, since NO derivation reads any refusal_* column -- symmetric_difference=[]
+
+
+ALL GREEN

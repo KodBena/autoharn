@@ -180,6 +180,7 @@ CHAIN = [
     "s65-refusal-attempted-kind.sql",
     "s66-forged-stamp-journal-totality.sql",
     "s67-refusal-digest-bound.sql",
+    "s68-typed-absence-dispositions.sql",
 ]
 # s66 (kernel/lineage/s66-forged-stamp-journal-totality.sql) re-issues ONLY kernel.set_stamp (a
 # trigger function, not a kind-shape CHECK) -- zero MANIFEST changes, named. s67 (kernel/lineage/
@@ -188,6 +189,23 @@ CHAIN = [
 # payload's canonical text exceeds 1,048,576 bytes) -- the MANIFEST row below is re-classified
 # to match, the SAME idiom refusal_attempted_actor (s43) and refusal_attempted_kind (s65) already
 # use for "legitimately NULL on the licensed kind too."
+# s68 (kernel/lineage/s68-typed-absence-dispositions.sql, design/
+# FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md, ADR-0012 P11 / ADR-0008's 2026-07-27 twin) adds
+# TWO new kind-scoped columns (refusal_attempted_kind_disposition,
+# refusal_attempted_actor_disposition, both two-way -- new MANIFEST rows below) and TWO new
+# CROSS-COLUMN-COUPLING CHECKs (new CROSS_COLUMN_COUPLING_MANIFEST rows below). ONE of the two
+# couplings needed the classifier itself extended: refusal_attempted_kind_disposition_coupling's
+# own vocabulary has FOUR members, three of which all mean "the coupled column is NULL", so its
+# CHECK is phrased `kind <> 'K' OR ((col_a IS NULL) = (col_b <> 'literal'))` -- an INEQUALITY
+# against the ONE member meaning "not NULL" -- rather than s44's/s67's own `(col_b = 'literal')`
+# equality-against-the-one-NULL-causing-member shape. _CROSS_COLUMN_COUPLING_RE below now
+# captures the comparator (`=` or `<>`) as its own group, and CROSS_COLUMN_COUPLING_MANIFEST rows
+# carry a `comparator` field accordingly (existing rows: "=", unchanged in effect;
+# refusal_attempted_kind_disposition_coupling: "<>", the new shape). refusal_attempted_actor_
+# disposition_coupling (THREE-member vocabulary, one NULL-causing member) fits the ORIGINAL `=`
+# shape unchanged -- no classifier extension needed for that one row alone, but the field is
+# added uniformly (see gates/kind_shape_manifest_gate.py's own header for the live psql test that
+# proves the guarded form is required either way).
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
 # columns plus TWO genuinely new kind-shape idioms this codebase had none of before -- found live
@@ -668,6 +686,30 @@ MANIFEST = [
                 "so the correlation cannot be an iff; one-way forecloses it appearing on a "
                 "non-write_refused row only. Non-emptiness when present is the separate "
                 "refusal_attempted_kind_nonempty value CHECK."),
+    dict(column="refusal_attempted_kind_disposition", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK",
+         constraint="refusal_attempted_kind_disposition_kind_shape",
+         defining_delta="s68-typed-absence-dispositions.sql",
+         reason="design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md §2 (ADR-0012 P11 / "
+                "ADR-0008's 2026-07-27 twin, maintainer ruling ledger rows 1541/1542): WHY "
+                "refusal_attempted_kind holds the value it does on a write_refused row -- ALWAYS "
+                "known there (s44's attest_verdict idiom: mandatory-within-kind), forbidden "
+                "elsewhere; closed four-member vocabulary (extracted/absent/not_a_string/"
+                "over_bound) is the separate refusal_attempted_kind_disposition_check value "
+                "CHECK; table-coupled to refusal_attempted_kind via the CROSS_COLUMN_COUPLING_"
+                "MANIFEST row below (the comparator=<> variant)."),
+    dict(column="refusal_attempted_actor_disposition", kinds=("write_refused",),
+         arity="two-way", mechanism="CHECK",
+         constraint="refusal_attempted_actor_disposition_kind_shape",
+         defining_delta="s68-typed-absence-dispositions.sql",
+         reason="design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md §2 (ADR-0012 P11 / "
+                "ADR-0008's 2026-07-27 twin, maintainer ruling ledger rows 1541/1542): WHY "
+                "refusal_attempted_actor holds the value it does on a write_refused row -- "
+                "ALWAYS known there, forbidden elsewhere; closed three-member vocabulary "
+                "(resolved_explicit/resolved_session_default/unresolvable) is the separate "
+                "refusal_attempted_actor_disposition_check value CHECK; table-coupled to "
+                "refusal_attempted_actor via the CROSS_COLUMN_COUPLING_MANIFEST row below "
+                "(the comparator='=' variant)."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "
@@ -861,14 +903,15 @@ assert len(FORBIDDEN_BY_KEY) == len(FORBIDDEN_ON_KIND_MANIFEST), \
 # ================================================================================================
 CROSS_COLUMN_COUPLING_MANIFEST = [
     dict(constraint="attest_expected_verdict_coupling", kind="model_identity_attested",
-         col_a="attest_expected", col_b="attest_verdict", coupled_value="unevaluated",
+         col_a="attest_expected", col_b="attest_verdict", comparator="=",
+         coupled_value="unevaluated",
          defining_delta="s44-model-identity-attestation.sql",
          reason="design/FABLE-OTEL-SENTRY-SPEC.md §8.2's fixed structural rule: "
                 "(attest_expected IS NULL) = (attest_verdict = 'unevaluated') -- an unevaluated "
                 "verdict with a declared expectation, or a match/mismatch claim with nothing to "
                 "match against, is unrepresentable."),
     dict(constraint="refusal_payload_digest_disposition_coupling", kind="write_refused",
-         col_a="refusal_payload_digest", col_b="refusal_digest_disposition",
+         col_a="refusal_payload_digest", col_b="refusal_digest_disposition", comparator="=",
          coupled_value="payload_over_bound",
          defining_delta="s67-refusal-digest-bound.sql",
          reason="design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 AMENDMENT (maintainer ruling "
@@ -882,6 +925,31 @@ CROSS_COLUMN_COUPLING_MANIFEST = [
                 "two-way kind-shape CHECK, never by this coupling CHECK alone -- see kernel/"
                 "lineage/s67-refusal-digest-bound.sql's own header for the live psql test that "
                 "falsifies the bare unguarded form)."),
+    dict(constraint="refusal_attempted_kind_disposition_coupling", kind="write_refused",
+         col_a="refusal_attempted_kind", col_b="refusal_attempted_kind_disposition",
+         comparator="<>", coupled_value="extracted",
+         defining_delta="s68-typed-absence-dispositions.sql",
+         reason="design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md §2 item 2 (maintainer "
+                "ruling, ledger rows 1541/1542): (refusal_attempted_kind IS NULL) = "
+                "(refusal_attempted_kind_disposition <> 'extracted') -- a FOUR-member "
+                "disposition vocabulary where THREE members (absent/not_a_string/over_bound) all "
+                "mean the token is NULL and only ONE ('extracted') means it is not, so the sound "
+                "coupling is an INEQUALITY against that one member, the comparator=<> variant "
+                "this delta's own build taught the classifier (contrast the TWO prior rows, "
+                "each a two/three-member vocabulary with exactly one NULL-causing member, "
+                "comparator='='). col_a's own one-way kind-shape CHECK (s65) stays separate and "
+                "necessary, the same s44/s67 retained-sibling reasoning."),
+    dict(constraint="refusal_attempted_actor_disposition_coupling", kind="write_refused",
+         col_a="refusal_attempted_actor", col_b="refusal_attempted_actor_disposition",
+         comparator="=", coupled_value="unresolvable",
+         defining_delta="s68-typed-absence-dispositions.sql",
+         reason="design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md §2 item 2 (maintainer "
+                "ruling, ledger rows 1541/1542): (refusal_attempted_actor IS NULL) = "
+                "(refusal_attempted_actor_disposition = 'unresolvable') -- a THREE-member "
+                "vocabulary (resolved_explicit/resolved_session_default/unresolvable) with "
+                "exactly ONE NULL-causing member, so the s44/s67 equality shape applies "
+                "unchanged (comparator='='). col_a's own one-way kind-shape CHECK (s43) stays "
+                "separate and necessary, the same retained-sibling reasoning."),
 ]
 CROSS_COLUMN_BY_CONNAME = {row["constraint"]: row for row in CROSS_COLUMN_COUPLING_MANIFEST}
 assert len(CROSS_COLUMN_BY_CONNAME) == len(CROSS_COLUMN_COUPLING_MANIFEST), \
@@ -1108,8 +1176,17 @@ _FORBIDDEN_ON_KIND_RE = re.compile(r"\((\w+) IS NULL\)\s*OR\s*\(kind <> '([^']+)
 # ALREADY licensed by their own individual MANIFEST_BY_COLUMN rows (attest_expected,
 # attest_verdict); this manifest tracks the ADDITIONAL cross-column invariant, not a
 # competing shape declaration for either column alone.
+# COMPARATOR GENERALIZATION (s68, kernel/lineage/s68-typed-absence-dispositions.sql): s44's/s67's
+# own instances all couple a NULLABLE column to a literal-equality on its sibling, `(colB =
+# 'literal')` -- sound whenever the sibling's own closed vocabulary has EXACTLY ONE member that
+# means "colA is NULL". s68's own refusal_attempted_kind_disposition_coupling has a FOUR-member
+# sibling vocabulary where THREE members all mean "colA is NULL" and only ONE means "colA is NOT
+# NULL" -- the sound coupling there is therefore an INEQUALITY against that one member,
+# `(colB <> 'literal')`, not an equality. The regex below now matches EITHER comparator and
+# captures which one was used (group 4), so classify_kind_shape can tell the two apart and
+# CROSS_COLUMN_COUPLING_MANIFEST's own `comparator` field records which shape each row declares.
 _CROSS_COLUMN_COUPLING_RE = re.compile(
-    r"kind <> '([^']+)'(?:::\w+)?\)\s*OR\s*\(\((\w+) IS NULL\)\s*=\s*\((\w+) = '([^']+)'")
+    r"kind <> '([^']+)'(?:::\w+)?\)\s*OR\s*\(\((\w+) IS NULL\)\s*=\s*\((\w+) (=|<>) '([^']+)'")
 # s58's missive_disposition_mandatory_on_disposed, the SIXTH idiom (found authoring s58,
 # kernel/lineage/s58-missive-substrate.sql): MANDATORY-ON-KIND, `kind <> '<K>' OR
 # (<col> IS NOT NULL)` -- the mirror image of FORBIDDEN-ON-KIND (which negates the column;
@@ -1214,10 +1291,11 @@ def classify_kind_shape(conname: str, defn: str):
         # checked in the same early position as FORBIDDEN-ON-KIND, for the same reason: its
         # "kind <> '<K>'" prefix is unreadable by `_extract_kinds` (which reads only
         # `kind = '...'`), so leaving it to the generic path would land it UNPARSEABLE.
-        kind, col_a, col_b, literal = m_cc.group(1), m_cc.group(2), m_cc.group(3), m_cc.group(4)
+        kind, col_a, col_b, comparator, literal = (
+            m_cc.group(1), m_cc.group(2), m_cc.group(3), m_cc.group(4), m_cc.group(5))
         if "kind" in (col_a, col_b):
             return ("UNPARSEABLE", conname, defn)
-        return ("CROSS-COLUMN-COUPLING", kind, col_a, col_b, literal, conname)
+        return ("CROSS-COLUMN-COUPLING", kind, col_a, col_b, comparator, literal, conname)
     m_pv = _PARTIAL_VALUE_RE.search(defn)
     if m_pv:
         # checked BEFORE the "IS NULL"/"IS NOT NULL" entry filter below: this idiom is phrased
@@ -1284,7 +1362,7 @@ def assert_manifest(schema: str) -> list[str]:
     catalog_shapes: dict[str, tuple] = {}   # column -> (kinds, arity, conname)
     partial_value_shapes: dict[tuple[str, str], tuple] = {}   # (column, value) -> (kinds, conname)
     forbidden_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
-    cross_column_shapes: dict[str, tuple] = {}   # conname -> (kind, col_a, col_b, literal)
+    cross_column_shapes: dict[str, tuple] = {}   # conname -> (kind, col_a, col_b, comparator, literal)
     mandatory_on_kind_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
     kind_or_value_shapes: dict[str, tuple] = {}   # conname -> (col, kind, other_col, other_val)
     eligibility_one_way_shapes: dict[str, tuple] = {}   # column -> (kind, eligibility, conname)
@@ -1317,8 +1395,8 @@ def assert_manifest(schema: str) -> list[str]:
             forbidden_shapes[key] = conname
             continue
         if parsed[0] == "CROSS-COLUMN-COUPLING":
-            _, kind, col_a, col_b, literal, _conname = parsed
-            cross_column_shapes[conname] = (kind, col_a, col_b, literal)
+            _, kind, col_a, col_b, comparator, literal, _conname = parsed
+            cross_column_shapes[conname] = (kind, col_a, col_b, comparator, literal)
             continue
         if parsed[0] == "ELIGIBILITY-ONE-WAY":
             _, col, el_kind, eligibility, _conname = parsed
@@ -1453,24 +1531,27 @@ def assert_manifest(schema: str) -> list[str]:
                 f"dropped constraint.")
 
     # 2d. every catalog CROSS-COLUMN-COUPLING CHECK must match its
-    #     CROSS_COLUMN_COUPLING_MANIFEST row exactly
-    for conname, (kind, col_a, col_b, literal) in cross_column_shapes.items():
+    #     CROSS_COLUMN_COUPLING_MANIFEST row exactly (including its comparator -- s68's own
+    #     `<>` variant, gates/kind_shape_manifest_gate.py's own header)
+    for conname, (kind, col_a, col_b, comparator, literal) in cross_column_shapes.items():
         row = CROSS_COLUMN_BY_CONNAME.get(conname)
         if row is None:
             violations.append(
                 f"UNLICENSED CROSS-COLUMN-COUPLING CHECK {conname!r}: couples {col_a!r} and "
-                f"{col_b!r} (kind {kind!r}, literal {literal!r}) by the catalog, but no "
-                f"CROSS_COLUMN_COUPLING_MANIFEST row declares it. Add it to "
+                f"{col_b!r} (kind {kind!r}, comparator {comparator!r}, literal {literal!r}) by "
+                f"the catalog, but no CROSS_COLUMN_COUPLING_MANIFEST row declares it. Add it to "
                 f"CROSS_COLUMN_COUPLING_MANIFEST in gates/kind_shape_manifest_gate.py with its "
                 f"reason, or remove the constraint if it should not exist.")
             continue
-        if (row["kind"], row["col_a"], row["col_b"], row["coupled_value"]) != (kind, col_a, col_b, literal):
+        if ((row["kind"], row["col_a"], row["col_b"], row["comparator"], row["coupled_value"])
+                != (kind, col_a, col_b, comparator, literal)):
             violations.append(
                 f"CROSS-COLUMN-COUPLING CHECK {conname!r}: catalog shape (kind={kind!r}, "
-                f"col_a={col_a!r}, col_b={col_b!r}, literal={literal!r}) disagrees with "
-                f"CROSS_COLUMN_COUPLING_MANIFEST's declared "
+                f"col_a={col_a!r}, col_b={col_b!r}, comparator={comparator!r}, "
+                f"literal={literal!r}) disagrees with CROSS_COLUMN_COUPLING_MANIFEST's declared "
                 f"(kind={row['kind']!r}, col_a={row['col_a']!r}, col_b={row['col_b']!r}, "
-                f"coupled_value={row['coupled_value']!r}) -- shape drifted.")
+                f"comparator={row['comparator']!r}, coupled_value={row['coupled_value']!r}) -- "
+                f"shape drifted.")
     # 3d. every CROSS_COLUMN_COUPLING_MANIFEST row must exist in the catalog
     for row in CROSS_COLUMN_COUPLING_MANIFEST:
         if row["constraint"] not in cross_column_shapes:
