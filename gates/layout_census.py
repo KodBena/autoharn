@@ -149,6 +149,11 @@ ROOT_FILES = {
     # landing, not left an unregistered breach for the next run (CLAUDE.md hazard-flagging
     # duty).
     "autoharn",
+    # s-history.md — the "s" kernel-lineage-numbering archaeology + one-synopsis-per-delta
+    # narrative companion to kernel/lineage/README.md (commission: GLOSSARY.md "fixture"/"sNN"
+    # entries), landed at repo root alongside GLOSSARY.md/README.md's own siblings. Registered
+    # on landing, not left an unregistered breach for the next run.
+    "s-history.md",
 }
 ROOT_DIRS = {
     ".claude", "bootstrap", "law", "judgment", "kernel", "stores", "instruments", "engine",
