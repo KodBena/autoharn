@@ -1,0 +1,47 @@
+seen-red/world-wiring — banked RED evidence (both-polarity proof, fixture-census)
+
+tools/world_wiring.py's `restore` subcommand refuses WHOLESALE (nothing written) on four
+distinct defect shapes. Real output, captured live from seen-red/world-wiring/run_fixtures.py
+(HARNESS_PGHOST=192.168.122.1, 2026-07-27):
+
+--- RED-NO-MANIFEST (a tarball whose first member is not manifest.json) ---
+$ python3 tools/world_wiring.py restore red/nomanifest.tar.gz --dest red/dst_nomanifest
+world_wiring restore: REFUSED -- archive's first member is not 'manifest.json' (got 'onefile.txt')
+-- a world_wiring archive always carries the manifest first; this is not one, or it has been
+reordered/tampered with. Nothing written.
+exit: 1
+`red/dst_nomanifest` was never created.
+
+--- RED-PATH-ESCAPE (a crafted member named '../evil.txt') ---
+$ python3 tools/world_wiring.py restore red/escape.tar.gz --dest red/dst_escape
+world_wiring restore: REFUSED -- archive member '../evil.txt' contains a '..' path-escape
+component -- refused wholesale, nothing written.
+exit: 1
+Neither `red/dst_escape` nor anything outside it (e.g. a sibling `evil.txt`) was ever created.
+
+--- RED-TAMPERED-HASH (manifest sha256 disagrees with the member's real bytes) ---
+$ python3 tools/world_wiring.py restore red/tampered.tar.gz --dest red/dst_tampered
+world_wiring restore: REFUSED -- archive member 'somefile.txt' sha256 mismatch: manifest says
+0000000000000000000000000000000000000000000000000000000000000000, archive bytes hash to
+7af227b174cc44f1c369b575e2b77cac4744611cd2e2bf123ce63643fee0741b -- TAMPERED OR CORRUPT. Refused
+wholesale, nothing written.
+exit: 1
+`red/dst_tampered` was never created.
+
+--- RED-CONFLICT-NO-FORCE (an existing destination file that differs from the incoming one) ---
+$ echo '{"different": "content-that-does-not-match-the-backup"}' > dst_conflict/deployment.json
+$ python3 tools/world_wiring.py restore backup.tar.gz --dest dst_conflict
+world_wiring restore: REFUSED -- 1 destination file(s) already exist and DIFFER from the incoming
+archive content, and --force was not given -- refused wholesale, nothing written. Differing
+file(s): ['deployment.json']. Re-run with --force to overwrite (every overwrite will be printed
+by name).
+exit: 1
+`dst_conflict/deployment.json` was verified byte-for-byte unchanged afterward, and no other file
+(e.g. features.json) was written into dst_conflict -- a partial write on a wholesale refusal
+would itself be a defect this same fixture checks for.
+
+Each of the four cases above is exercised programmatically (not just by hand, as transcribed
+here) by seen-red/world-wiring/run_fixtures.py, alongside the GREEN cases (manifest-hash
+independence, secrets exclusion, and a full backup/strip/restore/serve/doctor round trip against
+a live scratch boundary) -- gates/fixture_census.py REGISTRY entry "world-wiring" points at that
+file as the live, re-runnable proof of everything transcribed above.

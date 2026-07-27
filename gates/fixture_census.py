@@ -124,6 +124,7 @@ REGISTRY: dict[str, str] = {
     "track-work":                     "seen-red/track-work/run_fixtures.py",  # RETIRED-SCAFFOLD
     "minimal-profile-tracker":        "seen-red/minimal-profile-tracker/run_fixtures.py",
     "extract-context":                "seen-red/extract-context/run_fixtures.py",
+    "world-wiring":                   "seen-red/world-wiring/run_fixtures.py",
     "resource-registry":              "seen-red/resource-registry/run_fixtures.py",  # RETIRED-SCAFFOLD
     "track-experiments":              "seen-red/track-experiments/run_fixtures.py",
     "attest-tags":                    "seen-red/attest-tags/run_fixtures.py",
