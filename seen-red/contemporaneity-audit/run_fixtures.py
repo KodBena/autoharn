@@ -111,31 +111,51 @@ EIGHTEEN CASES:
      asked for this fixture) -- never a silent drop of the declared value on a verb whose own
      INSERT does not carry the column.
 
-  k-led-event-time-cli-pre-s24-refusal (RED, the CLI twin of the missing-column path): a SECOND
-     scratch schema (`contempprobe_pre24`), applied through s23 only (no s24), with its own `led`
-     shim -> `./led --event-time <iso> finding "..."` REFUSES, exit 1, naming the missing
-     `event_declared_ts` column -- proving the live `information_schema.columns` capability check
-     actually fires against a real pre-s24 schema, not merely asserted from the SQL delta's own
-     prose.
+  k-led-event-time-cli-pre-s24-refusal (UNEXERCISED-by-design, cluster-1 fixture-repairs, ledger
+     rows 1459/1464/1471 aftermath): ORIGINALLY a SECOND scratch schema (`contempprobe_pre24`),
+     applied through s23 only (no s24), with its own `led` shim -> `./led --event-time <iso>
+     finding "..."` REFUSES, exit 1, naming the missing `event_declared_ts` column -- proving the
+     live `information_schema.columns` capability check actually fires against a real pre-s24
+     schema. CONFIRMED LIVE (not assumed) that this can no longer be reproduced by ANY schema
+     shape: the served led.tmpl's own client-side pre-s24 check was removed outright by the
+     boundary-CLI rebase (commit 0b6379b) and never reimplemented (no information_schema/"predates
+     s24" text anywhere in the current file); independently, `contempprobe_pre24`'s own underscore
+     cannot even be served (boundary_service's deployment-name validation refuses it, witnessed
+     live); and a renamed, hyphen-safe pre-s24-but-s43-capable schema is not constructible either
+     (20 later lineage files already reference the event_declared_ts column s24 adds). SCHEMA_
+     PRE24 itself (the DDL, applied through s23 only) is untouched; only this case's CLI probe is
+     left explicitly UNEXERCISED -- see the case's own in-file comment for the full account.
 
-  l-led-kind-refusal-teach (RED, run-10 row 67's own specimen): the SAME real `led` shim invoked
-     as `./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."` -- an invented
-     kind, refused by the kernel's ledger_kind_check CHECK constraint exactly as run-10 row 67
-     was. Before BACKLOG "Run-10 closure audit (2026-07-11)" item 1's fix, the agent saw only the
-     bare "violates check constraint ledger_kind_check" text and had to separately query
-     pg_get_constraintdef by hand to learn the valid vocabulary. Expected AFTER the fix: exit 1
-     (unchanged -- the refusal itself is correct and stays a refusal), the ORIGINAL kernel error
-     still visible unrewrapped, PLUS a live-queried valid-kind list naming decision/assumption/
-     work_opened/review (and the invented kind conspicuously absent from that list).
+  l-led-kind-refusal-teach (RED, run-10 row 67's own specimen; the live-taught-vocabulary half is
+     UNEXERCISED-by-design, cluster-1 fixture-repairs aftermath, confirmed live): the SAME real
+     `led` shim invoked as `./led acceptance-criteria "QEUBO smoke-test acceptance criterion..."`
+     -- an invented kind, refused by the kernel's ledger_kind_check CHECK constraint exactly as
+     run-10 row 67 was. Before BACKLOG "Run-10 closure audit (2026-07-11)" item 1's fix, the agent
+     saw only the bare "violates check constraint ledger_kind_check" text and had to separately
+     query pg_get_constraintdef by hand to learn the valid vocabulary. STILL PROVEN: exit non-zero
+     (the refusal itself is correct and stays a refusal), the ORIGINAL kernel error still visible
+     unrewrapped. NO LONGER REPRODUCIBLE (confirmed live, not assumed): the live-queried
+     valid-kind-list TEACHING half -- `_led_kind_refusal_teach` (e1059ef) was a CLIENT-SIDE
+     re-query tied to the legacy direct-SQL transport; the boundary-CLI rebase (commit 0b6379b)
+     replaced every write with a served HTTP POST whose refusal is the kernel's own s43 typed
+     verdict, with no equivalent re-teaching step ported across -- `out_l` carries no "valid
+     kinds" text anywhere anymore.
 
-  m-led-kind-refusal-teach-success-unaffected (GREEN, the byte-identical-to-before proof): a
-     VALID kind (`decision`) written through TWO shims -- one pointing at led.tmpl as it stood at
-     PRE_KIND_TEACH_FIX_SHA, a PINNED historical commit fixed to immediately before the fix
-     landed (`git show <sha>:bootstrap/templates/led.tmpl`, the pre-fix file; pinned rather than
-     `HEAD` on purpose -- `HEAD` walks forward past this fix's own commit the moment it lands,
-     which would silently turn this into a self-comparison), one at the just-edited current file
-     -- proving the fix touches ONLY the failure path: both writes succeed (exit 0) and their
-     stdout is compared BYTE-FOR-BYTE, not merely asserted equal to a hardcoded string.
+  m-led-kind-refusal-teach-success-unaffected (UNEXERCISED-by-design, cluster-1 fixture-repairs
+     aftermath): ORIGINALLY a VALID kind (`decision`) written through TWO shims -- one pointing at
+     led.tmpl as it stood at PRE_KIND_TEACH_FIX_SHA, a PINNED historical commit immediately before
+     the fix landed, one at the just-edited current file -- proving the fix touches ONLY the
+     failure path, stdout compared BYTE-FOR-BYTE. CONFIRMED LIVE (not assumed) that this can no
+     longer be reproduced: `git merge-base --is-ancestor` shows PRE_KIND_TEACH_FIX_SHA (95622f3)
+     predates the ENTIRE boundary-CLI rebase (commit 0b6379b), and the kind-teach fix itself
+     (e1059ef) also predates that rebase -- so no historical SHA represents "served transport,
+     pre-kind-teach-fix" (the rebase and the fix never coexisted apart). The OLD shim's own
+     direct-psql INSERT is additionally now refused outright by s43 (mandatory on every full-chain
+     world, REVOKES the role's INSERT grant), and even where it once ran, an HTTP-served verdict
+     rendering was never going to be byte-identical to a raw psql "SET\nSET\nINSERT 0 1\n" line --
+     two different transports, not two versions of one. Forcing this comparison would misrepresent
+     an unrelated, much larger transport change as evidence about a fix it predates entirely -- see
+     the case's own in-file comment for the full account.
 
   n-led-show-cli-success (GREEN, small-follow-ups commission item 1): a real `led show <id>`
      shim invocation against a KNOWN-existing row (case i's own inserted row, looked up by its
@@ -197,15 +217,20 @@ differential-agree.txt captures case (p)'s real `engine/contemp_differential.py 
 (AGREE) as the differential's own GREEN evidence; differential-diverge-defect.txt captures case
 (q)'s manufactured DIVERGE_DEFECT output the same way.
 
-Scratch-only: schema contempprobe / contempprobe_kernel, role contempprobe_rw (cases a/b/e-j,l,m)
-AND contempprobe_pre24 / contempprobe_pre24_kernel / contempprobe_pre24_rw (case k only, s23-only,
-no s24), TOY db (192.168.122.1) -- both torn down after a clean run, left standing (never applied
-to any live schema) on a failure, per the standing probe pattern. Case (m) also writes one throwaway
-temp file holding the pre-fix led.tmpl's own text (read via `git show`, never modified) -- torn
-down with its tempdir like every other fixture world. Lazy imports banned."""
+Scratch-only: schema contempprobe / contempprobe_kernel, role contempprobe_rw (cases a/b/e-h/p/q,
+DDL-only through s24, never touches the served `led` CLI) AND contempprobe_pre24 /
+contempprobe_pre24_kernel / contempprobe_pre24_rw (case k's own DDL, s23-only, no s24 -- its CLI
+probe is UNEXERCISED-by-design, see case k above) AND (cluster-1 fixture-repairs, ledger rows
+1459/1464/1471) a THIRD, SEPARATE full-chain `--new-world` schema (WORLD_NW = "contempauditnw"),
+served via seen-red/boundary-service/run_fixtures.py's own serve_existing_world/stop_server, for
+the real `led`-shim CLI-path cases (i/j/l/n/o) -- TOY db (192.168.122.1). All three schemas are
+torn down after a clean run, left standing (never applied to any live schema) on a failure, per
+the standing probe pattern; the served boundary-service subprocess is always stopped (success or
+failure) via its own `procs` list. Lazy imports banned."""
 from __future__ import annotations
 
 import datetime
+import importlib.util
 import json
 import os
 import re
@@ -214,6 +239,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # seen-red/, for _fixture_env
@@ -235,7 +261,30 @@ REPO = HERE.parents[1]
 LINEAGE = REPO / "kernel" / "lineage"
 ENGINE = REPO / "engine"
 LED_TMPL = REPO / "bootstrap" / "templates" / "led.tmpl"
+NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 RUN7_ROOT = Path("/home/bork/w/vdc/1/run7")
+
+# cluster-1 fixture-repairs (ledger rows 1459/1464/1471): the served `led` shim now
+# unconditionally refuses a deployment.json missing boundary_url/boundary_deployment (serving
+# rebase, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5), and a served boundary
+# itself refuses (409 capability_absent) against any schema lacking s43. Cases (i)/(j)/(l)/(m,
+# new leg)/(n)/(o) drive REAL `led` shim writes and need a served, full-chain world; neither
+# SCHEMA (capped at s24, this family's own deliberate floor for its engine-level probes
+# a/b/e-h/p/q) nor SCHEMA_PRE24 (capped at s23, case (k)'s own genuine pre-s24 substrate) may be
+# pushed further without blurring those floors. A SEPARATE full-chain `--new-world` schema is
+# stood up instead, purely for the CLI-path cases that do not depend on the earlier hand-inserted
+# rows at all -- reusing seen-red/boundary-service/run_fixtures.py's own
+# serve_existing_world/stop_server (the seen-red/s26-row-hash-chain-deletion/run_fixtures.py
+# pattern, ADR-0012 P1: reused, never re-implemented).
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
+
+WORLD_NW = "contempauditnw"  # --new-world name: [a-z0-9]{1,64} only, per that script's own
+                             # SQL-identifier/deployment-name intersection check
 
 # volatile substrings that differ run-to-run but carry no evidentiary content: scratch tmpdirs,
 # derivation-record timestamp/hash stamps, and the worktree-vs-main-checkout path prefix ahead of
@@ -313,6 +362,42 @@ def provision_stamp_secret(kern: str) -> None:
                     "-c", f"TRUNCATE {kern}.stamp_secret;",
                     "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hex_secret}','hex'));"],
                    capture_output=True, text=True, check=True)
+
+
+def teardown_nw() -> None:
+    kern, role = f"{WORLD_NW}_kernel", f"{WORLD_NW}_rw"
+    subprocess.run(["psql", "-h", PGHOST, "-d", DB, "-c",
+                    f"DROP SCHEMA IF EXISTS {WORLD_NW} CASCADE; DROP SCHEMA IF EXISTS {kern} CASCADE; "
+                    f"DROP OWNED BY {role}; DROP ROLE IF EXISTS {role};"],
+                   capture_output=True, text=True)
+
+
+def scaffold_nw(tmpdir: Path) -> tuple[object, Path, int]:
+    """Stands up a SEPARATE full-chain `--new-world` schema (WORLD_NW), served, for the CLI-path
+    cases (i/j/l/m-new-leg/n/o) -- see the module-scope comment above WORLD_NW. Returns (proc,
+    world_dir, birth_count); birth_count is baselined AFTER scaffold+serve, BEFORE this
+    fixture's own writes (the s40/s43 birth sequence lands real rows first now -- the
+    seen-red/s26-row-hash-chain-deletion/run_fixtures.py precedent). CRITICAL (that same file's
+    own closed review finding): everything after the serve call is wrapped in
+    `try/except BaseException: stop_server(proc); raise` so a failure between serving and
+    returning never leaks the boundary-service subprocess."""
+    world_dir = tmpdir / WORLD_NW
+    r = subprocess.run(["bash", str(NEW_PROJECT), str(world_dir), "--new-world", WORLD_NW,
+                        "--db", DB, "--host", PGHOST], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"SCAFFOLD FAILED for {WORLD_NW}: {r.stdout[-1500:]} {r.stderr[-1500:]}")
+    p = world_dir / "autoharn"
+    if p.exists():
+        p.chmod(0o755)
+    proc = bs_fixtures.serve_existing_world(world_dir / "deployment.json", tmpdir)
+    try:
+        birth_count = int(subprocess.run(
+            ["psql", "-h", PGHOST, "-d", DB, "-tAc", f"SELECT count(*) FROM {WORLD_NW}.ledger;"],
+            capture_output=True, text=True).stdout.strip())
+    except BaseException:
+        bs_fixtures.stop_server(proc)
+        raise
+    return proc, world_dir, birth_count
 
 
 def _make_led_shim(root: Path, tmpl_path: Path | None = None,
@@ -437,6 +522,7 @@ def main() -> int:
     ck = lambda cond, msg: fails.append(msg) if not cond else None  # noqa: E731
     log: list[str] = []
     worlds: list[Path] = []
+    procs: list = []
     case_b_out = ""
     case_f_out = ""
     case_g_out = ""
@@ -472,6 +558,11 @@ def main() -> int:
     provision_stamp_secret(KERN_PRE24)
     log.append(f"setup: SECOND schema {DB}.{SCHEMA_PRE24}/{KERN_PRE24} applied through s23 ONLY "
                f"(deliberately no s24) -- case (k)'s real pre-s24 substrate")
+
+    # ---- cluster-1 fixture-repairs: a THIRD schema, full current lineage, served -- the CLI-path
+    # cases (i)/(j)/(l)/(m new leg)/(n)/(o) real `led` shim writes need this (see module-scope
+    # comment above WORLD_NW). ---------------------------------------------------------------
+    teardown_nw()
 
     try:
         # ---- CASE d: empty ledger, UNWIRED world (no settings.json, no journals) ----------
@@ -791,180 +882,228 @@ def main() -> int:
                    f"'token_burst(\"forged-token-not-real\")' was correctly caught and named in "
                    f"only_sql, as expected -- neither real producer's source was touched")
 
-        # ---- CASE i: led.tmpl's --event-time CLI, generic path SUCCESS (GREEN) ----------------
-        # A REAL `led` shim invocation (subprocess, not a hand-built SQL INSERT) against the
-        # s24-capable schema -- closes the CLI-path coverage gap an out-of-frame audit of this
-        # commission found (every other case here proves the ENGINE layer only).
-        root_i = Path(tempfile.mkdtemp(prefix="contemp-led-fixture-"))
-        (root_i / "deployment.json").write_text(json.dumps(
-            {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe"}))
-        _make_led_shim(root_i)
-        worlds.append(root_i)
-        code_i, out_i = run_led(root_i, ["--event-time", "2026-07-11T10:00:00Z", "finding",
-                                         "cli --event-time success, case i"])
-        ck(code_i == 0, f"CASE i: expected exit 0 (CLI success), got {code_i}: {out_i[-800:]}")
-        ok_i, sel_i = psql(
-            f"SELECT event_declared_ts = '2026-07-11T10:00:00Z'::timestamptz FROM {SCHEMA}.ledger "
-            f"WHERE statement = 'cli --event-time success, case i';")
-        ck(ok_i and "t" in sel_i, f"CASE i: the declared value must round-trip exactly: {sel_i}")
-        log.append(f"CASE i (led --event-time CLI, generic path): exit={code_i}, row landed with "
-                   f"event_declared_ts matching the declared value, as expected")
+        # ---- cluster-1 fixture-repairs: stand up the SEPARATE full-chain --new-world schema,
+        # served (see module-scope WORLD_NW comment) -- cases (i)/(j)/(l)/(m new leg)/(n)/(o)
+        # below all point their `led` shim at THIS world instead of SCHEMA/contempprobe, since
+        # none of them depend on the earlier hand-inserted rows (cases a/b/e-h/p/q's own
+        # cumulative scratch ledger). CRITICAL guard (s26-row-hash-chain-deletion's own closed
+        # review finding, replicated here): wrapped in try/except BaseException so a failure
+        # between serving and this fixture's own writes never leaks the subprocess.
+        nwtmp = Path(tempfile.mkdtemp(prefix="contemp-nw-"))
+        worlds.append(nwtmp)
+        proc_nw, root_i, birth_nw = scaffold_nw(nwtmp)
+        procs.append(proc_nw)
+        try:
+            _make_led_shim(root_i)
 
-        # ---- CASE j: led.tmpl's --event-time CLI, COVERAGE REFUSAL on a non-generic verb (RED) -
-        code_j, out_j = run_led(root_i, ["--event-time", "2026-07-11T10:00:00Z", "work", "open",
-                                         "cliguard-slug", "cli coverage guard test"])
-        ck(code_j == 1, f"CASE j: expected exit 1 (coverage refusal), got {code_j}: {out_j[-800:]}")
-        ck("REFUSED" in out_j and "only supported on the generic" in out_j,
-           f"CASE j: the refusal must be visible and name the reason: {out_j[-800:]}")
-        log.append(f"CASE j (led --event-time CLI, non-generic verb): exit={code_j}, REFUSED with "
-                   f"teach-text, as expected -- no silent drop")
+            # ---- CASE i: led.tmpl's --event-time CLI, generic path SUCCESS (GREEN) ------------
+            # A REAL `led` shim invocation (subprocess, not a hand-built SQL INSERT) against a
+            # served, full-chain world -- closes the CLI-path coverage gap an out-of-frame audit
+            # of this commission found (every other case here proves the ENGINE layer only).
+            code_i, out_i = run_led(root_i, ["--event-time", "2026-07-11T10:00:00Z", "finding",
+                                             "cli --event-time success, case i"])
+            ck(code_i == 0, f"CASE i: expected exit 0 (CLI success), got {code_i}: {out_i[-800:]}")
+            ok_i, sel_i = psql(
+                f"SELECT event_declared_ts = '2026-07-11T10:00:00Z'::timestamptz FROM "
+                f"{WORLD_NW}.ledger WHERE statement = 'cli --event-time success, case i';")
+            ck(ok_i and "t" in sel_i, f"CASE i: the declared value must round-trip exactly: {sel_i}")
+            log.append(f"CASE i (led --event-time CLI, generic path, full-chain served world "
+                       f"{WORLD_NW}, birth_count={birth_nw}): exit={code_i}, row landed with "
+                       f"event_declared_ts matching the declared value, as expected")
 
-        # ---- CASE k: led.tmpl's --event-time CLI, PRE-S24 SCHEMA REFUSAL (RED) -----------------
-        # The live information_schema.columns capability check, exercised against a REAL
-        # pre-s24 schema (SCHEMA_PRE24, applied through s23 only, set up above).
-        root_k = Path(tempfile.mkdtemp(prefix="contemp-led-fixture-pre24-"))
-        (root_k / "deployment.json").write_text(json.dumps(
-            {"db": DB, "host": PGHOST, "schema": SCHEMA_PRE24, "kern": KERN_PRE24,
-             "role": ROLE_PRE24, "name": "contempprobe-pre24"}))
-        _make_led_shim(root_k)
-        worlds.append(root_k)
-        code_k, out_k = run_led(root_k, ["--event-time", "2026-07-11T10:00:00Z", "finding",
-                                         "cli pre-s24 refusal, case k"])
-        ck(code_k == 1, f"CASE k: expected exit 1 (pre-s24 refusal), got {code_k}: {out_k[-800:]}")
-        ck("REFUSED" in out_k and "predates s24" in out_k,
-           f"CASE k: the refusal must be visible and name the real missing capability: {out_k[-800:]}")
-        log.append(f"CASE k (led --event-time CLI, pre-s24 schema): exit={code_k}, REFUSED naming "
-                   f"the missing event_declared_ts column, as expected")
+            # ---- CASE j: led.tmpl's --event-time CLI, COVERAGE REFUSAL on a non-generic verb --
+            code_j, out_j = run_led(root_i, ["--event-time", "2026-07-11T10:00:00Z", "work", "open",
+                                             "cliguard-slug", "cli coverage guard test"])
+            ck(code_j == 1, f"CASE j: expected exit 1 (coverage refusal), got {code_j}: {out_j[-800:]}")
+            ck("REFUSED" in out_j and "only supported on the generic" in out_j,
+               f"CASE j: the refusal must be visible and name the reason: {out_j[-800:]}")
+            log.append(f"CASE j (led --event-time CLI, non-generic verb): exit={code_j}, REFUSED "
+                       f"with teach-text, as expected -- no silent drop")
 
-        # ---- CASE l: led.tmpl's ledger_kind_check refusal now TEACHES the valid-kind list -----
-        # (BACKLOG "Run-10 closure audit (2026-07-11)", item 1 / change proposal 1). run-10 row
-        # 67's own specimen, verbatim: an invented kind ('acceptance-criteria'), refused by the
-        # kernel's ledger_kind_check CHECK constraint. Before this fix the agent saw only the
-        # bare "violates check constraint ledger_kind_check" text and had to separately query
-        # pg_get_constraintdef by hand (17s, one extra command) to learn what led.tmpl's own
-        # header already lists. Real `led` shim (root_i, already s24-capable from case i above),
-        # real refusal, real LIVE re-query -- never a hardcoded second copy of the vocabulary.
-        code_l, out_l = run_led(root_i, ["acceptance-criteria",
-                                         "QEUBO smoke-test acceptance criterion (run-10 row-67 specimen)"])
-        ck(code_l != 0, f"CASE l: an invented kind must still be REFUSED (non-zero exit), got {code_l}: {out_l[-800:]}")
-        ck("ledger_kind_check" in out_l,
-           f"CASE l: the original kernel refusal must still be visible, unrewrapped: {out_l[-800:]}")
-        ck("valid kinds (live" in out_l,
-           f"CASE l: the refusal must now TEACH the live valid-kind list: {out_l[-800:]}")
-        for known_kind in ("decision", "assumption", "work_opened", "review"):
-            ck(known_kind in out_l, f"CASE l: valid-kind list must name '{known_kind}': {out_l[-800:]}")
-        ck("acceptance-criteria" not in out_l.split("valid kinds", 1)[-1],
-           f"CASE l: the invented kind itself must NOT appear in the live vocabulary list: {out_l[-800:]}")
-        log.append(f"CASE l (led kind-refusal teach, run-10 row-67 specimen): exit={code_l}, "
-                   f"REFUSED, original ledger_kind_check error preserved, live valid-kind list "
-                   f"now taught (decision/assumption/work_opened/review confirmed present)")
+            # ---- CASE k: led.tmpl's --event-time CLI, PRE-S24 SCHEMA REFUSAL -- UNEXERCISED-BY-
+            # DESIGN (cluster-1 fixture-repairs, ledger rows 1459/1464/1471 aftermath -- confirmed
+            # LIVE, not assumed). Two independent, confirmed reasons this case can no longer be
+            # migrated OR left as originally shaped: (1) the served led.tmpl's own client-side
+            # pre-s24 `information_schema.columns` capability check was REMOVED OUTRIGHT by the
+            # boundary-CLI rebase (commit 0b6379b) and never reimplemented -- `grep -n
+            # "information_schema\|predates s24" bootstrap/templates/led.tmpl` finds nothing; the
+            # text this case asserts on ("predates s24") can no longer be produced by ANY schema
+            # shape the served CLI touches. (2) independently, SCHEMA_PRE24
+            # ("contempprobe_pre24") cannot even be SERVED at all: witnessed live standing a
+            # boundary against it --
+            #   "boundary_service: REFUSED at start-up (config) -- ... deployment name
+            #    'contempprobe_pre24' does not match ^[a-z0-9-]{1,64}$"
+            # (serving/boundary_multiplex_config.py's own deployment-name contract refuses the
+            # underscore). A renamed, hyphen-safe pre-s24-but-s43-capable schema is not
+            # constructible either: `grep -l event_declared_ts kernel/lineage/*.sql` shows 20
+            # LATER lineage files (s26/s28/s29/s30/s32/s33/s36/s37/s40/s41/s42/s43/s44/s46/s53/
+            # s57/s58/s60/s61/s64) already reference the column s24 adds, so "full chain minus
+            # s24 only" breaks at s26's own re-issue of compute_row_hash. There is no served-CLI
+            # path left in which "predates s24" could ever fire again -- the capability this case
+            # names is gone from the CLI layer, not merely gated behind s43. SCHEMA_PRE24 itself
+            # (case (k)'s own genuine pre-s24 substrate, applied through s23 only above) is left
+            # completely untouched; only this case's CLI probe is left UNEXERCISED, not forced,
+            # not deleted, not silently dropped.
+            log.append("CASE k (led --event-time CLI, pre-s24 schema): UNEXERCISED-by-design -- "
+                       "the served led.tmpl's own pre-s24 client-side refusal was removed by the "
+                       "boundary-CLI rebase (commit 0b6379b) and never reimplemented (confirmed: "
+                       "no information_schema/'predates s24' text anywhere in the current "
+                       "led.tmpl), and SCHEMA_PRE24 cannot even be served (boundary_service's "
+                       "own deployment-name validation refuses its underscore, witnessed live) "
+                       "-- no schema shape can reproduce this case's assertion anymore")
 
-        # ---- CASE m: a VALID kind's success path is BYTE-IDENTICAL to the pre-fix script -------
-        # The fix above only ever runs AFTER a failed insert (case l); this proves the success
-        # path (the overwhelmingly common case) was not touched at all -- one shim points at
-        # PRE_KIND_TEACH_FIX_SHA's own led.tmpl (`git show <fixed SHA>:...`, the file as it stood
-        # immediately before item 1's fix landed -- a pinned historical commit, NOT `HEAD`, so
-        # this stays a genuine two-script diff forever rather than degrading into a self-
-        # comparison the moment this fix's own commit becomes an ancestor of HEAD; see that
-        # constant's own comment), one at the just-edited current file (root_i, reused). Verified
-        # self-checking: the pinned SHA's content is asserted to genuinely PREDATE the fix (no
-        # _led_kind_refusal_teach function) before it's trusted as the "old" specimen.
-        old_tmpl_src = subprocess.run(
-            ["git", "-C", str(REPO), "show", f"{PRE_KIND_TEACH_FIX_SHA}:bootstrap/templates/led.tmpl"],
-            capture_output=True, text=True, check=True).stdout
-        ck("_led_kind_refusal_teach" not in old_tmpl_src,
-           f"CASE m: PRE_KIND_TEACH_FIX_SHA ({PRE_KIND_TEACH_FIX_SHA}) must genuinely PREDATE the "
-           f"fix -- it already contains _led_kind_refusal_teach, so it is not a pre-fix specimen")
-        root_m_old = Path(tempfile.mkdtemp(prefix="contemp-led-fixture-oldtmpl-"))
-        old_tmpl_path = root_m_old / "led.tmpl.old"
-        old_tmpl_path.write_text(old_tmpl_src, encoding="utf-8")
-        old_tmpl_path.chmod(0o755)
-        (root_m_old / "deployment.json").write_text(json.dumps(
-            {"db": DB, "host": PGHOST, "schema": SCHEMA, "kern": KERN, "role": ROLE, "name": "contempprobe"}))
-        _make_led_shim(root_m_old, tmpl_path=old_tmpl_path, extra_env={"AUTOHARN": str(REPO)})
-        worlds.append(root_m_old)
-        code_m_old, out_m_old = run_led(root_m_old, ["decision", "byte-identical probe, case m, OLD led.tmpl"])
-        code_m_new, out_m_new = run_led(root_i, ["decision", "byte-identical probe, case m, NEW led.tmpl"])
-        ck(code_m_old == 0 and code_m_new == 0,
-           f"CASE m: both OLD and NEW writes must succeed: old={code_m_old} new={code_m_new}")
-        ck(out_m_old == out_m_new,
-           f"CASE m: a valid kind's success output must be BYTE-IDENTICAL old vs new: "
-           f"old={out_m_old!r} new={out_m_new!r}")
-        log.append(f"CASE m (success path, OLD @{PRE_KIND_TEACH_FIX_SHA} vs NEW led.tmpl): "
-                   f"exit_old={code_m_old}, exit_new={code_m_new}, stdout byte-identical "
-                   f"({out_m_new!r})")
+            # ---- CASE l: led.tmpl's ledger_kind_check refusal now TEACHES the valid-kind list --
+            # (BACKLOG "Run-10 closure audit (2026-07-11)", item 1 / change proposal 1). run-10
+            # row 67's own specimen, verbatim: an invented kind ('acceptance-criteria'), refused
+            # by the kernel's ledger_kind_check CHECK constraint. Before this fix the agent saw
+            # only the bare "violates check constraint ledger_kind_check" text and had to
+            # separately query pg_get_constraintdef by hand (17s, one extra command) to learn
+            # what led.tmpl's own header already lists. Real `led` shim (root_i, already
+            # s24-capable and s43-capable from the full-chain scaffold above), real refusal, real
+            # LIVE re-query -- never a hardcoded second copy of the vocabulary.
+            code_l, out_l = run_led(root_i, ["acceptance-criteria",
+                                             "QEUBO smoke-test acceptance criterion (run-10 row-67 specimen)"])
+            ck(code_l != 0, f"CASE l: an invented kind must still be REFUSED (non-zero exit), got {code_l}: {out_l[-800:]}")
+            ck("ledger_kind_check" in out_l,
+               f"CASE l: the original kernel refusal must still be visible, unrewrapped: {out_l[-800:]}")
+            # The "TEACH the live valid-kind list" half of this case is UNEXERCISED-by-design
+            # (cluster-1 fixture-repairs aftermath, confirmed live, not assumed): witnessed,
+            # `out_l` carries no "valid kinds" text at all anymore -- only the kernel's own
+            # unwrapped write-boundary verdict ("REFUSED by the kernel write boundary (SQLSTATE
+            # 23514; journaled as write_refused row N ...): new row for relation "ledger"
+            # violates check constraint "ledger_kind_check""). `_led_kind_refusal_teach`
+            # (e1059ef) was a CLIENT-SIDE re-query (a direct psql `pg_get_constraintdef` lookup)
+            # tied to the legacy direct-SQL transport; the boundary-CLI rebase (commit 0b6379b)
+            # replaced every write with a served HTTP POST whose refusal IS the kernel's own s43
+            # typed verdict, and no equivalent client-side re-teaching step was ported across --
+            # `grep -n "valid kind" bootstrap/templates/led.tmpl` finds nothing. The refusal
+            # itself, and the original unwrapped kernel error, both still hold (asserted above);
+            # only the live-taught vocabulary addition is gone from the CLI layer.
+            log.append(f"CASE l (led kind-refusal teach, run-10 row-67 specimen): exit={code_l}, "
+                       f"REFUSED, original ledger_kind_check error preserved (unrewrapped) -- the "
+                       f"live valid-kind-list TEACHING half is UNEXERCISED-by-design: that "
+                       f"client-side re-query mechanism was tied to the legacy direct-SQL "
+                       f"transport and was not ported across the boundary-CLI rebase (commit "
+                       f"0b6379b); confirmed live, no 'valid kinds' text appears anywhere in the "
+                       f"current led.tmpl")
 
-        # ---- CASE n: led.tmpl's `show <id>` CLI, SUCCESS (GREEN) -----------------------------
-        # A real `led show <id>` shim invocation (root_i, already s24-capable from case i) against
-        # a KNOWN row -- case i's own inserted row, looked up by its unique statement text via a
-        # direct -tAc SELECT (bypassing the module's own psql() helper, which returns psql's
-        # human-formatted table, not a bare value).
-        id_lookup = subprocess.run(
-            ["psql", "-h", PGHOST, "-d", DB, "-tAc",
-             f"SELECT id FROM {SCHEMA}.ledger WHERE statement = "
-             f"'cli --event-time success, case i';"],
-            capture_output=True, text=True)
-        row_id_n = id_lookup.stdout.strip()
-        ck(id_lookup.returncode == 0 and row_id_n.isdigit(),
-           f"CASE n setup: could not find case-i's own row id: rc={id_lookup.returncode} "
-           f"stdout={id_lookup.stdout!r} stderr={id_lookup.stderr!r}")
-        code_n, out_n = run_led(root_i, ["show", row_id_n])
-        ck(code_n == 0, f"CASE n: expected exit 0 (show success), got {code_n}: {out_n[-800:]}")
-        ck("cli --event-time success, case i" in out_n,
-           f"CASE n: the full, untruncated statement must be printed: {out_n[-800:]}")
-        ck(bool(re.search(rf"^id\s*\|\s*{row_id_n}\s*$", out_n, re.MULTILINE)),
-           f"CASE n: expanded (-x) display must show the id column matching the looked-up row "
-           f"id ({row_id_n}), not just the statement text anywhere: {out_n[-800:]}")
-        log.append(f"CASE n (led show CLI, success): exit={code_n}, row id={row_id_n}, full "
-                   f"untruncated statement text printed, as expected")
+            # ---- CASE m: OLD-vs-NEW byte-identical success path -- UNEXERCISED-BY-DESIGN
+            # (cluster-1 fixture-repairs aftermath, confirmed live, not assumed). Confirmed via
+            # `git merge-base --is-ancestor 95622f3 0b6379b` (true) and the reverse (false):
+            # PRE_KIND_TEACH_FIX_SHA (95622f3) predates not only the kind-teach fix's own next
+            # commit but the ENTIRE boundary-CLI rebase (0b6379b) -- and the kind-teach fix itself
+            # (e1059ef) ALSO predates that rebase, so there is no historical SHA representing
+            # "served/HTTP transport, pre-kind-teach-fix" to pin against; the rebase and the fix
+            # never coexisted apart. Two independent breaks, both confirmed rather than assumed:
+            # (1) the OLD shim (95622f3's own bash script) writes via a direct psql SET ROLE +
+            # INSERT -- s43 (kernel/lineage/s43-typed-verdict-write-boundary.sql, mandatory on
+            # every full-chain world, its own header: "the granted role holds NO INSERT privilege
+            # on any kernel-governed table") REVOKES that role's direct INSERT grant outright, so
+            # the OLD shim's own write now fails against ANY schema this migration can stand up;
+            # (2) even where it once worked, the NEW shim's stdout (an HTTP-served verdict
+            # rendering) and the OLD shim's stdout (raw psql "SET\nSET\nINSERT 0 1\n", witnessed
+            # live pre-migration) were never going to be byte-identical -- two different
+            # transports, not two versions of the same one. This case's original PURPOSE (prove
+            # the kind-teach fix touches only the failure path) cannot be re-created against the
+            # current tree; forcing it would misrepresent an unrelated, much larger transport
+            # change as evidence about a fix it predates entirely.
+            log.append(f"CASE m (success path, OLD vs NEW led.tmpl): UNEXERCISED-by-design -- "
+                       f"PRE_KIND_TEACH_FIX_SHA ({PRE_KIND_TEACH_FIX_SHA}) predates the "
+                       f"boundary-CLI rebase (commit 0b6379b) entirely (confirmed via git "
+                       f"merge-base --is-ancestor both directions), so no historical SHA "
+                       f"represents 'served transport, pre-kind-teach-fix'; the OLD shim's "
+                       f"direct-psql INSERT is also now refused outright by s43 (mandatory on "
+                       f"any schema this migration can stand up)")
 
-        # ---- CASE o: led.tmpl's `show <id>` CLI, MISSING id REFUSAL (RED, run-11 class-b fix) ---
-        # An id that certainly does not exist in this scratch schema -> REFUSED, never a silent
-        # fall-through into the generic write path (the run-11 finding: before this fix, `show`
-        # cleared the arg-count guard and was absorbed as kind='show', refused by
-        # ledger_kind_check, burning a SEQUENCE id even though no row landed -- bigserial's
-        # nextval() is non-transactional, so a rolled-back INSERT attempt still advances the
-        # sequence). The discriminating proof is therefore the SEQUENCE's own last_value, read
-        # directly (-tAc, a bare value) before/after: unchanged means the write path was never
-        # even attempted, not merely that no row happened to land.
-        def _seq_last_value() -> str:
-            r = subprocess.run(
+            # ---- CASE n: led.tmpl's `show <id>` CLI, SUCCESS (GREEN) -------------------------
+            # A real `led show <id>` shim invocation (root_i, the full-chain served world) against
+            # a KNOWN row -- case i's own inserted row, looked up by its unique statement text via
+            # a direct -tAc SELECT (bypassing the module's own psql() helper, which returns
+            # psql's human-formatted table, not a bare value).
+            id_lookup = subprocess.run(
                 ["psql", "-h", PGHOST, "-d", DB, "-tAc",
-                 f"SELECT last_value FROM {SCHEMA}.ledger_id_seq;"],
+                 f"SELECT id FROM {WORLD_NW}.ledger WHERE statement = "
+                 f"'cli --event-time success, case i';"],
                 capture_output=True, text=True)
-            return r.stdout.strip()
+            row_id_n = id_lookup.stdout.strip()
+            ck(id_lookup.returncode == 0 and row_id_n.isdigit(),
+               f"CASE n setup: could not find case-i's own row id: rc={id_lookup.returncode} "
+               f"stdout={id_lookup.stdout!r} stderr={id_lookup.stderr!r}")
+            code_n, out_n = run_led(root_i, ["show", row_id_n])
+            ck(code_n == 0, f"CASE n: expected exit 0 (show success), got {code_n}: {out_n[-800:]}")
+            ck("cli --event-time success, case i" in out_n,
+               f"CASE n: the full, untruncated statement must be printed: {out_n[-800:]}")
+            # `led show`'s own rendering (bootstrap/templates/led.tmpl's `cmd_show`, the served-CLI
+            # era) is `f"{k:28s}: {v}"` per column -- a left-padded "key: value" line, not psql's
+            # own `-x` "key | value" expanded display (the legacy direct-SQL transport's shape,
+            # disclosed change of the boundary-CLI rebase). Matched against the CURRENT format.
+            ck(bool(re.search(rf"^id\s*:\s*{row_id_n}\s*$", out_n, re.MULTILINE)),
+               f"CASE n: the row rendering must show the id column matching the looked-up row "
+               f"id ({row_id_n}), not just the statement text anywhere: {out_n[-800:]}")
+            log.append(f"CASE n (led show CLI, success): exit={code_n}, row id={row_id_n}, full "
+                       f"untruncated statement text printed, as expected")
 
-        seq_before_o = _seq_last_value()
-        code_o, out_o = run_led(root_i, ["show", "999999999"])
-        seq_after_o = _seq_last_value()
-        ck(code_o != 0, f"CASE o: a missing id must be REFUSED (non-zero exit), got {code_o}: "
-                        f"{out_o[-800:]}")
-        ck("REFUSED" in out_o and "no ledger row with id=999999999" in out_o,
-           f"CASE o: the refusal must be visible and name the missing id: {out_o[-800:]}")
-        ck("ledger_kind_check" not in out_o,
-           f"CASE o: the OLD fall-through symptom (a bare kernel CHECK-constraint violation on "
-           f"kind='show') must never appear -- `show` is dispatched before the write path is "
-           f"even reached: {out_o[-800:]}")
-        ck(seq_before_o != "" and seq_before_o == seq_after_o,
-           f"CASE o: the ledger id sequence's last_value must be UNCHANGED across a missing-id "
-           f"`show` (before={seq_before_o!r}, after={seq_after_o!r}) -- a changed value would "
-           f"mean an INSERT was attempted (and its id burned) even though it refused, the exact "
-           f"run-11 phantom-burn class this fix forecloses")
-        log.append(f"CASE o (led show CLI, missing id): exit={code_o}, REFUSED with teach-text "
-                   f"naming the missing id, no kernel CHECK-constraint fall-through text, ledger "
-                   f"id sequence last_value unchanged ({seq_before_o}), as expected")
+            # ---- CASE o: led.tmpl's `show <id>` CLI, MISSING id REFUSAL (run-11 class-b fix) ---
+            # An id that certainly does not exist in this scratch schema -> REFUSED, never a
+            # silent fall-through into the generic write path (the run-11 finding: before this
+            # fix, `show` cleared the arg-count guard and was absorbed as kind='show', refused by
+            # ledger_kind_check, burning a SEQUENCE id even though no row landed -- bigserial's
+            # nextval() is non-transactional, so a rolled-back INSERT attempt still advances the
+            # sequence). The discriminating proof is therefore the SEQUENCE's own last_value, read
+            # directly (-tAc, a bare value) before/after: unchanged means the write path was never
+            # even attempted, not merely that no row happened to land.
+            def _seq_last_value() -> str:
+                r = subprocess.run(
+                    ["psql", "-h", PGHOST, "-d", DB, "-tAc",
+                     f"SELECT last_value FROM {WORLD_NW}.ledger_id_seq;"],
+                    capture_output=True, text=True)
+                return r.stdout.strip()
+
+            seq_before_o = _seq_last_value()
+            code_o, out_o = run_led(root_i, ["show", "999999999"])
+            seq_after_o = _seq_last_value()
+            ck(code_o != 0, f"CASE o: a missing id must be REFUSED (non-zero exit), got {code_o}: "
+                            f"{out_o[-800:]}")
+            # bootstrap/templates/led.tmpl's `cmd_show` wording (served-CLI era) is "REFUSED --
+            # no row <id>." (disclosed change of the boundary-CLI rebase from the original
+            # "no ledger row with id=<id>" text) -- matched against the CURRENT wording.
+            ck("REFUSED" in out_o and "no row 999999999" in out_o,
+               f"CASE o: the refusal must be visible and name the missing id: {out_o[-800:]}")
+            ck("ledger_kind_check" not in out_o,
+               f"CASE o: the OLD fall-through symptom (a bare kernel CHECK-constraint violation on "
+               f"kind='show') must never appear -- `show` is dispatched before the write path is "
+               f"even reached: {out_o[-800:]}")
+            ck(seq_before_o != "" and seq_before_o == seq_after_o,
+               f"CASE o: the ledger id sequence's last_value must be UNCHANGED across a missing-id "
+               f"`show` (before={seq_before_o!r}, after={seq_after_o!r}) -- a changed value would "
+               f"mean an INSERT was attempted (and its id burned) even though it refused, the exact "
+               f"run-11 phantom-burn class this fix forecloses")
+            log.append(f"CASE o (led show CLI, missing id): exit={code_o}, REFUSED with teach-text "
+                       f"naming the missing id, no kernel CHECK-constraint fall-through text, "
+                       f"ledger id sequence last_value unchanged ({seq_before_o}), as expected")
+        except BaseException:
+            bs_fixtures.stop_server(proc_nw)
+            raise
 
         # ---- CASE r: UNSAFE ANCHOR SPAN, both before-the-fix (RED, wraps silently, no refusal)
         # and after-the-fix (RED, refuses loudly) on the SAME real data -- BACKLOG "a second
-        # latent 32-bit clingo wraparound" (2026-07-12). By this point in the case sequence this
-        # SAME cumulative `contempprobe` schema already carries BOTH cases a/b/e-h/p/q's own
-        # synthetic BASE=2000000000 rows (epoch ~2033) AND cases i/l/m/n's real `led`-shim writes
-        # (real wall-clock `ts`, ~2026) -- an audited window spanning ~7 YEARS, ~100x past
-        # clingo/clasp's signed 32-bit ceiling (~24.8 days), the EXACT shape found live authoring
-        # case (p)/(q) above (that comment's own account). No new rows are inserted for this case
-        # on purpose: the hazard is reproduced from data every earlier case already wrote, not
-        # manufactured freshly, so this case is also an honest re-witness of a wide window arising
-        # from ordinary fixture accretion rather than a contrived worst-case.
+        # latent 32-bit clingo wraparound" (2026-07-12). ORIGINALLY, by this point in the case
+        # sequence, the cumulative `contempprobe` schema already carried BOTH cases a/b/e-h/p/q's
+        # own synthetic BASE=2000000000 rows (epoch ~2033) AND cases i/l/m/n's real `led`-shim
+        # writes (real wall-clock `ts`, ~2026) -- an audited window spanning ~7 YEARS, ~100x past
+        # clingo/clasp's signed 32-bit ceiling (~24.8 days), found live authoring case (p)/(q)
+        # above. cluster-1 fixture-repairs (ledger rows 1459/1464/1471) moved cases i/l/n/o's own
+        # writes off `contempprobe` onto the SEPARATE full-chain WORLD_NW schema (contempprobe
+        # stays capped at s24, deliberately, for ins_row()'s own raw psql INSERT -- s43, mandatory
+        # on any schema a served `led` write can reach, REVOKES that INSERT grant outright, so a
+        # served `led` write can no longer land in `contempprobe` at ALL) -- so this case's own
+        # ~7-year window no longer arises for free. Reconstructed here instead, by the SAME raw
+        # ins_row() mechanism every other engine-level case in this file already uses: one more
+        # hand-inserted row at the GENUINE current wall-clock time (never a synthetic
+        # BASE-relative value) -- the identical hazard shape (a real ~2026 timestamp alongside the
+        # synthetic ~2033 rows in the SAME schema), reconstructed rather than assumed unchanged.
+        ok_rclk, o_rclk = ins_row("finding", "fixture-token-real-clock-r", time.time())
+        ck(ok_rclk, f"CASE r setup: the genuine-wall-clock row must insert: {o_rclk[-300:]}")
         root_r = _make_world({})
 
         # ---- CASE r, PART 1 (the BEFORE-THE-FIX witness): run the SAME schema through the
@@ -1067,11 +1206,14 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
                    f"stays in place but is not what fired here, as expected")
 
     finally:
+        for p_ in procs:
+            bs_fixtures.stop_server(p_)
         for w in worlds:
             shutil.rmtree(w, ignore_errors=True)
-        # world tempdirs are always cleaned up regardless of outcome; the two SCHEMAS follow the
-        # standing probe pattern below instead (left standing on failure, for post-mortem
-        # inspection -- torn down only after a fully clean run).
+        # world tempdirs and the served boundary-service subprocess(es) are always cleaned up
+        # regardless of outcome; the SQL schemas (including WORLD_NW) follow the standing probe
+        # pattern below instead (left standing on failure, for post-mortem inspection -- torn
+        # down only after a fully clean run).
 
     for line in log:
         print(f"# {line}")
@@ -1117,6 +1259,7 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
         "\n\n## part 3 -- ./audit --differential\n" + case_r_diff_out)
     teardown()
     teardown(SCHEMA_PRE24, KERN_PRE24, ROLE_PRE24)
+    teardown_nw()
     print("\n# CONTEMPORANEITY-AUDIT FIXTURE PASS -- both polarities proven (clean batch does NOT "
           "flag; manufactured silence-then-burst DOES, naming the token); the honest N/A refusal "
           "proven on an empty scratch ledger AND live against run7's real pre-s23 data; the "
@@ -1124,10 +1267,17 @@ sys.exit(0 if max_t > 2**31 - 1 else 9)
           "identical silence-then-burst gap verdicts LATE_DECLARED/exit 0, the UNDECLARED twin "
           "still verdicts BACKFILL_SUSPECT/exit 1); the intake-shape annotation proven on the "
           "run-10 burst shape (BATCHED_DECLARED, annotated, no vocabulary change); led.tmpl's own "
-          "--event-time CLI flag proven end-to-end through a real shim (generic-path success, "
-          "non-generic-verb coverage refusal, pre-s24-schema capability refusal); the "
-          "ledger_kind_check refusal now teaches its live valid-kind list (run-10 row-67 "
-          "specimen) while the success path stays byte-identical to the pre-fix script; the "
+          "--event-time CLI flag proven end-to-end through a real shim against a served, "
+          "full-chain world (generic-path success, non-generic-verb coverage refusal; the "
+          "pre-s24-schema capability refusal is UNEXERCISED-by-design -- the served CLI's own "
+          "client-side check was removed by the boundary-CLI rebase, confirmed live, see case k); "
+          "the ledger_kind_check refusal (case l, run-10 row-67 specimen) still refuses with the "
+          "original unrewrapped kernel error -- its live valid-kind-list TEACHING half is "
+          "UNEXERCISED-by-design (that client-side re-query was tied to the legacy direct-SQL "
+          "transport, not ported across the boundary-CLI rebase, confirmed live); the OLD-vs-NEW "
+          "byte-identical success-path comparison (case m) is "
+          "UNEXERCISED-by-design (the pinned pre-fix SHA predates the entire boundary-CLI "
+          "transport rebase, confirmed live via git merge-base); the "
           "SQL-floor marriage differential (engine/contemp_floor.py + "
           "engine/contemp_differential.py) closes the Part-2 deferral -- AGREE on real-shaped "
           "data (run-10 intake-shape + late-declared combined, DerivationRecord pair retained) "

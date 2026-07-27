@@ -63,7 +63,9 @@ Exit 0 if every case matches; 1 otherwise. Lazy imports banned.
 """
 from __future__ import annotations
 
+import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -81,6 +83,20 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 
 
 REPO = Path(__file__).resolve().parents[2]
+
+# ledger rows 1459/1464/1471 (sub-s43 fixture-family migration): the served `led` shim now
+# unconditionally refuses a deployment.json missing boundary_url/boundary_deployment -- GREEN
+# 4c/5b/8b's own `./autoharn led decision` + `--recent` round-trips below drive the real
+# dispatcher, so each of those smoke tests now needs a real boundary_service standing over the
+# world. REUSE (ADR-0012 P1) serve_existing_world/stop_server -- same pattern seen-red/
+# s26-row-hash-chain-deletion/run_fixtures.py's own sibling already established, imported via
+# importlib exactly as that file does (never re-implemented).
+_BS_SPEC = importlib.util.spec_from_file_location(
+    "boundary_service_fixtures", REPO / "seen-red" / "boundary-service" / "run_fixtures.py")
+assert _BS_SPEC is not None and _BS_SPEC.loader is not None
+bs_fixtures = importlib.util.module_from_spec(_BS_SPEC)
+sys.modules["boundary_service_fixtures"] = bs_fixtures
+_BS_SPEC.loader.exec_module(bs_fixtures)
 NEW_PROJECT = REPO / "bootstrap" / "new-project.sh"
 CONVERT = REPO / "bootstrap" / "convert-to-submodule.sh"
 UPGRADE = REPO / "bootstrap" / "upgrade-submodule.sh"
@@ -130,19 +146,129 @@ def _psql(sql: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True)
 
 
+def _full_lineage_files(worktree: Path) -> list[Path]:
+    """Mirrors bootstrap/new-project.sh's own FULL_LINEAGE apply-list derivation LIVE from the
+    directory (that script's own comment: "this loop derives the list LIVE from the directory
+    every run ... never a hand-typed block", the exact drift class row 1471's migration is meant
+    to foreclose): high_watermark_1.sql, THEN every kernel/lineage/sNN-<slug>.sql with N >= 20
+    (excluding .detect.sql/.verify.sql/.accommodate*.sql companions), sorted NUMERICALLY by N
+    (never a lexical sort -- s9 vs s10 class bug). Read from `worktree` (the scratch worktree
+    this fixture already committed the CURRENT on-disk pinning scripts into), so this always
+    applies the SAME lineage generation `new-project.sh --new-world` would from that same tree."""
+    lineage_dir = worktree / "kernel" / "lineage"
+    entries: list[tuple[int, Path]] = []
+    for f in lineage_dir.glob("s[0-9]*-*.sql"):
+        name = f.name
+        if name.endswith((".detect.sql", ".verify.sql", ".accommodate.sql", ".accommodate.verify.sql")):
+            continue
+        m = re.match(r"s(\d+)-", name)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if n < 20:
+            continue
+        entries.append((n, f))
+    entries.sort(key=lambda t: t[0])
+    return [lineage_dir / "high_watermark_1.sql"] + [f for _, f in entries]
+
+
 def _apply_light_kernel(worktree: Path, schema: str, kern: str, role: str) -> subprocess.CompletedProcess:
-    """The minimum kernel lineage (high_watermark_1 + s20 + s21) needed for `led decision` /
-    `led --recent` to round-trip against real postgres -- classic (non --new-world) scaffold mode
-    never applies a kernel itself, and this fixture wants a REAL smoke test, not just a path check."""
+    """cluster-1 fixture-repairs (ledger rows 1459/1464/1471): the served `led` shim now
+    unconditionally refuses a deployment.json missing boundary_url/boundary_deployment, and s43
+    revokes the granted role's own INSERT grants -- a served `led decision`/`--recent` round-trip
+    through the pin (GREEN 4c/5b/8b) needs the FULL current kernel lineage underneath it, not the
+    three-file high_watermark_1+s20+s21 floor this function used to cap out at (that floor
+    predates s43 and never carried the write boundary at all). Applies the SAME full chain
+    `bootstrap/new-project.sh --new-world` would (see `_full_lineage_files` above), then seeds
+    the stamp secret + row-hash chain genesis the same way seen-red/boundary-service/
+    run_fixtures.py's own `scaffold_classic()` already does for its CHAIN_B callers -- this
+    function deliberately keeps the CLASSIC (explicit --schema/--kern/--role) scaffold every case
+    in this file exercises; only the kernel lineage underneath it grows to the full chain."""
     _psql(f'DROP ROLE IF EXISTS {role};')
     _psql(f'CREATE ROLE {role} LOGIN;')
-    return subprocess.run(
-        ["psql", "-h", HOST, "-d", DB, "-v", "ON_ERROR_STOP=1",
-         "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}",
-         "-f", str(worktree / "kernel" / "lineage" / "high_watermark_1.sql"),
-         "-f", str(worktree / "kernel" / "lineage" / "s20-obligation-grants-and-view-refresh.sql"),
-         "-f", str(worktree / "kernel" / "lineage" / "s21-session-aware-distinctness.sql")],
+    args = ["psql", "-h", HOST, "-d", DB, "-v", "ON_ERROR_STOP=1",
+            "-v", f"schema={schema}", "-v", f"kern={kern}", "-v", f"role={role}"]
+    for f in _full_lineage_files(worktree):
+        args += ["-f", str(f)]
+    r = subprocess.run(args, capture_output=True, text=True)
+    if r.returncode != 0:
+        return r
+    hexsecret = subprocess.run(["openssl", "rand", "-hex", "32"], capture_output=True, text=True).stdout.strip()
+    rs = subprocess.run(
+        ["psql", "-h", HOST, "-d", DB, "-q", "-v", "ON_ERROR_STOP=1",
+         "-c", f"TRUNCATE {kern}.stamp_secret;",
+         "-c", f"INSERT INTO {kern}.stamp_secret (secret) VALUES (decode('{hexsecret}','hex'));"],
         capture_output=True, text=True)
+    if rs.returncode != 0:
+        return rs
+    genesis_hex = subprocess.run(["openssl", "rand", "-hex", "32"], capture_output=True, text=True).stdout.strip()
+    rg = subprocess.run(
+        ["psql", "-h", HOST, "-d", DB, "-q", "-v", "ON_ERROR_STOP=1",
+         "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
+               f"ON CONFLICT (only_one) DO NOTHING;"],
+        capture_output=True, text=True)
+    if rg.returncode != 0:
+        return rg
+    # THE s40 BIRTH MINIMUM (kernel/lineage/s40-principal-identity-events.sql §3.7, mirroring
+    # bootstrap/new-project.sh's own s40/s43 birth sequence steps 1/2/4): s40's re-issued
+    # set_actor is STRICT -- a NULL-actor write only resolves through an explicit standing
+    # declaration binding the CONNECTING role to a principal. Live-witnessed here (this fixture's
+    # first attempt refused with "login role 'bork' has no standing declaration" -- the served
+    # boundary_service's own psql invocations connect as the OS session_user, NOT the
+    # deployment's declared `role`, exactly the gap new-project.sh's own step 2 comment names:
+    # "the login role the world's DSN authenticates as needs its own declared standing ...
+    # witnessed at scaffold time as session_user"): standing is declared for BOTH `role` and the
+    # live session_user, same dual declaration. `write-boundary` is also registered (new-
+    # project.sh step 4) so a refusal recorded along the way (should one ever occur) has an
+    # authoring identity -- the SAME second failure this fixture's own first attempt hit
+    # (refusal-journaling itself erroring for want of this principal) once the primary write
+    # above it refused. Direct string interpolation into a single script fed via `-f /dev/stdin`
+    # -- matching seen-red/boundary-service/run_fixtures.py's own `birth_pre_s43`/`bw_call` idiom
+    # exactly: psql's `:"var"` substitution is a `-f`/script-mode-only feature (confirmed live --
+    # a bare `-c` argument does NOT interpolate `-v`-bound variables, "syntax error at or near
+    # ':'"), so this reuses that same sibling pattern rather than psql -v/-c.
+    login_role = subprocess.run(
+        ["psql", "-h", HOST, "-d", DB, "-tAc", "SELECT session_user;"],
+        capture_output=True, text=True).stdout.strip()
+    standing_stmts = []
+    for drole in dict.fromkeys([role, login_role]):  # de-duped, order-preserving
+        standing_stmts.append(
+            f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+            f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+            f"'kind', 'principal_standing_declared', "
+            f"'statement', 'role {drole} -> author (fixture genesis exception, deployment-pinning smoke test)', "
+            f"'actor', (SELECT id FROM principal WHERE name = 'author'), "
+            f"'principal_subject', (SELECT id FROM principal WHERE name = 'author'), "
+            f"'principal_db_role', '{drole}', "
+            f"'principal_binding_active', true)); "
+            f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'standing declaration refused for {drole} (%): %', v.sqlstate, v.message; END IF; "
+            f"END $bw$;\n")
+    birth_script = (
+        f"SET ROLE {role};\n"
+        f"SET search_path = {schema}, {kern};\n"
+        f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+        f"SELECT * INTO v FROM {kern}.ledger_write(jsonb_build_object("
+        f"'kind', 'principal_registered', "
+        f"'statement', 'author registered (fixture genesis exception, deployment-pinning smoke test)', "
+        f"'actor', (SELECT id FROM principal WHERE name = 'author'), "
+        f"'principal_subject', (SELECT id FROM principal WHERE name = 'author'), "
+        f"'principal_purpose', 'the scaffold connection principal for this fixture smoke test')); "
+        f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'birth step 1 refused (%): %', v.sqlstate, v.message; END IF; "
+        f"END $bw$;\n"
+        + "".join(standing_stmts) +
+        f"DO $bw$ DECLARE v {kern}.write_verdict; BEGIN "
+        f"SELECT * INTO v FROM {kern}.registration_write(jsonb_build_object("
+        f"'name', 'write-boundary', 'agent_class', 'tool', "
+        f"'purpose', 'the kernel write boundary''s own recording identity (fixture genesis exception, deployment-pinning smoke test)', "
+        f"'statement', 'principal ''write-boundary'' registered (fixture genesis exception, deployment-pinning smoke test)', "
+        f"'actor', (SELECT id FROM principal WHERE name = 'author'))); "
+        f"IF v.disposition <> 'accepted' THEN RAISE EXCEPTION 'write-boundary registration refused (%): %', v.sqlstate, v.message; END IF; "
+        f"END $bw$;\n"
+    )
+    rb = subprocess.run(
+        ["psql", "-h", HOST, "-d", DB, "-v", "ON_ERROR_STOP=1", "-f", "/dev/stdin"],
+        input=birth_script, capture_output=True, text=True)
+    return rb
 
 
 def _drop_schema_role(schema: str, kern: str, role: str) -> None:
@@ -157,6 +283,7 @@ def main() -> int:
     worktree = tmproot / "autoharn-src"
     ok_overall = True
     schemas_to_drop: list[tuple[str, str, str]] = []
+    boundary_procs: list = []
 
     def check(label: str, cond: bool, detail: str = "") -> None:
         nonlocal ok_overall
@@ -267,6 +394,11 @@ def main() -> int:
         if akr.returncode != 0:
             check("GREEN 4c: kernel apply for smoke test", False, akr.stdout + akr.stderr)
         else:
+            # cluster-1 fixture-repairs (ledger rows 1459/1464/1471): the served `led` shim
+            # unconditionally refuses a deployment.json missing boundary_url/boundary_deployment
+            # -- stand a real boundary_service against THIS scratch world before the round-trip.
+            boundary4 = bs_fixtures.serve_existing_world(dest4 / "deployment.json", tmproot)
+            boundary_procs.append(boundary4)
             smoke = _sh([str(dest4 / "autoharn"), "led", "decision",
                          "pinning-fixture smoke test (new-deployment path)"], cwd=dest4)
             recent = _sh([str(dest4 / "autoharn"), "led", "--recent", "1"], cwd=dest4)
@@ -298,6 +430,13 @@ def main() -> int:
         if akr5.returncode != 0:
             check("GREEN 5b: kernel apply for smoke test", False, akr5.stdout + akr5.stderr)
         else:
+            # Same s43 wiring gap as GREEN 4c -- stand a real boundary_service against dest5's
+            # world BEFORE the round-trip. This same server stays up (see boundary_procs) through
+            # RED 6/6b/7/9/10/11 and GREEN 8/12/13 below -- GREEN 8b's own round-trip against the
+            # SAME dest5 deployment.json (post-upgrade) reuses it rather than standing a second
+            # server against the identical schema/kern/role.
+            boundary5 = bs_fixtures.serve_existing_world(dest5 / "deployment.json", tmproot)
+            boundary_procs.append(boundary5)
             smoke5 = _sh([str(dest5 / "autoharn"), "led", "decision",
                           "pinning-fixture smoke test (conversion path)"], cwd=dest5)
             recent5 = _sh([str(dest5 / "autoharn"), "led", "--recent", "1"], cwd=dest5)
@@ -447,6 +586,8 @@ def main() -> int:
               smoke8.stdout + smoke8.stderr)
 
     finally:
+        for p in boundary_procs:
+            bs_fixtures.stop_server(p)
         for schema, kern, role in schemas_to_drop:
             _drop_schema_role(schema, kern, role)
         _sh(["git", "worktree", "remove", "--force", str(worktree)], cwd=REPO)

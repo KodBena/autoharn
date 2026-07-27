@@ -1,53 +1,53 @@
-== scaffolding classic world s35fxprobe + manual s15..s33+s35 apply (s34 excluded) ==
-  scaffold OK (schema=s35fxprobe).
+== scaffolding classic world s35fxprobe + manual s15..s33+s35 apply (s34 excluded) + served boundary ==
+  scaffold + serve OK (schema=s35fxprobe).
 
 === a-open-claim-close-roundtrip ===
   [ok] close_exit=0 state='closed'
 
 === b-duplicate-open-refused ===
-  [ok] exit=3 exact_text_match=True
+  [ok] exit=1 exact_text_match=True
 
 === c-event-on-unopened-slug ===
-  [ok] exit=3 excerpt='ater event on an item must reference an item that has been opened (invariant 2, item identity).\nCONTEXT:  PL/pgSQL function validate_work_item() line 9 at RAISE'
+  [ok] exit=1 excerpt="icy: work item slug 'never-opened-c' has no opening act — every later event on an item must reference an item that has been opened (invariant 2, item identity)."
 
 === d-dangling-parent-refused ===
-  [ok] exit=3 exact_text_match=True
+  [ok] exit=1 exact_text_match=True
 
 === e-parent-cycle-function-direct ===
   [ok] negative='f' positive='t'
 
 === f-depends-self-edge-refused ===
-  [ok] exit=3 exact_text_match=True
+  [ok] exit=1 exact_text_match=True
 
 === g-depends-dangling-antecedent ===
-  [ok] exit=3 exact_text_match=True
+  [ok] exit=1 exact_text_match=True
 
 === h-depends-default-informs ===
   [ok] exit=0 edge_type='informs'
 
 === i-depends-cycle-refused ===
-  [ok] exit=3 excerpt='point (s30). informs edges are not subject to this refusal.\nCONTEXT:  PL/pgSQL function validate_work_item_depends(ledger) line 13 at RAISE\nPL/pgSQL function validate_work_item() line 12 at assignment'
+  [ok] exit=1 excerpt="y) has a blocks-close dependency on 'i-b', so this edge would create a cycle; the obligation AND-tree must be a DAG or conjunction has no fixpoint (s30). informs edges are not subject to this refusal."
 
 === j-epoch-gated-review-missing ===
-  [ok] exit=1 excerpt='never silent (s29 Element B, sec-10 epoch amendment). Retry with --review-witness <ref> or --review-deferred.\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 7 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+  [ok] disposition='refused' excerpt="arries no review disposition — every close act past this world's migration epoch (id 0, see s35fxprobe.migration_epoch) must be witnessed or deferred, never silent (s29 Element B, sec-10 epoch amendment). Retry with --review-witness <ref> or --review-deferred."
 
 === k-strict-deferred-refused ===
-  [ok] exit=1 exact_text_match=True
+  [ok] disposition='refused' exact_text_match=True
 
 === l-strict-witnessed-blockers ===
-  [ok] exit=3 excerpt='se is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 17 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+  [ok] exit=1 excerpt="l-root' refused — its obligation tree is unresolved: l-blocker (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict)."
 
 === m-strict-witnessed-resolved-ok ===
   [ok] exit=0 state='closed'
 
 === n-retracted-open-still-refused ===
-  [ok] exit=3 exact_text_match=True
+  [ok] exit=1 exact_text_match=True
 
 === o-composite-zero-children-open ===
   [ok] effective_state='open'
 
 === p-composite-strict-by-type ===
-  [ok] exit=3 names_child=True no_strict_flag_passed=True excerpt='se is a pure query over the derived conjunction, no stored verdict).\nCONTEXT:  PL/pgSQL function validate_work_item_close(ledger,boolean,text) line 17 at RAISE\nPL/pgSQL function validate_work_item() line 16 at assignment'
+  [ok] exit=1 names_child=True no_strict_flag_passed=True excerpt=" 'p-root' refused — its obligation tree is unresolved: p-child (item is not yet closed). Resolve every named leaf, then retry (s29 Element C: strict close is a pure query over the derived conjunction, no stored verdict)."
 
 === q-ordering-hazard-shape-comparison ===
   [ok] shape-A refused-NULL=True shape-B(correctly-named)-refused-NULL=True shape-B(after rename)-defect-landed-val=999-with-no-error=True

@@ -1,7 +1,7 @@
 {
   "Solver": "clingo version 5.8.0",
   "Input": [
-    "/home/bork/w/vdc/1/autoharn/engine/lp/ledger_tnow.lp","/home/bork/w/vdc/1/autoharn/engine/lp/ledger_support.lp","/home/bork/w/vdc/1/autoharn/seen-red/defeat-pipeline/unstratified_negative_control.lp","/home/bork/w/vdc/1/autoharn/seen-red/defeat-pipeline/_w10_scratch_edb.lp"
+    "/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a3980e410145efa35/engine/lp/ledger_tnow.lp","/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a3980e410145efa35/engine/lp/ledger_support.lp","/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a3980e410145efa35/seen-red/defeat-pipeline/unstratified_negative_control.lp","/home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-a3980e410145efa35/seen-red/defeat-pipeline/_w10_scratch_edb.lp"
   ],
   "Call": [
     {
