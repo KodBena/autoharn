@@ -1,6 +1,12 @@
-# Composite work items — derived discharge (AWAITING RATIFICATION)
+# Composite work items — derived discharge
 
-Date: 2026-07-15, late evening. Author: the orchestrating Fable session. Status: DRAFT
+Date: 2026-07-15, late evening. Author: the orchestrating Fable session. Status: RATIFIED
+AND SHIPPED as `kernel/lineage/s33-composite-discharge.sql` (+ its `.detect.sql` sibling),
+in the birth chain ever since — every world born at or after s33, including autoharn3 and
+experience4 (s15..s68), carries it. (Header corrected 2026-07-28, autoharn3 ledger: the
+"DRAFT awaiting the maintainer's yes/no" line below stood stale for 13 days after the
+ratification and build it awaited; the maintainer's own "is it done?" question was the
+detector. Historical prose below kept verbatim.) Originally: DRAFT
 awaiting the maintainer's yes/no. Motivating evidence: the maintainer's own commission to
 the experience-world deployment asked for a parent task "automatically discharged when the
 precedence constraint on tasks 1 and 2 have been fulfilled ... and when 1 and 2 have been
