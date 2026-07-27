@@ -2797,7 +2797,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W35 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W36m live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 
