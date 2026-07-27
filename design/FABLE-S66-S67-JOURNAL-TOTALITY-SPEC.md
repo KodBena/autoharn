@@ -4,7 +4,13 @@
 (row 1519's fix: "it's yes of course"; row 1514's items: "The ratified-but-not-yet-built
 all should go in"). The A:B:C loop runs on the build, not the proposal text. Removal
 condition: superseded by the build's merge record. -->
-<!-- design-currency: status=ratified depends-on=FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md -->
+<!-- design-currency: status=discharged discharged-by=5912dd5 depends-on=FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md -->
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+`status=ratified` stood stale — both deltas shipped and merged as `kernel/lineage/
+s66-forged-stamp-journal-totality.sql` and `s67-refusal-digest-bound.sql` (merge commit
+`5912dd5`, "forged-complete stamp now journals a typed refusal... digest bounded at 1
+MiB"). Historical prose below kept verbatim.)
 
 Two kernel lineage deltas, both members of the s49 totality family: the refusal journal
 must record refusals under hostile conditions, because the refusal path is exactly where

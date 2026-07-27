@@ -17,7 +17,14 @@ append-only Postgres decision record, written and read via the `./autoharn led` 
   ratified; on ratification the block in §2 below is appended verbatim to
   `law/adr/0012-compositional-and-structural-hygiene.md`'s Amendments section
   (ADR-0005 Rule 8 dated-append form, matching the house `Amendment — <date>:
-  <title>` convention).
+  <title>` convention). (Header corrected 2026-07-28, autoharn3 design-drift-triage
+  sweep, ledger row 90: the "DRAFT — awaiting maintainer ratification" line above
+  stood stale — `law/adr/0012-compositional-and-structural-hygiene.md`'s own
+  "Amendment — 2026-07-22: P10 — data is not code" section cites this file by name
+  and records that the maintainer ratified it 2026-07-22, choosing to promote the
+  rule to a standalone tenth principle (**P10**) rather than filing it under P1 as
+  this draft's own text below defaults to asking about. Historical prose below kept
+  verbatim.)
 - **Commission (verbatim, maintainer observation b):** "file size violation; factor
   out the configuration content from code #governance / 1. (ADR-0012 extension:
   data is not code; factor out the prompts)"

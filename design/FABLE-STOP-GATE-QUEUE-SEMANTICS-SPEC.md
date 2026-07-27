@@ -3,7 +3,12 @@
 Date: 2026-07-15, evening. Author: the orchestrating Fable session (restored; the prior
 turn's lower-urgency classification was written under a demoted model and is retracted on
 the ledger — this spec is the release-blocker response). Status: DRAFT awaiting the
-maintainer's yes/no. Motivating evidence: witnessed live in the experience world today —
+maintainer's yes/no. (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep,
+ledger row 90: "DRAFT awaiting the maintainer's yes/no" stood stale — built and live:
+`hooks/stop_clean_exit.py` cites this spec by name and implements exactly the described
+bequeath mechanism (`stopping:`/`remains:` decision-row bequest, `stamp_session`
+matching, informational-only unclaimed-item counts). Historical prose below kept
+verbatim.) Motivating evidence: witnessed live in the experience world today —
 `hooks/stop_clean_exit.py` blocked a stop over `state='open'` work items that were (a) the
 planned queue point 1 of the deployment preamble itself mandates, and (b) mid-implementation
 by a live background workflow; the session, misled further by the gate's own overstated

@@ -875,7 +875,14 @@ head-body table against the tree before authoring a line of SQL.*
 
 ---
 
-## AMENDMENT 1 (2026-07-25) — `missive_regards` replaces the `regards` reuse; AWAITING MAINTAINER RATIFICATION (yes/no)
+## AMENDMENT 1 (2026-07-25) — `missive_regards` replaces the `regards` reuse; RATIFIED, shipped as s58
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: this
+amendment's title stood "AWAITING MAINTAINER RATIFICATION (yes/no)" — ratified and built:
+`kernel/lineage/s58-missive-substrate.sql`'s own header reads "AS AMENDED by AMENDMENT 1
+(2026-07-25, maintainer-ratified 'yes to the column')" and mints `missive_regards`/
+`validate_missive_regards` exactly as this amendment describes. Historical prose below
+kept verbatim.)
 
 **Witnessed defect in this spec's own text (builder stop-and-name, build 4881a8f on
 branch worktree-agent-a3366689a6462cdce).** §4/§5's `missive_disposed` items route the
@@ -930,7 +937,13 @@ all.
 
 ---
 
-## AMENDMENT 2 (2026-07-25) — the outbound feed is transport, not truth; AWAITING MAINTAINER RATIFICATION (yes/no)
+## AMENDMENT 2 (2026-07-25) — the outbound feed is transport, not truth; RATIFIED, shipped as s59
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: this
+amendment's title stood "AWAITING MAINTAINER RATIFICATION (yes/no)" — ratified and built:
+`kernel/lineage/s59-missive-views.sql`'s own header reads "(2026-07-25, maintainer-ratified
+'yes')" and re-issues `missive_outbound` as APPEND-COMPLETE per this amendment's design.
+Historical prose below kept verbatim.)
 
 **Witnessed defect (strengthened-tier review of the family, serving axis).** §3's claim
 that `missive_outbound` carries "`/rows/current`'s own guarantee class" bakes a

@@ -8,7 +8,12 @@ settlement reopens). Removal condition: superseded by the build's completion rec
 - **Status:** RATIFIED basis (rows 1379/1380: "incorporate it with the WORK-GATING
   kaboodle. Let's implement this"); this spec is the assembly, not a new proposal. The
   §5 attention points are the only open choices, flagged for the maintainer's leisure,
-  none blocking the v1 build.
+  none blocking the v1 build. (Header corrected 2026-07-28, autoharn3 design-drift-triage
+  sweep, ledger row 90: this status line reads as pre-build though the title above already
+  says "built" — v1 (`kernel/lineage/s60-entitlement-enforcement.sql`), v1.1
+  (`s61-signature-symmetry-and-key-binding.sql`), and the delegation-lifecycle amendment
+  (`s62-delegation-lifecycle-gating.sql`) are all shipped, merged (`9f91f88`), and even
+  post-merge-fixed (`781e03d`). Historical prose below kept verbatim.)
 - **The frame (ratified):** design/CONSULT-WORK-GATING-SHAPE-2026-07-26.md §§B–C in
   full — that document IS this spec's elaborated content; this file adds only the delta
   boundaries, the requirements fold-in, the witness plan, and the closure statement.

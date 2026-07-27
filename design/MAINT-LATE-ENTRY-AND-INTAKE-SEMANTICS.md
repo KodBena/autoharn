@@ -92,3 +92,12 @@ batches keep reading as bare BATCHED_DECLARED and improvised prose disclosures l
 row 1 remain uncredited by the audit. Recommendation: YES — every part is additive, the
 mandate's own late-entry concept is the missing piece, and the first three specimens are
 already banked.
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: this
+question read as still-open — all three proposals are ratified and shipped:
+`kernel/lineage/s24-declared-event-time.sql` exists; `LATE_DECLARED` is implemented in
+`engine/contemp_audit.py`/`engine/contemp_edb.py`/`engine/lp/contemporaneity.lp` and wired
+into `bootstrap/templates/audit.tmpl`, with `seen-red/contemporaneity-audit/
+late-declared-green.txt` as the witness; the preamble teaching line and intake-shape
+annotation are cited as shipped by `design/ORCH-CONTEMPORANEITY-PART3-SPEC.md`'s own
+landed-status section. Historical prose above kept verbatim.)

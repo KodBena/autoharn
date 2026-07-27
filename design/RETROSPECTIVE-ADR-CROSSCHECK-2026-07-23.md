@@ -317,3 +317,13 @@ surfaces already declared, and no wording improvement substitutes for that. It i
 rather than as a one-liner because it is infrastructure to commission, not law to ratify.
 
 *End of cross-check. Not committed; the orchestrator installs after the maintainer reads.*
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "Not
+committed" stood stale for two of the three §6 closing synthesis one-liners — item 1
+("Meaning-preservation witness") shipped as `law/adr/0020-meaning-preservation-witness.md`
+and item 2 (the external recurrence trigger) landed as an ADR-0014 amendment, both in
+commit `2ecea82` ("law: ADR-0020 meaning-preservation witness + ADR-0014 external
+recurrence trigger, maintainer-ratified 2026-07-23"), with a follow-up A:B:C pass in
+`d23dfb0`. Item 3 ("the commission is the controlled artifact") remains uninstalled — no
+match for "commission's verbatim text"/"controlled artifact" in `law/adr/`. Historical
+prose above kept verbatim.)

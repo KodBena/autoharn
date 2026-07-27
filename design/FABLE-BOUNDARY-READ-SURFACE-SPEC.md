@@ -8,6 +8,13 @@
 boundary service's ratified closed route enumeration ("exactly eleven routes and
 nothing else"), which is precisely the kind of change the closure discipline exists
 to make loud. The §5 CLI-rebase build is HELD until this is ratified or declined.**
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+"AWAITING MAINTAINER RATIFICATION" / "HELD" stood stale — ratified and built:
+`serving/boundary_service.py` implements the three proposed routes (`GET
+/d/{deployment}/views/{view}`, `GET /d/{deployment}/rows/asof/{ts}`, `GET
+/d/{deployment}/meta`), its own in-file comments describe the route table's growth
+from eleven to fourteen as accomplished fact, and the §5 CLI rebase shipped and
+merged (rows 1631/1652). Historical prose below kept verbatim.)
 
 ## The witnessed gap (why §5 cannot build as written)
 

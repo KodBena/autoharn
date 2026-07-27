@@ -25,6 +25,15 @@ roles and authority).
 
 ## 1. The ceremony (one new screen, between Birth and Boundary; skippable, skip recorded)
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: this
+section title's placement is stale — the shipped `SECTIONS` order in
+`tools/setup_tui/steps.py` runs Birth → Boundary → Principals-authority → Signed-genesis,
+i.e. signed-genesis now sits AFTER boundary, not between Birth and Boundary; that file's
+own comment cites `design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md` Part C (ledger row
+1158/1159) for the reordering. The ceremony mechanics themselves (keygen/export/sign/
+verify-commission gate) are unaffected and live in `tools/setup_tui/signed_genesis.py`/
+`steps_signed_genesis.py`. Historical prose below kept verbatim.)
+
 **Screen: "Signed genesis" — ON BY DEFAULT, optional by one recorded keypress.**
 The maintainer's refinement (same-day, banked with the commission): optional,
 and "if benign and 'no-op' for non-rigorous use, it should be turned on by

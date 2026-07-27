@@ -6,7 +6,12 @@
 AWAITING MAINTAINER RATIFICATION — the edits touch `kernel/lineage/*.detect.sql`
 siblings (diagnostic surface, not semantics: no shipped `sNN-*.sql` delta file
 changes, no trigger/function/table/view definition changes anywhere). Defects
-witnessed at the omega-lab birth, ledger row 1657.**
+witnessed at the omega-lab birth, ledger row 1657.** (Header corrected 2026-07-28,
+autoharn3 design-drift-triage sweep, ledger row 90: "AWAITING MAINTAINER RATIFICATION"
+stood stale — ratified (ledger row 1673 item 3) and merged (`36da921`); confirmed
+`kernel/lineage/s20-obligation-grants-and-view-refresh.detect.sql` implements the
+described fix and a follow-on commit (`8b2bdc0`) hardened it further. Historical prose
+below kept verbatim.)
 
 ## The two witnessed defects
 

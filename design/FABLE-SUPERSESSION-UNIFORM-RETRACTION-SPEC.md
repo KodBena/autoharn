@@ -1,7 +1,14 @@
 # Supersession = uniform retraction — the closure spec (AWAITING RATIFICATION)
 
 Date: 2026-07-15, night. Author: the orchestrating Fable session. Status: DRAFT awaiting
-the maintainer's yes/no on THIS document; the two load-bearing forks inside it were
+the maintainer's yes/no on THIS document. (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: "DRAFT awaiting the maintainer's yes/no" stood
+stale — shipped as `kernel/lineage/s31-supersession-uniform-retraction.sql` and its
+`.detect.sql` sibling, implementing the uniform-retraction design (including the
+`orphaned_by_retraction` member added to `work_item_violations`); `engine/lp/
+work_items.lp`/`work_review.lp` and `gates/ledger_reader_allowlist.py` cite s31 directly,
+with `seen-red/s31-supersession-uniform-retraction/` as the witness fixture. Historical
+prose kept verbatim.) the two load-bearing forks inside it were
 already put to the maintainer as prepared questions and answered (ledgered the same
 evening): uniform retraction over refuse-on-work-kinds, and slug-burned over
 slug-re-openable. Lineage of the shape: the maintainer challenged a readers×kinds matrix

@@ -1,5 +1,10 @@
 # FABLE-SETUP-TUI-DESTINATION-STATE-SPEC — one typed answer to "what is this directory to autoharn?"
 
+<!-- doc-attest-exempt: design-drift-triage mechanical edit (autoharn3 ledger row 90,
+2026-07-28) -- one dated correction note added to the Status line (build already shipped,
+commit 93050a9); no prose rewrite. Removal condition: strike this marker and run the real
+A:B:C loop next time this file is touched for content, not just status repair. -->
+
 autoharn's setup TUI (the terminal wizard under `tools/setup_tui/` that walks an
 operator through a sequence of screens to create — "birth" — a new autoharn
 deployment into a destination directory) currently answers "may I use this
@@ -10,7 +15,11 @@ one on-disk sentinel.
 - **Status:** Proposed (Fable-authored; Track 2.3 of
   [FABLE-SETUP-TUI-FIELD-STRATEGY.md](FABLE-SETUP-TUI-FIELD-STRATEGY.md); build
   gated on maintainer reading of that
-  strategy — the maintainer's commission item c is its verbatim seed).
+  strategy — the maintainer's commission item c is its verbatim seed). (Header
+  corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+  "Proposed... build gated" stood stale — built and merged, commit `93050a9`:
+  `tools/setup_tui/destination.py` implements `DestKind`/`classify_destination`
+  matching §1's design essentially verbatim. Historical prose kept verbatim.)
 - **Date:** 2026-07-21
 - **Commission (verbatim, maintainer observation c):** "TUI fails if dest-dir exists
   (add a sentinel to target directory and create a function that tests whether it is

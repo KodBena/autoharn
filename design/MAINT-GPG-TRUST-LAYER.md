@@ -211,3 +211,14 @@ configuration.
 
 Status lines below this point are maintained by the implementing commission, dated,
 per ADR-0005 Rule 8.
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: no
+build-status append was ever added here despite the build landing — all three rungs are
+shipped: `libexec/autoharn/attest-tags` and `libexec/autoharn/verify-chain` are wired
+into the umbrella CLI (commit `3d2043e`); `bootstrap/templates/verify-commission.tmpl`
+exists; `kernel/lineage/s26-row-hash-chain.sql` (plus its accommodate sibling) is
+shipped; `seen-red/attest-tags/`, `seen-red/verify-commission/`, and
+`seen-red/s26-row-hash-chain/` are the witness fixtures. `law/keys/` itself is honestly
+still AWAITING-KEY per its own README — that one fact in this document's world is not
+stale, only the "working name"/unbuilt framing of the verbs above is. Historical prose
+above kept verbatim.)

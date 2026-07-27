@@ -279,6 +279,15 @@ own refusal: `autoharn1`, the only deployment record on this host, is pre-`s32`.
 above are witnessed with real output and a named exit code; the success-path JSON shape stated in
 "What it exports" above is documented from the source, not from an observed run.
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "`autoharn1`,
+the only deployment record on this host" is stale — `autoharn1`/`autoharn2` are now dust-but-live
+predecessors and the current deployment is `autoharn3` (the repo's own most recent commit,
+"rebirth autoharn3"; `deployment.json` names it), whose birth-chain scaffold includes s32 (and
+runs to s68) by construction. This makes the success path very likely witnessable now, but this
+sweep did not itself run the live command against autoharn3 to confirm — flagged UNCERTAIN
+whether it has actually been exercised since, rather than asserted. Historical prose above
+kept verbatim.)
+
 ## What this note does NOT claim
 
 - **Not that every LLM-dispatched batch of work is now provably safe to parallelize.** The

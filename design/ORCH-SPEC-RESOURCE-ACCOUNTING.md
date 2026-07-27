@@ -78,7 +78,16 @@ modality:
 | `forbidden: <task-shape>` | MUST-NOT for that shape — **new in this spec** |
 
 `forbidden` is one additive vocabulary value, UNBUILT at this spec's authoring — §8's
-stage A is where it becomes real. That stage will add it to the TIER vocabulary the
+stage A is where it becomes real. (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90, matching the §4.1 dated-correction idiom below:
+"UNBUILT at this spec's authoring" is now stale for the write-time grammar — Stage A
+shipped same-day per the maintainer's own record, and `bootstrap/templates/led.tmpl`'s
+`tier_prefixes` already carries `("blessed:", "mandated:", "forbidden:")` live (merge
+commits `e3ad92b`/`2941e05`, "resource-accounting Stage A: forbidden TIER"). Historical
+prose kept verbatim; the remainder of §8's staging — write-time policing beyond the
+audit-derived check (§5), and the §2 ACCOUNTING column pending the s27 kernel step
+(see the s27-citation correction near §8 below) — is unaffected.) That stage will add it
+to the TIER vocabulary the
 intake validator in `bootstrap/templates/led.tmpl` teaches (the write-time grammar
 refusal shipped 2026-07-12 currently accepts only the three existing tiers), will make
 `bootstrap/templates/pickup.tmpl` sort it first (a prohibition outranks a mandate for a
@@ -247,7 +256,14 @@ spec's own stage 3 lands:
   apparatus, registered in the mechanism registry like its read/bash siblings.
 - **s27 fold-in**: when the registry spec's stage 3 lands the `resource` kernel kind,
   the ACCOUNTING column (§2) and the tier vocabulary including `forbidden` ride that
-  delta; this spec adds no kernel step of its own.
+  delta; this spec adds no kernel step of its own. (Header corrected 2026-07-28,
+  autoharn3 design-drift-triage sweep, ledger row 90: "s27" is no longer an available
+  future step — `kernel/lineage/s27-chain-high-water.sql` shipped 2026-07-15 for an
+  unrelated feature (tail-deletion witness); a future `resource` kernel kind would need a
+  later step number, current head being s68. The same stale citation appears in
+  [ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §2/§8 and
+  [ORCH-SPEC-TASK-TAXONOMY.md](ORCH-SPEC-TASK-TAXONOMY.md) §7, corrected there too.
+  Historical prose above kept verbatim.)
 
 Each stage carries the standing witness duties: claims WITNESSED with observed output,
 REFUSED-AS-EXPECTED, or UNEXERCISED with the blocker named; fixtures registered in the

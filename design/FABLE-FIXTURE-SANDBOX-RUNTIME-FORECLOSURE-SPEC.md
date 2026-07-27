@@ -10,7 +10,13 @@ declined. -->
   row-1316 recommendation, confirmed same day ("make a decision on your own") — no separate
   yes/no owed; the orchestrator queuing one anyway was excess ceremony, corrected on the
   record (row 1325). Build proceeds; scheduled serially behind the deploy-feature-manifest
-  merge because both sweep `seen-red/*/run_fixtures.py`.
+  merge because both sweep `seen-red/*/run_fixtures.py`. (Header corrected 2026-07-28,
+  autoharn3 design-drift-triage sweep, ledger row 90: "build proceeds" read as in-flight —
+  fully built, merged, and post-merge-hardened: `filing/fixture_sandbox_preamble.sh` and
+  `filing/fixture_sandbox.py` implement the marker check (`FIXTURE_SANDBOX_REFUSED_EXIT =
+  21`), `./autoharn`'s dispatcher calls the gate, every registered `run_fixtures.py` sets
+  `AUTOHARN_FIXTURE_SANDBOX=1` (commits `73874cc`/`c065485`/`dc91755`, hardening fix
+  `609ac09`). Historical prose below kept verbatim.)
 - **The class (rows 1237–1248):** a fixture invokes this repo's own root verbs, or mutates
   `PICKUP_DEPLOYMENT`, and test garbage lands in the real ledger.
 - **Why static detection cannot close it (rows 1315/1316, witnessed five times):** a

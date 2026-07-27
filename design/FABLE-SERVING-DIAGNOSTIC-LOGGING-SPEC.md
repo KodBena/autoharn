@@ -5,6 +5,15 @@ the A:B:C loop runs on the build, not the proposal text. Removal condition: supe
 the build's merge record, or rejection. -->
 <!-- design-currency: status=discharged discharged-by=f5d4934ace5cf4d980e50772c1a1360874579f60 -->
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: the
+doc-attest-exempt marker's free prose above ("awaiting maintainer ratification") stood
+stale against the machine-readable `design-currency` header immediately below it, which
+already correctly reads `status=discharged` — `git merge-base --is-ancestor
+f5d4934a... HEAD` confirms that sha is an ancestor, and its own commit message reads
+"Merge serving diagnostic logging (f450019 + fix round b45eef0): all four ratified
+layers; review CLEARS." The status line below is likewise already correct
+("RATIFIED IN FULL"). Historical prose kept verbatim.)
+
 - **Status:** RATIFIED IN FULL 2026-07-27 (maintainer, same day as proposal: "As per
   your recommendation, then" — all four layers; ledger row records it). The L3 floor was
   ratified separately and earlier (the maintainer, verbatim on ledger row 1496: *"I'll

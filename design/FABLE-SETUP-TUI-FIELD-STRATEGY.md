@@ -1,5 +1,11 @@
 # FABLE-SETUP-TUI-FIELD-STRATEGY — disposition of the 2026-07-19 field test
 
+<!-- doc-attest-exempt: design-drift-triage mechanical edit (autoharn3 ledger row 90,
+2026-07-28) -- one dated correction note added to the Status line (tracks are extensively
+executed and cited as governing basis in shipped code); no prose rewrite. Removal
+condition: strike this marker and run the real A:B:C loop next time this file is touched
+for content, not just status repair. -->
+
 This document is the repair strategy for autoharn's setup TUI (the terminal wizard,
 `tools/setup_tui/`, that walks an operator through creating a new autoharn
 deployment). The maintainer field-tested the wizard by creating a real deployment,
@@ -9,7 +15,16 @@ the fixes: why does each defect exist, and what sequence of work closes them all
 
 - **Status:** Proposed (Fable-authored strategy, awaiting maintainer reading; the two
   constitutional items inside it additionally require maintainer ratification per the
-  standing orchestration contract).
+  standing orchestration contract). (Header corrected 2026-07-28, autoharn3
+  design-drift-triage sweep, ledger row 90: "Proposed... awaiting maintainer reading"
+  stood stale — the tracks this strategy commissions are extensively executed and cited
+  as governing basis in shipped code (`gates/max_lines.py`, `tools/setup_tui/
+  feature_facts.py`, `durable_decisions.py`, `principals_authority.py` all cite specific
+  Track items by number). Two Track 2 sub-items (typed UI vocabulary, navigation) were
+  built and then superseded by the 2026-07-22 wholesale rebuild
+  (FABLE-SETUP-TUI-REBUILD-SPEC.md); their own successor specs are already moved to
+  `vestigial_documentation/design/` per VESTIGIAL-INDEX.md. Historical prose below kept
+  verbatim.)
 - **Date:** 2026-07-21
 - **Inputs:** the maintainer's eight verbatim field observations (a–h, quoted in full
   below), the downstream [world](../GLOSSARY.md#world)'s `AUTOHARN_BACKFLOW.md` (8

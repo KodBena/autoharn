@@ -9,7 +9,14 @@ text. Removal condition: superseded by the build's completion record. -->
   stated contingent on the nested-agent forward-compatibility check, which passed
   (ledger row 1441) before the word was given. Nothing is built yet; §7's choices remain
   open at the maintainer's leisure, and the agent-definition surface map (ledger row
-  1443) may refine §3 item 3's carrier before the build spec is cut.
+  1443) may refine §3 item 3's carrier before the build spec is cut. (Header corrected
+  2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "Nothing is built yet"
+  is now only PARTIALLY true — §3 item 1 (the kernel delta) shipped as
+  `kernel/lineage/s64-principal-stamps-delegation-conditions.sql`, entered the birth
+  chain, and was even post-merge-fixed (`781e03d`, "drop wrong active-guard in
+  delegation classification"); §3 items 2-3 (the PreToolUse hook and the dispatch-
+  mechanics stamp injection) remain unbuilt as this line originally described. Historical
+  prose kept verbatim.)
 - **Basis (ledger rows, read together):** 1386/1387 (the maintainer's monotone sub-agent
   authority requirement and the harness tag-propagation assumption it rests on); 1414/1415
   (the wholesale-delegation specimen and its three defect classes, enumeration OPEN);
