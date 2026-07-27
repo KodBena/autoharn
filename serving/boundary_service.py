@@ -352,6 +352,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import copy
 import datetime
 import hashlib
 import json
@@ -367,6 +368,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
+import uvicorn.config
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -2392,6 +2394,37 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
     return app
 
 
+# The one free win the logging-direction survey identified (design/
+# LOGGING-DIRECTION-SURVEY-2026-07-27.md §3.4 item 4, ledger row 1486): uvicorn's own default
+# logging runs unmodified today (no `log_config`/`log_level` was ever passed to `uvicorn.Config`
+# below) and lands in <world>/service.log via ensure_running.py's stdout/stderr redirect --
+# WITNESSED there with zero timestamps, which made a real refusal ("wearing 200 OK") to a
+# specific ledger row's 14:11 timestamp un-attributable without one. This constant's ONLY
+# job is adding an ISO-8601 timestamp ahead of uvicorn's own default fields; nothing else about
+# uvicorn's default format, level, or destination changes.
+#
+# MECHANISM (installed uvicorn 0.51's own documented mechanism, read from
+# uvicorn/config.py's `Config.configure_logging`, not a web recollection): `Config(log_config=...)`
+# is fed straight to `logging.config.dictConfig` when it is a dict (config.py ~line 391). The
+# dict shape (`version`/`formatters`/`handlers`/`loggers`) is uvicorn's own `uvicorn.config.
+# LOGGING_CONFIG` default, deep-copied here (never mutated in place -- that module-level dict is
+# process-global and other code may still read it) so this restatement is a MINIMAL, CITED copy,
+# not a re-derivation: same `uvicorn.logging.DefaultFormatter`/`AccessFormatter` classes, same
+# message shapes (`%(levelprefix)s %(message)s` / `%(levelprefix)s %(client_addr)s - "%(request_
+# line)s" %(status_code)s`), same handlers (stderr for `default`, stdout for `access`), same
+# logger levels (`INFO`) and `propagate` flags -- only `%(asctime)s ` is prepended to each
+# formatter's `fmt`, with `datefmt="%Y-%m-%dT%H:%M:%S%z"` (ISO-8601 basic format, local time with
+# UTC offset, e.g. `2026-07-27T15:29:48+0200`). If a future uvicorn upgrade changes its own
+# `LOGGING_CONFIG` defaults, this restatement of the OTHER keys (levels/handlers/classes) could
+# drift out of sync with the new installed defaults -- disclosed here rather than silently
+# assumed current; re-diff against `uvicorn.config.LOGGING_CONFIG` on any uvicorn version bump.
+_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP: dict[str, Any] = copy.deepcopy(uvicorn.config.LOGGING_CONFIG)
+for _formatter in _UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP["formatters"].values():
+    _formatter["fmt"] = "%(asctime)s " + _formatter["fmt"]
+    _formatter["datefmt"] = "%Y-%m-%dT%H:%M:%S%z"
+del _formatter
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="python3 -m serving.boundary_service",
@@ -2589,9 +2622,12 @@ def main(argv: list[str] | None = None) -> int:
         # Hand the ALREADY-BOUND socket to uvicorn (the same `sockets=` pathway uvicorn's own
         # multi-worker/gunicorn integration uses) -- asyncio's own `create_server` calls
         # `sock.listen()` on it; uvicorn never re-binds host/port when a socket is supplied.
-        uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port)).run(sockets=[sock])
+        uvicorn.Server(uvicorn.Config(
+            app, host=args.host, port=args.port,
+            log_config=_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP)).run(sockets=[sock])
         return 0
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port,
+                log_config=_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP)
     return 0
 
 
