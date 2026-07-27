@@ -325,6 +325,7 @@ REGISTRY: dict[str, str] = {
     # test_cosign_live.py in KodBena/autoharn-panel) when the PoC moved out of panel/ into its
     # own repo, adopted back as a git submodule at tools/autoharn-panel — both-polarity
     # discipline continues to hold there, just no longer under this repo's seen-red/ registry.
+    "bounds-vocabulary-drift":         "seen-red/bounds-vocabulary-drift/run_fixtures.py",  # row 1514 item 2
 }
 
 def _red_evidence_name(d: str) -> str | None:

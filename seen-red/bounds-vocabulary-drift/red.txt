@@ -1,0 +1,2 @@
+bounds_kernel_drift: REFUSED (RED, banked demonstration)
+  - DRIFT: serving/bounds.py IDENTITY_HEADER_MAX_BYTES = 999 but /home/bork/w/vdc/1/autoharn/.claude/worktrees/agent-adaa79fd467b9a0a7/kernel/lineage/s65-refusal-attempted-kind.sql's own refusal_attempted_kind_length CHECK bounds it at 256.

@@ -81,7 +81,36 @@ as before in every other respect. The digest is a grep handle, never a join key 
 row-1498 witness: joins anchor on `refusal_id`); losing it beyond the bound costs an
 attacker-sized payload its vanity hash, nothing else. Below the bound, byte-identical.
 
-## 3. Class routing
+### §2 AMENDMENT 2026-07-27 — NULL may not carry the meaning (maintainer ruling at merge-hold)
+
+The maintainer, reviewing the built delta's one-way CHECK widening, ruled (near-verbatim):
+NULL as an implicit sentinel/meaning-carrier is not condonable here regardless of the
+no-consumer argument — it is a drift hazard. This lands squarely on the house's own law
+(ADR-0000's unrepresentable-illegal-states; the standing no-bare-types rule, autoharn2
+row 1105): the reason for an absence must be a representable, typed value, never an
+inference from a comment. s67 is therefore re-shaped:
+
+1. **One new column**: `refusal_digest_disposition text`, kind-scoped to `write_refused`
+   by the house two-way kind-shape idiom, closed vocabulary CHECK
+   (`'computed'`, `'payload_over_bound'`) — extend ONLY by future delta.
+2. **The coupling CHECK, two-way, table-level**:
+   `(refusal_digest_disposition = 'computed') = (refusal_payload_digest IS NOT NULL)`.
+   This RESTORES a two-way table constraint (the original widening dissolves): a digest
+   NULL row must declare `payload_over_bound`; a populated digest must declare
+   `computed`. An accidental future re-issue that drops the digest computation without
+   also declaring the disposition is table-caught — the realistic bug the maintainer's
+   drift concern names. (A deliberately lying re-issue can still lie in lockstep; that
+   is function-trust for TRUTHFULNESS, which no self-reported column escapes and which
+   the old presence-only CHECK never provided either — stated, not hidden.)
+3. `compute_row_hash` re-issued for the new column under the s42 law;
+   `gates/hash_coverage_gate.py`, kind-shape manifest, and the fixture family extended
+   accordingly. `journal_write_refusal` writes the disposition in the same statement
+   that writes (or NULLs) the digest — one writer, one home.
+4. **Precedent columns flagged, not touched:** `refusal_attempted_kind` (s65) and the
+   s43/s49 attempted-actor NULLs carry the SAME implicit-sentinel shape this ruling
+   condemns. Whether the ruling extends to them (a disposition column each, or a
+   consolidated one) is a separate maintainer decision, named here so it is a visible
+   gap (ADR-0008 Rule 3), not silently absorbed.
 
 Both deltas are the s49 class — totalizing the refusal journaler, more refusals
 recorded, nothing newly permitted, no existing CHECK relaxed — and s49 shipped as

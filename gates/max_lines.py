@@ -492,7 +492,12 @@ BASELINE: dict[str, int] = {
     # FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md build) -- the identical shape as the two rows
     # immediately above, witnessed growth from adding this build's own seen-red fixture bank
     # entry, not unnoticed growth.
-    "gates/fixture_census.py":                     435,
+    # bumped 434 -> 435 (one new REGISTRY row: bounds-vocabulary-drift, ledger row 1514 item 2)
+    # -- landed independently on main, same 434 baseline; reconciled at this merge (both
+    # parents' rows are ADDITIVE and non-overlapping, so the merged registry carries both,
+    # taking the true count to 436 -- fixed below, the union-of-two-independent-+1s class
+    # this file's own history already names for a merge-union ratchet crossing).
+    "gates/fixture_census.py":                     436,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -591,7 +596,13 @@ BASELINE: dict[str, int] = {
     # BASELINE growing to carry the two entries this same commit bumps
     # (gates/kind_shape_manifest_gate.py 1592 -> 1605, gates/fixture_census.py 434 -> 435) --
     # the same self-referential fixpoint as every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          716,
+    # bumped 704 -> 707 (bounds-vocabulary single-home build, landed independently on main):
+    # this gate's own BASELINE growing to carry the one entry that commit bumps
+    # (gates/fixture_census.py, 434 -> 435).
+    # Reconciled at THIS merge (2026-07-27, s66/s67 x bounds-vocabulary-drift): both parents'
+    # bump comments kept verbatim above; the union is re-measured on the merged file below,
+    # the same merge-union ratchet-crossing class as every reconciliation above.
+    "gates/max_lines.py":                          727,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

@@ -422,6 +422,18 @@ import boundary_diagnostic_log  # noqa: E402
 # reused (it would reopen an unbounded, non-admission-gated psql call inside this otherwise fully
 # disciplined service).
 import migrate_core  # noqa: E402  (bootstrap/migrate_core.py)
+# serving/bounds.py -- the ONE home (ADR-0012 P1) for the service layer's bound vocabulary; every
+# constant below was formerly declared locally in this module (a pure relocation, ledger row 1514
+# item 2). gates/bounds_kernel_drift.py is the cross-layer mechanism keeping the two kernel-tied
+# names (IDENTITY_HEADER_MAX_BYTES, MAX_WRITE_BODY_BYTES) from silently drifting off their kernel
+# CHECK twins.
+from bounds import (  # noqa: E402
+    IDENTITY_HEADER_MAX_BYTES,
+    MAX_AFTER_SLUG_BYTES,
+    MAX_ARTIFACT_BODY_BYTES,
+    MAX_PSQL_ARG_BYTES,
+    MAX_WRITE_BODY_BYTES,
+)
 from boundary_models import (  # noqa: E402
     AnonymousWriteRefused,
     ArtifactWriteIntFields,
@@ -644,24 +656,11 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 # id-typed parameters -- never let a malformed hash reach psql's own text-literal interpolation).
 _ARTIFACT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
-# A2.2's raw-body write-ingress bound (ADR-0012 P1: one home, not one literal per checkpoint),
-# 1 MiB -- generous for any ledger payload. Enforced at `_read_bounded_body` (checkpoint a,
-# raw body, BEFORE any JSON parsing); its rationale is BUFFERING -- never hold an unbounded
-# request body in memory. As of A8 this constant no longer denominates checkpoint (b): A2.2
-# justified 1 MiB as "safely under the argv wall (ARG_MAX = 2 MiB total)", but the payload
-# crosses as ONE psql `-v` argument and the PER-ARGUMENT wall is MAX_ARG_STRLEN (131 072
-# bytes) -- see MAX_PSQL_ARG_BYTES below. See this module's docstring, "SIZE AXIS".
-MAX_WRITE_BODY_BYTES = 1_048_576
-
-# A8 item 1: checkpoint (b)'s OWN bound, denominated on the transport's TRUE capacity -- the
-# re-serialized payload travels to postgres as ONE psql `-v payload=...` argument, and Linux
-# bounds each individual exec argument at MAX_ARG_STRLEN (32 pages = 131 072 bytes), NOT the
-# 2 MiB total-argv ARG_MAX the pre-A8 bound was sized against. 100 000 sits under
-# MAX_ARG_STRLEN with margin (a ledger payload is prose; this remains generous -- A2.2's own
-# "generous" claim, re-made honestly at the smaller number). The A1-ratified psql transport is
-# NOT reopened: the bound moves to the transport's true capacity, not the transport to the
-# bound. Enforced in `make_write_route`'s handler (checkpoint b), typed 413 naming this wall.
-MAX_PSQL_ARG_BYTES = 100_000
+# A2.2/A8's raw-body write-ingress bounds (checkpoint a: raw body, BEFORE any JSON parsing,
+# enforced at `_read_bounded_body`; checkpoint b: the re-serialized psql `-v` argument, enforced
+# in `make_write_route`'s handler, typed 413 naming this wall). ADR-0012 P1: one home, not one
+# literal per checkpoint -- both bounds, their full rationale, and MAX_WRITE_BODY_BYTES's kernel
+# twin now live in serving/bounds.py (see this module's docstring, "SIZE AXIS").
 
 # A3.1's two named time-axis bounds (ADR-0012 P1: one home each, not a literal per call site).
 # PSQL_CONNECT_TIMEOUT_S bounds the TCP handshake/auth round trip (passed as PGCONNECT_TIMEOUT
@@ -726,13 +725,9 @@ def compute_per_deployment_limit(n_deployments: int) -> int:
 # this project's own worlds) needs an explicit `after_id` hop to see the rest.
 HISTORY_DEFAULT_LIMIT = 1000
 
-# A11 item 1: `/work/items`' cursor domain bound -- the per-field reasoning A8's transport wall
-# already applied to a single argument's own margin, applied here to ONE field (never a general
-# string-length policy): a slug over 512 bytes names no real item any world this kernel
-# scaffolds could ever open (work_slug is operator-authored identifier text, not free prose), so
-# 512 is generous headroom, not a measured ceiling. Named ONCE (ADR-0012 P1) rather than an
-# inline literal at the one call site that checks it.
-MAX_AFTER_SLUG_BYTES = 512
+# A11 item 1: `/work/items`' cursor domain bound. ADR-0012 P1: named ONCE, not an inline literal
+# at the one call site that checks it -- now in serving/bounds.py (see its own docstring for the
+# full rationale).
 
 # ================================================================================================
 # IDENTITY CONDUIT (design/FABLE-DISPATCH-MECHANICS-SPEC.md, ledger rows 1463/1467/1468/1471) --
@@ -769,11 +764,9 @@ IDENTITY_HEADER_VENDOR_INVOCATION = "x-autoharn-vendor-invocation"  # optional; 
 # claims, when a dispatched agent's own dispatch-mint stamp is present.
 IDENTITY_HEADER_MINTED_PRINCIPAL = "x-autoharn-minted-principal"
 
-# The s65 house precedent (design/FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md, the 256-byte bound
-# ratified for a comparably-shaped bounded-and-typed field): every identity header value is
-# bounded to 256 bytes, refused with IdentityHeaderInvalid BEFORE any kernel call -- never
-# truncated, never passed through (spec §1, verbatim).
-IDENTITY_HEADER_MAX_BYTES = 256
+# Every identity header value is bounded (refused with IdentityHeaderInvalid BEFORE any kernel
+# call -- never truncated, never passed through, spec §1 verbatim); the bound itself, its s65
+# house-precedent rationale, and its kernel-side twin now live in serving/bounds.py.
 
 # A vendor HMAC is a sha256 hex digest (kernel/lineage/s17-stamp-mechanism.sql's own
 # `stamp_valid`: `encode(hmac(..., 'sha256'), 'hex')`) -- exactly 64 lowercase hex characters.
@@ -973,19 +966,9 @@ def _is_authority_bearing_write(method: str, path: str) -> bool:
 # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `POST /d/{deployment}/artifacts`' own raw-
 # body buffering bound. NOT a second, independent judgment of "is this artifact too large" (the
 # spec's own P1 instruction: "kernel hash-verification is the refusal authority; no second size
-# limit") -- kernel.artifact_write's own 1 MiB (1048576-byte) cap (kernel/lineage/
-# s51-artifact-store.sql) is the ONE authority on artifact size. This constant is DERIVED from
-# that cap, never chosen independently: base64 inflates raw bytes by a strict ceil(n/3)*4 factor,
-# so a payload whose `bytes` field decodes to <= the kernel's own cap can NEVER re-encode past
-# this bound, and any request THAT exceeds it necessarily carries decoded content the kernel
-# would refuse anyway (base64 never shrinks) -- so this bound can never disagree with the
-# kernel's own refusal, it only bounds how much this service buffers in memory before that
-# refusal is reached (the SAME buffering rationale MAX_WRITE_BODY_BYTES states for the four
-# generic write routes, sized here for the one route whose payload is not prose but base64
-# bytes). +4096 is generous JSON-envelope headroom (media_type/hash/actor keys, quoting) -- not
-# itself a second artifact-size judgment, just room for the request's own structure.
-_ARTIFACT_KERNEL_CAP_BYTES = 1_048_576  # kernel/lineage/s51-artifact-store.sql's own cap, mirrored
-MAX_ARTIFACT_BODY_BYTES = ((_ARTIFACT_KERNEL_CAP_BYTES + 2) // 3) * 4 + 4096
+# limit") -- kernel.artifact_write's own 1 MiB cap is the ONE authority on artifact size, and
+# this constant is DERIVED from it, never chosen independently (see serving/bounds.py's own
+# docstring for the base64-inflation derivation and the kernel citation).
 
 
 class PsqlInfraFailure(Exception):
