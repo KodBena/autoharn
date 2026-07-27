@@ -452,6 +452,19 @@ unknown event, or omitting one of an event's own required fields, raises `LogCon
 (ADR-0002 applied to the log's own contract) — BEFORE any level filter, so a validation defect
 can never hide behind an operator's chosen log level.
 
+**One shape per field name, everywhere** (fresh-context review finding (a), fixed post-f450019
+— a jq query grouping or filtering on a field name must see the SAME kind of value under that
+name on every event that carries it, or it silently splits what should be one coherent series).
+Two corollaries: `route` is ALWAYS the bare request path (never method-prefixed) on every event
+that carries it, including `infra_failure`/`unclassified_failure` (which used to log a combined
+`"METHOD /path"` string under `route` — now split into `route` + its own `method` field, the
+same shape `request_start`/`request_end` already used); `surface` is ALWAYS the short
+write-surface label (`ledger`/`review`/`registration`/`obligation`/`obligation_revoke`/
+`missive_dispose`/`artifact` — `write_verdict`'s own vocabulary, matching
+`boundary_service.WRITE_SURFACES`'s keys) — `kernel_call` used to overload `surface` with the
+full route path; it now carries that fact under `route` instead (identical to the value
+`request_start`/`request_end` already log for the same request).
+
 **The `refusal` event's disposition vocabulary is DERIVED, never a parallel list** — every
 `serving/boundary_models.py` response model carrying a `disposition: str = "..."` field default
 (`capability_absent`, `payload_too_large`, `server_saturated`, `deployment_saturated`,
@@ -494,16 +507,21 @@ environment failure — a full disk, a closed fd) must never become the reason t
 merely describing fails. See `boundary_diagnostic_log.py`'s own docstring for the full
 reasoning.
 
-**Witnessed** (scratch, both polarities — see the build report for the full enumeration and
-observed output): RED — an unknown event name, a missing required field, and an unrecognized
-`log_level` value each refuse loudly, before any level filter / before the socket binds. GREEN —
-a served accept-leg write and a served refuse-leg write each yield a `jq`-reconstructable
-`request_start → kernel_call → write_verdict → request_end` chain sharing one `request_id`; the
-refuse leg's `refusal_id` joins to the scratch world's own journaled `write_refused` row;
-contextvar propagation holds under 60 concurrent requests split across two routes on the REAL
-app (no cross-contamination of any request's own `route` field); the existing
-`seen-red/boundary-service/run_fixtures.py` bank stays green, including its own new `W34` legs
-for this build.
+**Witnessed** (scratch, both polarities, all committed as `seen-red/boundary-service/
+run_fixtures.py`'s `W34`/`W35` — see the build report for the full enumeration and observed
+output): RED — an unknown event name, a missing required field, and an unrecognized
+`log_level` value each refuse loudly, before any level filter / before the socket binds
+(`W34i`/`W34ii`). GREEN — a served accept-leg write and a served refuse-leg write each yield a
+`jq`-reconstructable `request_start → kernel_call → write_verdict → request_end` chain sharing
+one `request_id` (`W34iii`), with every field carrying its one coherent shape across that chain
+— `group_by(.route)` groups the request's own `request_start`/`kernel_call`/`write_verdict`/
+`request_end` together (never splitting `kernel_call` off under a mangled value), and
+`select(.surface=="ledger")` returns only the `write_verdict` record, never a `kernel_call` one
+(`W34iiiv`); the refuse leg's `refusal_id` joins to the scratch world's own journaled
+`write_refused` row (`W34iv`); contextvar propagation holds under 20 concurrent requests (10
+each to two distinct routes) on the REAL, already-running app — zero request_id whose own
+chain disagreed on `route` (`W35`; a smaller, committed N than an earlier ad hoc 60-request
+probe — the point is a re-runnable witness, not a specific number).
 
 **A hazard this build's own log-volume increase exposed, found and fixed in passing
 (CLAUDE.md's engineering-responsibility rule):** `seen-red/boundary-service/run_fixtures.py`'s
@@ -565,7 +583,7 @@ HARNESS_PGHOST=<toy-db-host> $HOME/w/vdc/venvs/generic/bin/python seen-red/bound
 ```
 
 Covers spec §8's W1–W7 plus A2's W9–W12 plus A3's W13–W14 plus A4's W15–W19 plus A5's W20–W23
-plus the diagnostic-logging spec's W34, all live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
+plus the diagnostic-logging spec's W34–W35, all live; **W8 (the panel-side deprecation-mark emission) is UNEXERCISED by construction** — that legacy path
 lives in the separate autoharn-panel repository, which this build never touches, per the spec's
 own §10.4 ("panel-side is a separate session's item citing this spec"). A2's additions: **W9**
 an oversized write body at both A2.2 checkpoints (typed 413 both times, server stays alive,
@@ -617,8 +635,15 @@ and a missing required field each raise `LogContractError`, in-process, against
 `boundary_diagnostic_log.log_event` directly; **(ii)** RED, an unrecognized `log_level` value in
 the multiplex TOML refuses loudly before the socket ever binds; **(iii)** GREEN, an accepted
 write yields a `request_start → kernel_call → write_verdict → request_end` chain sharing one
-`request_id`, reconstructed from WORLD B's own live log file; **(iv)** GREEN, a refused write's
-`refusal_id` joins to the scratch world's own journaled `write_refused` ledger row.
+`request_id`, reconstructed from WORLD B's own live log file; **(iiiv)** GREEN, field-shape
+coherence over that SAME chain — every record carrying `route` carries the bare path (never
+method-prefixed), the `kernel_call` record(s) carry `route` (never `surface`), and the
+`write_verdict` record carries `surface` as the short write-surface label (`"ledger"`); **(iv)**
+GREEN, a refused write's `refusal_id` joins to the scratch world's own journaled `write_refused`
+ledger row. **W35**: contextvar propagation under 20 concurrent requests (10 each to `/health`
+and `/rows/current`) against the real, already-running `WORLD B` server — asserted directly on
+the captured log: every request_id's own events agree on exactly one `route` (no
+cross-contamination).
 
 **Concurrent-runner safety (A3.5).** Every scratch world/schema name carries a per-run unique,
 pid-derived suffix (`RUN_SUFFIX`); teardown is scoped to the exact suffixed name a run created.

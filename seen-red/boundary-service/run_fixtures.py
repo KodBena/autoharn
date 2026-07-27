@@ -3,7 +3,7 @@
 §8 witness plan (W1-W12, A2's amendment; W13-W14, A3's amendment; W15-W19, A4's amendment;
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
 A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment; W31,
-A12's amendment; W32, A13's amendment; W34, design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md,
+A12's amendment; W32, A13's amendment; W34-W35, design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md,
 ledger row 1500). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
@@ -1872,6 +1872,34 @@ def main() -> int:
               f"chain for its own request_id: {w34_chain_events}",
               failures)
 
+        # Leg (iiiv), GREEN, fresh-context review finding (a) fixed: field-shape COHERENCE
+        # across the same chain -- a jq query grouping/filtering on a field name must see the
+        # SAME kind of value under that name on every event that carries it. Two assertions,
+        # both against the SAME w34_chain_events/w34_rid this leg already reconstructed:
+        #   1. every record in the chain that carries `route` carries the BARE path (never
+        #      method-prefixed "METHOD /path") -- request_start/request_end/kernel_call all
+        #      qualify here (no infra/unclassified_failure fires on this accepted-write leg).
+        #   2. the kernel_call record(s) in this chain carry `route`, never `surface`; the
+        #      write_verdict record carries `surface` as the short write-surface label
+        #      ("ledger", WRITE_SURFACES's own vocabulary), never a route path.
+        w34_records_in_chain = [r for r in w34_json_lines if r.get("request_id") == w34_rid] if w34_accept_wv else []
+        w34_routes_seen = {r["route"] for r in w34_records_in_chain if "route" in r}
+        w34_route_bare = all(not re.match(r"^[A-Z]+ /", rt) for rt in w34_routes_seen)
+        w34_kernel_call_recs = [r for r in w34_records_in_chain if r.get("event") == "kernel_call"]
+        w34_write_verdict_recs = [r for r in w34_records_in_chain if r.get("event") == "write_verdict"]
+        w34_kernel_call_shape_ok = bool(w34_kernel_call_recs) and all(
+            "route" in r and "surface" not in r for r in w34_kernel_call_recs)
+        w34_write_verdict_shape_ok = bool(w34_write_verdict_recs) and all(
+            r.get("surface") == "ledger" for r in w34_write_verdict_recs)
+        check("w34iiiv-green-jq-floor-field-coherence-one-shape-per-name",
+              up_b and w34_route_bare and w34_kernel_call_shape_ok and w34_write_verdict_shape_ok,
+              f"routes seen across the chain (must all be bare paths, never method-prefixed): "
+              f"{w34_routes_seen}; kernel_call record(s) carry 'route' not 'surface': "
+              f"{[{'route': r.get('route'), 'has_surface': 'surface' in r} for r in w34_kernel_call_recs]}; "
+              f"write_verdict record(s) carry surface='ledger' (the short write-surface label): "
+              f"{[r.get('surface') for r in w34_write_verdict_recs]}",
+              failures)
+
         # Leg (iv), GREEN: the refuse leg's `refusal_id` joins to the scratch world's own
         # journaled write_refused ledger row -- the join anchor row-1498 settled on (NEVER the
         # payload digest, which the spec's §1 point 1 witness proved unequal by mechanism).
@@ -1889,6 +1917,59 @@ def main() -> int:
               and w34_journal_row.get("refusal_surface") == "ledger",
               f"POST /write/ledger (refused) status={st34r} verdict={body34r}; journal row for "
               f"refusal_id={w34_refusal_id}: {w34_journal_row}",
+              failures)
+
+        # -- W35 (design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md, ledger row 1500 --
+        # committed per fresh-context review finding (b), post-f450019: the review found the
+        # concurrency leg TRUE but UNCOMMITTED -- this closes that audit-trail gap). L1's
+        # contextvar propagation, live, under real parallel load, against WORLD B's already-
+        # running server -- reused rather than scaffolding a third server. N=20 (10 per route,
+        # not the ad hoc review's own N=60 -- the point is a committed, re-runnable witness,
+        # not a specific number; a smaller N against the SAME assertion is exactly as sound a
+        # proof of "no cross-contamination" as a larger one, and keeps this bank's own runtime
+        # down). Split across two distinct routes so a request_id's OWN chain disagreeing on
+        # `route` (the cross-contamination this leg exists to catch) is actually reachable.
+        w35_n_per_route = 10
+        w35_results: list[tuple[str, int]] = []
+        w35_lock = threading.Lock()
+
+        def _w35_fire(route_suffix: str) -> None:
+            try:
+                st, _ = http_get(f"{base}{route_suffix}")
+            except Exception:
+                st = 0
+            with w35_lock:
+                w35_results.append((route_suffix, st))
+
+        w35_threads = [
+            threading.Thread(target=_w35_fire, args=(rs,))
+            for rs in (["/health"] * w35_n_per_route + ["/rows/current"] * w35_n_per_route)
+        ] if up_b else []
+        for t in w35_threads:
+            t.start()
+        for t in w35_threads:
+            t.join(timeout=30)
+        time.sleep(0.3)  # let every JSON line flush to the log file
+
+        w35_all_200 = bool(w35_results) and all(st == 200 for _, st in w35_results)
+        w35_log_text = proc_b._diag_log_path.read_text(encoding="utf-8", errors="replace")
+        w35_json_lines = [json.loads(ln) for ln in w35_log_text.splitlines() if ln.startswith("{")]
+        w35_by_request_id: dict[str, set[str]] = {}
+        for rec in w35_json_lines:
+            rid, rt = rec.get("request_id"), rec.get("route")
+            if rid is not None and rt is not None:
+                w35_by_request_id.setdefault(rid, set()).add(rt)
+        # Only request_ids whose OWN chain touched a /health or /rows/current call from THIS
+        # burst are in scope (WORLD B's server already served many prior requests this same
+        # run; this leg does not require isolating the log to only its own burst -- it only
+        # requires that NO single request_id's own events ever disagree on route).
+        w35_cross_contaminated = {rid: routes for rid, routes in w35_by_request_id.items() if len(routes) > 1}
+        check("w35-concurrency-contextvar-propagation-no-cross-contamination",
+              up_b and w35_all_200 and not w35_cross_contaminated,
+              f"fired {len(w35_threads)} concurrent requests ({w35_n_per_route} each to "
+              f"/health and /rows/current) against the REAL, already-running WORLD B server; "
+              f"all 200={w35_all_200}; request_id(s) whose own chain disagreed on route "
+              f"(cross-contamination -- must be empty): {w35_cross_contaminated}",
               failures)
 
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
@@ -2287,7 +2368,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W34 live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W35 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

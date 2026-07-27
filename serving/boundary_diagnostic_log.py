@@ -179,22 +179,54 @@ MEMBERS: frozenset[str] = frozenset({
 })
 
 # Per-event required fields (spec §2 L2) -- checked against the MERGED record (explicit
-# call-site fields; `request_id`/`route`/`method`/`deployment`/`client_addr` are enriched from
-# REQUEST_CONTEXT separately and are NEVER themselves a required key here, precisely so a
-# direct, non-HTTP call site -- this project's own fixture bank, `boundary_service._psql`'s own
-# unit-shaped callers -- never trips the contract merely for lacking a live request; what a
-# call site MUST supply is the structural fact only it can know (a disposition, a surface, an
-# exit class, a status, a duration).
+# call-site fields; `request_id`/`deployment`/`client_addr` are enriched from REQUEST_CONTEXT
+# separately and are NEVER themselves a required key here, precisely so a direct, non-HTTP
+# call site -- this project's own fixture bank, `boundary_service._psql`'s own unit-shaped
+# callers -- never trips the contract merely for lacking a live request; what a call site MUST
+# supply is the structural fact only it can know (a disposition, a surface, an exit class, a
+# status, a duration).
+#
+# ONE SHAPE PER FIELD NAME, EVERYWHERE (fresh-context review finding (a), post-f450019): a jq
+# query grouping or filtering on a field name must see the SAME kind of value under that name
+# on every event that carries it -- a name that means one thing on one event and a different
+# thing on a sibling event silently splits what should be one coherent series. Two corollaries,
+# both load-bearing here:
+#   1. `route` is ALWAYS the bare request path (`request.url.path`), on every event that
+#      carries it (`request_start`/`request_end`/`kernel_call`/`infra_failure`/
+#      `unclassified_failure`) -- never method-prefixed. An event that also needs the HTTP
+#      method carries it under its OWN field, `method` (request_start/request_end already did;
+#      infra_failure/unclassified_failure now do too, splitting what used to be one combined
+#      "METHOD /path" string under `route` into two fields).
+#   2. `surface` is ALWAYS the short write-surface label the kernel's own boundary functions
+#      use (`ledger`/`review`/`registration`/`obligation`/`obligation_revoke`/
+#      `missive_dispose`/`artifact` -- `write_verdict`'s own vocabulary, matching
+#      `WRITE_SURFACES`'s keys in boundary_service.py) -- never a route path. `kernel_call`
+#      used to overload `surface` with the FULL route path; it now carries that same fact
+#      under `route` instead (the identical value `request_start`/`request_end` already log
+#      for the same request, via REQUEST_CONTEXT's own auto-enrichment when a request context
+#      exists; a direct, non-HTTP call site with no context still gets an explicit "unknown"
+#      fallback, same as before this fix, just under the correctly-shared field name).
 EVENT_REQUIRED_FIELDS: dict[str, frozenset[str]] = {
     Event.REQUEST_START: frozenset({"route", "method"}),
     Event.REQUEST_END: frozenset({"route", "status", "duration_ms"}),
-    Event.KERNEL_CALL: frozenset({"surface", "exit_class", "duration_ms"}),
+    Event.KERNEL_CALL: frozenset({"route", "exit_class", "duration_ms"}),
     Event.WRITE_VERDICT: frozenset({"surface", "disposition"}),
     Event.REFUSAL: frozenset({"disposition"}),
-    Event.INFRA_FAILURE: frozenset({"route"}),
-    Event.UNCLASSIFIED_FAILURE: frozenset({"route"}),
+    Event.INFRA_FAILURE: frozenset({"route", "method"}),
+    Event.UNCLASSIFIED_FAILURE: frozenset({"route", "method"}),
     Event.STARTUP: frozenset({"deployments", "max_inflight_kernel_calls"}),
 }
+# MINOR (fresh-context review, carried as a comment per the coordinator's own instruction): the
+# check below is PRESENCE-only, not type-checked -- a required field supplied as `None` (e.g.
+# `disposition=None`, which `make_write_route`'s handler passes deliberately when a kernel verdict
+# shape drifts and no longer carries a `disposition` key at all) satisfies `required - merged.keys()`
+# and is NOT caught here. This is a deliberate choice, not an oversight: the proxy survey's own
+# design (design/LOGGING-DIRECTION-SURVEY-2026-07-27.md §2 item 2) is presence-only too, and a
+# stricter non-None check would make this log's OWN contract a second, independent judge of
+# kernel-shape validity -- exactly the "second validator that could disagree with the authority"
+# class serving/boundary_models.py's own docstring already forbids for the write path. A `None`
+# under a required key is still visible to `jq` (`select(.disposition == null)`), which is the
+# honest signal a kernel-shape drift produces here, not a silently absent field.
 
 
 class LogContractError(Exception):

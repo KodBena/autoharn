@@ -941,10 +941,17 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     # exception legs) -- never for a saturation refusal above (KernelCallSaturated/
     # DeploymentCallSaturated are refused BEFORE subprocess.run ever runs; those are `refusal`
     # events, emitted by the app's own exception handlers, not a kernel call that happened).
-    # `surface` is the current request's own route (`current_route()`, `None`/"unknown" outside
+    # `route` is the current request's own route (`current_route()`, `None`/"unknown" outside
     # any request context -- this project's own fixture bank calls `_psql`/`_query_json`
     # directly, unit-style, with no HTTP request in flight) -- deliberately NOT a new parameter
-    # threaded through every one of this function's callers (ADR-0004: minimal-touch).
+    # threaded through every one of this function's callers (ADR-0004: minimal-touch). Fresh-
+    # context review finding (a), post-f450019: this field used to be named `surface`, which
+    # `write_verdict`'s own field ALSO uses for a different shape (the short write-surface
+    # label, e.g. "ledger") -- one name, two shapes, silently splitting a `jq` query keyed on
+    # `surface` across events. Renamed to `route` here, which is exactly what this field
+    # already meant, and matches the SAME field's shape on `request_start`/`request_end`
+    # (see boundary_diagnostic_log.py's own EVENT_REQUIRED_FIELDS comment, "ONE SHAPE PER
+    # FIELD NAME, EVERYWHERE").
     _kernel_call_started = time.monotonic()
     try:
         cp = subprocess.run(
@@ -953,7 +960,7 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
         )
         boundary_diagnostic_log.log_event(
             boundary_diagnostic_log.Event.KERNEL_CALL,
-            surface=boundary_diagnostic_log.current_route() or "unknown",
+            route=boundary_diagnostic_log.current_route() or "unknown",
             exit_class=_psql_exit_class(cp.returncode),
             duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
         )
@@ -961,7 +968,7 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
     except subprocess.TimeoutExpired as e:
         boundary_diagnostic_log.log_event(
             boundary_diagnostic_log.Event.KERNEL_CALL,
-            surface=boundary_diagnostic_log.current_route() or "unknown",
+            route=boundary_diagnostic_log.current_route() or "unknown",
             exit_class="infra", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
         )
         raise PsqlInfraFailure(
@@ -980,7 +987,7 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
         # forbids. Full detail stays server-side, per the class's own logging discipline.
         boundary_diagnostic_log.log_event(
             boundary_diagnostic_log.Event.KERNEL_CALL,
-            surface=boundary_diagnostic_log.current_route() or "unknown",
+            route=boundary_diagnostic_log.current_route() or "unknown",
             exit_class="unclassified", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
         )
         raise PsqlUnclassifiedFailure(
@@ -997,7 +1004,7 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
         # is the net that catches whatever a future ingress fails to gate at its own boundary.
         boundary_diagnostic_log.log_event(
             boundary_diagnostic_log.Event.KERNEL_CALL,
-            surface=boundary_diagnostic_log.current_route() or "unknown",
+            route=boundary_diagnostic_log.current_route() or "unknown",
             exit_class="unclassified", duration_ms=(time.monotonic() - _kernel_call_started) * 1000,
         )
         raise PsqlUnclassifiedFailure(
@@ -1409,29 +1416,35 @@ def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
     return None
 
 
-def _log_infra_failure(context: str, exc: Exception) -> None:
+def _log_infra_failure(route: str, method: str, exc: Exception) -> None:
     """The full, loud, un-redacted detail stays server-side (stderr -- this project's own house
     channel for a loud diagnostic every other construction-time refusal in this file already
-    uses) -- never in the HTTP response (A2.4's exposure posture).
+    uses) -- never in the HTTP response (A2.4's exposure posture). The human stderr line's own
+    combined "METHOD /path" text is UNCHANGED (spec: "their server-side-only discipline ... is
+    unchanged") -- only the JSON event's FIELDS split `route`/`method` apart (fresh-context
+    review finding (a), post-f450019: `route` must stay the bare path everywhere it appears,
+    matching `request_start`/`request_end`, never method-prefixed on this event alone).
 
     Diagnostic-logging spec §2 L4: this is one of the THREE existing sites that migrate to a
     typed call site rather than staying a parallel stream -- the pre-existing human stderr line
-    above is UNCHANGED (spec: "their server-side-only discipline ... is unchanged"); this JSON
-    `infra_failure` event is added BESIDE it, not instead of it."""
-    sys.stderr.write(f"boundary_service: INFRA FAILURE ({context}): {exc}\n")
-    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.INFRA_FAILURE, route=context)
+    above is UNCHANGED; this JSON `infra_failure` event is added BESIDE it, not instead of it."""
+    sys.stderr.write(f"boundary_service: INFRA FAILURE ({method} {route}): {exc}\n")
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.INFRA_FAILURE, route=route, method=method)
 
 
-def _log_unclassified_failure(context: str, exc: Exception) -> None:
+def _log_unclassified_failure(route: str, method: str, exc: Exception) -> None:
     """A4.3's sibling to `_log_infra_failure` -- the full detail (which, unlike an ordinary
     infra failure, may include the actual psql stderr naming the offending SQL/data) stays
     server-side only; the client sees `unclassified_failure`'s honest, cause-free message.
+    Same `route`/`method` field split as `_log_infra_failure` above, same reason.
 
     Diagnostic-logging spec §2 L4: the second of the three migrated call sites -- the existing
-    human stderr line above is unchanged; this JSON `unclassified_failure` event is added
+    human stderr line below is unchanged; this JSON `unclassified_failure` event is added
     beside it."""
-    sys.stderr.write(f"boundary_service: UNCLASSIFIED FAILURE ({context}): {exc}\n")
-    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.UNCLASSIFIED_FAILURE, route=context)
+    sys.stderr.write(f"boundary_service: UNCLASSIFIED FAILURE ({method} {route}): {exc}\n")
+    boundary_diagnostic_log.log_event(
+        boundary_diagnostic_log.Event.UNCLASSIFIED_FAILURE, route=route, method=method)
 
 
 class _BodyTooLarge(Exception):
@@ -1867,7 +1880,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # becomes a typed 503, for every route uniformly (ADR-0012 P1: one handler, not a
         # try/except duplicated per route). Registered on the DEDICATED exception class, never
         # the bare `RuntimeError` a foreign failure (RecursionError, for one) could also raise.
-        _log_infra_failure(f"{request.method} {request.url.path}", exc)
+        _log_infra_failure(request.url.path, request.method, exc)
         return infra_failure(
             "the ledger's underlying database connection failed -- this is an infrastructure "
             "problem, not a problem with your request; see the server's own log for full detail.")
@@ -1881,7 +1894,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         # or deployment defect; the message says exactly that, honestly, rather than claiming
         # a cause (infra vs request) this boundary did not witness -- the lying-signature class
         # ADR-0002 rung 3 exists to forbid. Full psql stderr logged server-side only.
-        _log_unclassified_failure(f"{request.method} {request.url.path}", exc)
+        _log_unclassified_failure(request.url.path, request.method, exc)
         return unclassified_failure(
             "the storage layer refused for a reason this boundary did not anticipate -- this "
             "may be the deployment or the request; the boundary declines to guess. Full detail "
