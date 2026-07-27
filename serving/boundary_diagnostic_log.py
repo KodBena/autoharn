@@ -371,6 +371,12 @@ def log_event(event: str, *, level: str = "INFO", **fields: Any) -> None:
             merged["deployment"] = ctx.deployment
         if ctx.principal is not None:
             merged["principal"] = ctx.principal
+        # Which spec-§2 identity resolution case fired (fresh-context review MODERATE, ledger
+        # row 1525: the field was set on the context but never landed in any record) --
+        # enriched here, the one home, so every event a bound-identity request emits carries it
+        # and `jq 'select(.resolution_case=="minted")'` works across the whole series.
+        if ctx.resolution_case is not None:
+            merged["resolution_case"] = ctx.resolution_case
     merged.update(fields)  # explicit call-site fields always win over context enrichment
 
     required = EVENT_REQUIRED_FIELDS[event]

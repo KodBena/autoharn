@@ -3,8 +3,17 @@
 FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger rows 1463/1467/1468/1471). Two subcommands:
 
     dispatch mint <name> <commission-row-id>[,<commission-row-id>...] [--depth N]
-                  [--purpose <why>] [--independent-verification]
-    dispatch close <name> [<reason...>]
+                  [--purpose <why>] [--independent-verification] [--deployment <path>]
+    dispatch close <name> [<reason...>] [--deployment <path>]
+
+TARGET SCOPING (fresh-context review CRITICAL, ledger rows 1525/1526 -- the live-deployment
+incident): this verb REFUSES to run unless its target deployment record is EXPLICIT -- either
+`--deployment <path/to/deployment.json>` on the command line or the `LEDGER_DEPLOYMENT`
+environment variable. There is NO default: the previous behavior (fall back to the
+deployment.json beside this script's own repo) is exactly what let a scratch-world exercise of
+`mint` land four rows on the live deployment (real-ledger rows 1521-1524, standing as
+documented history). An authority-bearing verb never guesses its target; the operator names
+it, every invocation, and the refusal text teaches both spellings.
 
 `mint` performs the spec's own three-step dispatch act, in order: (1) mints the delegate
 principal via the existing led registration machinery (`POST /write/registration`, the SAME
@@ -61,7 +70,6 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent  # repo root (tools/ is one level under it)
-DEPLOYMENT_PATH = Path(os.environ.get("LEDGER_DEPLOYMENT", str(HERE / "deployment.json")))
 
 sys.path.insert(0, str(HERE / "serving"))
 sys.path.insert(0, str(HERE / "filing"))
@@ -71,18 +79,41 @@ import ensure_running as er  # noqa: E402
 PROG = "dispatch"
 
 
-def _load_config() -> bcc.ServedConfig:
+def _resolve_deployment_path(explicit: str | None) -> Path:
+    """The verb's target-scoping gate (module docstring, "TARGET SCOPING") -- an explicit
+    `--deployment` flag wins, then the `LEDGER_DEPLOYMENT` environment variable; NO other
+    source, and in particular never this script's own repo location (real-ledger rows
+    1521-1524 are the witnessed cost of that default). Refuses with teaching text, before any
+    config read or network touch, when neither is present."""
+    if explicit:
+        return Path(explicit)
+    env = os.environ.get("LEDGER_DEPLOYMENT", "")
+    if env:
+        return Path(env)
+    print(f"{PROG}: REFUSED -- no target deployment named. This verb writes authority-bearing "
+          f"rows (principal registrations, dispatched-by edges, suspensions) and will not "
+          f"guess which world receives them: name the target explicitly, either\n"
+          f"    {PROG} ... --deployment <path/to/deployment.json>\n"
+          f"or\n"
+          f"    LEDGER_DEPLOYMENT=<path/to/deployment.json> {PROG} ...\n"
+          f"(The former default -- the deployment.json beside this script's own repo -- is "
+          f"exactly how a scratch-world exercise once landed rows on the live deployment; "
+          f"ledger rows 1525/1526.)", file=sys.stderr)
+    sys.exit(2)
+
+
+def _load_config(deployment_path: Path) -> bcc.ServedConfig:
     """Mirrors `bootstrap/templates/led.tmpl`'s own `_load_config` (ADR-0012 P1: the same
     resolve-then-handshake-then-ensure-running-once shape, not a second copy of its reasoning)."""
     try:
-        cfg = bcc.load_served_config(DEPLOYMENT_PATH)
+        cfg = bcc.load_served_config(deployment_path)
     except bcc.BoundaryClientError as e:
         print(f"{PROG}: {e}", file=sys.stderr)
         sys.exit(4)
     try:
         bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
     except bcc.BoundaryUnreachable:
-        er.ensure_running_or_leave_unreachable(DEPLOYMENT_PATH, PROG)
+        er.ensure_running_or_leave_unreachable(deployment_path, PROG)
         bcc.check_protocol_version(cfg.base, cfg.record.boundary_url)
     return cfg
 
@@ -154,10 +185,17 @@ def cmd_mint(argv: list[str]) -> int:
     depth = 0
     purpose: str | None = None
     independent_verification = False
+    deployment_flag: str | None = None
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a == "--depth":
+        if a == "--deployment":
+            if i + 1 >= len(argv):
+                print(f"{PROG} mint: --deployment requires a path", file=sys.stderr)
+                return 2
+            deployment_flag = argv[i + 1]
+            i += 2
+        elif a == "--depth":
             if i + 1 >= len(argv):
                 print(f"{PROG} mint: --depth requires a value", file=sys.stderr)
                 return 2
@@ -184,7 +222,8 @@ def cmd_mint(argv: list[str]) -> int:
             i += 1
     if len(positional) != 2:
         print(f"usage: {PROG} mint <name> <commission-row-id>[,<commission-row-id>...] "
-              f"[--depth N] [--purpose <why>] [--independent-verification]", file=sys.stderr)
+              f"[--depth N] [--purpose <why>] [--independent-verification] "
+              f"[--deployment <path>]", file=sys.stderr)
         return 2
     name, commission_ids_raw = positional
     try:
@@ -199,7 +238,8 @@ def cmd_mint(argv: list[str]) -> int:
               f"against is exactly the stale-copy-coherence hazard this spec closes).", file=sys.stderr)
         return 2
 
-    cfg = _load_config()
+    deployment_path = _resolve_deployment_path(deployment_flag)
+    cfg = _load_config(deployment_path)
     by_name = _principals_by_name(cfg)
     by_id = {v: k for k, v in by_name.items()}
     dispatcher_id = _resolve_dispatcher(cfg, by_name)
@@ -264,12 +304,26 @@ def cmd_mint(argv: list[str]) -> int:
 
 
 def cmd_close(argv: list[str]) -> int:
-    if not argv:
-        print(f"usage: {PROG} close <name> [<reason...>]", file=sys.stderr)
+    deployment_flag: str | None = None
+    rest: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--deployment":
+            if i + 1 >= len(argv):
+                print(f"{PROG} close: --deployment requires a path", file=sys.stderr)
+                return 2
+            deployment_flag = argv[i + 1]
+            i += 2
+        else:
+            rest.append(argv[i])
+            i += 1
+    if not rest:
+        print(f"usage: {PROG} close <name> [<reason...>] [--deployment <path>]", file=sys.stderr)
         return 2
-    name = argv[0]
-    reason = " ".join(argv[1:]) or "dispatch session closed (dispatch-mechanics close verb)"
-    cfg = _load_config()
+    name = rest[0]
+    reason = " ".join(rest[1:]) or "dispatch session closed (dispatch-mechanics close verb)"
+    deployment_path = _resolve_deployment_path(deployment_flag)
+    cfg = _load_config(deployment_path)
     by_name = _principals_by_name(cfg)
     pid = by_name.get(name)
     if pid is None:

@@ -261,6 +261,24 @@ class AnonymousWriteRefused(BaseModel):
                                       "deployment's identity_enforcement posture is 'enforce'")
 
 
+class MintedActorConflict(BaseModel):
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §2 ("declared, never silent"), fresh-context
+    review CRITICAL (ledger row 1525): a write payload carrying an EXPLICIT `actor` value that
+    DISAGREES with the request's own `X-Autoharn-Minted-Principal` header refuses -- typed,
+    teaching, before any kernel call -- rather than silently overriding the payload's claim.
+    "Minted governs" (spec §2) resolves which identity WINS when the payload is silent or
+    agrees; it never licenses discarding an explicit, conflicting claim with no record anywhere
+    (the diagnostic log is diagnostic-grade, never evidentiary -- maintainer principle
+    2026-07-11 -- so 'logged' cannot stand in for 'declared'; a refusal the caller must resolve
+    is the only shape that leaves no evidentiary gap). A payload with NO `actor`, or one equal
+    to the minted principal, proceeds with the minted attribution as before."""
+
+    disposition: str = "minted_actor_conflict"
+    minted_principal: int = Field(description="the X-Autoharn-Minted-Principal header's validated principal id")
+    payload_actor: str = Field(description="the payload's own explicit `actor` value, rendered as text (it may not be an integer)")
+    message: str = Field(description="teach-text: both values, the resolution rule, and what the caller should do (drop the payload actor, or drop the minted header)")
+
+
 class MetaResponse(BaseModel):
     """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's third new route, `GET /d/{deployment}/meta`
     -- the capability surface a rebased CLI shim decides its own behavior from, replacing the

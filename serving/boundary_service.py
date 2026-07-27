@@ -435,6 +435,7 @@ from boundary_models import (  # noqa: E402
     KindsResponse,
     LedgerWriteIntFields,
     MetaResponse,
+    MintedActorConflict,
     MissiveDisposeWriteIntFields,
     ObligationRevokeWriteIntFields,
     ObligationWriteIntFields,
@@ -895,6 +896,46 @@ def _parse_identity_headers(headers) -> tuple[str, str | None, dict[str, str] | 
     if vendor_stamp is not None:
         return "vendor", None, vendor_stamp
     return "anonymous", None, None
+
+
+def _apply_minted_actor(payload: dict) -> JSONResponse | None:
+    """design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3, reshaped by the fresh-context review's
+    CRITICAL (ledger row 1525): a MINTED-PRINCIPAL identity (resolution case "minted") sets this
+    write's `actor` field from the conduit's own validated fact -- when the payload makes no
+    competing claim. A payload whose OWN explicit `actor` disagrees with the minted header is a
+    typed 409 `minted_actor_conflict`, refused BEFORE any kernel call -- never a silent
+    override (spec §2's "declared, never silent"; the diagnostic log cannot carry the
+    declaration because it is diagnostic-grade, never evidentiary). Agreement is compared on
+    the exact-integer axis: a non-integer explicit `actor` (including a bool) under a minted
+    header is a disagreement by construction, not coerced. The vendor stamp, if also present,
+    still rides along to its own GUCs via `_psql`, entirely independent of this rule. Returns
+    the refusal response, or None after (possibly) setting `payload['actor']` in place."""
+    ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
+    if ctx is None or ctx.resolution_case != "minted" or ctx.principal is None:
+        return None
+    minted = int(ctx.principal)
+    if "actor" in payload:
+        claimed = payload["actor"]
+        agrees = isinstance(claimed, int) and not isinstance(claimed, bool) and claimed == minted
+        if not agrees:
+            body = MintedActorConflict(
+                minted_principal=minted,
+                payload_actor=repr(claimed),
+                message=(
+                    f"this write's payload claims actor={claimed!r} while its own "
+                    f"X-Autoharn-Minted-Principal header names principal {minted} -- two "
+                    f"competing attribution claims on one write. Refused rather than silently "
+                    f"resolved (design/FABLE-DISPATCH-MECHANICS-SPEC.md §2: identity resolution "
+                    f"is declared, never silent): either drop the payload's `actor` field (the "
+                    f"minted principal will be attributed), set it equal to the minted "
+                    f"principal, or drop the minted-principal header. Nothing was written."),
+            )
+            boundary_diagnostic_log.log_event(
+                boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition,
+                minted_principal=minted)
+            return JSONResponse(status_code=409, content=body.model_dump())
+    payload["actor"] = minted
+    return None
 
 
 # IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c
@@ -2665,18 +2706,9 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 return JSONResponse(status_code=422, content={
                     "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
 
-            # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3: a MINTED-PRINCIPAL identity
-            # (resolution case "minted") sets this write's `actor` field from the conduit's own
-            # validated fact, overriding whatever the caller's JSON body claimed (never merged,
-            # never left to the caller's own say-so -- serving/README.md's pre-existing
-            # "attribution honestly limited" posture, sharpened here: a caller presenting a
-            # minted-principal header no longer gets to also claim a DIFFERENT `actor` in its
-            # body). "Both-present = minted governs" (spec §2) applies to `actor` specifically;
-            # the vendor stamp, if also present, still rides along to its own GUCs via `_psql`
-            # above, entirely independent of this override.
-            ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
-            if ctx is not None and ctx.resolution_case == "minted" and ctx.principal is not None:
-                payload["actor"] = int(ctx.principal)
+            minted_conflict = _apply_minted_actor(payload)
+            if minted_conflict is not None:
+                return minted_conflict
 
             # A5.2: the write-body id-domain closure -- every integer-typed field this
             # surface's payload contract declares (boundary_models.py's *WriteIntFields models)
@@ -2879,12 +2911,11 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if not isinstance(payload, dict):
             return JSONResponse(status_code=422, content={
                 "detail": "write payload must be a JSON object (transport-level shape check, spec §4)"})
-        # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3: same minted-principal `actor` override
-        # as `make_write_route` above (ADR-0012 P1's own reasoning applies here too -- one rule,
-        # not a per-route dialect that could silently diverge).
-        ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
-        if ctx is not None and ctx.resolution_case == "minted" and ctx.principal is not None:
-            payload["actor"] = int(ctx.principal)
+        # design/FABLE-DISPATCH-MECHANICS-SPEC.md §2/§3: same minted-principal `actor` rule as
+        # `make_write_route` above (ADR-0012 P1: one rule, not a per-route dialect).
+        minted_conflict = _apply_minted_actor(payload)
+        if minted_conflict is not None:
+            return minted_conflict
         int_field_oor = _bound_write_payload_ints("artifact", payload)
         if int_field_oor is not None:
             return int_field_oor

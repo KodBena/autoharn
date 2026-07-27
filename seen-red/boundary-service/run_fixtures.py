@@ -2226,6 +2226,181 @@ def main() -> int:
               + ("" if up36h else f" -- enforce-posture server FAILED TO COME UP: {out36h[-500:]}"),
               failures)
 
+        # W36i-k: the minted-principal actor rule, all three payload shapes (fresh-context
+        # review round 2, ledger row 1525 -- the round-1 build had ZERO coverage of the valid
+        # override path, and the disagreement case was a SILENT override, now a typed 409).
+        print("=== w36i-green-minted-principal-actor-absent-attributed ===")
+        st36i, body36i = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36i minted write, payload actor absent"},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36i_row = body36i.get("row_id") if isinstance(body36i, dict) else None
+        w36i_actor = (psql_tuples(f"SELECT actor FROM {world_b}.ledger WHERE id = {w36i_row};").strip()
+                      if w36i_row is not None else "")
+        check("w36i-green-minted-principal-actor-absent-attributed",
+              st36i == 200 and isinstance(body36i, dict)
+              and body36i.get("disposition") == "accepted"
+              and w36i_actor == str(svc_id),
+              f"payload with NO actor + X-Autoharn-Minted-Principal={svc_id}: status={st36i} "
+              f"body={body36i}; landed row's actor={w36i_actor!r} (must be the minted "
+              f"principal, {svc_id})",
+              failures)
+
+        print("=== w36j-green-minted-principal-actor-agreeing-accepted ===")
+        st36j, body36j = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36j minted write, payload actor agreeing",
+             "actor": svc_id},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36j_row = body36j.get("row_id") if isinstance(body36j, dict) else None
+        w36j_actor = (psql_tuples(f"SELECT actor FROM {world_b}.ledger WHERE id = {w36j_row};").strip()
+                      if w36j_row is not None else "")
+        check("w36j-green-minted-principal-actor-agreeing-accepted",
+              st36j == 200 and isinstance(body36j, dict)
+              and body36j.get("disposition") == "accepted"
+              and w36j_actor == str(svc_id),
+              f"payload actor={svc_id} agreeing with the minted header: status={st36j} "
+              f"body={body36j}; landed row's actor={w36j_actor!r}",
+              failures)
+
+        print("=== w36k-red-minted-actor-conflict-typed-409-nothing-written ===")
+        w36k_count_before = psql_tuples(f"SELECT count(*) FROM {world_b}.ledger;").strip()
+        st36k, body36k = http_post_headers(
+            f"{base}/write/ledger",
+            {"kind": "finding", "statement": "w36k should never land", "actor": author_id},
+            {"X-Autoharn-Minted-Principal": str(svc_id)})
+        w36k_count_after = psql_tuples(f"SELECT count(*) FROM {world_b}.ledger;").strip()
+        check("w36k-red-minted-actor-conflict-typed-409-nothing-written",
+              st36k == 409 and isinstance(body36k, dict)
+              and body36k.get("disposition") == "minted_actor_conflict"
+              and body36k.get("minted_principal") == svc_id
+              and str(author_id) in str(body36k.get("payload_actor"))
+              and str(svc_id) in str(body36k.get("message"))
+              and str(author_id) in str(body36k.get("message"))
+              and w36k_count_before == w36k_count_after,
+              f"payload actor={author_id} DISAGREEING with minted header {svc_id}: "
+              f"status={st36k} body={body36k} (must be a typed 409 naming BOTH values -- "
+              f"declared, never silent, spec §2); ledger row count "
+              f"before/after={w36k_count_before}/{w36k_count_after} (must be unchanged -- "
+              f"nothing written, no journal row either: this refusal is pre-kernel)",
+              failures)
+
+        # W36k2: resolution_case serialized into the diagnostic log (round-2 MODERATE: the
+        # field was set on the context dataclass but never landed in any record). Reads WORLD
+        # B's own live log file, the same access path W34iii already uses.
+        print("=== w36k2-green-resolution-case-serialized-in-log ===")
+        time.sleep(0.3)  # let the JSON lines flush
+        w36k2_log_lines = [json.loads(ln) for ln in
+                           proc_b._diag_log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                           if ln.startswith("{")]
+        w36k2_minted = [r for r in w36k2_log_lines if r.get("resolution_case") == "minted"]
+        w36k2_vendor = [r for r in w36k2_log_lines if r.get("resolution_case") == "vendor"]
+        w36k2_anon = [r for r in w36k2_log_lines if r.get("resolution_case") == "anonymous"]
+        w36k2_conflict = [r for r in w36k2_log_lines
+                          if r.get("event") == "refusal"
+                          and r.get("disposition") == "minted_actor_conflict"]
+        check("w36k2-green-resolution-case-serialized-in-log",
+              bool(w36k2_minted) and bool(w36k2_vendor) and bool(w36k2_anon)
+              and bool(w36k2_conflict)
+              and all(r.get("resolution_case") == "minted" for r in w36k2_conflict),
+              f"records carrying resolution_case in WORLD B's live log: "
+              f"minted={len(w36k2_minted)} vendor={len(w36k2_vendor)} "
+              f"anonymous={len(w36k2_anon)}; the w36k conflict refusal record(s) "
+              f"(event=refusal disposition=minted_actor_conflict, must carry "
+              f"resolution_case='minted'): {w36k2_conflict!r}",
+              failures)
+
+        # W36l-m: the dispatch verb's target-scoping gate (round-2 CRITICAL, ledger rows
+        # 1525/1526 -- the live-deployment incident: the verb's former default resolved
+        # deployment.json relative to the SCRIPT's own repo, so a scratch-world exercise wrote
+        # rows 1521-1524 to the real ledger). RED: a bare invocation with neither
+        # --deployment nor LEDGER_DEPLOYMENT refuses, teaching both spellings, before ANY
+        # config read or network touch. GREEN: the explicit form mints end-to-end against
+        # WORLD B's own scratch server, and close retires the delegate.
+        print("=== w36l-red-dispatch-verb-unscoped-invocation-refused ===")
+        w36l_env = {k: v for k, v in os.environ.items()
+                    if k not in ("LEDGER_DEPLOYMENT", "PICKUP_DEPLOYMENT",
+                                 # an ambient minted/vendor identity in THIS harness's own env
+                                 # would ride into the verb's own boundary calls and change the
+                                 # leg's meaning -- stripped so the witness is self-contained
+                                 "AUTOHARN_MINTED_PRINCIPAL", "PGOPTIONS")}
+        w36l_env["LED_ACTOR"] = "author"
+        w36l = subprocess.run(
+            [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+             "mint", "w36l-delegate", "1"],
+            capture_output=True, text=True, env=w36l_env, timeout=60)
+        check("w36l-red-dispatch-verb-unscoped-invocation-refused",
+              w36l.returncode == 2
+              and "REFUSED -- no target deployment named" in w36l.stderr
+              and "--deployment" in w36l.stderr and "LEDGER_DEPLOYMENT" in w36l.stderr,
+              f"bare `dispatch mint` with no --deployment and no LEDGER_DEPLOYMENT: "
+              f"rc={w36l.returncode} stderr={w36l.stderr[-600:]!r} (must refuse, teach both "
+              f"spellings, and touch NOTHING -- the former script-relative default is the "
+              f"live-deployment incident's own mechanism)",
+              failures)
+
+        # WORLD B's chain deliberately ends at s43 (CHAIN_B) and carries no s64 delegation
+        # vocabulary, so the mint verb's dispatched-by edge cannot land there -- this leg
+        # scaffolds its OWN throwaway --new-world (full chain through s65, the same move
+        # seen-red/pickup-connection-failure-silent-empty already uses), serves it, and tears
+        # it down self-contained.
+        print("=== w36m-green-dispatch-mint-close-explicit-deployment-end-to-end ===")
+        w36m_world = f"svcfxw36m{RUN_SUFFIX}"
+        teardown(w36m_world)
+        w36m_tmp = Path(tempfile.mkdtemp(prefix="svcfxw36m-"))
+        w36m_world_dir = w36m_tmp / w36m_world
+        w36m_proc = None
+        try:
+            r36m = sh(["bash", str(NEW_PROJECT), str(w36m_world_dir), "--new-world", w36m_world,
+                       "--db", PGDB, "--host", PGHOST])
+            if r36m.returncode != 0:
+                raise RuntimeError(f"w36m --new-world scaffold FAILED: "
+                                   f"{r36m.stdout[-800:]} {r36m.stderr[-800:]}")
+            w36m_dep = w36m_world_dir / "deployment.json"
+            w36m_proc = serve_existing_world(w36m_dep, w36m_tmp)
+            w36m_env = dict(w36l_env)
+            w36m_env["LEDGER_DEPLOYMENT"] = str(w36m_dep)
+            w36m_mint = subprocess.run(
+                [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+                 "mint", "w36m-delegate", "1", "--purpose", "w36m end-to-end scoping witness"],
+                capture_output=True, text=True, env=w36m_env, timeout=120)
+            w36m_delegate_id = psql_tuples(
+                f"SELECT id FROM {w36m_world}_kernel.principal WHERE name = 'w36m-delegate';").strip()
+            w36m_edge = psql_tuples(
+                f"SELECT principal_relation, delegation_redelegate_depth "
+                f"FROM {w36m_world}.ledger "
+                f"WHERE kind = 'principal_relation_asserted' "
+                f"AND principal_subject = {w36m_delegate_id or 'NULL'} "
+                f"AND principal_relation = 'dispatched-by';") if w36m_delegate_id else ""
+            w36m_close = subprocess.run(
+                [str(PYVENV), str(REPO / "tools" / "dispatch_mechanics.py"),
+                 "close", "w36m-delegate", "w36m witness done",
+                 "--deployment", str(w36m_dep)],
+                capture_output=True, text=True, env=w36l_env, timeout=120)
+            w36m_standing = psql_tuples(
+                f"SELECT count(*) FROM {w36m_world}.ledger WHERE kind = 'principal_suspended' "
+                f"AND principal_subject = {w36m_delegate_id or 'NULL'};").strip() if w36m_delegate_id else ""
+            check("w36m-green-dispatch-mint-close-explicit-deployment-end-to-end",
+                  w36m_mint.returncode == 0 and bool(w36m_delegate_id)
+                  and f"AUTOHARN_MINTED_PRINCIPAL={w36m_delegate_id}" in w36m_mint.stdout
+                  and "dispatched-by|0" in w36m_edge
+                  and w36m_close.returncode == 0 and w36m_standing == "1",
+                  f"mint via LEDGER_DEPLOYMENT (env spelling) against full-chain scratch world "
+                  f"{w36m_world}: rc={w36m_mint.returncode} "
+                  f"stdout={w36m_mint.stdout[-300:]!r} stderr={w36m_mint.stderr[-300:]!r}; "
+                  f"delegate id={w36m_delegate_id!r}; dispatched-by edge "
+                  f"(relation|depth)={w36m_edge!r} (depth 0 = no-redelegate default); close via "
+                  f"--deployment (flag spelling): rc={w36m_close.returncode} "
+                  f"stderr={w36m_close.stderr[-300:]!r}; principal_suspended rows for the "
+                  f"delegate={w36m_standing!r} -- BOTH explicit spellings witnessed, against "
+                  f"the scratch world only",
+                  failures)
+        finally:
+            if w36m_proc is not None:
+                stop_server(w36m_proc)
+            teardown(w36m_world)
+            shutil.rmtree(w36m_tmp, ignore_errors=True)
+
         # -- W9 streaming-abort leg: UNEXERCISED, named (spec A3.4's own carve-out, "exercised
         # if cheaply drivable, else UNEXERCISED with why"). Driving it needs a client that opens
         # the write connection, sends a Content-Length promise, then closes the socket mid-body
