@@ -4,7 +4,13 @@
 (work item boundary-hub-restart-robustness, row 1553 option A; ratification row 1557 item 2,
 "as you suggest on all outstanding decisions"). The A:B:C loop runs on the build, not the
 proposal text. Removal condition: superseded by the build's merge record. -->
-<!-- design-currency: status=ratified depends-on=FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md -->
+<!-- design-currency: status=discharged discharged-by=b6282ba depends-on=FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md -->
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+`status=ratified` stood stale — shipped and merged (`b6282ba`, "zero-trust re-review
+CLEARS"), with a further residual-window quantification fix on top (`361e010`);
+`libexec/autoharn-service` implements `cmd_restart`/`_parse_restart_args` citing this
+spec by name. Historical prose below kept verbatim.)
 
 One new subcommand on the existing control plane (`libexec/autoharn-service`, shared logic
 in `serving/ensure_running.py` — ADR-0012 P1, extend the one home, never a second copy):

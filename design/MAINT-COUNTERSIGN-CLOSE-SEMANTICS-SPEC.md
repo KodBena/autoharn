@@ -218,7 +218,13 @@ Forward-compatibility audit of the ratified design against that rider, honestly 
   `obligation-actor-type-system` holds that question; if a re-architecture wins there,
   this spec's elements are its migration inputs, not its constraints.
 
-## 10. Amendment (2026-07-14 night, AWAITING RATIFICATION) — the pre-migration epoch
+## 10. Amendment (2026-07-14 night, RATIFIED and shipped) — the pre-migration epoch
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+"AWAITING RATIFICATION" stood stale — `kernel/lineage/s29-obligation-item-key-and-
+typed-close.sql` (build commit `92e1c75`, RATIFIED 2026-07-14) already carries this
+amendment's `migration_epoch` table folded directly in, not as a separate follow-on
+amendment as this section's own text below describes. Historical prose kept verbatim.)
 
 The ent rehearsal (witnessed, migrator report + ledger rows) falsified sec-7's corrected
 claim: Element B's two-way shape CHECK validates historical rows at ADD CONSTRAINT

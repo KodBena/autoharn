@@ -4,7 +4,13 @@
 
 **Status:** DRAFT FOR MAINTAINER RATIFICATION. Fable-authored, fresh-context, 2026-07-22, per
 the standing rule that nobody edits `kernel/lineage/` without a Fable-authored,
-maintainer-ratified spec (CLAUDE.md ORCHESTRATION). Implements the RATIFIED consult
+maintainer-ratified spec (CLAUDE.md ORCHESTRATION). (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: "DRAFT FOR MAINTAINER RATIFICATION" contradicts
+this file's own doc-attest-exempt marker two lines above, which already reads "ratified
+build basis... ledger row 1919, maintainer 'yes go' with R1-R3 landed" — and matches the
+shipped tree: `kernel/lineage/s53-belief-substrate.sql`, `s54-belief-views.sql`, and
+`s55-dispatch-grain-independence.sql` all exist, each citing this exact ratification.
+Historical prose below kept verbatim.) Implements the RATIFIED consult
 [design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md](../vestigial_documentation/design/FABLE-CONSULT-EPISTEMIC-DOXASTIC-SUBSTRATE-2026-07-22.md)
 (moved to vestigial 2026-07-23: its recommendations are now built, s53/s54, and this
 spec is the live reference copy) under the maintainer's resolved decisions (ledger rows 1893–1894, 1909–1910). Nothing here is

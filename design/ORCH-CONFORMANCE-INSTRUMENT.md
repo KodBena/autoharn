@@ -1,11 +1,22 @@
 # COMMISSION/CONFORMANCE INSTRUMENT — schema + acceptance criteria (Fable, 2026-07-09)
 
+<!-- doc-attest-exempt: design-drift-triage mechanical edit (autoharn3 ledger row 90,
+2026-07-28) -- one dated correction note added to the Status line (checker already
+shipped, commit 9f5ee6e); no prose rewrite. Removal condition: strike this marker and run
+the real A:B:C loop next time this file is touched for content, not just status repair. -->
+
 Audience: orchestrator
 
 Status: DESIGN, Fable-authored schema per OPUS-READINESS move 4 ("Fable reviews its schema,
 Sonnet builds it"). Ratified in principle with OPUS-READINESS (assent batch item 3,
 2026-07-09). Sonnet builds the checker from this; the schema itself changes only under the
-succession ceremony.
+succession ceremony. (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep,
+ledger row 90: "Status: DESIGN" stood stale — the checker shipped (commit `9f5ee6e`):
+`instruments/conformance_check.py` cites this file by name ("Mechanizes design/
+ORCH-CONFORMANCE-INSTRUMENT.md... ratified 2026-07-09") and implements the
+CONFORMANT/CONFORMANT_WITH_DEFERRALS/NONCONFORMANT vocabulary and "OBSERVER ONLY" wiring
+exactly as specified; `instruments/conformance_commission_template.json` and
+`seen-red/conformance_check/` also exist. Historical prose below kept verbatim.)
 
 ## What it is
 

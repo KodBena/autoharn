@@ -56,6 +56,11 @@ convention shows what columns earn their place.
   [CLAUDE.md](../CLAUDE.md)'s ORCHESTRATION section (nothing existing relaxed, scratch-
   witnessed both ways), so it lands as lineage step s27 whenever stage 3 begins; until
   then, stage 1 uses `decision` rows with a `resource:` statement-prefix convention.
+  (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "s27"
+  is stale — `kernel/lineage/s27-chain-high-water.sql` shipped 2026-07-15 (three days
+  after this spec's 2026-07-12 authoring) for an unrelated feature (tail-deletion
+  witness); a future `resource` kernel kind, when stage 3 begins, would take a later step
+  number, current head being s68. Historical prose above kept verbatim.)
 - A declaration statement carries six fields, in a fixed order the pickup view can parse:
   NAME; CLASS (solver | service | backend | binary | library); REACH (endpoint, binary
   path, venv, or import); WHAT-IT-PROVES (one clause — the eliciting hook: "feasibility →
@@ -196,7 +201,9 @@ polarities (a manufactured close-before-dependency goes red; a lawful order pass
 gate never seen red is a claim, per the house rule.
 Stage 3 (on witnessed need, the pre-ratified fail-safe class) adds: the s27 `resource`
 kind; obligation-attachment columns. Stage 4 adds the appendix, if ever, by explicit maintainer
-word.
+word. (Same stale "s27" citation as §2 above — see that section's dated correction;
+s27 is taken by an unrelated shipped delta, so a future `resource` kind takes a later
+step number.)
 
 **STATUS 2026-07-12: Stage 1 SHIPPED** (tracker item `registry-stage1-implementation`,
 Sonnet-executed). Four things were built:

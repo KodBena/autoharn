@@ -1,5 +1,10 @@
 # FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC — "told" is not "verified", and selected daemons become an artifact
 
+<!-- doc-attest-exempt: design-drift-triage mechanical edit (autoharn3 ledger row 90,
+2026-07-28) -- one dated correction note added to the Status line (build already shipped,
+commit a7929f9); no prose rewrite. Removal condition: strike this marker and run the real
+A:B:C loop next time this file is touched for content, not just status repair. -->
+
 autoharn's setup TUI (the terminal wizard under `tools/setup_tui/` that creates new
 autoharn deployments) keeps a setup checklist: a per-item record of what each wizard
 screen established, each row carrying a status word. This spec, for whoever
@@ -10,7 +15,11 @@ written down anywhere runnable — so a selected daemon can silently never start
 
 - **Status:** Proposed (Fable-authored; Track 2.4 of
   [FABLE-SETUP-TUI-FIELD-STRATEGY.md](FABLE-SETUP-TUI-FIELD-STRATEGY.md); build
-  gated on maintainer reading).
+  gated on maintainer reading). (Header corrected 2026-07-28, autoharn3
+  design-drift-triage sweep, ledger row 90: "Proposed... build gated" stood stale —
+  built and merged, commit `a7929f9`: `tools/setup_tui/checklist.py` implements
+  INSTRUCTED/PREPARED/VERIFIED-UP exactly per §2, and `DaemonSelection`/`start-daemons`
+  ship in `tools/setup_tui/plan.py`. Historical prose kept verbatim.)
 - **Date:** 2026-07-21
 - **Commissions (verbatim):** maintainer observation g: "had to manually start
   boundary-multiplex / 1. on that note: should create a daemon collection script

@@ -5,7 +5,13 @@ assembles the already-ledgered bindings of rows 1151-1154, 1159, 1162, 1165. Rem
 condition: superseded by a polished live edition or the build's completion record. -->
 
 - **Status:** Fable-authored 2026-07-23; awaits maintainer ratification. Pre-tag per the
-  maintainer's ruling ("It would be silly to tag v2 with obsolete residue").
+  maintainer's ruling ("It would be silly to tag v2 with obsolete residue"). (Header
+  corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "awaits
+  maintainer ratification" stood stale — the spec was ratified and built; `./autoharn`
+  and `libexec/autoharn/{led,judge,doctor,pickup,courier,dispatch,fixture-sweep,...}`
+  are shipped in the working tree, and this document's own later §6 amendment records
+  the root-shim-pruning execution (ledger rows 1357-1359) as CLAUDE.md's ORCHESTRATION
+  section also confirms verbatim. Historical prose below kept verbatim.)
 - **Commissions assembled (all verbatim in their rows):** row 1151 (git-type semantics;
   "the program is just a client to the FastAPI"), 1152 (root carries exactly ONE
   executable; implementations to a libexec-style directory), 1153 (idempotent,

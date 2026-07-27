@@ -14,7 +14,13 @@ whether it is a legal `edge_type` value or a reserved word is unstated and §4's
 needs the answer. Constitutional standing: Fable-reviewed-and-adopted, offered to the
 maintainer with true provenance; the maintainer's yes/no decides whether adoption-after-
 review satisfies the Fable-authored route or the spec must be re-authored fresh. Status:
-DRAFT awaiting the maintainer's yes/no. Motivating requirement (maintainer, 2026-07-15 pre-sleep): "the
+DRAFT awaiting the maintainer's yes/no. (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: "DRAFT awaiting the maintainer's yes/no" stood
+stale — `kernel/lineage/s30-typed-dependency-edges.sql`'s own header records "RATIFIED
+2026-07-15, ledger decision row 1018" and implements this spec's edge-type design in full
+(closed vocabulary `blocks-close`/`informs`, `supersedes` refused as an `edge_type` per
+this spec's own open review note, fail-safe `informs` default). Historical prose kept
+verbatim.) Motivating requirement (maintainer, 2026-07-15 pre-sleep): "the
 typing of obligation dependents (related to and necessary for the obligation AND-tree to
 make sense as a projection of SSOT)." Factual basis: the s22/s28/s29 scout brief banked
 in the night-shift workflow journal (cited inline as SCOUT with file:line where it gave

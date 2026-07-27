@@ -15,7 +15,15 @@ requirement, not decoration.**
 ## 1. Placement and scope
 
 **New screen between Birth and Signed genesis** (so the genesis bequeathal can
-name authority that was just constituted). Facts line first (feature_facts
+name authority that was just constituted). (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: the placement above is stale — the shipped
+`SECTIONS` order in `tools/setup_tui/steps.py` is Birth → Boundary → Principals-authority
+→ Signed-genesis, not Birth → Principals-authority → Signed-genesis; that file's own
+comment cites `design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md` Part C (ledger row 1158/1159)
+for moving "boundary" ahead of both screens so `led` is already served, not the retired
+`legacy/led` shim, by the time this screen's acts run. The registry/verb content below
+(register-principal, s41 bindings, charter trap) is unaffected and still live. Historical
+prose kept verbatim.) Facts line first (feature_facts
 entry: aspiration = NIST SP 800-63's identity/lifecycle/binding decomposition
 via the s40/s41 family, cited to FABLE-PRINCIPAL-IDENTITY-SPEC; external =
 none). ON by default like the genesis screen (same benign-and-skippable test:

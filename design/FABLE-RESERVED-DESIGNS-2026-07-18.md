@@ -4,6 +4,18 @@
 
 **Status: DESIGN NOTES, non-binding, Fable-authored fresh-context 2026-07-18 — explicitly NOT a spec, explicitly awaiting a future commissioning act.** Nothing here licenses touching `kernel/lineage/`; the standing rule (nobody edits kernel lineage without a Fable-authored, maintainer-ratified spec, [CLAUDE.md](../CLAUDE.md) ORCHESTRATION) is untouched, and each design below reaches reality only as its own future spec entering a future [world](../GLOSSARY.md#world)'s [birth chain](../GLOSSARY.md#birth-chain) (runs-are-strictly-linear, maintainer ruling 2026-07-11 — no delta is ever applied to an existing world).
 
+**(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90):** this
+"awaiting a future commissioning act" framing now applies only to §3 (the competence-band
+system — confirmed still open: no `competence_band_defined`/`activity_band_required`
+anywhere in the shipped tree). §1 (db_role standing unbind) and §2 (reinstatement of a
+suspended/revoked principal) were in fact ratified (ledger row 1481) and converted into
+[design/FABLE-STANDING-LIFECYCLE-SPEC.md](FABLE-STANDING-LIFECYCLE-SPEC.md), which states
+its primary inputs include this file's "§1.3/§2.3, the designs converted here," and was
+built as `kernel/lineage/s45-standing-lifecycle.sql` (`principal_binding_active` on
+`principal_standing_declared`/`principal_suspended`, `undeclare-standing`/`lift-suspension`
+verbs). §1/§2's own ratification questions below are therefore historical, not open.
+Historical prose kept verbatim throughout.
+
 **What this document is, in plain words.** The principal-identity delta family s40/s41 — specified by [design/FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md](FABLE-PRINCIPAL-IDENTITY-SPEC-BUILD-BASIS.md) (the frozen build basis, read here in full as corrected by its amendments C1–C13) and built as [kernel/lineage/s40-principal-identity-events.sql](../kernel/lineage/s40-principal-identity-events.sql) and [kernel/lineage/s41-principal-bindings-and-relations.sql](../kernel/lineage/s41-principal-bindings-and-relations.sql) — deliberately left three small designs undone, each named honestly in the basis rather than silently absent. This document banks the design analysis for those three, so that a future spec author (or the maintainer directly) can act on them without re-deriving it: (1) a sanctioned way for a database role to return to *undeclared* standing (basis amendment C8); (2) reinstatement of a suspended or revoked principal (basis §3.4 / §9(b), ratified not-built-in-v1 with an explicit revisit condition); (3) the closed competence-band system the §9(g) free-text placeholder awaits. Each section opens with a plain-words motivation preamble (what the mechanism is, what is stuck today, and what concretely goes wrong without the design — before any apparatus vocabulary), then restates its problem from zero context, enumerates the design space, states one recommended design at builder precision, names what it deliberately does not decide, and closes with a single yes/no ratification question. A final section states how the three interact — notably that designs 1 and 2 share one mechanism, and design 3 does not.
 
 Everything below was verified against the s40/s41 DDL as actually built (constraint names, CHECK shapes, view bodies, trigger bodies), not only against the spec's prose. Where a recommendation depends on a specific line of the built DDL, that dependency is cited.

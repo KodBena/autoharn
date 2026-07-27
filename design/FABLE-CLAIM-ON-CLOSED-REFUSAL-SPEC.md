@@ -6,7 +6,14 @@
 approval, item 3, following the witnessed defect at ledger rows 1539/1540 and its filing at
 row 1544 / work item `claim-on-closed-item-admitted`). Fable-authored. A Sonnet builder
 executes this document. Nothing is applied by its authoring; the delta reaches reality only
-through a future world's birth chain (runs-are-linear, 2026-07-11).
+through a future world's birth chain (runs-are-linear, 2026-07-11). (Header corrected
+2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: §5's builder-guidance line
+below — "Wire the delta into the gates' scratch-only CHAIN extensions... NOT into
+`bootstrap/new-project.sh`'s LINEAGE_CHAIN" — is now stale as a description of where the
+delta lives: `kernel/lineage/s47-claim-on-closed-refusal.sql` and its `.detect.sql` sibling
+shipped, and `s47-claim-on-closed-refusal` IS present in `bootstrap/new-project.sh`'s
+`LINEAGE_CHAIN`, entered by the maintainer's own subsequent act per house process.
+Historical prose kept verbatim below.)
 
 **Class:** strictly additive refusal — nothing existing relaxed, no existing semantics
 changed. This is the class-ratified fail-safe shape (CLAUDE.md, 2026-07-09 ruling): it

@@ -2,6 +2,16 @@
 
 <!-- doc-attest-exempt: build-basis spec; attestation rides witnessed delivery -->
 
+**Correction, 2026-07-28 (design-drift triage, autoharn3 ledger rows 90/91):** SHIPPED as
+`kernel/lineage/s50-defeat-input-raw-domain.sql`, in the birth chain since (ruling ledger
+row autoharn1:1647 — see law/adr/history/ledger.md). The 2026-07-28 triage first moved
+this file to the vestigial tree as superseded-by-its-own-build; the orchestrator's
+adjudication REVERSED that same day: the frozen `s50` lineage file and
+`bootstrap/new-project.sh`'s LINEAGE_CHAIN narrative both cite this exact `design/` path
+(frozen records are never retro-edited), and house practice keeps every shipped delta's
+ratified spec in `design/`. This file is the shipped delta's spec of record, not a
+vestige. Historical prose below unchanged.
+
 **Status: Fable-authored 2026-07-18, build basis for one kernel lineage delta (next
 free sNN at build time). Ratification: maintainer-delegated adjudication, ledger row
 1647 ("I have to yield competence on the matter to you"), read plainly per the

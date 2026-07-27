@@ -12,7 +12,13 @@ ratified cascade direction) to build grade. A **Sonnet builder** executes this d
 after Fable authoring ends (2026-07-19); every forkable choice is fixed herein, because
 `engine/lp/` semantics require a Fable-authored spec and no Fable will be available to
 consult. Cost attribution: ledger estimate row 1483. Nothing in this document is applied by
-its authoring; no commit, no ledger write, no kernel or engine edit accompanies it.
+its authoring; no commit, no ledger write, no kernel or engine edit accompanies it. (Header
+corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "nothing... is
+applied" stood stale — the build shipped and merged: `engine/lp/ledger_defeat.lp` and
+`engine/ledger_edb.py`'s `export_defeat()` implement §4/§5.1 exactly, and
+`kernel/lineage/s46-credited-views.sql` (plus its `.detect.sql` sibling) is wired into
+`bootstrap/new-project.sh`'s LINEAGE_CHAIN; a follow-on delta (s50) has since amended s46's
+defeat-input domain. Historical prose below kept verbatim.)
 
 **What this document is, in plain words.** The project's ledger derives "what currently
 stands" two independent ways — SQL recursive views/queries and an ASP logic program — and

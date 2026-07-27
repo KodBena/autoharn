@@ -68,6 +68,16 @@ in omega-lab that is `./legacy/led` until served coverage extends. Extending the
 served shim to the work family is a SEPARATE, already-named pass — this spec does
 not smuggle it in, and the compiler must not depend on it.
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: this
+section is now stale — `legacy/led` is fully retired (FABLE-LEGACY-LED-RETIREMENT-SPEC.md,
+`legacy-led.tmpl` deleted outright; `./legacy/led`, once scaffolded, is a one-line
+teaching-refusal stub) after `led principal *` closed the one served-coverage gap the
+work family had. `tools/workflow_compile.py` and the driven instances under
+`tools/workflow_units/*/drive.py` now default `--led` to the served umbrella path
+(`libexec/autoharn/led`), not `legacy/led`. The rest of this spec — kernel-coupled units,
+no compiler-owned enforcement, the instance-discriminator amendment — remains an accurate
+description of the shipped mechanism. Historical prose above kept verbatim.)
+
 ## Witnesses (both polarities, on omega-lab or a scratch world)
 
 - **WC1** compile a two-phase specimen (e.g. `autoharn-builder-wave.toml`'s

@@ -4,7 +4,7 @@
 ("when a design is fully discharged or superseded, it should automatically raise an
 advisory about its possible non-actuality"); the A:B:C loop runs on the build, not the
 proposal text. Removal condition: superseded by the build's merge record, or rejection. -->
-<!-- design-currency: status=in-build -->
+<!-- design-currency: status=discharged discharged-by=d534466 -->
 
 This document specifies a small advisory mechanism for the `design/` directory: a
 machine-readable currency header that design documents adopt when touched, and a gate
@@ -16,6 +16,12 @@ status quietly stops being true.
 
 - **Status:** PROPOSED 2026-07-27 (maintainer direction verbatim on the ledger row for
   this spec; his design caveat carried: "some design documents depend on others").
+  (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: both
+  this line and the `status=in-build` machine header above stood stale — genuinely so by
+  this very spec's own vocabulary, since `gates/design_currency.py` shipped and merged
+  (`4cbbb8e` + two fix rounds `a7781ce`/`0f5f8e8`, merge commit `d534466`); corrected to
+  `status=discharged discharged-by=d534466` per the gate's own rule that a shipped build
+  should carry that token. Historical prose below kept verbatim.)
 - **The live specimen motivating it:** design/LOGGING-DIRECTION-SURVEY-2026-07-27.md's
   own exempt marker says "Removal condition: superseded by a ratified logging spec that
   cites it" — that condition came TRUE when FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md

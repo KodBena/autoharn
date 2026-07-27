@@ -114,6 +114,13 @@ glossing over).
 adopters have different constraints, and the scaffold should not force a choice that does not
 fit an adopter's environment.
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: the
+"`--pin copy` fallback" proposed above was not shipped — `bootstrap/new-project.sh`
+refuses any `--pin` value except `submodule` verbatim: "`--pin '$PIN' is not a recognized
+value -- only 'submodule' is supported`". Only the submodule path was built; the
+copy-at-scaffold fallback remains this document's proposal, not shipped behavior.
+Historical prose above kept verbatim.)
+
 ## Migration path for EXISTING deployments — ~/ent is the motivating case
 
 A deployment scaffolded before this design exists (~/ent, and any other adopter scaffolded under

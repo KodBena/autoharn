@@ -6,7 +6,15 @@
 **Status: DRAFT, Fable-authored 2026-07-18, NOT ratified. Build doubly gated: (1) the
 maintainer's sign-off on this spec, (2) the boundary-service review loop reaching its
 fixpoint (the loop reviews `serving/` at pinned commits; building this before the loop
-closes would swap the review target mid-pass).** Authored now rather than later for a
+closes would swap the review target mid-pass).** (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: "NOT ratified" / "build doubly gated" stood
+stale — both gates cleared and the build shipped and merged: `serving/boundary_service.py`
+implements the full `/d/{deployment}` discriminator (route table grown to fourteen routes)
+and `serving/boundary_multiplex_config.py` exists; the CLI rebase (§5) is live (`led`/
+`pickup`/`asof-export`/`distance-to-clean` all run through the boundary); the §6 `./legacy/`
+plan was itself further superseded by FABLE-LEGACY-LED-RETIREMENT-SPEC.md (`./legacy/led`
+is now a one-line teaching-refusal stub, `legacy-led.tmpl` deleted outright). Historical
+prose below kept verbatim.) Authored now rather than later for a
 stated reason: the maintainer named the direction on 2026-07-18 ("we'll want to move the
 CLI verbs to run on top of the FastAPI server (placing the old ones in ./legacy) and make
 sure that the FastAPI server can service multiple deployments (essentially a JSON/TOML

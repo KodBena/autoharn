@@ -5,7 +5,12 @@
 ledger row 1541 parked, in the direction row 1542's audit item anticipates). The A:B:C loop
 runs on the build, not the proposal text. Removal condition: superseded by the build's
 merge record. -->
-<!-- design-currency: status=ratified depends-on=FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md -->
+<!-- design-currency: status=discharged discharged-by=7451f63 depends-on=FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md -->
+
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90:
+`status=ratified` stood stale — the delta shipped and merged (`7451f63`, "review CLEARS
+at strengthened tier"), and a follow-up merge (`8cb2b85`) even refreshed the Idris model
+through it. Historical prose below kept verbatim.)
 
 One kernel lineage delta, `kernel/lineage/s68-typed-absence-dispositions.sql`, extending
 the s67 §2-AMENDMENT discipline (ADR-0012 P11: absence carries a typed reason; ADR-0008's

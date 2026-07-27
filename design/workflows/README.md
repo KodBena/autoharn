@@ -104,6 +104,15 @@ specimen files below passing clean.
 
 ## The four transcribed specimens
 
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: "this
+directory's index" below is now incomplete — three more TOML files
+(`faq-abc-fixpoint-loop.toml`, `faq-bookkeeping-close-pairing.toml`,
+`faq-doc-then-fix-sequencing.toml`) were added later by a different work item (commit
+`5576223`, "shaped recipes -- factor three mechanical FAQ recipes," ledger row 1619) and
+are documented instead in `user-guide/USER-SHAPED-RECIPES-FAQ.md`, which runs
+`tools/workflow_check.py` against them. The four specimens below remain this v0 grammar's
+own harvested-transcription set; historical prose kept verbatim.)
+
 The table below is this directory's index: each row names one transcribed TOML file, the
 letter ("Specimen A/B/C/D") the "Known misfits" section below uses to refer back to it, what
 real run it was harvested from, and how many phases it declares. Each file's own header comment

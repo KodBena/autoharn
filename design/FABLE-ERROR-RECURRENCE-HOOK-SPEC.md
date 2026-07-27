@@ -5,7 +5,13 @@
 **Status: Fable-authored 2026-07-19, build basis. Maintainer-directed same date ("I
 think we should do the automatic part that the ADR-0011 FAQ question refers to"),
 which supersedes row 1696's build-on-recurrence hold — his instruction is the
-ratification, read plainly. Constraints carried from row 1696 verbatim: the signal
+ratification, read plainly. (Header corrected 2026-07-28, autoharn3 design-drift-triage
+sweep, ledger row 90: "build basis" read as pre-build — shipped and merged (`fe94b54`):
+`hooks/posttooluse_error_recurrence.py` exists, and `bootstrap/templates/apparatus.json`
++ `bootstrap/templates/HOOKS.md.tmpl` both carry the `error_recurrence` wiring; this
+repo's own live apparatus deliberately omits the key per the hooks-frozen-during-
+live-sessions rule, which is by design, not a gap. Historical prose kept verbatim.)
+Constraints carried from row 1696 verbatim: the signal
 originates from the hook/action-stream layer (the evidentiary basis); otelcol stays
 the observability window; detective control ONLY — the hook surfaces priors, it
 never blocks, never writes suspensions, never polices.**

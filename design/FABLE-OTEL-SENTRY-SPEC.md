@@ -9,7 +9,15 @@ attribution: ledger estimate row 1465, original authoring row 1453, slug `otel-s
 The revision restructures the design watchdog-first (§3), authors the typed attestation kind
 in full delta grade (§8), and renumbers the reserved decisions (§12) — the maintainer's
 alone. Nothing in this document is applied anywhere by its authoring; a non-Fable builder
-executes it only after the maintainer's word.
+executes it only after the maintainer's word. (Header corrected 2026-07-28, autoharn3
+design-drift-triage sweep, ledger row 90: "DRAFT awaiting maintainer ratification" /
+"nothing... is applied" stood well behind the shipped tree — v0 (watchdog) and v1
+(`otel-attest`) are ratified, built, and in service: `./otel-watch` and `./otel-attest`
+are live repo-root verbs (`ORCH-CAPABILITIES.md` items 39-40, commits `e2ce003`/fix
+`c3301e5`, service restored ledger row 1515), with `seen-red/otel-watch/` and
+`seen-red/otel-attest/` fixture suites; v2's kernel shape is also already shipped as
+`kernel/lineage/s44-model-identity-attestation.sql` (no verb writes it yet, per s44's own
+comment). Historical prose below kept verbatim.)
 
 **What this document is, in plain words.** Claude Code can emit OpenTelemetry ("OTel")
 telemetry — structured event records about its own API calls — to a local collector, and each

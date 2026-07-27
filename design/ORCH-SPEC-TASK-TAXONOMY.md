@@ -133,7 +133,13 @@ never by decree.
 - **Stage A** — `taxon:`/`interface:` intake validation + pickup TAXONOMIES section +
   a USER- template page with the omega licensing specimen as the worked example
   (marked as one maintainer's example, per the blessed-table convention). Seen-red
-  both polarities; census.
+  both polarities; census. (Header corrected 2026-07-28, autoharn3 design-drift-triage
+  sweep, ledger row 90: presented as future routing, but Stage A shipped — confirmed
+  live in `bootstrap/templates/led.tmpl`'s `taxon:`/`interface:` validators and
+  `bootstrap/templates/pickup.tmpl`'s TAXONOMIES section, commits `365bf6f`/`4b9c01d`,
+  "taxonomy-stage-a: taxon:/interface: intake validation + pickup TAXONOMIES section +
+  USER-TAXONOMY-DECLARATION page." Stages B-D remain unbuilt, consistent with this
+  section's own framing. Historical prose kept verbatim.)
 - **Stage B** — the audit family: ASP + SQL floor + differential + `./autoharn audit` flag
   (next free exit code; note the exit-6/7 collision precedent — one exit, one owner,
   checked at authoring). Includes the unassigned-artifact report.
@@ -154,6 +160,8 @@ he asked is answered in §2 with the correction he invited. Deliberately absent,
 where they fall: semantic understanding of any taxonomy (§4), non-textual reference
 detection (§6), any judgment that a declared taxonomy is well-drawn (§5, §6), and
 kernel columns before the deferred `resource` kernel step (s27; see
-[ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §2) every sibling
+[ORCH-SPEC-RESOURCE-REGISTRY.md](ORCH-SPEC-RESOURCE-REGISTRY.md) §2 for the dated
+correction — s27 is taken by an unrelated shipped delta, so the deferred `resource`
+kind takes a later step number when it lands) every sibling
 spec defers to. No obligation
 exists for deployments that declare nothing (§6).

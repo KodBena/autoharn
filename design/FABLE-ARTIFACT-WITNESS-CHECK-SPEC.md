@@ -7,6 +7,11 @@ kernel lineage delta (next free sNN at build time). AWAITING MAINTAINER RATIFICA
 to build; birth-chain entry is separately his act. This is the successor both the
 artifact-store spec ([FABLE-ARTIFACT-STORE-SPEC.md](FABLE-ARTIFACT-STORE-SPEC.md),
 "anticipated successor, not smuggled in") and s48's own LIMITS section name.**
+(Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: the
+"AWAITING MAINTAINER RATIFICATION to build" line above stood stale —
+`kernel/lineage/s52-artifact-witness-check.sql`'s own header quotes this exact status
+line and records "ratified 2026-07-18, ledger row 1673 item 2, 'artifact-witness-check
+build YES'"; the delta shipped as s52. Historical prose above kept verbatim.)
 
 ## Class statement
 

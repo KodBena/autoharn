@@ -1,5 +1,11 @@
 # Dispatch-principal wiring — the LED_ACTOR convention for builder identity
 
+<!-- doc-attest-exempt: design-drift-triage mechanical edit (autoharn3 ledger row 90,
+2026-07-28) -- one dated correction note added describing the shipped charset regex
+tightening past what this doc names; no prose rewrite. Removal condition: strike this
+marker and run the real A:B:C loop next time this file is touched for content, not just
+status repair. -->
+
 This note is for an orchestrator (human or agent) that dispatches a builder — via Claude
 Code's Agent/Task tool — to work on one item from this project's ledger (its append-only
 decision/audit log, read via the `./led` command-line tool). It answers one question: how does
@@ -113,6 +119,12 @@ exposes two subcommands:
   `[A-Za-z0-9_-]+` (fix round finding 1, this document's own attestation history: an unquoted
   paste line built from an unconstrained name was a shell-injection hazard, e.g.
   `builder$(touch PWNED)`) before doing anything else, including talking to `led` at all.
+  (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger row 90: the
+  charset rule above is looser than what shipped — `tools/dispatch_principal.py`'s
+  `NAME_CHARSET_RE` is `^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$` (no leading hyphen, 64-char cap,
+  neither mentioned above), tightened by commit `14e8139` after this document's own last
+  fix round; a further commit `16623b1` also shlex-hardened an unquoted `subprocess.run` in
+  `run_led` not described here. Historical prose kept verbatim.)
 - `check <name>` — same test, machine-readable `REGISTERED:`/`NOT-REGISTERED:` output by
   default (using Python `repr()` for the name, not hand-rolled quotes — fix round finding 4)
   or, with `--json`, one `{"name": ..., "registered": true|false}` object — for a batch

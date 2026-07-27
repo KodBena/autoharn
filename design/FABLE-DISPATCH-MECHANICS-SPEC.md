@@ -18,7 +18,12 @@ reviews that service change.
   §3 item 3 (dispatch mechanics) built out, per the maintainer's standing word on ledger
   row 1471: the confirmed stamp finding "enters the dispatch-mechanics build spec as a
   named requirement — one HTTP-borne identity plumbing serving both minted principals and
-  vendor stamps."
+  vendor stamps." (Header corrected 2026-07-28, autoharn3 design-drift-triage sweep, ledger
+  row 90: the status line above states ratification only and omits that the build has since
+  landed — `serving/boundary_service.py` implements the identity-header conduit
+  (`IDENTITY_HEADER_MINTED_PRINCIPAL`, `_parse_identity_headers()`) and `libexec/autoharn/
+  dispatch` is the shipped dispatch verb, merged as commit `e67063a`. Historical prose above
+  kept verbatim.)
 - **Basis:** ledger rows 1463/1467 (ledger row — this project's append-only
   decision/audit log, read via `./autoharn led show <id>`; every bare row number in this
   document is one of its entries) (the finding: vendor stamps NEVER reach the served path — `PGOPTIONS` is a
