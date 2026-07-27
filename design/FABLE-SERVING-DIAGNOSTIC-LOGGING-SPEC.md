@@ -4,10 +4,11 @@
 the A:B:C loop runs on the build, not the proposal text. Removal condition: superseded by
 the build's merge record, or rejection. -->
 
-- **Status:** PROPOSED 2026-07-27. The L3 floor is already ratified (the maintainer,
-  verbatim on ledger row 1496: *"I'll at least want the json debug log so that we can do
-  structured resolution with jq (so this is the minimum floor, not a ceiling or scope)"*).
-  The rest of this spec is his accept/cut/reject on
+- **Status:** RATIFIED IN FULL 2026-07-27 (maintainer, same day as proposal: "As per
+  your recommendation, then" — all four layers; ledger row records it). The L3 floor was
+  ratified separately and earlier (the maintainer, verbatim on ledger row 1496: *"I'll
+  at least want the json debug log so that we can do structured resolution with jq (so
+  this is the minimum floor, not a ceiling or scope)"*). The layer shapes resolve
   [design/LOGGING-DIRECTION-SURVEY-2026-07-27.md](LOGGING-DIRECTION-SURVEY-2026-07-27.md)
   §3, sharpened by the two witnesses below.
 - **Basis:** ledger rows 1484/1486 (the survey commission and its due-diligence framing),
