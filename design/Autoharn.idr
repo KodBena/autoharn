@@ -26,17 +26,43 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s65. LAGGING: s66-forged-stamp-journal-totality.sql and
-||| s67-refusal-digest-bound.sql (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md) landed after
-||| this model's last transcription sweep -- both are refusal-journal totality fixes (one
-||| trigger branch on kernel.set_stamp gated on NEW.kind='write_refused', one payload-size bound
-||| inside kernel.journal_write_refusal plus a CHECK arity widening on refusal_payload_digest),
-||| neither of which this model currently renders at all (set_stamp/journal_write_refusal are
-||| kernel-internal trigger/journaler mechanics, not part of the PWriteRefused/checkPayload
-||| surface this model transcribes) -- named here rather than silently bumped on faith. A future
-||| pass pays this down by transcribing both (or confirming, as s65's own sweep did for its
-||| six non-model-visible deltas, that neither changes any premise this model states) and
-||| dropping this LAGGING suffix.
+||| AS-OF: kernel chain through s67 (this pass pays down the prior LAGGING note, below, per
+||| gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics
+||| genuinely catch up).
+||| THE s66-s67 PASS (design/FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md, ledger rows 1514/1519 --
+||| both members of the s49 refusal-journal-totality family): per-delta disposition, read against
+||| the SQL, not bumped on faith.
+|||   s66 (kernel/lineage/s66-forged-stamp-journal-totality.sql) -- CONFIRMED NOT MODEL-VISIBLE,
+|||     the s42/s51-style "verified before bumping" disposition. The delta's ONE branch is inside
+|||     kernel.set_stamp: a forged-complete stamp on the journaler's OWN write_refused row now
+|||     records stamp_verified=false instead of raising a second, uncaught exception. This model
+|||     has never rendered set_stamp's raise-vs-accept control flow at all -- `write` (§3b) is
+|||     ALREADY total on both arms with no stamp-validity gate anywhere in its own decision (the
+|||     header's own PRESERVED list: the HMAC stamp is a black-box mock, §0; StampOracle is
+|||     declared and never invoked by write/checkEntry/boundaryOk), and Entry.stamp is carried as
+|||     a raw `Maybe Stamp`, never a `stampVerified` boolean this file reads anywhere. `write`'s
+|||     own refusal arm already mints its write_refused row with stamp := Nothing unconditionally
+|||     (a coarser abstraction than "verified=false" that already subsumes it) -- so a fix to
+|||     WHICH of set_stamp's internal branches assigns stamp_verified := false cannot be observed
+|||     at an altitude that never modeled stamp_verified's assignment to begin with. Re-verified
+|||     directly against the reissued function body (kernel/lineage/
+|||     s66-forged-stamp-journal-totality.sql Element 1) before writing this note, not inferred
+|||     from the spec's prose alone.
+|||   s67 (kernel/lineage/s67-refusal-digest-bound.sql + its §2 AMENDMENT) -- MODEL-VISIBLE.
+|||     PWriteRefused's digest gains a disposition discriminator (RefusalDigestDisposition:
+|||     RDComputed/RDOverBound) and the digest field itself becomes DigestF-indexed by it
+|||     (NonEmptyText under RDComputed, () under RDOverBound) -- the kind-guarded coupling CHECK
+|||     (refusal_payload_digest_disposition_coupling) rendered as unrepresentability, one family
+|||     over from CompetenceValueF/ExpectedF, matching the maintainer's OWN merge-hold ruling that
+|||     a bare-nullable `Maybe NonEmptyText` here would be exactly the "NULL as an implicit
+|||     sentinel" shape ADR-0000 condemns. `write`'s own construction (§3b) can only ever mint
+|||     RDComputed -- this model carries no byte-length for a Payload value, so nothing here can
+|||     decide the over-bound leg is reached (the identical "domain never sees the adversarial
+|||     input" judgment s65's own 256-byte attemptedKind bound already argues, one field over);
+|||     the RDOverBound leg is representable and exercised by its own dedicated fixture (k67a),
+|||     never reachable from `write` itself, named rather than silently unexercised. Two `failing`
+|||     blocks (k67b/k67c) witness both directions of the coupling as unrepresentable, the k44c/
+|||     k44d precedent one family over.
 ||| THE s53-s65 SWEEP (this pass, one transcription sweep across all thirteen deltas, per-delta,
 ||| not bumped on faith -- gates/idris_model_freshness.py, previously WARN on the s53-s57 lag,
 ||| now clean): what each delta became here, or why nothing model-visible resulted.
@@ -967,6 +993,26 @@ PremisesF : BeliefBasis -> Nat -> Type
 PremisesF BDerived n = List (Fin n)
 PremisesF _        n = ()
 
+||| s67 (kernel/lineage/s67-refusal-digest-bound.sql, design/
+||| FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 AMENDMENT): the closed, two-member
+||| refusal_digest_disposition vocabulary -- WHY a write_refused row's digest holds the value it
+||| does. RDComputed: the payload was within the 1 MiB bound and the digest is a real SHA-256.
+||| RDOverBound: the payload's canonical text exceeded the bound, so no digest was computed. Never
+||| extended past two members by this rendering (the SQL's own CHECK is equally closed).
+data RefusalDigestDisposition = RDComputed | RDOverBound
+
+||| s67: the digest is mandatory NonEmptyText exactly under RDComputed, forbidden (unrepresentable)
+||| under RDOverBound -- the kind-guarded coupling CHECK
+||| (refusal_payload_digest_disposition_coupling) rendered as unrepresentability rather than a bare
+||| nullable column, one family over from CompetenceValueF/PossessionRefF/DelegationConditionsF.
+||| This is the §2 AMENDMENT's own point: the maintainer's merge-hold ruling refused a NULL-as-
+||| implicit-sentinel encoding even though the SQL's original one-way CHECK would have licensed it
+||| -- so this model does not carry `Maybe NonEmptyText` here at all, the exact bare-nullable shape
+||| the ruling condemns.
+DigestF : RefusalDigestDisposition -> Type
+DigestF RDComputed  = NonEmptyText
+DigestF RDOverBound = ()
+
 data Payload : (st : Stage) -> (n : Nat) -> Type where
   PProse      : ProseKind -> Payload st n
   ||| s36: a decision row with its writer-supplied durability grade (nullable,
@@ -1031,12 +1077,37 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
                       -> (active : Bool) -> PossessionRefF active n -> Payload st n
   PCompetenceGranted   : (subject : PrincipalId) -> (activity : NonEmptyText)
                       -> (active : Bool) -> CompetenceValueF active -> Payload st n
+  |||
   ||| s43: a refusal the write boundary caught, COMMITTED as an ordinary row
   ||| (the one event class the pre-s43 kernel destroyed by the refusal's own
-  ||| abort). Six typed fields, the SQL's six refusal_* columns: sqlstate and
+  ||| abort). Eight typed fields, the SQL's eight refusal_* columns (s67 adds the
+  ||| eighth): sqlstate and
   ||| digest are NonEmptyText here where the SQL refines further by regex
   ||| (^[0-9A-Z]{5}$ / 64-hex -- shape refinements below this rendering's
   ||| altitude, named); the attempted actor is legitimately Maybe (an
+  ||| s67 (kernel/lineage/s67-refusal-digest-bound.sql, design/
+  ||| FABLE-S66-S67-JOURNAL-TOTALITY-SPEC.md §2 + its §2 AMENDMENT, ledger row 1514 item 1 "all
+  ||| should go in" / merge-hold ruling "NULL as an implicit sentinel ... is not condonable"): the
+  ||| digest is now BOUNDED -- a refused payload whose canonical text exceeds 1,048,576 bytes (the
+  ||| s51 artifact_too_large figure, reused) gets NO digest at all, because the direct-psql-bypass
+  ||| path this journaler backstops has no other size cap. THE AMENDMENT'S OWN POINT: the reason
+  ||| for that absence must be a TYPED, representable fact, never an inference from a NULL a reader
+  ||| must guess the meaning of (ADR-0000's unrepresentable-illegal-states principle, autoharn2 row
+  ||| 1105) -- so this model does not render digest as `Maybe NonEmptyText` (a bare nullable, the
+  ||| exact shape the maintainer's ruling condemns) but as a NEW discriminator/dependent-field pair,
+  ||| RefusalDigestDisposition/DigestF just below, one family over from CompetenceValueF/
+  ||| PossessionRefF/DelegationConditionsF: RDComputed forces an actual NonEmptyText digest,
+  ||| RDOverBound forces (), the impossibility of a populated digest under that disposition (or an
+  ||| absent one under RDComputed) rendered as UNREPRESENTABILITY, stronger than the SQL's own
+  ||| kind-guarded coupling CHECK (refusal_payload_digest_disposition_coupling), matching how every
+  ||| other mandatory-iff column in this file is already rendered. NOT MODELED, named rather than
+  ||| silently smoothed: this model carries no notion of a Payload's own serialized byte length (no
+  ||| field anywhere counts bytes), so nothing in `write`'s own construction (§3b) can ever DECIDE
+  ||| to mint the RDOverBound leg -- exactly the s65 attemptedKind precedent one field over ("the
+  ||| bound can never bind here"): the leg is representable and exercised by a dedicated fixture
+  ||| (k67a below), never reachable from `write` itself, because `write`'s payload is already typed
+  ||| Idris data, never the adversarial raw jsonb text whose size this bound polices at the SQL
+  ||| altitude.
   ||| unattributable attempt), the attempted ROLE always known. SINCE THE
   ||| s44-s49 PARITY PASS the boundary's totality invariant ("a refusal
   ||| verdict cannot be delivered unjournaled", s43 §4.4) IS rendered --
@@ -1084,7 +1155,8 @@ data Payload : (st : Stage) -> (n : Nat) -> Type where
   ||| simply below this rendering's, exactly the Nat-vs-bigint idealization's
   ||| own shape one field over.
   PWriteRefused : (sqlstate : NonEmptyText) -> (message : NonEmptyText)
-               -> (surface : RefusalSurface) -> (digest : NonEmptyText)
+               -> (surface : RefusalSurface)
+               -> (disposition : RefusalDigestDisposition) -> (digest : DigestF disposition)
                -> (attemptedActor : Maybe PrincipalId)
                -> (attemptedRole : NonEmptyText)
                -> (attemptedKind : Maybe NonEmptyText) -> Payload st n
@@ -2528,7 +2600,7 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| channel) is boundary-side payload VALIDATION at the SECURITY DEFINER
   ||| trust line, an authorship fact this row algebra cannot see (named, not
   ||| hidden; the oracle's count>sequence FAIL is its mechanical tripwire).
-  VWriteRefused : ValidPayload l (PWriteRefused q m sf d aa ar ak)
+  VWriteRefused : ValidPayload l (PWriteRefused q m sf disp d aa ar ak)
   ||| s40: the four identity events. Registration freshness by NAME lives on
   ||| the SQL anchor's UNIQUE(name) + the CLI ceremony -- this model's
   ||| PrincipalId is the id, not the name, so name-duplicate refusal is out of
@@ -2674,7 +2746,7 @@ recordPayload l st (PViolationDisposition c t r w) = PViolationDisposition c t r
 recordPayload l st (PReview r (MkReviewDetail v i b a ())) =
   let tgt = case entryAt l r of (_ ** e) => e.stamp
   in PReview r (MkReviewDetail v i b a (gradeLadder (stampPair st) (stampPair tgt)))
-recordPayload l st (PWriteRefused q m sf d aa ar ak) = PWriteRefused q m sf d aa ar ak
+recordPayload l st (PWriteRefused q m sf disp d aa ar ak) = PWriteRefused q m sf disp d aa ar ak
 recordPayload l st (PModelAttested t m g os jb he v ex) = PModelAttested t m g os jb he v ex
 recordPayload l st (PPrincipalRegistered s c p) = PPrincipalRegistered s c p
 recordPayload l st (PPrincipalSuspended s a)    = PPrincipalSuspended s a
@@ -2726,7 +2798,7 @@ recordPayload l st (PKeyPossessionVerified fp)  = PKeyPossessionVerified fp
 maySupersede : Payload Recorded m -> Payload Draft k -> Bool
 -- s43 R6 (RATIFIED): a write_refused row is UNRETRACTABLE -- it records a
 -- historical fact about a refused attempt and asserts nothing retractable.
-maySupersede (PWriteRefused _ _ _ _ _ _ _) _ = False
+maySupersede (PWriteRefused _ _ _ _ _ _ _ _) _ = False
 -- s45 §3.4, the conversion-found closure: the three standing-lifecycle kinds
 -- accept only SAME-KIND, IDENTITY-CONTINUOUS supersessors. A declaration's
 -- supersessor restates the SAME db_role always, and the SAME subject when it
@@ -2973,7 +3045,7 @@ payloadKindToken (PRelationAsserted _ _ _ _ _)   = MkNonEmptyText "principal_rel
 payloadKindToken (PRoleBound _ _ _)              = MkNonEmptyText "principal_role_bound" Oh
 payloadKindToken (PKeyBound _ _ _ _)             = MkNonEmptyText "principal_key_bound" Oh
 payloadKindToken (PCompetenceGranted _ _ _ _)    = MkNonEmptyText "principal_competence_granted" Oh
-payloadKindToken (PWriteRefused _ _ _ _ _ _ _)   = MkNonEmptyText "write_refused" Oh
+payloadKindToken (PWriteRefused _ _ _ _ _ _ _ _) = MkNonEmptyText "write_refused" Oh
 payloadKindToken (PModelAttested _ _ _ _ _ _ _ _) = MkNonEmptyText "model_identity_attested" Oh
 payloadKindToken (PWorkOpened _ _ _ _)           = MkNonEmptyText "work_opened" Oh
 payloadKindToken (PWorkClaimed _)                = MkNonEmptyText "work_claimed" Oh
@@ -3058,7 +3130,7 @@ checkPayload l (PProse k)                      = Right VProse
 checkPayload l (PDecision g)                   = Right VDecision
 checkPayload l (PViolationDisposition c t r w) = Right VViolationDisposition
 checkPayload l (PReview r d)                   = Right VReview
-checkPayload l (PWriteRefused q m sf d aa ar ak)  = Right VWriteRefused
+checkPayload l (PWriteRefused q m sf disp d aa ar ak) = Right VWriteRefused
 checkPayload l (PModelAttested t m g os jb he v ex) = Right VModelAttested
 checkPayload l (PPrincipalRegistered s c p)    = Right VPrincipalRegistered
 checkPayload l (PPrincipalSuspended s a)       = Right VPrincipalSuspended
@@ -3179,7 +3251,7 @@ boundaryReason l e =
       Nothing => RSupersedeLifecycleKind
       Just t  => case entryAt l t of
         (_ ** te) => case te.payload of
-          PWriteRefused _ _ _ _ _ _ _ => RSupersedeWriteRefused
+          PWriteRefused _ _ _ _ _ _ _ _ => RSupersedeWriteRefused
           PStandingDeclared _ _ _   => case e.payload of
             PStandingDeclared _ _ _   => RSupersedeLifecycleIdentity
             _                         => RSupersedeLifecycleKind
@@ -3224,19 +3296,22 @@ write j role l e = case checkEntry l e of
     l :< MkEntry e.session "write refused (journaled verdict)" j Nothing
            Nothing Nothing Nothing [] Nothing
            (PWriteRefused Autoharn.pstate (refusalText r) (surfaceFor e.payload)
-              Autoharn.unmodeledDigest (Just e.actor) role (attemptedKindFor e.payload))
+              -- s67: this model carries no byte-length for a Payload value (see PWriteRefused's
+              -- own doc), so `write`'s construction can never DECIDE the RDOverBound leg -- it
+              -- always mints RDComputed with the same out-of-model digest literal as before.
+              RDComputed Autoharn.unmodeledDigest (Just e.actor) role (attemptedKindFor e.payload))
 
 ||| Probes for the §7 fixtures: is the head row a journaled refusal, and at
 ||| which surface. Pattern-total: a Ledger (S n) is always (:<).
 headRefused : {n : Nat} -> Ledger (S n) -> Bool
 headRefused (l :< e) = case e.payload of
-  PWriteRefused _ _ _ _ _ _ _ => True
-  _                         => False
+  PWriteRefused _ _ _ _ _ _ _ _ => True
+  _                           => False
 
 headSurface : {n : Nat} -> Ledger (S n) -> Maybe RefusalSurface
 headSurface (l :< e) = case e.payload of
-  PWriteRefused _ _ sf _ _ _ _ => Just sf
-  _                          => Nothing
+  PWriteRefused _ _ sf _ _ _ _ _ => Just sf
+  _                            => Nothing
 
 -- ===========================================================================
 -- §4  COMPOSITE DISCHARGE AS A READ OF THE §2b OBLIGATION CALCULUS. No new
@@ -3841,7 +3916,7 @@ worldWF = Lin :< mkE 1 Nothing (PProse KNote)
               :< mkE 1 Nothing (PWriteRefused (MkNonEmptyText "P0001" Oh)
                                   (MkNonEmptyText "Ledger policy: refused" Oh)
                                   SurfLedger
-                                  (MkNonEmptyText "deadbeef" Oh)
+                                  RDComputed (MkNonEmptyText "deadbeef" Oh)
                                   (Just 1) (MkNonEmptyText "bork" Oh)
                                   (Just (MkNonEmptyText "note" Oh)))
 
@@ -3850,9 +3925,36 @@ worldWF = Lin :< mkE 1 Nothing (PProse KNote)
 -- `kind` key (QUANTIFICATION UNIVERSE, s65's own closure statement).
 k43a : ValidPayload Autoharn.worldWF
          (PWriteRefused (MkNonEmptyText "23505" Oh) (MkNonEmptyText "dup" Oh)
-            SurfRegistration (MkNonEmptyText "beef" Oh) Nothing
+            SurfRegistration RDComputed (MkNonEmptyText "beef" Oh) Nothing
             (MkNonEmptyText "bork" Oh) Nothing)
 k43a = VWriteRefused
+
+-- s67 GREEN: the digest is legitimately ABSENT under RDOverBound -- the () argument is the
+-- coupling CHECK (refusal_payload_digest_disposition_coupling) rendered as unrepresentability,
+-- one family over from k44a/k44b's ExpectedF pair. A payload-over-bound refusal still carries a
+-- full refusal record otherwise (surface/sqlstate/message/attempted actor/role) -- only the digest
+-- itself is foreclosed (§2 AMENDMENT).
+k67a : ValidPayload Autoharn.worldWF
+         (PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "Ledger policy: refused" Oh)
+            SurfLedger RDOverBound ()
+            (Just 1) (MkNonEmptyText "bork" Oh) Nothing)
+k67a = VWriteRefused
+
+-- s67 RED: RDComputed demands an actual digest -- () does not typecheck there (DigestF RDComputed
+-- = NonEmptyText, not Unit), the coupling's first direction made unrepresentable.
+failing
+  k67b : Payload Recorded 2
+  k67b = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDComputed ()
+           (Just 1) (MkNonEmptyText "bork" Oh) Nothing
+
+-- s67 RED: RDOverBound forbids a populated digest -- a NonEmptyText literal does not typecheck
+-- there (DigestF RDOverBound = ()), the coupling's other direction made unrepresentable.
+failing
+  k67c : Payload Recorded 2
+  k67c = PWriteRefused (MkNonEmptyText "P0001" Oh) (MkNonEmptyText "x" Oh)
+           SurfLedger RDOverBound (MkNonEmptyText "deadbeef" Oh)
+           (Just 1) (MkNonEmptyText "bork" Oh) Nothing
 
 -- s43 R6 RED: superseding the write_refused row (index 1) fails boundaryOk --
 -- the hiding is unrepresentable at the boundary, not merely traceable.
@@ -4413,7 +4515,7 @@ b61b = Refl
 -- never carries a caller `kind` key at all (QUANTIFICATION UNIVERSE, s65's own closure statement).
 headAttemptedKind : {n : Nat} -> Ledger (S n) -> Maybe NonEmptyText
 headAttemptedKind (l :< e) = case e.payload of
-  PWriteRefused _ _ _ _ _ _ ak => ak
+  PWriteRefused _ _ _ _ _ _ _ ak => ak
   _                            => Nothing
 
 w65a : headAttemptedKind (write 9 Autoharn.wbRole Autoharn.worldA (mkD 1 Nothing (PWorkClaimed "a")))
