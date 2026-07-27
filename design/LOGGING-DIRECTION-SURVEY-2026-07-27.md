@@ -6,8 +6,17 @@ license fence per the commission's STEP 0, compliance statement in the report's 
 The maintainer has not yet read it. Removal condition: superseded by a ratified logging
 spec that cites it. -->
 
-**Provenance:** produced by the commissioned survey analyst (Opus). Filed VERBATIM below
-the rule — nothing edited. Its §3 is direction, not design; nothing in it is a spec.
+This document is a survey of another codebase's logging design (the "proxy," a separate
+project of the maintainer's, at `/home/bork/w/omega/proxy`) written to inform a possible
+future logging layer for autoharn; it is not itself a spec, and nothing in it has been
+built yet.
+
+**Provenance:** produced by the commissioned survey analyst (Opus). Legibility repairs
+(referent grounding, citation linking, sentence completeness, structure grounding, acronym
+expansion) were applied by maintainer-directed A-side pre-review on 2026-07-27; no factual
+claim, witness-class marking, number, or the §0 compliance statement's substance was
+altered. The as-delivered original is preserved at the filing commit
+(`8182f711777504208679b1ef50d75f759fcf2dae`). Its §3 is direction, not design; nothing in it is a spec.
 The three upstream defects its §1 found are in the PROXY repository (the maintainer's
 other project) and are reported here only — nothing was fixed there (read-only fence).
 
@@ -19,7 +28,12 @@ other project) and are reported here only — nothing was fixed there (read-only
 
 ## §0 The license fence
 
-**DOC-SOURCED — `/home/bork/w/omega/proxy/NOTICE`, read in full as my first file in that tree, before any other read.** Its operative terms, verbatim:
+**DOC-SOURCED (this report's evidentiary tags, defined once here: DOC-SOURCED = taken
+from the cited document's own text, not independently executed; WITNESSED = the surveyor
+ran the command or probe and shows the observed output; UNEXERCISED = deliberately not
+run, with the concrete blocker or choice stated) — `/home/bork/w/omega/proxy/NOTICE`,
+read in full as my first file in that tree, before any other read.** Its operative
+terms, verbatim:
 
 > ```
 > Project root and all subdirectories EXCEPT `goboard_transposition/`
@@ -50,9 +64,11 @@ and, for the vendored dependency inside it:
 
 ## §1 The proxy's logging architecture
 
-**Two documents, deliberately split.** `docs/logging-design.md` (893 lines) is the architectural memo — schema invariants, event vocabulary rationale, phasing, and a recorded decision ledger (Q1–Q6, each with a "Decided:" line). `docs/logging.md` (439 lines) is the operator runtime reference — env-var matrix, formatter shapes, six worked "operator recipes." Each cross-links the other and states which view it is. `CLAUDE.md` §"Logging conventions (load-bearing for the structured envelope)" (lines 262–371) is the third leg: standing law for anyone authoring or migrating a call site. *(DOC-SOURCED, those files.)*
+**Every file path in this section is inside the proxy repository (`/home/bork/w/omega/proxy`), not autoharn**, unless a citation says otherwise; none of these paths resolve inside this repository.
 
-**One package, seven modules, 1928 lines.** *(WITNESSED — `wc -l proxy_logging/*.py`.)* `enums.py` (Role, Direction, `LogContractError`), `events.py` (the closed `Event` enum + `EVENT_REQUIRED_FIELDS`), `adapter.py` (`ProxyLogger`), `formatters.py` (three renderers + filters + the env dispatcher), `lifecycle.py` (call-site helpers), `summarize.py` (`log_safe`/`filter_dict`/`summarize_query`), `__init__.py` (public surface). The pre-existing `logging_config.py` was reduced to a 55-line back-compat shim re-exporting `get_logger`/`log_safe`/`filter_dict` — that shim is explicitly what made a file-by-file sweep possible instead of a flag-day rewrite *(DOC-SOURCED, `logging_config.py:1-26` and design memo §11 Phase 1)*.
+The proxy's logging documentation is split deliberately into two documents. `docs/logging-design.md` (893 lines) is the architectural memo — schema invariants, event vocabulary rationale, phasing, and a recorded decision ledger (Q1–Q6, each with a "Decided:" line). `docs/logging.md` (439 lines) is the operator runtime reference — env-var matrix, formatter shapes, six worked "operator recipes." Each cross-links the other and states which view it is. The proxy's own `CLAUDE.md` (a different file from this repository's `CLAUDE.md`), §"Logging conventions (load-bearing for the structured envelope)" (lines 262–371), is the third leg: standing law for anyone authoring or migrating a call site. *(DOC-SOURCED, those files.)*
+
+The implementation itself is one package of seven modules, 1928 lines total. *(WITNESSED — `wc -l proxy_logging/*.py`.)* `enums.py` (Role, Direction, `LogContractError`), `events.py` (the closed `Event` enum + `EVENT_REQUIRED_FIELDS`), `adapter.py` (`ProxyLogger`), `formatters.py` (three renderers + filters + the env dispatcher), `lifecycle.py` (call-site helpers), `summarize.py` (`log_safe`/`filter_dict`/`summarize_query`), `__init__.py` (public surface). The pre-existing `logging_config.py` was reduced to a 55-line back-compat shim re-exporting `get_logger`/`log_safe`/`filter_dict` — that shim is explicitly what made a file-by-file sweep possible instead of a flag-day rewrite *(DOC-SOURCED, `logging_config.py:1-26` and design memo §11 Phase 1)*.
 
 **The layering, bottom to top:**
 
@@ -95,7 +111,7 @@ and, for the vendored dependency inside it:
 
 ## §2 What "mature" actually consists of here
 
-Nine properties, in rough order of what I'd want in autoharn:
+Nine properties follow, in rough order of what I'd want in autoharn:
 
 1. **The log is a contract, not output.** A closed event set plus per-event required fields, enforced at the call site with a dedicated exception type. This is the load-bearing idea; everything else is ergonomics around it. The motivating framing in the memo is worth quoting for its posture: *"renaming an event field after operators are parsing it is expensive"* — so schema decisions were made in a reviewable memo **before** any code landed.
 2. **Refusals that teach.** `LogContractError`'s message names the event, the full required set, what was missing, and what *was* provided *(DOC-SOURCED, `adapter.py:290-294`)*. Directly the autoharn house shape.
@@ -109,12 +125,15 @@ Nine properties, in rough order of what I'd want in autoharn:
 
 ### Worth NOT adopting for autoharn's shape (stated honestly)
 
+Seven specific things the proxy does well for its own shape but that autoharn should not copy, each with why:
+
 - **The lazy import.** `lifecycle.py:227` does `import logging as _logging` inside `forward()`; `proxy_server.py:1327` defers the whole `proxy_logging` import inside `_main`. autoharn bans these outright, mechanically (`gates/no_lazy_imports.py`). Don't carry the pattern across with the ideas.
-- **The scale.** 1928 lines and 44 events is right for a five-role async proxy emitting per-partial-response records at DEBUG. autoharn's serving layer is 14 routes and one write path. Starting at proxy scale would be work ahead of demonstrated need (ADR-0004). ~8 events is the honest analogue.
+- **The scale.** 1928 lines and 44 events is right for a five-role async proxy emitting per-partial-response records at DEBUG. autoharn's serving layer is 14 routes and one write path. Starting at proxy scale would be work ahead of demonstrated need ([ADR-0003](../law/adr/0003-domain-coupling-bands.md)'s "explicit seams without premature extraction" — this survey's original citation named ADR-0004, which is about a different discipline (minimal-touch edits); retargeted to the ADR that actually states this principle). ~8 events is the honest analogue.
 - **Three formatters.** The proxy's console renderer earns its keep because operators watch three interleaved proxy processes on one terminal. autoharn's boundary service is a detached child whose output already goes to a file. One machine-readable rendering plus the existing human stderr lines is likely enough; a second renderer is cheap to add later and a surface to keep honest now.
 - **Env vars as *the* config channel.** Correct for the proxy (env is how it's launched). autoharn's boundary service already takes `--config <toml>` with a whole-file validation pass before the socket binds; a parallel env namespace would be a second config channel for the same process.
 - **Two sources of truth for the field schema.** The proxy names this compromise honestly and pins both in tests, but it exists only because it targets 3.10. autoharn's serving venv is 3.13 (the `__pycache__` entries are `cpython-313`), so one declaration suffices — don't inherit a workaround for a constraint that doesn't apply.
-- **Deferring cross-process correlation (memo Q4).** Right for the proxy — the cid is its tracer. Wrong for autoharn: *session identity is exactly the gap the incident named*. This is the one place where the direction should diverge from the source rather than copy it.
+- **Deferring cross-process correlation (memo Q4).** Right for the proxy — the cid is its tracer. Wrong for autoharn: *session identity is exactly the gap the row-1474/1476 attribution
+incident named* (the two unattributed refused writes §3.4 details). This is the one place where the direction should diverge from the source rather than copy it.
 - **The `module` defect (a) above.** Whatever autoharn builds on top of stdlib `logging` must pass `stacklevel=` or render the logger name — otherwise it inherits a field that lies.
 
 ---
@@ -125,9 +144,13 @@ Nine properties, in rough order of what I'd want in autoharn:
 
 Three readers, each with a decision:
 
-- **RCA of an unattributed write** (the maintainer, or an agent doing what rows 1474/1476 → 1483 could not). Decision: *which session and which command produced this attempt?*
+- **RCA of an unattributed write** — the maintainer, or an agent attempting the same
+  reconstruction. Ledger rows 1474 and 1476 are two `write_refused` rows logged at 14:11
+  with no session or command recorded; row 1483 later traced their probable cause, but
+  only by manual interrogation the record itself did not support. Decision: *which
+  session and which command produced this attempt?*
 - **An operator facing a refusing or slow boundary.** Decision: *is this saturation, a stall, or a dead world — restart the service, or look at the world?* The service already computes these as distinct typed dispositions; today they are indistinguishable after the fact.
-- **The identity-plumbing build (ledger row 1471).** Decision: *what per-request context object exists to hang a principal stamp on?* Row 1467's own closing observation is that `_psql()` is the single site where a per-request stamp could thread in *if caller identity were plumbed through the HTTP request*. That plumbing and this logging want the same object.
+- **The identity-plumbing build (ledger row 1471, the maintainer's decision ratifying that per-request caller identity gets plumbed through the HTTP request).** Decision: *what per-request context object exists to hang a principal stamp on?* Ledger row 1467 (the finding that confirmed served writes carry no per-request stamp) closes with the observation that `_psql()` is the single site where a per-request stamp could thread in *if caller identity were plumbed through the HTTP request*. That plumbing and this logging want the same object.
 
 Any stream that cannot name one of these — or a successor as concrete — doesn't get built.
 
@@ -135,30 +158,30 @@ Any stream that cannot name one of these — or a successor as concrete — does
 
 Standing rule: the action stream and the ledger are the **evidentiary** basis; logs would be **diagnostic-grade**, never load-bearing for a guarantee. Two concrete corollaries I'd want stated in any spec:
 
-- **No fact may live only in the log.** If a guarantee rests on it, it goes through s43 into the ledger.
-- **This direction does not close the rows-1474/1476 attribution gap by itself, and should not be sold as doing so.** That gap is *kernel-side*: the s43 refusal journal licenses exactly six `refusal_*` columns — sqlstate, message, surface, payload_digest, attempted_actor, attempted_role *(DOC-SOURCED, `kernel/lineage/s43-typed-verdict-write-boundary.sql:425-431`)* — and carries no session identity, because served writes are unstamped (row 1467's second consequence). Logs would have made that RCA *faster*; only the journal can make it *sound*. So: **two work items, not one.** The evidentiary one (row 1471's identity plumbing) is the real fix. The diagnostic one below is cheap, can land first, and must not become the excuse to defer the other.
+- **No fact may live only in the log.** If a guarantee rests on it, it goes through s43 (kernel-lineage migration [`s43-typed-verdict-write-boundary.sql`](../kernel/lineage/s43-typed-verdict-write-boundary.sql), which added the refusal journal cited just below) into the ledger.
+- **This direction does not close the rows-1474/1476 attribution gap by itself, and should not be sold as doing so.** That gap is *kernel-side*: the s43 refusal journal licenses exactly six `refusal_*` columns — sqlstate, message, surface, payload_digest, attempted_actor, attempted_role *(DOC-SOURCED, [`kernel/lineage/s43-typed-verdict-write-boundary.sql:425-431`](../kernel/lineage/s43-typed-verdict-write-boundary.sql))* — and carries no session identity, because served writes are unstamped (row 1467's second consequence). Logs would have made that RCA *faster*; only the journal can make it *sound*. So: **two work items, not one.** The evidentiary one (row 1471's identity plumbing) is the real fix. The diagnostic one below is cheap, can land first, and must not become the excuse to defer the other.
 
 ### 3.2 What it would join on
 
 The valuable thing a request log can do without becoming evidence is supply a **breadcrumb that joins to the ledger**. Every served write already yields either a kernel verdict with a row id, or a journaled `write_refused` row carrying `refusal_id` and `refusal_payload_digest`. If the request record carries `(request_id, route, deployment, caller identity once plumbed, payload digest, verdict, refusal_id)`, then a `write_refused` row becomes joinable back to the request that caused it — the ledger stays the sole authority, the log supplies provenance.
 
-**Caveat, to be witnessed rather than assumed:** the digest is computed kernel-side over whatever bytes the boundary function received. For the join to be sound, the service must digest *the same bytes*. Whether the service's re-serialized payload (`json.dumps(..., allow_nan=False)`, per A4.1) is byte-identical to what the kernel digests is an open question that needs a scratch-world witness, not a design assertion.
+**Caveat, to be witnessed rather than assumed:** the digest is computed kernel-side over whatever bytes the boundary function received. For the join to be sound, the service must digest *the same bytes*. Whether the service's re-serialized payload (`json.dumps(..., allow_nan=False)`, per [`design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md`](FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md) §A4.1) is byte-identical to what the kernel digests is an open question that needs a scratch-world witness, not a design assertion.
 
 ### 3.3 Layers
 
-**L1 — one per-request context object.** A single FastAPI dependency or middleware mints a request id and records deployment, route, method, client address, and (once row 1471's work lands) the declared principal/session. Held in a `contextvars.ContextVar`. This is the proxy's bind chain specialized to one request scope, and it is the object the identity work needs anyway — build it once. **Needs a witness, not an assumption:** the write handlers are plain `def` dispatched to Starlette's threadpool (per A3.1); contextvars *do* propagate through `run_in_threadpool`, but that should be proven live on this stack before anything depends on it.
+**L1 — one per-request context object.** A single FastAPI dependency or middleware mints a request id and records deployment, route, method, client address, and (once row 1471's work lands) the declared principal/session. Held in a `contextvars.ContextVar`. This is the proxy's bind chain specialized to one request scope, and it is the object the identity work needs anyway — build it once. **Needs a witness, not an assumption:** the write handlers are plain `def` dispatched to Starlette's threadpool (per [`design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md`](FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md) §A3.1); contextvars *do* propagate through `run_in_threadpool`, but that should be proven live on this stack before anything depends on it.
 
-**L2 — a small closed event vocabulary with per-event required fields.** Candidate starting set, each with a reader from §3.0: `request_start` / `request_end` (route, deployment, status, duration_ms), `kernel_call` (surface, psql exit code, duration), `refusal` (the typed disposition), `write_verdict` (accepted|refused, row id or `refusal_id`, payload digest), `infra_failure`, `unclassified_failure`. Eight, not forty-four. Validated at the call site against a required-field frozenset, raising a dedicated error whose message teaches — the proxy's `LogContractError` message shape is directly copyable, and it is ADR-0002's rung applied to the log's own contract.
+**L2 — a small closed event vocabulary with per-event required fields.** Candidate starting set, each with a reader from §3.0: `request_start` / `request_end` (route, deployment, status, duration_ms), `kernel_call` (surface, psql exit code, duration), `refusal` (the typed disposition), `write_verdict` (accepted|refused, row id or `refusal_id`, payload digest), `infra_failure`, `unclassified_failure`. Eight, not forty-four. Validated at the call site against a required-field frozenset, raising a dedicated error whose message teaches — the proxy's `LogContractError` message shape is directly copyable, and it is [ADR-0002](../law/adr/0002-fail-loudly.md)'s (fail loudly) rung applied to the log's own contract.
 
-**Generic mechanism, not a parallel enumeration:** the refusal events should be **derived from** the dispositions the service already computes (`payload_too_large`, `body_read_timeout`, `unknown_view`, `unknown_deployment`, `server_saturated`, `deployment_saturated`, `capability_absent`, the value/representability/id-domain axes, `infra_failure`, `unclassified_failure`), not maintained beside them. One enumeration, so a future A-amendment adding a disposition gets its log event by construction rather than by a second edit someone forgets.
+**Generic mechanism, not a parallel enumeration:** the refusal events should be **derived from** the dispositions the service already computes (`payload_too_large`, `body_read_timeout`, `unknown_view`, `unknown_deployment`, `server_saturated`, `deployment_saturated`, `capability_absent`, the value/representability/id-domain axes, `infra_failure`, `unclassified_failure`), not maintained beside them. One enumeration, so a future amendment in the boundary spec's A-series (the dated Amendment A2/A3/A4/A5 numbering [`serving/README.md`](../serving/README.md) carries — the A3.1/A4.1 codes cited above are its sub-items) adding a disposition gets its log event by construction rather than by a second edit someone forgets.
 
 **L3 — one rendering: JSON lines.** The served process's output already goes to a file, not a terminal. Console prettiness is not the need. Keep the existing human `sys.stderr.write` lines as-is alongside it.
 
-**L4 — migrate the existing sites.** `_log_infra_failure`, `_log_unclassified_failure`, and the startup banner *(DOC-SOURCED, `serving/boundary_service.py:1262-1272`, `:2430-2450`)* are already the right *content* — loud, server-side-only, never client-exposed. They are just untyped and unjoinable. They become the first four call sites, not a separate stream.
+**L4 — migrate the existing sites.** `_log_infra_failure`, `_log_unclassified_failure`, and the startup banner *(DOC-SOURCED, [`serving/boundary_service.py:1262-1272`](../serving/boundary_service.py), `:2430-2450`)* are already the right *content* — loud, server-side-only, never client-exposed. They are just untyped and unjoinable. They become the first four call sites, not a separate stream.
 
-**Config surface:** put level/format in the existing multiplex TOML that already validates whole-file before the socket binds, rather than a new env namespace. Leave the destination alone — `ensure_running.py:160` already sends the detached child's stdout+stderr to `<world>/service.log`, and nothing about deployment should change.
+**Config surface:** put level/format in the existing multiplex TOML that already validates whole-file before the socket binds, rather than a new env namespace. Leave the destination alone — [`serving/ensure_running.py:160`](../serving/ensure_running.py) already sends the detached child's stdout+stderr to `<world>/service.log`, and nothing about deployment should change.
 
-**Standing rules this respects:** no lazy imports (every import top-of-file — the proxy's own two violations are the counter-example); fail loudly (an unknown event or missing field raises, it does not emit a malformed record); refusals that teach; diagnostic-only, per §3.1.
+**This direction respects the following standing rules:** no lazy imports (every import top-of-file — the proxy's own two violations are the counter-example); fail loudly (an unknown event or missing field raises, it does not emit a malformed record); refusals that teach; diagnostic-only, per §3.1.
 
 ### 3.4 The maintainer's literal question: is there debug logging to just enable?
 
@@ -166,13 +189,13 @@ The valuable thing a request log can do without becoming evidence is supply a **
 
 1. **There is no autoharn-authored logging layer to turn up.** *(WITNESSED — `grep -rn "import logging" --include='*.py'` across the repo returns two hits, both in `tools/makespan-scheduler/`.)* Nothing in `serving/`, `filing/`, `hooks/`, or the operator verbs imports `logging`; every diagnostic is a direct `sys.stderr.write`. So there is no level to raise.
 
-2. **But uvicorn's own default logging is already on and already captured.** `uvicorn.Config(app, host=..., port=...)` is constructed with no `log_config` or `log_level` *(DOC-SOURCED, `serving/boundary_service.py:2592`, `:2594`)*, so uvicorn's defaults apply, and `ensure_running.py:224-231` redirects the detached child's stdout+stderr into `<world>/service.log`. **WITNESSED:** `/home/bork/w/vdc/1/autoharn/service.log` is 1410 lines, including the startup banner, three server-process lifecycles, one `WARNING: Invalid HTTP request received.`, and 223 `POST /d/autoharn2/write/ledger` access lines. My own `./autoharn led show 1474/1476/1483/1467/1471` reads for this survey appear in it.
+2. **But uvicorn's own default logging is already on and already captured.** `uvicorn.Config(app, host=..., port=...)` is constructed with no `log_config` or `log_level` *(DOC-SOURCED, [`serving/boundary_service.py:2592`](../serving/boundary_service.py), `:2594`)*, so uvicorn's defaults apply, and [`serving/ensure_running.py:224-231`](../serving/ensure_running.py) redirects the detached child's stdout+stderr into `<world>/service.log`. **WITNESSED:** [`/home/bork/w/vdc/1/autoharn/service.log`](../service.log) is 1410 lines, including the startup banner, three server-process lifecycles, one `WARNING: Invalid HTTP request received.`, and 223 `POST /d/autoharn2/write/ledger` access lines. My own `./autoharn led show 1474/1476/1483/1467/1471` reads for this survey appear in it.
 
 3. **What it buys today, honestly: not the incident.** **WITNESSED:** `grep -cE '[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}:[0-9]{2}:[0-9]{2}'` over that file returns **0** — uvicorn's default access format carries no timestamp at all. And a kernel-refused write is HTTP 200 by design (a refusal is a first-class domain result, not a transport error). So the two 14:11 refusals of rows 1474/1476 *are* in that file, wearing `200 OK`, indistinguishable from the other 221 writes, with no time, no body, no principal, and only an ephemeral loopback source port as a discriminator. **Enabling nothing further, this log could not have attributed those rows.**
 
-4. **The one genuinely free win — timestamps on the access log.** Passing a `log_config` to `uvicorn.Config` that adds an ISO-8601 timestamp to the `uvicorn.access` and `uvicorn.error` formatters is roughly fifteen lines, no new dependency, no new concept, no change to how the service is operated. It would have narrowed the incident from "one of 223 POSTs" to "the two POSTs at 14:11:01" — which, against the ledger's own row timestamps, is a real correlation the operator did not have. **The format change is safe:** `service.log` is only ever *pointed at* for a human to read, never parsed *(WITNESSED — `grep -rn "service\.log"` finds five references, all of them prose telling an operator where to look: `doctor.tmpl:259`, `USER-GUIDE.md:112`, `new-project.sh:348/2086`, `ensure_running.py:160`)*. I'd take this step regardless of whether the larger build ever happens.
+4. **The one genuinely free win — timestamps on the access log.** Passing a `log_config` to `uvicorn.Config` that adds an ISO-8601 timestamp to the `uvicorn.access` and `uvicorn.error` formatters is roughly fifteen lines, no new dependency, no new concept, no change to how the service is operated. It would have narrowed the incident from "one of 223 POSTs" to "the two POSTs at 14:11:01" — which, against the ledger's own row timestamps, is a real correlation the operator did not have. **The format change is safe:** [`service.log`](../service.log) is only ever *pointed at* for a human to read, never parsed *(WITNESSED — `grep -rn "service\.log"` finds five references, all of them prose telling an operator where to look: [`bootstrap/templates/doctor.tmpl:259`](../bootstrap/templates/doctor.tmpl), [`user-guide/USER-GUIDE.md:112`](../user-guide/USER-GUIDE.md), [`bootstrap/new-project.sh`](../bootstrap/new-project.sh)`:348/2086`, [`serving/ensure_running.py:160`](../serving/ensure_running.py))*. I'd take this step regardless of whether the larger build ever happens.
 
-5. **psql verbosity: I'd not turn it up as a standing setting.** `_psql` already captures stderr, and the infra/unclassified paths already log its last 2000 chars server-side *(DOC-SOURCED, `boundary_service.py:1009-1016`, `:1262-1272`)*. A global libpq verbosity increase would put SQL text into a file guarded only by filesystem permissions, against a service that deliberately keeps SQL off every client-visible surface. If more psql detail is wanted, the honest place is those two existing chokepoints.
+5. **psql verbosity: I'd not turn it up as a standing setting.** `_psql` already captures stderr, and the infra/unclassified paths already log its last 2000 chars server-side *(DOC-SOURCED, [`serving/boundary_service.py:1009-1016`](../serving/boundary_service.py), `:1262-1272`)*. A global libpq verbosity increase would put SQL text into a file guarded only by filesystem permissions, against a service that deliberately keeps SQL off every client-visible surface. If more psql detail is wanted, the honest place is those two existing chokepoints.
 
 6. **Hook stderr: nothing to enable, and the wrong place to start.** Fifteen of the seventeen hooks already write to stderr, which Claude Code surfaces; the only hook env vars are two timeouts (`DOC_CRITIC_TIMEOUT_S`, `DEMURRAL_TIMEOUT_S`), not verbosity controls. And the standing rule forbids touching `hooks/` while a live session runs there.
 
@@ -180,7 +203,7 @@ The valuable thing a request log can do without becoming evidence is supply a **
 
 ## §4 Closure
 
-**Surveyed.** The proxy's entire Unlicense-side logging surface: both design and operator documents in full, all seven `proxy_logging` modules in full, the compatibility shim, the `CLAUDE.md` conventions section, the call-site wiring in `proxy_server.py`/`router.py`, and the full call-site census by grep. One read-only execution witness (the format-matrix diagnose script). On the autoharn side: `serving/README.md` in full, the `boundary_service.py` header and its `_psql`/exit-classification region, `ensure_running.py`'s spawn and log-redirect path, the s43 refusal-journal column set, ledger rows 1474/1476/1483/1467/1471, and the live `service.log`.
+**Surveyed.** The proxy's entire Unlicense-side logging surface (all paths below are inside the proxy repository, not autoharn): both design and operator documents in full, all seven `proxy_logging` modules in full, the compatibility shim, the proxy's own `CLAUDE.md` conventions section, the call-site wiring in `proxy_server.py`/`router.py`, and the full call-site census by grep. One read-only execution witness (the format-matrix diagnose script). On the autoharn side: [`serving/README.md`](../serving/README.md) in full, the [`serving/boundary_service.py`](../serving/boundary_service.py) header and its `_psql`/exit-classification region, [`serving/ensure_running.py`](../serving/ensure_running.py)'s spawn and log-redirect path, the s43 refusal-journal column set (see [`kernel/lineage/s43-typed-verdict-write-boundary.sql`](../kernel/lineage/s43-typed-verdict-write-boundary.sql) above), ledger rows 1474/1476/1483/1467/1471 (glossed at first use in §3.0), and the live [`service.log`](../service.log).
 
 **Excluded by the fence.** The whole `goboard_transposition/` subtree, unopened. Nothing skipped-as-ambiguous.
 
