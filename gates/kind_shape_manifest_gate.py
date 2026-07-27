@@ -175,6 +175,9 @@ CHAIN = [
     "s60-entitlement-enforcement.sql",
     "s61-signature-symmetry-and-key-binding.sql",
     "s62-delegation-lifecycle-gating.sql",
+    "s63-supersession-body-restoration.sql",
+    "s64-principal-stamps-delegation-conditions.sql",
+    "s65-refusal-attempted-kind.sql",
 ]
 # s58 (kernel/lineage/s58-missive-substrate.sql, design/FABLE-MISSIVES-KERNEL-SPEC.md, maintainer-
 # ratified ledger row 1263) extends this SAME gate's scratch CHAIN and ships TEN new kind-scoped
@@ -352,6 +355,19 @@ CHAIN = [
 # silently uniformized (ADR-0000 Rule 2a's "an axis deliberately not covered is named as not
 # covered" applied one level down, to enforcement mechanism rather than input axis).
 # ================================================================================================
+def _canon_eligibility(text: str) -> str:
+    """Canonicalize an eligibility-clause fragment for exact comparison: strip Postgres's own
+    added `::text`/`::type` casts and collapse whitespace -- catalog rendering detail, not a
+    substantive difference. Never used to loosen a REAL drift; a changed literal, a changed
+    column, a changed AND/OR structure all still compare unequal. Defined here, ahead of MANIFEST
+    and its siblings below, because ELIGIBILITY_ONE_WAY_MANIFEST (further down, alongside the
+    other seven manifests) calls it at MODULE LOAD time to canonicalize its own declared
+    eligibility text the same way the live classifier will canonicalize the catalog's -- one
+    function, called from both sides of the comparison, never two independent implementations
+    that could drift apart (ADR-0012 P1)."""
+    return re.sub(r"::\w+", "", text)
+
+
 MANIFEST = [
     dict(column="work_slug", kinds=("work_opened", "work_claimed", "work_depends_on", "work_closed"),
          arity="two-way", mechanism="CHECK", constraint="work_slug_kind_shape",
@@ -614,6 +630,16 @@ MANIFEST = [
          reason="session_user at the attempt -- ALWAYS known (server-witnessed), so "
                 "mandatory even when the attempted principal is not resolvable; "
                 "non-emptiness is the separate refusal_attempted_role_nonempty value CHECK."),
+    dict(column="refusal_attempted_kind", kinds=("write_refused",),
+         arity="one-way", mechanism="CHECK", constraint="refusal_attempted_kind_kind_shape",
+         defining_delta="s65-refusal-attempted-kind.sql",
+         reason="the refused payload's own attempted `kind` token, extracted before digesting "
+                "-- legitimately NULL when not extractable (no `kind` key, a non-text value, or "
+                "a refusing surface whose payload contract never carries one), the SAME "
+                "'legitimately NULL on the licensed kind too' shape as refusal_attempted_actor, "
+                "so the correlation cannot be an iff; one-way forecloses it appearing on a "
+                "non-write_refused row only. Non-emptiness when present is the separate "
+                "refusal_attempted_kind_nonempty value CHECK."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "
@@ -871,6 +897,40 @@ KIND_OR_VALUE_BY_CONNAME = {row["constraint"]: row for row in KIND_OR_VALUE_MANI
 assert len(KIND_OR_VALUE_BY_CONNAME) == len(KIND_OR_VALUE_MANIFEST), \
     "duplicate constraint in KIND_OR_VALUE_MANIFEST -- SSOT violated"
 
+# ================================================================================================
+# ELIGIBILITY_ONE_WAY_MANIFEST -- an EIGHTH manifest (see the _ELIGIBILITY_ONE_WAY_RE comment
+# above): `((kind = 'K') AND <eligibility clause>) OR (col IS NULL)` -- a one-way kind-shape
+# correlation narrowed by additional non-kind conjuncts. Keyed by column (one shape per column,
+# same convention as MANIFEST_BY_COLUMN). First instance: s64's five delegation_* columns, all
+# sharing the SAME eligibility clause (a fresh acts-for/dispatched-by relation-assertion row that
+# is currently active) -- GENERATED below, the s53 _BELIEF_COLS / s58 _MISSIVE_COLS precedent
+# (ADR-0012 P1 SSOT), never five hand-repeated dicts for one shared clause.
+# ================================================================================================
+_S64_DELEGATION_ELIGIBILITY = (
+    "(principal_relation = ANY (ARRAY['acts-for', 'dispatched-by'])) "
+    "AND (principal_binding_active IS TRUE)"
+)
+_S64_DELEGATION_REASON = (
+    "s64's own header, 'eligibility test': the column is legal ONLY on a "
+    "principal_relation_asserted row whose principal_relation is acts-for/dispatched-by AND "
+    "whose principal_binding_active is TRUE (a FRESH bind, not a retraction restating identity "
+    "fields only, and not a principal_relation_asserted row of a different relation type e.g. "
+    "same-natural-person) -- narrower than 'this kind or not', so ONE-WAY alone (as the plain "
+    "_ONE_WAY_A_RE/_ONE_WAY_B_RE idioms express it) would under-license: a retraction row of the "
+    "same kind is NOT eligible to carry these columns either, per s64 Element itself."
+)
+ELIGIBILITY_ONE_WAY_MANIFEST = [
+    dict(column=_col, kind="principal_relation_asserted",
+         eligibility=_canon_eligibility(_S64_DELEGATION_ELIGIBILITY),
+         constraint=f"{_col}_kind_shape", defining_delta="s64-principal-stamps-delegation-conditions.sql",
+         reason=_S64_DELEGATION_REASON)
+    for _col in ("delegation_redelegate_depth", "delegation_must_countersign", "delegation_expiry",
+                 "delegation_scope_classes", "delegation_purpose")
+]
+ELIGIBILITY_ONE_WAY_BY_COLUMN = {row["column"]: row for row in ELIGIBILITY_ONE_WAY_MANIFEST}
+assert len(ELIGIBILITY_ONE_WAY_BY_COLUMN) == len(ELIGIBILITY_ONE_WAY_MANIFEST), \
+    "duplicate column in ELIGIBILITY_ONE_WAY_MANIFEST -- SSOT violated"
+
 # CORE_COLUMNS: every OTHER live ledger column, confirmed NOT kind-scoped (see module docstring's
 # "MANIFEST SCOPE" paragraph for how amends/amends_scope/answers were checked). A column that is
 # neither in MANIFEST nor here is, by construction, an unlicensed payload column.
@@ -954,6 +1014,7 @@ def catalog_check_defs(schema: str) -> dict[str, str]:
     return out
 
 
+_BARE_KIND_RE = re.compile(r"\bkind\b")
 _KIND_EQ_RE = re.compile(r"kind = '([^']+)'")
 _KIND_ANY_RE = re.compile(r"kind = ANY \(ARRAY\[([^\]]+)\]\)")
 _ARRAY_ELEM_RE = re.compile(r"'([^']+)'")
@@ -1022,6 +1083,33 @@ _MANDATORY_ON_KIND_RE = re.compile(
 # KIND_OR_VALUE_MANIFEST, keyed by constraint name.
 _KIND_OR_VALUE_RE = re.compile(
     r"\((\w+) IS NULL\)\s*OR\s*\(kind = '([^']+)'(?:::\w+)?\)\s*OR\s*\((\w+) = '([^']+)'(?:::\w+)?\)")
+# s64's delegation_redelegate_depth_kind_shape (and its four siblings: delegation_must_
+# countersign/_expiry/_scope_classes/_purpose, all kernel/lineage/s64-principal-stamps-
+# delegation-conditions.sql, found live extending this SAME gate's scratch CHAIN through s64):
+# the EIGHTH idiom, ELIGIBILITY-GATED ONE-WAY, `((kind = '<K>') AND <eligibility clause>) OR
+# (<col> IS NULL)` -- a one-way kind-shape correlation the same as _ONE_WAY_B_RE's shape, but
+# with ADDITIONAL non-kind conjuncts (here: `principal_relation = ANY(...)` AND
+# `principal_binding_active IS TRUE`) narrowing WHICH rows of the licensed kind may carry the
+# column, not merely "this kind or not". Before this idiom was recognized, all five columns'
+# CHECKs were SWALLOWED by _VOCAB_PARTITION_RE (a false match: that regex's own
+# `\(kind = '...'...\) AND \(\w+ = ANY` fragment does not verify the ANY-tested column is the
+# SAME column the leading IS-NULL branch names -- s37's own work_resolution_check idiom always
+# has that identity, `(work_resolution IS NULL) OR (kind='K' AND work_resolution = ANY(...))`,
+# but here `principal_relation` (the ANY-tested column) and `delegation_redelegate_depth` (the
+# IS-NULL column) are DIFFERENT columns entirely -- a different idiom the shared regex cannot
+# tell apart from VALUE-VOCABULARY partitioning without checking that identity). Caught live:
+# extending the CHAIN through s64 surfaced these five as VOCAB_PARTITION's `classify_kind_shape`
+# returning None (silently out of scope), which in turn tripped check 4's UNLICENSED PAYLOAD
+# COLUMN scan (the column was never entered into `catalog_shapes` for anything to match against
+# a MANIFEST row). Matched generically on shape, never by constraint name, and checked BEFORE
+# _VOCAB_PARTITION_RE (same reason FORBIDDEN-ON-KIND/MANDATORY-ON-KIND are checked early: a more
+# specific idiom must win before a looser one partially consumes the same text). Tracked in its
+# own manifest, ELIGIBILITY_ONE_WAY_MANIFEST, keyed by column -- the `eligibility` field records
+# the exact (canonicalized, ::cast-stripped) extra conjunct text read from the catalog, so a
+# FUTURE narrowing or widening of the eligibility condition is caught as drift, not silently
+# accepted because "some AND clause was there."
+_ELIGIBILITY_ONE_WAY_RE = re.compile(
+    r"\(\(kind = '([^']+)'(?:::\w+)?\)\s+AND\s+(.+?)\)\s+OR\s+\((\w+) IS NULL\)\)")
 
 
 def _extract_kinds(defn: str) -> tuple[str, ...]:
@@ -1040,7 +1128,16 @@ def classify_kind_shape(conname: str, defn: str):
     silently skipped -- ADR-0002). Returns ("PARTIAL-VALUE", column, value, kinds, conname) for
     the single-value idiom (see _PARTIAL_VALUE_RE above). Otherwise returns
     (column, kinds, arity)."""
-    if "kind" not in defn:
+    if not _BARE_KIND_RE.search(defn):
+        # a WORD-BOUNDARY test, not a bare substring test (s65 finding, 2026-07-27): a plain
+        # `"kind" not in defn` false-fires on any OTHER column whose own name merely ENDS in
+        # "kind" (e.g. refusal_attempted_kind's own nonempty/length value CHECKs, which mention
+        # no ledger.kind test at all) -- underscore is a `\w` word character, so `\bkind\b` does
+        # NOT match the "kind" inside "attempted_kind" (no boundary between two word characters),
+        # but DOES match the standalone `kind` column reference every real kind-shape CHECK
+        # actually tests. Caught live: extending this gate's CHAIN through s65 surfaced
+        # refusal_attempted_kind_nonempty and refusal_attempted_kind_length as false
+        # UNPARSEABLE kind-mentioning CHECKs under the old substring test.
         return None
     m_kv = _KIND_OR_VALUE_RE.search(defn)
     if m_kv:
@@ -1090,6 +1187,16 @@ def classify_kind_shape(conname: str, defn: str):
             # degenerate/unrecognized variant of the idiom -- refuse loudly rather than guess.
             return ("UNPARSEABLE", conname, defn)
         return ("PARTIAL-VALUE", col, literal, kinds, conname)
+    m_el = _ELIGIBILITY_ONE_WAY_RE.search(defn)
+    if m_el:
+        # checked BEFORE _VOCAB_PARTITION_RE below: that regex's own `(kind = '...') AND
+        # (\w+ = ANY` fragment does not verify the ANY-tested column matches the IS-NULL column,
+        # so it would otherwise silently swallow this idiom too (the s64 finding this branch
+        # repairs -- see _ELIGIBILITY_ONE_WAY_RE's own comment above).
+        kind, eligibility, col = m_el.group(1), m_el.group(2), m_el.group(3)
+        if col == "kind":
+            return ("UNPARSEABLE", conname, defn)
+        return ("ELIGIBILITY-ONE-WAY", col, kind, _canon_eligibility(eligibility), conname)
     if "IS NULL" not in defn and "IS NOT NULL" not in defn:
         # a pure kind-VOCABULARY CHECK (e.g. ledger_kind_check's `kind = ANY (ARRAY[...])`) --
         # constrains kind's own legal values, correlates it with no OTHER column's nullability,
@@ -1137,6 +1244,7 @@ def assert_manifest(schema: str) -> list[str]:
     cross_column_shapes: dict[str, tuple] = {}   # conname -> (kind, col_a, col_b, literal)
     mandatory_on_kind_shapes: dict[tuple[str, str], str] = {}   # (column, kind) -> conname
     kind_or_value_shapes: dict[str, tuple] = {}   # conname -> (col, kind, other_col, other_val)
+    eligibility_one_way_shapes: dict[str, tuple] = {}   # column -> (kind, eligibility, conname)
     for conname, defn in check_defs.items():
         parsed = classify_kind_shape(conname, defn)
         if parsed is None:
@@ -1169,15 +1277,20 @@ def assert_manifest(schema: str) -> list[str]:
             _, kind, col_a, col_b, literal, _conname = parsed
             cross_column_shapes[conname] = (kind, col_a, col_b, literal)
             continue
+        if parsed[0] == "ELIGIBILITY-ONE-WAY":
+            _, col, el_kind, eligibility, _conname = parsed
+            eligibility_one_way_shapes[col] = (el_kind, eligibility, conname)
+            continue
         if parsed[0] == "UNPARSEABLE":
             violations.append(
                 f"UNPARSEABLE kind-mentioning CHECK {parsed[1]!r} ({parsed[2]!r}) -- this "
-                f"gate's classifier recognizes only the seven shapes MANIFEST/"
+                f"gate's classifier recognizes only the eight shapes MANIFEST/"
                 f"VALUE_PARTITION_MANIFEST/FORBIDDEN_ON_KIND_MANIFEST/"
                 f"CROSS_COLUMN_COUPLING_MANIFEST/MANDATORY_ON_KIND_MANIFEST/"
-                f"KIND_OR_VALUE_MANIFEST declare (two-way iff, one-way implication, "
-                f"PARTIAL-VALUE single-value implication, FORBIDDEN-ON-KIND, "
-                f"CROSS-COLUMN-COUPLING, MANDATORY-ON-KIND, KIND-OR-VALUE-PERMITTED). Either "
+                f"KIND_OR_VALUE_MANIFEST/ELIGIBILITY_ONE_WAY_MANIFEST declare (two-way iff, "
+                f"one-way implication, PARTIAL-VALUE single-value implication, "
+                f"FORBIDDEN-ON-KIND, CROSS-COLUMN-COUPLING, MANDATORY-ON-KIND, "
+                f"KIND-OR-VALUE-PERMITTED, ELIGIBILITY-GATED ONE-WAY). Either "
                 f"this is a NEW kind-shape idiom (extend classify_kind_shape and the relevant "
                 f"manifest together) or it is not truly kind-scoped (rename it off 'kind' to "
                 f"stop tripping this gate).")
@@ -1365,6 +1478,33 @@ def assert_manifest(schema: str) -> list[str]:
                 f"KIND-OR-VALUE-PERMITTED CHECK but no such CHECK exists in the live catalog -- "
                 f"stale manifest row or a dropped constraint.")
 
+    # 2h. every catalog ELIGIBILITY-ONE-WAY CHECK must match its ELIGIBILITY_ONE_WAY_MANIFEST
+    #     row exactly (s64 finding, 2026-07-27)
+    for col, (el_kind, eligibility, conname) in eligibility_one_way_shapes.items():
+        row = ELIGIBILITY_ONE_WAY_BY_COLUMN.get(col)
+        if row is None:
+            violations.append(
+                f"UNLICENSED ELIGIBILITY-GATED PAYLOAD COLUMN {col!r}: catalog CHECK {conname!r} "
+                f"ties it to kind {el_kind!r} plus an eligibility clause, but no "
+                f"ELIGIBILITY_ONE_WAY_MANIFEST row declares it. Add it to "
+                f"ELIGIBILITY_ONE_WAY_MANIFEST in gates/kind_shape_manifest_gate.py, or remove "
+                f"the column/constraint if it should not exist.")
+            continue
+        if row["kind"] != el_kind or row["eligibility"] != eligibility:
+            violations.append(
+                f"column {col!r}: ELIGIBILITY_ONE_WAY_MANIFEST declares "
+                f"(kind={row['kind']!r}, eligibility={row['eligibility']!r}), catalog CHECK "
+                f"{conname!r} is (kind={el_kind!r}, eligibility={eligibility!r}) -- shape "
+                f"drifted.")
+    # 3h. every ELIGIBILITY_ONE_WAY_MANIFEST row must exist in the catalog
+    for row in ELIGIBILITY_ONE_WAY_MANIFEST:
+        if row["column"] not in eligibility_one_way_shapes:
+            violations.append(
+                f"ELIGIBILITY_ONE_WAY_MANIFEST row for column {row['column']!r} declares an "
+                f"ELIGIBILITY-GATED ONE-WAY CHECK (constraint={row['constraint']!r}) but no such "
+                f"CHECK exists in the live catalog -- stale manifest row or a dropped "
+                f"constraint.")
+
     # 4. every payload-like (non-core) column must be licensed, whether or not it carries a
     #    catalog CHECK -- this is what catches a column with NO CHECK at all (the seen-red case:
     #    mechanism="CHECK"-shaped hazard that never got its CHECK written).
@@ -1377,7 +1517,8 @@ def assert_manifest(schema: str) -> list[str]:
     _kind_or_value_cols = {row["column"] for row in KIND_OR_VALUE_MANIFEST}
     for col in columns:
         if (col in CORE_COLUMNS or col in MANIFEST_BY_COLUMN
-                or col in _mandatory_only_cols or col in _kind_or_value_cols):
+                or col in _mandatory_only_cols or col in _kind_or_value_cols
+                or col in ELIGIBILITY_ONE_WAY_BY_COLUMN):
             continue
         violations.append(
             f"UNLICENSED PAYLOAD COLUMN {col!r}: not in CORE_COLUMNS (structural/universal) and "
@@ -1438,7 +1579,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"kind-shape-manifest-gate: clean -- {len(MANIFEST)} MANIFEST row(s) + "
           f"{len(VALUE_PARTITION_MANIFEST)} VALUE_PARTITION_MANIFEST row(s) + "
           f"{len(FORBIDDEN_ON_KIND_MANIFEST)} FORBIDDEN_ON_KIND_MANIFEST row(s) + "
-          f"{len(CROSS_COLUMN_COUPLING_MANIFEST)} CROSS_COLUMN_COUPLING_MANIFEST row(s) match "
+          f"{len(CROSS_COLUMN_COUPLING_MANIFEST)} CROSS_COLUMN_COUPLING_MANIFEST row(s) + "
+          f"{len(MANDATORY_ON_KIND_MANIFEST)} MANDATORY_ON_KIND_MANIFEST row(s) + "
+          f"{len(KIND_OR_VALUE_MANIFEST)} KIND_OR_VALUE_MANIFEST row(s) + "
+          f"{len(ELIGIBILITY_ONE_WAY_MANIFEST)} ELIGIBILITY_ONE_WAY_MANIFEST row(s) match "
           f"the live catalog exactly, {len(CORE_COLUMNS)} core column(s) accounted for, no "
           f"unlicensed payload column. ✓")
     return 0
