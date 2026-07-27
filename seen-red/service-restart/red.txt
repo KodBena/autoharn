@@ -92,3 +92,114 @@ Every scratch Postgres role/schema this fixture provisions is dropped in `finall
 verified by hand after this run (no `svcrestart*` schema/role left in the toy database, no
 leftover `/tmp/service-restart-fixture-*` directory, no leftover `serving.boundary_service`
 process).
+
+---
+
+FRESH-CONTEXT REVIEW ROUND (2026-07-27), commit 8caec59 BLOCKED MERGE on two CRITICALs, both
+live-witnessed by the reviewer, plus one MODERATE. Two new cases (d3, d4) were added to this
+family to both-polarity-prove each CRITICAL's fix; the MODERATE was a one-line text fix with no
+new case needed (already covered by existing help-text assertions elsewhere).
+
+CRITICAL-1: `--force-kill`'s SIGKILL fired without re-verifying the pid's identity across the
+WHOLE drain window (default 30s, and `--drain-timeout` carries no upper bound at all) -- leg 1's
+own `/proc/<pid>/cmdline` check ran ONCE, before the drain, then was trusted blindly at SIGKILL
+time. `stop`'s own precedent (this same file's `cmd_stop`) only ever accepts an unverified window
+at "seconds" scale (its disclosed 5.0s SIGTERM grace).
+
+New case d3-force-kill-identity-reverify-white-box (white-box, DISCLOSED as such -- a genuine
+PID-reuse race inside a bounded drain window cannot be constructed deterministically against a
+live black box): a mock process that ignores SIGTERM (stays genuinely alive the whole test) has
+`pid_is_boundary_service` monkeypatched to answer truthfully on its first call (leg 1, real) and
+falsely on every call after (simulating a reused pid while the mock is, in reality, still alive
+and unrelated); `os.kill` is faked to a recording no-op so SIGKILL delivery is directly observable.
+
+REPRODUCTION, pre-fix code (`git stash` the libexec/autoharn-service hunk of this round's fix,
+rerun, `git stash pop` immediately after this capture -- confirmed reverted):
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/service-restart/run_fixtures.py
+[cases a/b/c/d/d2 PASS, unchanged]
+d3-force-kill-identity-reverify-white-box: FAIL -- rc=1, mock_still_alive=True,
+never_sigkilled=False, sigterm_was_sent=True, kill_calls=[<Signals.SIGTERM: 15>,
+<Signals.SIGKILL: 9>], combined="autoharn service: config at .../d3/boundary-multiplex.toml
+validates -- the new process will serve ['svcrestart1...'].\nautoharn service: pid 2739701 did
+NOT exit within 30.0s of SIGTERM -- --force-kill was passed, ESCALATING to SIGKILL.\nautoharn
+service: REFUSED -- pid 2739701 is STILL ALIVE 2.0s after SIGKILL (likely stuck in
+uninterruptible kernel sleep). Investigate pid 2739701 by hand.\n"
+
+SIGKILL WAS sent (`kill_calls` shows both SIGTERM and SIGKILL) despite the forced identity-check
+failure simulating that this pid is no longer ours -- exactly the blind-kill hazard the reviewer
+named, reproduced live.
+
+THE FIX (`libexec/autoharn-service`'s `cmd_restart`): immediately before sending SIGKILL, the
+identical `pid_is_boundary_service` check re-runs. If it still names our process, escalate as
+before. If not, two honest outcomes are distinguished by a plain `/proc/<pid>` liveness check: the
+process may have genuinely exited during the drain window (a narrow detection-timing gap, not a
+hazard) -- proceed to spawn, never sending SIGKILL; or the pid is still alive but is no longer
+ours (PID REUSE) -- REFUSE, teaching, and never signal it. Post-fix, same reproduction:
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/service-restart/run_fixtures.py
+[cases a/b/c/d/d2 PASS, unchanged]
+d3-force-kill-identity-reverify-white-box: PASS (white-box, disclosed: a forced drain-timeout
+plus a forced identity-check failure immediately before SIGKILL -- SIGKILL was never sent, the
+process stayed alive and untouched, and the refusal names the PID-reuse hazard rather than
+escalating blind)
+
+CRITICAL-2: `serving/ensure_running.py`'s `spawn_and_wait` (the "persisted pidfile + probe
+succeeds" EARLY-return branch) reported `winner_pid` as the STALE, pre-drain pidfile content with
+NO ground-truth check at all -- so `restart`'s own "adopted" refusal named the drained, already-
+EXITED old pid as "the winner" while the REAL foreign occupant of the freed port went completely
+unidentified. `start`'s own "adopted" reporting shares this exact code path and benefits from the
+same fix (ADR-0012 P1: one home, one fix).
+
+New case d4-adopted-winner-ground-truth-live -- LIVE, no monkeypatching (the reviewer's own
+construction): a REAL hub stands; a background THREAD (not a subprocess -- so `ss` reports the
+port-holder as THIS FIXTURE PROCESS's own pid, verifiably distinct from the drained old pid) binds
+the freed port the instant the old process's drain releases it, using a tight bind-retry loop
+(minimal overhead, no FastAPI/uvicorn import cost), and answers every request with a genuinely
+protocol-compatible `/health` body (`{"protocol_version": "1"}`, matching `boundary_cli_client.
+_CLIENT_WIRE_PROTOCOL_VERSION`).
+
+REPRODUCTION, pre-fix code (same stash/pop discipline as above, `serving/ensure_running.py`
+reverted to its pre-this-round content, confirmed reverted immediately after this capture):
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/service-restart/run_fixtures.py
+[cases a/b/c/d/d2/d3 PASS, unchanged from their own witnessed transcripts]
+d4-adopted-winner-ground-truth-live: FAIL -- exit 1, old_pid=2739706, this_pid=2738941,
+names_true_winner=False, never_blames_old_pid_as_winner=False, combined="autoharn service:
+config at .../d4/boundary-multiplex.toml validates -- the new process will serve
+['svcrestart1...'].\n...\nautoharn service: drained pid 2739706 in 0.2s.\nautoharn service:
+REFUSED -- pid 2739706 was drained, but pid 2739706 won the bind on http://127.0.0.1:60409
+before this invocation's own spawn (pid None) could -- this looks like a foreign process racing
+the freed port, not this restart's own new config taking over. ... The hub is now served by pid
+2739706, NOT by the config this invocation just validated -- investigate immediately.\n"
+
+The refusal names pid 2739706 as "the winner" -- but 2739706 IS `old_pid`, the process this SAME
+invocation had JUST confirmed drained and dead one line earlier ("drained pid 2739706 in 0.2s").
+The real winner (this fixture's own process, pid 2738941, actually holding the port via its
+background thread) went completely unnamed -- exactly the live misdiagnosis the reviewer found.
+
+THE FIX (`serving/ensure_running.py`'s `spawn_and_wait`): before returning `winner_pid` from this
+early branch, ground-truth it against `_pid_holding_port` (the kernel's own socket table via
+`ss` -- the SAME authority the poll loop a few lines below this branch already trusts over any
+pidfile/cmdline text match). When `ss` names a holder, THAT is reported, regardless of what the
+stale pidfile claimed; when `ss` itself cannot name one (missing binary, a transient read
+failure, a permissions gap), the honest "an unidentified process" fallback (`winner_pid=None`) is
+reported instead of asserting the stale value on faith. Post-fix, same reproduction:
+
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/service-restart/run_fixtures.py
+[cases a/b/c/d/d2/d3 PASS, unchanged]
+d4-adopted-winner-ground-truth-live: PASS (live, no monkeypatching: a background thread bound the
+freed port and answered /health protocol-compatibly; restart's refusal correctly names the live
+thread's own OS pid (2739987) as the winner, never the drained, dead old pid 2740754)
+
+MODERATE: `main()`'s unrecognized-subcommand refusal still read "known: status, start, stop" --
+fixed to "known: status, start, stop, restart" (one-line text change, no new case -- the
+umbrella-cli-dispatch-parity fixture's case e already asserts 'restart' is named in `autoharn
+service --help`'s own usage text, a stronger, already-existing check on the same surface).
+
+Post-fix, the full ten-case family (a, b, c, d, d2, d3, d4, e, f, g) passes reliably, both
+regression suites this round's fix touches (seen-red/umbrella-cli-ensure-running,
+seen-red/umbrella-cli-dispatch-parity) remain green, and zero residue was re-verified by hand
+after every run in this round (no `svcrestart*` schema/role, no leftover
+`/tmp/service-restart-fixture-*` directory, no leftover `serving.boundary_service` or mock
+process).

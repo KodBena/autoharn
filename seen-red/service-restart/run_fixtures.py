@@ -55,6 +55,34 @@ un-lettered prose):
                                  second real serving.boundary_service answering /health inside
                                  this exact narrow window). Proves `cmd_restart`'s leg-5
                                  divergence text (names the squatter, never claims success).
+  d3-force-kill-identity-reverify-white-box -- fresh-context review finding CRITICAL-1
+                                 (2026-07-27): a forced drain-timeout plus a forced identity-
+                                 check failure on the re-check immediately before SIGKILL --
+                                 white-box, DISCLOSED (a genuine PID-reuse race inside a bounded
+                                 drain window cannot be constructed deterministically against a
+                                 live black box): a mock process that ignores SIGTERM (so it
+                                 stays genuinely alive throughout, never actually reaped) has its
+                                 `pid_is_boundary_service` identity check monkeypatched to answer
+                                 truthfully on its FIRST call (leg 1, real) and falsely on every
+                                 call after (simulating the pid having been reused while the real
+                                 mock is, in fact, still alive and unrelated) -- `os.kill` is also
+                                 faked to a recording no-op so SIGKILL delivery can be observed
+                                 directly. Proves the fix: SIGKILL is NEVER sent, the process is
+                                 confirmed untouched, and the refusal names the PID-reuse hazard
+                                 rather than blindly escalating.
+  d4-adopted-winner-ground-truth-live -- fresh-context review finding CRITICAL-2 (2026-07-27),
+                                 live black-box construction, NO monkeypatching: a REAL hub is
+                                 standing; a background thread (not a subprocess -- so its pid,
+                                 as `ss` reports it, is this fixture PROCESS's own pid, distinct
+                                 from the drained old pid) binds the freed port the instant the
+                                 old process's drain releases it and answers `/health` with a
+                                 protocol-COMPATIBLE body (`{"protocol_version": "1"}`) -- the
+                                 exact "persisted pidfile + probe already succeeds" branch
+                                 `serving/ensure_running.py`'s own `spawn_and_wait` used to report
+                                 by reading the STALE, now-dead old pid out of the pidfile with no
+                                 ground-truth check at all. Proves the fix: the refusal names the
+                                 live thread's actual OS pid (ground-truthed via `_pid_holding_
+                                 port`/`ss`), never the drained old pid.
   e-drain-timeout-tiny-succeeds -- GREEN: `--drain-timeout` exercised with a tiny value (0.2s)
                                  against a HEALTHY hub with nothing in flight -- completes well
                                  under it, exit 0, never a timeout refusal.
@@ -101,6 +129,7 @@ import io
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -533,6 +562,205 @@ def main() -> int:
                     ok = False
         finally:
             _kill(real_proc)
+
+        # ================================================================
+        # d3-force-kill-identity-reverify-white-box (fresh-context review CRITICAL-1)
+        # ================================================================
+        d3_dir = scratch_root / "d3"
+        d3_dir.mkdir(parents=True, exist_ok=True)
+        d3_toml = d3_dir / "boundary-multiplex.toml"
+        d3_dep = d3_dir / "deployment.json"
+        _write_multiplex_toml(d3_toml, [rec1])
+        _write_deployment_json(d3_dep, rec1, _free_port())
+        d3_pidfile = d3_dir / ".autoharn-service.pid"
+        # A mock process (never a real boundary_service -- the same house rule seen-red/
+        # umbrella-cli-ensure-running/run_fixtures.py's own cases l/m/n document): its
+        # /proc/<pid>/cmdline is made to satisfy `pid_is_boundary_service`'s text check (mentions
+        # "serving.boundary_service" and this world's own toml path, via trailing argv), and it
+        # IGNORES SIGTERM outright so it stays genuinely alive for the WHOLE test -- a real
+        # PID-reuse race inside a bounded drain window cannot be constructed deterministically
+        # against a live black box, so the identity flip is monkeypatched below (disclosed,
+        # white-box, exactly as this finding allows).
+        mock_code = ("import signal, time\n"
+                     "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                     "time.sleep(300)\n")
+        mock_proc = subprocess.Popen(
+            ["python3", "-c", mock_code, "serving.boundary_service", "--config", str(d3_toml)])
+        threading.Thread(target=mock_proc.wait, daemon=True).start()
+        try:
+            d3_pidfile.write_text(str(mock_proc.pid), encoding="utf-8")
+            loader = importlib.machinery.SourceFileLoader(
+                "autoharn_service_mod_d3", str(AUTOHARN_SERVICE))
+            spec = importlib.util.spec_from_loader(loader.name, loader)
+            assert spec is not None
+            mod = importlib.util.module_from_spec(spec)
+            loader.exec_module(mod)
+            mod.DEPLOYMENT_PATH = d3_dep
+
+            # Call #1 (leg 1, real): the mock's cmdline genuinely matches, so this is the REAL
+            # answer. Call #2+ (the pre-SIGKILL re-verify) is forced to say "not ours anymore" --
+            # simulating a reused pid while the mock is, in reality, still alive and unrelated.
+            call_count = [0]
+            real_pid_is_boundary_service = mod.er.pid_is_boundary_service
+
+            def _fake_pid_is_boundary_service(pid, toml_path_arg):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return real_pid_is_boundary_service(pid, toml_path_arg)
+                return False
+
+            mod.er.pid_is_boundary_service = _fake_pid_is_boundary_service
+            # Forces the drain-timeout branch without a real 30s wait (the mock ignores SIGTERM
+            # and would never exit for real anyway; this only removes the wall-clock cost).
+            mod._wait_for_pid_exit = lambda pid, timeout_s, poll_interval_s: False
+
+            class _FakeOS:
+                def __init__(self, real: object) -> None:
+                    self._real = real
+                    self.kill_calls: list[int] = []
+
+                def kill(self, pid: int, sig: int) -> None:
+                    self.kill_calls.append(sig)  # recorded, never actually delivered
+
+                def __getattr__(self, name: str) -> object:
+                    return getattr(self._real, name)
+
+            fake_os = _FakeOS(os)
+            mod.os = fake_os
+
+            out, err = io.StringIO(), io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    rc = mod.cmd_restart(["--force-kill"])
+            finally:
+                mod.er.pid_is_boundary_service = real_pid_is_boundary_service
+
+            stdout, stderr = out.getvalue(), err.getvalue()
+            combined = stdout + stderr
+            mock_still_alive = mock_proc.poll() is None
+            never_sigkilled = signal.SIGKILL not in fake_os.kill_calls
+            sigterm_was_sent = signal.SIGTERM in fake_os.kill_calls
+            refuses = rc == 1 and "REFUSED" in combined
+            names_reuse_hazard = "PID REUSE" in combined or "no longer a" in combined
+            no_escalation_claim = "ESCALATING to SIGKILL" not in combined
+            if not (mock_still_alive and never_sigkilled and sigterm_was_sent and refuses
+                    and names_reuse_hazard and no_escalation_claim):
+                print(f"d3-force-kill-identity-reverify-white-box: FAIL -- rc={rc}, "
+                      f"mock_still_alive={mock_still_alive}, never_sigkilled={never_sigkilled}, "
+                      f"sigterm_was_sent={sigterm_was_sent}, kill_calls={fake_os.kill_calls}, "
+                      f"combined={combined!r}")
+                ok = False
+            else:
+                print("d3-force-kill-identity-reverify-white-box: PASS (white-box, disclosed: a "
+                      "forced drain-timeout plus a forced identity-check failure immediately "
+                      "before SIGKILL -- SIGKILL was never sent, the process stayed alive and "
+                      "untouched, and the refusal names the PID-reuse hazard rather than "
+                      "escalating blind)")
+        finally:
+            try:
+                os.kill(mock_proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                mock_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+        # ================================================================
+        # d4-adopted-winner-ground-truth-live (fresh-context review CRITICAL-2)
+        # ================================================================
+        d4_dir = scratch_root / "d4"
+        d4_dir.mkdir(parents=True, exist_ok=True)
+        d4_port = _free_port()
+        d4_toml = d4_dir / "boundary-multiplex.toml"
+        d4_dep = d4_dir / "deployment.json"
+        _write_multiplex_toml(d4_toml, [rec1])
+        _write_deployment_json(d4_dep, rec1, d4_port)
+        d4_env = _base_env(d4_dep)
+        r = _run([str(AUTOHARN), "service", "start"], d4_env)
+        d4_pidfile = d4_dir / ".autoharn-service.pid"
+        d4_url = f"http://127.0.0.1:{d4_port}"
+        stop_impostor = threading.Event()
+        impostor_thread: threading.Thread | None = None
+        try:
+            if r.returncode != 0 or not _wait_health(d4_url, rec1.schema):
+                print(f"d4-adopted-winner-ground-truth-live: FAIL -- setup failed, exit "
+                      f"{r.returncode}, stdout={r.stdout!r}, stderr={r.stderr!r}")
+                ok = False
+            else:
+                old_pid = _read_pid(d4_pidfile)
+
+                def _serve_impostor_health(port: int, stop_event: threading.Event) -> None:
+                    """A LIVE thread (no monkeypatching, per this finding's own construction) --
+                    a tight bind-retry loop (minimal overhead, no FastAPI/uvicorn import cost,
+                    the same reason case d's dummy squatter reliably wins its own race) that
+                    grabs the port the instant the old process's drain frees it, then answers
+                    every request with a protocol-COMPATIBLE /health body
+                    (`{"protocol_version": "1"}`, matching `boundary_cli_client._CLIENT_WIRE_
+                    PROTOCOL_VERSION`) -- exactly the shape `spawn_and_wait`'s early "persisted
+                    pidfile + probe already OK" branch must classify "adopted", and exactly the
+                    branch CRITICAL-2 fixed. Because this is a THREAD, not a subprocess, `ss`
+                    reports the pid holding the port as THIS FIXTURE PROCESS's own pid --
+                    verifiably distinct from `old_pid` (the just-drained, now-dead old process)."""
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    while not stop_event.is_set():
+                        try:
+                            s.bind(("127.0.0.1", port))
+                            break
+                        except OSError:
+                            time.sleep(0.001)
+                    else:
+                        s.close()
+                        return
+                    s.listen(50)
+                    s.settimeout(0.2)
+                    body = json.dumps({"protocol_version": "1"}).encode()
+                    resp = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                            b"Content-Length: " + str(len(body)).encode()
+                            + b"\r\nConnection: close\r\n\r\n" + body)
+                    while not stop_event.is_set():
+                        try:
+                            conn, _addr = s.accept()
+                        except socket.timeout:
+                            continue
+                        except OSError:
+                            break
+                        try:
+                            conn.recv(4096)
+                            conn.sendall(resp)
+                        except OSError:
+                            pass
+                        finally:
+                            conn.close()
+                    s.close()
+
+                impostor_thread = threading.Thread(
+                    target=_serve_impostor_health, args=(d4_port, stop_impostor), daemon=True)
+                impostor_thread.start()
+                r2 = _run([str(AUTOHARN), "service", "restart"], d4_env, timeout=30)
+                combined = r2.stdout + r2.stderr
+                names_true_winner = f"pid {os.getpid()} won the bind" in combined
+                never_blames_old_pid_as_winner = f"pid {old_pid} won the bind" not in combined
+                refused = r2.returncode == 1 and "REFUSED" in combined
+                if not (refused and never_blames_old_pid_as_winner and names_true_winner):
+                    print(f"d4-adopted-winner-ground-truth-live: FAIL -- exit {r2.returncode}, "
+                          f"old_pid={old_pid}, this_pid={os.getpid()}, "
+                          f"names_true_winner={names_true_winner}, "
+                          f"never_blames_old_pid_as_winner={never_blames_old_pid_as_winner}, "
+                          f"combined={combined!r}")
+                    ok = False
+                else:
+                    print(f"d4-adopted-winner-ground-truth-live: PASS (live, no monkeypatching: "
+                          f"a background thread bound the freed port and answered /health "
+                          f"protocol-compatibly; restart's refusal correctly names the live "
+                          f"thread's own OS pid ({os.getpid()}) as the winner, never the "
+                          f"drained, dead old pid {old_pid})")
+        finally:
+            stop_impostor.set()
+            if impostor_thread is not None:
+                impostor_thread.join(timeout=5)
+            _run([str(AUTOHARN), "service", "stop"], d4_env)
 
         # ================================================================
         # e-drain-timeout-tiny-succeeds
