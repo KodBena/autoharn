@@ -1,0 +1,51 @@
+== scaffolding classic world s65fxpre (chain ends s64-principal-stamps-delegation-conditions.sql, NO s65) ==
+=== RED-baseline-re-witnessed-no-attempted-kind-column ===
+  [ok] pre-s65 (s64-head) world: an invalid-kind ('row') write is refused exactly as before, but the world's own ledger table carries NO refusal_attempted_kind column at all (pre_cols='') -- the rows-1474/1476 incident shape this delta closes -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 6, 'disposition': 'refused'}
+
+== scaffolding classic world s65fxmain (chain ends s65-refusal-attempted-kind.sql) ==
+=== RED-NON-WRITE-REFUSED-CARRYING-KIND-refused ===
+  [ok] kind='note' payload additionally supplying refusal_attempted_kind directly -- refused by the new one-way kind-shape CHECK -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "refusal_attempted_kind_kind_shape"', 'sqlstate': '23514', 'refusal_id': 6, 'disposition': 'refused'}
+
+=== GREEN-INVALID-KIND-INCIDENT-SPECIMEN-accepted-kind-recorded ===
+  [ok] ledger_write with kind='row' (not a member of ledger_kind_check's vocabulary) -- REFUSED, journaled row detail (surface|sqlstate|attempted_kind)='ledger|23514|row' (expect 'ledger|23514|row') -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 8, 'disposition': 'refused'}
+
+=== GREEN-MISSING-KIND-NULL-accepted ===
+  [ok] ledger_write payload with NO `kind` key -- REFUSED (kind NOT NULL, 23502), journaled detail='ledger|23502|<NULL>' (expect NULL attempted-kind -- 'not extractable', never aborting the refusal recording -- the s49-totality shape) -- verdict={'row_id': None, 'message': 'null value in column "kind" of relation "ledger" violates not-null constraint', 'sqlstate': '23502', 'refusal_id': 10, 'disposition': 'refused'}
+
+=== GREEN-NONTEXT-KIND-NULL-accepted ===
+  [ok] ledger_write payload with `kind` as a JSON NUMBER (42, not a string) -- REFUSED (the stringified '42' fails ledger_kind_check), journaled detail='ledger|23514|<NULL>' (expect NULL attempted-kind -- present but non-text is NOT extracted) -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "ledger_kind_check"', 'sqlstate': '23514', 'refusal_id': 12, 'disposition': 'refused'}
+
+=== GREEN-NON-LEDGER-SURFACE-NULL-accepted ===
+  [ok] obligation_write with assigned_by=obliges_actor (obligation_not_self_assigned CHECK) -- REFUSED, journaled detail='obligation|23514|<NULL>' (expect NULL -- the obligation payload contract has no `kind` key to begin with, structurally NULL, never a failed extraction) -- verdict={'row_id': None, 'message': 'new row for relation "countersign_obligation" violates check constraint "obligation_not_self_assigned"', 'sqlstate': '23514', 'refusal_id': 13, 'disposition': 'refused'}
+
+=== GREEN-ACCEPTED-WRITE-BYTE-IDENTICAL-verdict-shape ===
+  [ok] an ordinary (kind='decision') write's verdict shape is IDENTICAL pre-s65 vs post-s65-birth: pre={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}, post={'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}; the accepted row's own refusal_attempted_kind stays NULL ('<NULL>', licensed only on write_refused rows)
+
+== scaffolding classic world s65fxbirth (chain ends s65-refusal-attempted-kind.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s65 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after five refusals (forged-kind attempt, kind='row', missing kind, non-text kind, obligation self-assign) -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=5 == sequence=5
+
+  [clingo raw stdout]
+clingo version 5.8.0
+Reading from ...784aaeab64e0f/engine/lp/ledger_tnow.lp ...
+Solving...
+Answer: 1 (Time: 0.002s)
+reaches_genesis(1) reaches_genesis_scoped(1,"principal_registered") reaches_genesis_scoped(1,"principal_role_bound") reaches_genesis_scoped(1,"standing_lifecycle") reaches_genesis_scoped(1,"milestone_closure") reaches_genesis_scoped(1,"gate_edge_supersession") reaches_genesis_scoped(1,"entitlement_class_configured") reaches_genesis_scoped(1,"delegation_lifecycle") reaches_genesis_scoped(1,"independent_verification_delegation")
+SATISFIABLE
+
+Models       : 1
+Calls        : 1
+Time         : 0.002s (Solving: 0.00s 1st Model: 0.00s Unsat: 0.00s)
+CPU Time     : 0.002s
+
+  [clingo raw stderr]
+
+
+=== AGREE-sql-asp-differential ===
+  [ok] SQL principal_authority_chain_reaches_genesis(pid) vs ASP reaches_genesis/1 on the s65-head world -- a non-regression sanity check, since NO derivation reads any refusal_* column (this delta's own §1 item 4 finding) --  symmetric_difference=[]
+
+
+ALL GREEN

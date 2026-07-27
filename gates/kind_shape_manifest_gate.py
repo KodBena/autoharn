@@ -614,6 +614,16 @@ MANIFEST = [
          reason="session_user at the attempt -- ALWAYS known (server-witnessed), so "
                 "mandatory even when the attempted principal is not resolvable; "
                 "non-emptiness is the separate refusal_attempted_role_nonempty value CHECK."),
+    dict(column="refusal_attempted_kind", kinds=("write_refused",),
+         arity="one-way", mechanism="CHECK", constraint="refusal_attempted_kind_kind_shape",
+         defining_delta="s65-refusal-attempted-kind.sql",
+         reason="the refused payload's own attempted `kind` token, extracted before digesting "
+                "-- legitimately NULL when not extractable (no `kind` key, a non-text value, or "
+                "a refusing surface whose payload contract never carries one), the SAME "
+                "'legitimately NULL on the licensed kind too' shape as refusal_attempted_actor, "
+                "so the correlation cannot be an iff; one-way forecloses it appearing on a "
+                "non-write_refused row only. Non-emptiness when present is the separate "
+                "refusal_attempted_kind_nonempty value CHECK."),
     dict(column="work_review_disposition", kinds=("work_closed", "work_violation_disposition"),
          arity="two-way", mechanism="trigger", constraint=None,
          defining_delta="s29-obligation-item-key-and-typed-close.sql (sec-10 epoch amendment; "

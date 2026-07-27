@@ -206,7 +206,11 @@ BASELINE: dict[str, int] = {
     # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
     # comments kept verbatim above; the union is the measured merged file. Same
     # merge-union ratchet-crossing class as the reconciliations above.
-    "gates/kind_shape_manifest_gate.py":           1448,
+    # NEW to BASELINE, 1458 (s65 build, design/FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md,
+    # ledger row 1487): one new MANIFEST row (refusal_attempted_kind, one-way, mirroring
+    # refusal_attempted_actor's own shape) -- a visible ratchet bump with rationale,
+    # sanctioned per this gate's own convention, not silently absorbed.
+    "gates/kind_shape_manifest_gate.py":           1458,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -466,7 +470,9 @@ BASELINE: dict[str, int] = {
     # and is re-measured on the merged file. Same merge-union ratchet-crossing class -- and
     # the commit-phase contention class the standing memory predicts -- as every
     # reconciliation above.
-    "gates/fixture_census.py":                     432,
+    # bumped 432 -> 433 (one new REGISTRY row: s65-refusal-attempted-kind, design/
+    # FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md, ledger row 1487).
+    "gates/fixture_census.py":                     433,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -550,7 +556,11 @@ BASELINE: dict[str, int] = {
     # engine/lp_registry.py entry, design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md build --
     # self-referential, checked here too, the usual fixpoint settled by re-measuring after
     # writing, same idiom as every prior self-reference bump in this file's own history above).
-    "gates/max_lines.py":                          675,
+    # bumped 675 -> 681 (s65 build, design/FABLE-S65-REFUSAL-ATTEMPTED-KIND-SPEC.md, ledger row
+    # 1487): this gate's own BASELINE growing to carry the two entries this same commit bumps
+    # (gates/kind_shape_manifest_gate.py, gates/fixture_census.py) -- the same self-referential
+    # fixpoint as every prior bump above, re-measured after writing.
+    "gates/max_lines.py":                          685,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
