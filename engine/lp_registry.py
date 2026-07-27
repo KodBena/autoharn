@@ -38,12 +38,33 @@ a runner calls before grounding a named layer: given the program-name list it is
 either returns cleanly or raises `RegistryError` with teach-text naming exactly which module is
 missing and why the layer needs it -- never a silent empty grounding.
 
+EACH LAYERS ENTRY IS A TYPED LayerSpec, NOT A BARE PROGRAM-NAME TUPLE (design/
+FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md, RATIFIED 2026-07-27; the fix for ledger row 1459's
+"bare `./judge` crashes on `entitlement`" defect). Before this build, "what does a layer need to
+detect its own substrate" and "what does a layer's SQL floor compare" lived as two separate
+if-chains in engine/ledger_differential.py (`layer_capability`, `_LAYER_FLOOR_PREDS`) that fell
+open the moment a new layer was registered here without an entry there -- exactly what happened
+when `entitlement` landed. This registry is the single home the spec's Rule-2(a) answer names: a
+`LayerSpec` carries the program stack (unchanged), a `capability` probe (name -> (bool, reason),
+the SAME shape and SAME reason strings `layer_capability`'s deleted if-chain used, moved here
+verbatim), and a `floor` disposition -- the frozenset of predicate names the SQL floor compares,
+or an honest `NoFloor(reason)`/`FloorElsewhere()` marker when no such comparison exists (see
+their own docstrings). `_validate_layer_registry` runs at IMPORT TIME (module scope, below) and
+refuses loudly if any entry is missing a part -- so registering a layer without all three, from
+now on, fails at import in every test and every commit, never at the next operator's bare
+`judge`.
+
 Lazy imports banned (CLAUDE.md)."""
 from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
+
+from belief_floor import BELIEF_PREDS, belief_capable
+from ledger_edb import resolve
+from ledger_floor import DEFEAT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS
 
 
 @dataclass(frozen=True)
@@ -215,22 +236,179 @@ MODULES: dict[str, ModuleSpec] = {
 
 # ==== LAYERS ==================================================================================
 # The named, checkable program stacks this codebase's own runners actually compose (plan step
-# 8(ii)/(iii)). A layer's tuple is the COMPLETE required member set, in load order; a runner that
-# wants to ground a layer calls `require_layer_stack(layer, loaded)` with the program-NAME list it
-# is about to hand to clingo -- a subset refuses loudly (RegistryError, teach-text naming the
-# missing member and why), a superset (extra modules alongside the layer) is accepted.
-LAYERS: dict[str, tuple[str, ...]] = {
-    "tnow": ("ledger_tnow.lp",),
-    "work": ("ledger_tnow.lp", "work_items.lp", "work_review.lp"),
-    "defeat": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
-    "belief": ("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp", "ledger_belief.lp"),
-    "entitlement": ("ledger_tnow.lp", "ledger_entitlement.lp"),
-}
+# 8(ii)/(iii); typed per LayerSpec, closure spec §2 item 1). A layer's `programs` tuple is the
+# COMPLETE required member set, in load order; a runner that wants to ground a layer calls
+# `require_layer_stack(layer, loaded)` with the program-NAME list it is about to hand to clingo --
+# a subset refuses loudly (RegistryError, teach-text naming the missing member and why), a
+# superset (extra modules alongside the layer) is accepted.
+
+WORK_LAYER_PREDS = frozenset(WORK_ITEM_PREDS) | frozenset(WORK_REVIEW_PREDS)
 
 
 class RegistryError(RuntimeError):
     """Raised when a caller's program-name list does not satisfy a named layer's required member
-    set (ADR-0002 fail-loudly; the F7 mis-stacked-invocation hazard this registry forecloses)."""
+    set (ADR-0002 fail-loudly; the F7 mis-stacked-invocation hazard this registry forecloses), OR
+    (closure spec §2 items 2/4) when the import-time registry validation finds an incomplete
+    LayerSpec, OR when an explicit `--layer <x>` request lands on a layer whose floor disposition
+    is `NoFloor` -- the typed refusal design item 4 calls for, sourced from the registry entry's
+    own declared reason rather than a bare `NotImplementedError`."""
+
+
+@dataclass(frozen=True)
+class NoFloor:
+    """A layer's floor disposition: capability detection may exist, but NO complete SQL-floor
+    differential is wired for this layer yet on this build -- an honest, filed gap (closure spec
+    §2 item 3's fallback), never silently widened into a passing (AGREE) comparison. `reason` is
+    the one-line teaching text a bare-path skip line or an explicit-request refusal prints."""
+    reason: str
+
+
+@dataclass(frozen=True)
+class FloorElsewhere:
+    """A layer's floor disposition: the floor comparison EXISTS and runs, but through a mechanism
+    OTHER than run_layer_differential's `preds`-restricted lookup -- today, only 'tnow', whose
+    floor is the ORIGINAL, unrestricted run_differential/floor_atoms comparison that
+    ledger_differential.main() special-cases before ever reaching run_layer_differential (that
+    special-casing predates this build and is untouched by it). Deliberately a DIFFERENT type
+    than `NoFloor`: 'tnow' unambiguously HAS a floor, just not one this field's consumers should
+    ever read as a predicate-restriction set or a stated absence -- collapsing the two into one
+    representation would let a future refactor that unifies the two code paths misread 'runs
+    elsewhere' as 'doesn't exist', exactly the representable-but-wrong state ADR-0000 Rule 2(a)
+    asks a fix to foreclose, not merely avoid today."""
+
+
+@dataclass(frozen=True)
+class LayerSpec:
+    """One judge LAYER entry (closure spec §2 item 1): the program stack (unchanged, load order),
+    a capability probe (`name -> (bool, reason)`, the exact shape `layer_capability` returns --
+    the SAME checks and SAME reason strings the four pre-existing layers' branches used, moved
+    here byte-verbatim, not retyped; see each `_*_capability` function below), and a floor
+    disposition: `frozenset[str]` (the predicate names the SQL floor compares -- what
+    `_LAYER_FLOOR_PREDS` held pre-this-build), `NoFloor(reason)` (no such comparison exists yet,
+    honestly declared), or `FloorElsewhere()` ('tnow' only -- see that class's own docstring)."""
+    programs: tuple[str, ...]
+    capability: Callable[[str], tuple[bool, str]]
+    floor: frozenset[str] | NoFloor | FloorElsewhere
+
+
+# ---- capability probes -------------------------------------------------------------------------
+# Moved VERBATIM (byte-diffed in the build report, not retyped) from
+# engine/ledger_differential.py's now-deleted `layer_capability` if-chain -- the single home this
+# registry already was for load order becomes the single home for capability detection too, per
+# the closure spec's Rule 2(a) answer. Each probe takes the target NAME (matching
+# `layer_capability`'s own signature) and returns (bool, reason), same as before.
+
+def _tnow_capability(name: str) -> tuple[bool, str]:
+    """'tnow' is always capable: every ledger (even the pre-kernel/empty case) has the entry rows
+    both T_now and the SQL floor read; there is no schema precondition to detect, so it is never
+    auto-declared incapable."""
+    return True, ""
+
+
+def _work_capability(name: str) -> tuple[bool, str]:
+    t = resolve(name)
+    if not t.has_col("work_slug"):
+        return False, ("target has no `work_slug` column (pre-s22 lineage) -- "
+                       "the 'work' layer has no substrate here, capability absent")
+    return True, ""
+
+
+def _defeat_capability(name: str) -> tuple[bool, str]:
+    t = resolve(name)
+    if not (t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")):
+        return False, ("target has no principal_binding_active/"
+                       "principal_competence_activity columns (pre-s41 lineage) "
+                       "-- the 'defeat' layer has no grant substrate here, "
+                       "capability absent, not record-empty")
+    return True, ""
+
+
+def _belief_capability(name: str) -> tuple[bool, str]:
+    """Moved verbatim from belief_differential.belief_layer_capability (whose one caller was
+    ledger_differential.layer_capability's now-deleted if-chain); belief_layer_capability itself
+    is deleted from belief_differential.py by this same delta (this was its only caller) rather
+    than kept as an orphaned wrapper. Same belief_floor.belief_capable has_col-idiom check, same
+    reason string."""
+    t = resolve(name)
+    if not belief_capable(t):
+        return False, ("target has no `statement` column, or `actor` is not integer-typed -- "
+                       "the 'belief' layer has no substrate here, capability absent, "
+                       "not record-empty")
+    return True, ""
+
+
+def _entitlement_capability(name: str) -> tuple[bool, str]:
+    """NEW (closure spec §2 item 3): the s60 marker column `entitlement_act_class`, same has_col
+    idiom the work/defeat probes use. Builder-verified (build report) against
+    kernel/lineage/s60-entitlement-enforcement.sql: that migration adds
+    `entitlement_act_class` ALONGSIDE the principal_relation/principal_binding_active/
+    principal_object substrate engine/ledger_edb.py's export_entitlement() also gates on, in the
+    SAME file -- so a target carrying the marker column always carries the rest, making a single
+    has_col check a sound proxy for the whole capability gate (exactly as 'work's single
+    work_slug check, and 'defeat's two-column check, are proxies for their own richer
+    substrates). Builder-verified against kernel/lineage/s64-principal-stamps-delegation-
+    conditions.sql too: s64 adds delegation_expiry/delegation_scope_classes to the SAME s41-era
+    ledger kind but never touches entitlement_act_class -- this probe is unchanged by s64,
+    verified, not assumed."""
+    t = resolve(name)
+    if not t.has_col("entitlement_act_class"):
+        return False, ("target has no `entitlement_act_class` column (pre-s60 lineage) -- "
+                       "the 'entitlement' layer has no substrate here, capability absent, "
+                       "not record-empty")
+    return True, ""
+
+
+LAYERS: dict[str, LayerSpec] = {
+    "tnow": LayerSpec(("ledger_tnow.lp",), _tnow_capability, FloorElsewhere()),
+    "work": LayerSpec(("ledger_tnow.lp", "work_items.lp", "work_review.lp"),
+                      _work_capability, WORK_LAYER_PREDS),
+    "defeat": LayerSpec(("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp"),
+                        _defeat_capability, frozenset(DEFEAT_PREDS)),
+    "belief": LayerSpec(("ledger_tnow.lp", "ledger_support.lp", "ledger_defeat.lp",
+                         "ledger_belief.lp"), _belief_capability, frozenset(BELIEF_PREDS)),
+    "entitlement": LayerSpec(
+        ("ledger_tnow.lp", "ledger_entitlement.lp"), _entitlement_capability,
+        NoFloor("no SQL-floor differential is wired for the 'entitlement' layer yet "
+                "(engine/ledger_floor.py has no entitlement floor function) -- capability "
+                "detection only; the floor-wiring gap is FILED (design/FABLE-JUDGE-LAYER-"
+                "CAPABILITY-CLOSURE-SPEC.md §2 item 3's honest-no-floor fallback; a ledger row "
+                "for the floor-wiring follow-on is the orchestrator's to file, this build has no "
+                "ledger-write access) -- never silently widened into an AGREE")),
+}
+
+
+def _validate_layer_registry(layers: dict[str, LayerSpec], modules: dict[str, ModuleSpec]) -> None:
+    """THE IMPORT-TIME CLOSURE CHECK (closure spec §2 item 1's mandate): a plain module-scope
+    check over the completed registry (no lazy import -- CLAUDE.md's ban is about
+    runtime-deferred IMPORTS, not ordinary code executing at module scope over already-imported
+    names). Refuses LOUDLY if any LAYERS entry is missing a part of its required triple: a
+    non-empty program stack whose every member is a real MODULES entry, a callable capability
+    probe, and a typed floor disposition. Takes the two dicts as PARAMETERS (not the module
+    globals) precisely so a test can construct a synthetic, deliberately-incomplete registry and
+    witness this refusal directly (the closure spec §4 negative-control leg) without
+    monkeypatching this module's own LAYERS/MODULES."""
+    for lname, spec in layers.items():
+        if not spec.programs:
+            raise RegistryError(
+                f"LAYERS[{lname!r}] declares an empty program stack -- a layer with no members "
+                f"is a missing declaration, not a stack.")
+        missing_modules = [p for p in spec.programs if p not in modules]
+        if missing_modules:
+            raise RegistryError(
+                f"LAYERS[{lname!r}] references undeclared MODULES entries {missing_modules} -- "
+                f"every program a layer stacks must have its own MODULES declaration.")
+        if not callable(spec.capability):
+            raise RegistryError(
+                f"LAYERS[{lname!r}] has no capability probe (got {spec.capability!r}) -- every "
+                f"layer must declare how to detect its own substrate (closure spec §2 item 1).")
+        if not isinstance(spec.floor, (frozenset, NoFloor, FloorElsewhere)):
+            raise RegistryError(
+                f"LAYERS[{lname!r}]'s floor disposition {spec.floor!r} is none of frozenset "
+                f"(floor-preds), NoFloor(reason), or FloorElsewhere() -- every layer must declare "
+                f"a floor disposition, honestly (closure spec §2 item 1).")
+
+
+_validate_layer_registry(LAYERS, MODULES)
 
 
 def require_layer_stack(layer: str, loaded: list[str]) -> None:
@@ -243,7 +421,7 @@ def require_layer_stack(layer: str, loaded: list[str]) -> None:
         raise RegistryError(
             f"unknown layer {layer!r} -- known layers: {sorted(LAYERS)}. A layer is registered "
             f"in engine/lp_registry.py's LAYERS dict, not invented ad hoc at the call site.")
-    required = LAYERS[layer]
+    required = LAYERS[layer].programs
     loaded_set = set(loaded)
     missing = [m for m in required if m not in loaded_set]
     if missing:
@@ -265,7 +443,7 @@ def layer_paths(layer: str, lp_dir) -> list:
     already passed `require_layer_stack` (or is calling this BEFORE building its `loaded` list;
     both orders are legitimate, this function does not itself check membership)."""
     d = Path(lp_dir)
-    return [d / name for name in LAYERS[layer]]
+    return [d / name for name in LAYERS[layer].programs]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -280,8 +458,10 @@ def main(argv: list[str] | None = None) -> int:
         if spec.note:
             print(f"    note: {spec.note}")
     print("\n# engine/lp_registry -- LAYERS")
-    for name, members in sorted(LAYERS.items()):
-        print(f"  {name}: {list(members)}")
+    for name, spec in sorted(LAYERS.items()):
+        floor_desc = (f"preds={sorted(spec.floor)}" if isinstance(spec.floor, frozenset)
+                     else repr(spec.floor))
+        print(f"  {name}: programs={list(spec.programs)} floor={floor_desc}")
     return 0
 
 

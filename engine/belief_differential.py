@@ -4,10 +4,16 @@ FABLE-BELIEF-SUBSTRATE-SPEC.md §2.2/§3.4, ratified ledger rows 1914/1919), spl
 engine/ledger_differential.py into its own sibling module SOLELY because that file's
 ADR-0007 max_lines ratchet baseline (529 lines) had no headroom for a third full layer's worth
 of glue -- reported as a spec-conformance/idiom deviation (ADR-0013 renegotiation-upward), not
-a silent choice: see the build report. `run_sql_belief`/`belief_layer_capability`/
-`belief_edb_text` are called from ledger_differential.py's own layer_capability()/
-run_layer_differential()/main(), mirroring the 'work'/'defeat' layers' inline shape there as
-closely as the line budget allows.
+a silent choice: see the build report. `run_sql_belief`/`belief_edb_text` are called from
+ledger_differential.py's own run_layer_differential()/main(), mirroring the 'work'/'defeat'
+layers' inline shape there as closely as the line budget allows.
+
+`belief_layer_capability` (the capability probe) MOVED OUT of this module (design/
+FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md, RATIFIED 2026-07-27): its one caller was
+ledger_differential.layer_capability's if-chain, itself deleted and replaced by a registry
+lookup (lp_registry.LAYERS[layer].capability) -- so the belief probe's byte-identical logic now
+lives as lp_registry._belief_capability, the single home the closure spec designates for every
+layer's capability probe, not duplicated here as an orphaned wrapper.
 
 CIRCULAR IMPORT, RESOLVED BY ORDERING (not a lazy import -- CLAUDE.md's ban is about
 function-body-deferred imports, not module-level placement): this module imports several names
@@ -33,14 +39,6 @@ def belief_edb_text(name: str) -> str:
     export_belief(). Raises BeliefParseError/DefeatParseError on a malformed row."""
     return (export(name).edb_text() + "\n" + export_defeat(name).edb_text()
             + "\n" + export_belief(name).edb_text())
-
-
-def belief_layer_capability(t) -> tuple[bool, str]:
-    if not belief_capable(t):
-        return False, ("target has no `statement` column, or `actor` is not integer-typed -- "
-                       "the 'belief' layer has no substrate here, capability absent, "
-                       "not record-empty")
-    return True, ""
 
 
 def run_sql_belief(name: str, edb_text: str) -> "ld.ProducerRun":

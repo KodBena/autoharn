@@ -24,6 +24,18 @@ not a refusal) and RUNS every capable layer, one verdict line per layer; an inca
 its declared one-line capability reason and does not count toward the exit code (the same
 "absence of a layer is not a defect" rule `judge` already applies to work_item_violations).
 
+EVERY LAYER'S CAPABILITY PROBE AND FLOOR DISPOSITION LIVES IN THE REGISTRY, NOT HERE (design/
+FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md, RATIFIED 2026-07-27 -- the fix for ledger row
+1459's "bare `./judge` crashes on the `entitlement` layer" defect). `layer_capability` and
+`run_layer_differential`'s floor lookup are now `lp_registry.LAYERS[layer].capability`/`.floor`
+REGISTRY LOOKUPS, not if-chains that fail open at the next registered layer -- a layer's entry
+carries all three of its program stack, capability probe, and floor disposition (a predicate
+set, `lp_registry.NoFloor(reason)`, or `lp_registry.FloorElsewhere()`), validated complete at
+IMPORT time. A layer whose floor is `NoFloor` (capability-detected but no SQL-floor comparison
+exists yet -- 'entitlement', as of this build) prints a disclosed one-line skip on the bare path
+and REFUSES (typed, `lp_registry.RegistryError`) on an explicit `--layer` request against a
+capable target -- never silently passes, never crashes.
+
 PER-SOLVER SELF-PROVENANCE (B3 / AC5; F6/I8 + F16/I11 -- "an unqualified prover is an
 unverified verifier"). Every producer invocation banks a DerivationRecord
 {engine + version, config/args, EDB hash, program hash, output hash, target, wall ts}
@@ -46,22 +58,15 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import lp_registry
-from belief_floor import BELIEF_PREDS
 from clingo_run import run_clingo
 from ledger_edb import PGHOST, DefeatParseError, export, export_defeat, export_work, resolve
-from ledger_floor import (DEFEAT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS, defeat_floor_atoms,
-                          floor_atoms, work_item_floor_atoms, work_review_floor_atoms)
+from ledger_floor import (DEFEAT_PREDS, defeat_floor_atoms, floor_atoms, work_item_floor_atoms,
+                          work_review_floor_atoms)
 
 HERE = Path(__file__).resolve().parent
 LP_DIR = HERE / "lp"
 TNOW_LP = LP_DIR / "ledger_tnow.lp"
 RETENTION = HERE / "docs" / "ledger-marriage" / "derivations"
-
-# The predicates the "work" layer's differential compares (plan step 8(ii)) -- the union of both
-# work-layer #show families, never the whole composed stack's atoms (which also carries
-# ledger_tnow.lp's own in_force/head/etc, out of scope for THIS comparison -- the "tnow" layer
-# already covers those via the standing run_differential above).
-WORK_LAYER_PREDS = frozenset(WORK_ITEM_PREDS) | frozenset(WORK_REVIEW_PREDS)
 
 # The closed verdict vocabulary -- a frozen set, so a stray string can never masquerade
 # as a verdict (ADR-0012 P8: illegal states unrepresentable at the seam).
@@ -246,8 +251,9 @@ def run_differential(name: str, *, edb_text: str | None = None,
 # edit needed -- an existing, already-generic passthrough, not a new wiring point.
 def run_sql_work(name: str, edb_text: str) -> ProducerRun:
     """The SQL floor for the 'work' layer: work_item_floor_atoms | work_review_floor_atoms,
-    restricted to WORK_LAYER_PREDS (the tnow-layer atoms -- in_force/head/etc -- are out of scope
-    for this comparison, exactly as run_sql's floor_atoms is out of scope for the work layer)."""
+    restricted to lp_registry.WORK_LAYER_PREDS (the tnow-layer atoms -- in_force/head/etc -- are
+    out of scope for this comparison, exactly as run_sql's floor_atoms is out of scope for the
+    work layer)."""
     t = resolve(name)
     if not t.has_col("work_slug"):
         return ProducerRun("sql:floor(work)",
@@ -255,7 +261,7 @@ def run_sql_work(name: str, edb_text: str) -> ProducerRun:
                                        "the 'work' layer has no substrate here, capability absent")
     try:
         atoms = work_item_floor_atoms(name) | work_review_floor_atoms(name)
-        atoms = {a for a in atoms if a.split("(", 1)[0] in WORK_LAYER_PREDS}
+        atoms = {a for a in atoms if a.split("(", 1)[0] in lp_registry.WORK_LAYER_PREDS}
     except Exception as e:  # noqa: BLE001
         return ProducerRun("sql:floor(work)", quarantine=f"SQL work floor failed: {type(e).__name__}: {e}")
     rec = DerivationRecord(
@@ -296,7 +302,6 @@ def run_sql_defeat(name: str, edb_text: str) -> ProducerRun:
 
 
 import belief_differential  # noqa: E402 -- 'belief' glue module (max_lines headroom, its own docstring); placed HERE (module scope) since it imports ProducerRun/etc back
-_LAYER_FLOOR_PREDS = {"work": WORK_LAYER_PREDS, "defeat": frozenset(DEFEAT_PREDS), "belief": frozenset(BELIEF_PREDS)}
 
 
 def layer_capability(name: str, layer: str) -> tuple[bool, str]:
@@ -307,31 +312,21 @@ def layer_capability(name: str, layer: str) -> tuple[bool, str]:
     run_sql_defeat's/run_layer_differential's own has_col()/require() checks QUARANTINE loudly
     if the substrate turns out to be missing (the correct, UNWEAKENED behavior for an explicit
     request -- a target asked for BY NAME still reads QUARANTINED when incapable, never AGREE
-    and never silently skipped). This function reuses those SAME checks and the SAME reason
-    strings verbatim (never invents parallel wording), so bare judge and an explicit --layer
-    agree about WHY a layer is absent, whichever path a reader takes.
+    and never silently skipped).
 
-    'tnow' is always capable: every ledger (even the pre-kernel/empty case) has the entry rows
-    both T_now and the SQL floor read; there is no schema precondition to detect, so it is never
-    auto-declared incapable."""
-    if layer == "tnow":
-        return True, ""
-    t = resolve(name)
-    if layer == "work":
-        if not t.has_col("work_slug"):
-            return False, ("target has no `work_slug` column (pre-s22 lineage) -- "
-                           "the 'work' layer has no substrate here, capability absent")
-        return True, ""
-    if layer == "defeat":
-        if not (t.has_col("principal_binding_active") and t.has_col("principal_competence_activity")):
-            return False, ("target has no principal_binding_active/"
-                           "principal_competence_activity columns (pre-s41 lineage) "
-                           "-- the 'defeat' layer has no grant substrate here, "
-                           "capability absent, not record-empty")
-        return True, ""
-    if layer == "belief": return belief_differential.belief_layer_capability(t)  # noqa: E701
-    raise NotImplementedError(f"layer_capability has no detection rule for layer {layer!r} "
-                              f"(known layers: {sorted(lp_registry.LAYERS)})")
+    A REGISTRY LOOKUP (design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md, RATIFIED 2026-07-27),
+    not an if-chain that fails open at the next registered layer -- the defect ledger row 1459
+    witnessed (a bare `entitlement` iteration hit an if-chain dead end and crashed with
+    NotImplementedError, taking the four healthy layers down with it). Every layer's probe
+    (`lp_registry.LAYERS[layer].capability`) reuses the SAME checks and SAME reason strings this
+    if-chain used to hardcode -- moved, not retyped, into the registry entries themselves (the
+    single home lp_registry.py already was for load order); see lp_registry.py's own
+    `_*_capability` functions for the byte-diffed provenance of each one. An unknown `layer` (not
+    a `lp_registry.LAYERS` key) is a caller bug, not a taught refusal -- it surfaces as Python's
+    own KeyError, exactly as `LAYERS[layer]` always would; every real caller's `layer` comes from
+    `lp_registry.LAYERS`'s own keys (this module's `main`'s auto-detect loop, argparse's
+    `--layer` choices), so this is unreachable from any CLI path."""
+    return lp_registry.LAYERS[layer].capability(name)
 
 
 def run_layer_differential(name: str, layer: str = "work", *,
@@ -340,16 +335,36 @@ def run_layer_differential(name: str, layer: str = "work", *,
     defaults to the layer's own full, registry-declared stack (always valid by construction); a
     caller passing an INCOMPLETE list here (the red-polarity seam -- see the seen-red fixture this
     delta ships) hits `lp_registry.require_layer_stack`'s typed refusal (`RegistryError`) BEFORE
-    any clingo invocation -- never a silent empty grounding (the F7 hazard this closes)."""
-    names = program_names if program_names is not None else list(lp_registry.LAYERS[layer])
+    any clingo invocation -- never a silent empty grounding (the F7 hazard this closes).
+
+    THE FLOOR-DISPOSITION CHECK below (closure spec §2 items 2/4) replaces the former
+    `if layer not in _LAYER_FLOOR_PREDS: raise NotImplementedError(...)` -- deleted, not kept
+    defensively, since the import-time registry validation (lp_registry._validate_layer_registry)
+    now makes an undeclared floor disposition unrepresentable. A layer whose registry entry
+    declares `NoFloor` (capability detection exists, but no SQL-floor comparison is wired) first
+    re-checks CAPABILITY: an incapable target QUARANTINEs with the SAME reason string the bare
+    auto-detect path prints (the two-paths-agree discipline, design §4's witness plan) -- an
+    explicit `--layer <x>` request never silently passes an incapable target. A CAPABLE target on
+    a no-floor layer gets the typed refusal `run_layer_differential` always gave a no-floor layer
+    before this build (`RegistryError`, not `NotImplementedError`), sourced from the registry
+    entry's own declared reason rather than an ad hoc message -- "preserved," per design §2 item
+    4's own word for this leg."""
+    names = program_names if program_names is not None else list(lp_registry.LAYERS[layer].programs)
     lp_registry.require_layer_stack(layer, names)  # raises RegistryError on a mis-stacked list
     paths = [LP_DIR / n for n in names]
-    if layer not in _LAYER_FLOOR_PREDS:
-        raise NotImplementedError(f"run_layer_differential only implements the "
-                                  f"{sorted(_LAYER_FLOOR_PREDS)} floor comparisons this build "
-                                  f"shipped; layer {layer!r} has no SQL floor wired here yet "
-                                  f"(the 'tnow' layer's is run_differential).")
-    preds = _LAYER_FLOOR_PREDS[layer]
+    floor = lp_registry.LAYERS[layer].floor
+    if isinstance(floor, lp_registry.NoFloor):
+        capable, reason = lp_registry.LAYERS[layer].capability(name)
+        if not capable:
+            qr = reason
+            asp = ProducerRun("asp:clingo", quarantine=qr)
+            sql = ProducerRun(f"sql:floor({layer})", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        raise lp_registry.RegistryError(
+            f"REFUSED: layer {layer!r} has capability on {name!r} but no SQL-floor differential "
+            f"is wired for it yet -- {floor.reason} (an explicit --layer request for a no-floor "
+            f"layer refuses rather than silently passing; see lp_registry.LAYERS[{layer!r}].floor)")
+    preds = floor
     if layer == "work":
         try:
             edb_text = export(name).edb_text() + "\n" + export_work(name).edb_text()
@@ -458,7 +473,14 @@ def main(argv: list[str] | None = None) -> int:
                          "floor_atoms), 'work' (+ work_items.lp/work_review.lp vs the work-item "
                          "SQL floors, over export_work's EDB), 'defeat' (+ ledger_support.lp/"
                          "ledger_defeat.lp vs defeat_floor_atoms, over export_defeat's EDB -- FABLE-DEFEAT-PIPELINE-SPEC.md §7), "
-                         "or 'belief' (+ ledger_belief.lp vs belief_floor_atoms, over export_belief's EDB -- FABLE-BELIEF-SUBSTRATE-SPEC.md §2). `judge` forwards this flag unchanged.")
+                         "'belief' (+ ledger_belief.lp vs belief_floor_atoms, over export_belief's EDB -- FABLE-BELIEF-SUBSTRATE-SPEC.md §2), "
+                         "or 'entitlement' (+ ledger_entitlement.lp; capability-detected via the s60 "
+                         "entitlement_act_class marker column, but NO SQL floor is wired yet -- "
+                         "see lp_registry.LAYERS['entitlement'].floor's declared reason -- so an "
+                         "incapable target QUARANTINES same as any other layer, and a CAPABLE "
+                         "target REFUSES with a typed no-floor error rather than silently passing; "
+                         "FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md §2 item 3). "
+                         "`judge` forwards this flag unchanged.")
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
 
@@ -490,6 +512,14 @@ def main(argv: list[str] | None = None) -> int:
                     # this line does NOT contribute to `red` (absence of a layer is not a defect,
                     # the same rule judge.tmpl already applies to work_item_violations).
                     print(f"  [--] {name:6} {'INCAPABLE':18} layer={layer!r} declared: {reason}")
+                    continue
+                floor = lp_registry.LAYERS[layer].floor
+                if isinstance(floor, lp_registry.NoFloor):
+                    # closure spec §2 item 4: capability-present, no-floor -- a disclosed one-line
+                    # skip (mirroring the INCAPABLE line's shape), NOT a run, NOT a crash. Never
+                    # contributes to `red` either (same "absence of a comparison is not a defect"
+                    # rule the INCAPABLE branch above applies).
+                    print(f"  [--] {name:6} {'NO-FLOOR':18} layer={layer!r} declared: {floor.reason}")
                     continue
             edb_text = ""
             if layer == "tnow":
