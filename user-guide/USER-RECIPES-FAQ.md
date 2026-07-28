@@ -29,6 +29,7 @@ question-and-recipe entries.
 - [Model identity: watchdog, attestation, defeat](#model-identity-watchdog-attestation-defeat)
 - [Trust ceremonies](#trust-ceremonies)
 - [Review discipline](#review-discipline)
+- [Work-unit role assignment: who opens, claims, closes, and reviews](#work-unit-role-assignment-who-opens-claims-closes-and-reviews)
 - [Classifying audit/diagnostic findings](#classifying-auditdiagnostic-findings)
 - [The findings-ledger / mined-checklist / +A:B:C pattern](#the-findings-ledger--mined-checklist--abc-pattern)
 - [Capturing errors so they cannot quietly recur (ADR-0000 / ADR-0011)](#capturing-errors-so-they-cannot-quietly-recur-adr-0000--adr-0011)
@@ -1464,6 +1465,114 @@ one. `--type blocks-close` (point 3) is a THIRD, later gate — closing time, no
 is not a substitute for either of the first two, though all three commonly apply to the same item
 (an antecedent that must be finished before X starts is very often also load-bearing for X's own
 strict close).
+
+<!-- doc-attest-exempt: this whole "Work-unit role assignment" section is new prose,
+Fable-authored 2026-07-28 under work item work-role-doctrine-faq (autoharn3 row 170,
+maintainer-commissioned row 168c: current practice "hap-hazard", taxonomy possibly too
+coarse, careful treatment wanted). Every empirical claim cites the filed census
+design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall; no live A:B:C loop
+has run on this section yet and this marker does not claim one did. The maintainer has
+not yet ratified the SHOULD-clauses below — until he has, they are the coordinator's
+reasoned proposal, binding nobody. Removal condition: strike when a real A:B:C
+attestation covers this section and the maintainer has dispositioned the proposals. -->
+
+## Work-unit role assignment: who opens, claims, closes, and reviews
+
+What this section rests on: a read-only census of every work-item lifecycle act across
+three real worlds ([design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md](../design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md)
+— read it before disputing a number here). Its headline: in all three worlds, 100% of
+opens, claims, and closes were performed by one principal (`author`) in one session
+(`main`), with zero exceptions; every separation-of-roles fact in the record lives on
+the *review* surface, not the work lifecycle. So the questions below are not answered
+from what we do — what we do is uniform to the point of vacuity — but from what the
+mechanism enforces, what real organizations converge on, and where those two disagree.
+The organizational frame used throughout (initiator / owner / performer / verifier /
+approver, the change-control and CAPA roles of regulated-industry practice) is a
+reference frame in this page's usual sense, never an adopted requirement.
+
+**Who opens a work item — and does opening obligate the opener to anything?**
+Anyone who *sees* the need opens; opening is the initiator's act and carries no
+ownership. This mirrors the convergent real-organization rule — anyone may raise a
+change request or file a CAPA; triage, not the filer, decides who owns it — and it is
+also what the kernel enforces, which is nothing: no trigger ties any later lifecycle
+act to the opener's identity (evidence §4). An orchestrator opening items on sighting
+is therefore correct practice, not sloppiness — the census's 41-of-102 opened-never-
+claimed items in autoharn2 are a visible backlog, not a defect, *provided* each open
+item carries its visible current rationale (the standing rule from the 2026-07-23
+directive: executable-now, blocked-on-named-thing, awaiting-maintainer, or closed with
+reason — an item sitting open with no stated why is itself a defect). The opener's one
+obligation is that rationale, written into the opening statement.
+
+**Must the principal that opened the item also close it?** No — and forcing that would
+invert the real accountability. Closure is the *owner's* attestation that the work is
+done as the resolution says; the initiator is often the least-placed identity to make
+that claim (the reporter of a defect is rarely its fixer). Accountability rides the
+CLAIM, not the open: the claimant is the owner of record, and the closer should be the
+claimant of record at close time. Note the tense of "should": today that is convention,
+not mechanism — the CLI enforces claim-before-close (led-side only; the kernel checks
+merely that the item was *opened*), and nothing anywhere checks that the closer IS the
+claimant (evidence §4, from the live trigger bodies). A close by a different principal
+than the claimant is representable and silent. Until that changes, treat closer ≠
+claimant as a handoff that must be made visible: the incoming owner claims first
+(multiple claims are legal by design; `work_item_current` resolves last-claim-wins),
+then closes as themselves. A silent cross-identity close is exactly the "haphazard"
+shape this section exists to retire.
+
+**Who claims — the orchestrator, or the agent actually doing the work?** The identity
+that will *perform* claims. Here is where the census says our practice, not our
+schema, is too coarse: the principal registry already carries the finer identities
+(`author`, `reviewer`, subagent-class delegates, and since s64 the `dispatch mint`
+verb that mints a delegate principal against a commission row), yet every claim ever
+recorded was `author`'s. When a commissioned builder executes, the honest record is a
+claim by the minted delegate (or at minimum an opening/claiming statement naming the
+dispatch), so that "who actually did this" is a query, not an archaeology exercise
+over commission briefs. The orchestrator claims in its own name only work it performs
+itself. This costs one `dispatch mint` per commission and buys the attribution the
+whole principal layer was built to record.
+
+**Under a review/fix gate: who reviews, who fixes, who re-closes, who re-reviews?**
+Four rules, each with its specimen or refusal already in the record:
+
+1. **The performer never verifies their own work under an independence claim above
+   `self-review`.** This one IS mechanism, not convention: claiming `technical` or
+   above from the same (stamp_session, stamp_agent) that wrote the reviewed row is
+   refused by the kernel with a teaching text (evidence §2's row-339 specimen; s21/
+   s41). `self-review` itself is legal and honest — the record's 31-of-31 self-review
+   rate is a disclosed single-operator reality, not a scandal — but it is *graded*:
+   `discharge_grade` is kernel-computed from stamp identity and cannot be asserted
+   upward. Render unto the vocabulary what the vocabulary can prove.
+2. **A `refuse` verdict reopens the substance, and the fix lands as a superseding
+   close by the owner** — not an edit of the refused close, not a quiet re-review of
+   the old row. The panel-board-view thread (evidence §2: refused close 413 → fix →
+   superseding close 427) is the worked positive specimen.
+3. **The re-review regards the SUCCESSOR close row, never the superseded one.** The
+   same thread's mis-citation (review 431 citing dead row 413, self-caught and
+   re-filed as 435) is the worked negative specimen — and note it was caught by the
+   author's own stop-gate discipline, not by any mechanism; the s48 witness-existence
+   trigger checks that a cited row exists, not that it is the right row or even
+   review-shaped (evidence §3 specimen 1 is a witness-ref pointing at a
+   `work_claimed` row, accepted silently).
+4. **The refusing reviewer is the preferred re-reviewer.** The verifier who rejected
+   is the one who knows what the rejection meant — the same reason regulated practice
+   routes a CAPA's verification back to the QA identity that raised the
+   nonconformance. Where that identity is genuinely unavailable, a fresh reviewer
+   reads the refusal first; what is not acceptable is the fix's own author attesting
+   the fix under a claimed independence (rule 1 already refuses the mechanized part
+   of that; the rest is this convention).
+
+**So is the taxonomy too coarse, or the practice?** The evidence says: the practice.
+The five organizational roles map onto existing vocabulary with nothing missing —
+initiator = opener; owner = claimant of record; performer = claimant or its minted
+delegate; verifier = reviewer with kernel-graded independence; approver = the strict
+close / s60 entitlement conjunct, where armed. What the census actually exposed is
+three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
+enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
+a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
+place independence and grade are recorded — has zero adoption outside experience4.
+(a) and (b) are candidate fail-safe kernel deltas (they only ADD refusals; the
+class-ratification of 2026-07-09 would cover both) — proposed here, not decided; the
+maintainer's disposition governs. (c) is not a delta at all: it is this section,
+applied.
 
 ## Classifying audit/diagnostic findings
 
