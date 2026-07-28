@@ -189,7 +189,7 @@ as a deliberate v1 limit rather than an oversight.
 
 **Can I use GPG to sign roles / authenticate myself as a principal?**
 Answering exactly what was asked, in three honest parts — this is not a recommendation to go
-generate a key; the standing deferral on key generation ("key generation/signing deferred until
+generate a key; the standing deferral on key generation (durable ledger row 264, re-asserting the 2026-07-13 ruling) ("key generation/signing deferred until
 all else banked; never re-raise as recommendation") is the maintainer's own ruling to lift, not
 this page's to nudge him toward.
 
@@ -488,11 +488,11 @@ reference frame in this page's usual sense, never an adopted requirement.
 **Who opens a work item — and does opening obligate the opener to anything?**
 Anyone who *sees* the need opens; opening is the initiator's act and carries no
 ownership. This mirrors the convergent real-organization rule — anyone may raise a
-change request or file a CAPA; triage, not the filer, decides who owns it — and it is
+change request or file a CAPA (Corrective and Preventive Action, regulated industry's fix-and-verify process); triage, not the filer, decides who owns it — and it is
 also what the kernel enforces, which is nothing: no trigger ties any later lifecycle
 act to the opener's identity (evidence §4). An orchestrator opening items on sighting
 is therefore correct practice, not sloppiness — the census's 41-of-102 opened-never-
-claimed items in autoharn2 are a visible backlog, not a defect, *provided* each open
+claimed items in autoharn2 (this project's own second, now-retired world) are a visible backlog, not a defect, *provided* each open
 item carries its visible current rationale (the standing rule from the 2026-07-23
 directive: executable-now, blocked-on-named-thing, awaiting-maintainer, or closed with
 reason — an item sitting open with no stated why is itself a defect). The opener's one
@@ -519,7 +519,7 @@ claimant as a handoff that must be made visible: the incoming owner claims first
 then closes as themselves. That claim-over-a-live-claim by a distinct actor IS the
 handoff's entire record — no new ledger kind is needed (the 2026-07-28 consult
 demoted its own instinct for one on the named-consumer test), but the same shape is
-also what a claim-steal would look like, so the role-census view below is what makes
+also what a claim-steal would look like, so the role-census view -- approved but NOT YET BUILT (autoharn3 work item boundary-role-census-view, ledger row 203) -- is what will make
 the two distinguishable by inspection. A silent cross-identity close is exactly the
 "haphazard" shape this section exists to retire.
 
@@ -542,7 +542,7 @@ Four rules, each with its specimen or refusal already in the record:
 
 1. **The performer never verifies their own work under an independence claim above
    `self-review`.** This one IS mechanism, not convention: claiming `technical` or
-   above from the same (stamp_session, stamp_agent) that wrote the reviewed row is
+   above from the same (stamp_session, stamp_agent) pair -- the per-session/per-agent HMAC stamp identity EVIDENCE-AND-TRUST.md's trust ceremonies describe -- that wrote the reviewed row is
    refused by the kernel with a teaching text (evidence §2's row-339 specimen; s21/
    s41). `self-review` itself is legal and honest — the record's 31-of-31 self-review
    rate is a disclosed single-operator reality, not a scandal — but it is *graded*:
@@ -578,7 +578,7 @@ close / s60 entitlement conjunct, where armed. What the census actually exposed 
 three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
 enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
 a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
-place independence and grade are recorded — has zero adoption outside experience4.
+place independence and grade are recorded — has zero adoption outside experience4 (the sibling panel project's world — the fourth live deployment alongside the autoharnN worlds).
 (a) and (b) are fail-safe kernel deltas, joined by (d) review-regards-in-force
 (fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — all
 three only ADD refusals, and all three were RATIFIED 2026-07-28 as one delta, s69

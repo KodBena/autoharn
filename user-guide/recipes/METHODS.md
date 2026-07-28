@@ -311,7 +311,7 @@ enters the next world via the scaffold (it usually already has), and the finding
 the ledger. This is a ruling, not a limitation looking for a workaround. Ruling text:
 [../CLAUDE.md](../../CLAUDE.md), ORCHESTRATION section.
 
-## Recusal and independent RCA (a conflict-of-interest method harvested downstream)
+## Recusal and independent RCA — root cause analysis (a conflict-of-interest method harvested downstream)
 
 This section covers a five-step method for what an orchestrator should do when the thing it
 would need to judge is a decision it made itself — recuse from the judgment, then dispatch an
@@ -339,7 +339,7 @@ own database, which this session has no credentials or access path to from this 
 ledger** — the autoharn-side row (1364) that reports them, by contrast, was read live, this
 session, and is WITNESSED.
 
-**The five steps**, reconstructed from the specimen above and from the same "two-spy synthesis"
+**The five steps**, reconstructed from the specimen above and from the same "two-spy synthesis" (one ledger row combining two independent observer sessions' findings; the worked example lives in [REVIEW-AND-GATING.md](REVIEW-AND-GATING.md))
 practice's own harvest of this method (WITNESSED, `./autoharn led show 1357`, kind `decision`, 2026-07-17
 evening, read this session):
 

@@ -470,7 +470,7 @@ quote it if it is genuinely intended prose.
 `led --json <ledger|review|registration|obligation> <file|->` routes a JSON object straight to
 the matching s43 [write boundary](../../GLOSSARY.md#write-boundary) function
 (`ledger_write`/`review_write`/`registration_write`/`obligation_write`) — the exact same four
-functions "The ledger boundary service (`serving/`)" section below documents for its own HTTP
+functions "The ledger boundary service (`serving/`)" section above (editorial fix at the suite's legibility loop: the original said "below", wrong-direction even pre-split — the residue filing anticipated exactly this deliberate correction) documents for its own HTTP
 endpoints, so the payload shape is the one documented there (payload keys are the target table's own
 column names, verbatim, no second vocabulary). Validation at this layer is well-formedness and
 top-level-shape only (parses as JSON, is an object) — everything else is the kernel's own

@@ -34,7 +34,7 @@ seriously robust experience*").
 
 **The interactive face is a real Textual application — a hierarchical configuration tree, not a
 sequence of numbered prompts.** The pre-2026-07-22 build described in
-[design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md](../../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)
+[design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md — now archived under vestigial_documentation/](../../vestigial_documentation/design/FABLE-SETUP-TUI-TEXTUAL-SPEC.md)
 (a linear "N/11 Screen" flow, one screen at a time) was deleted wholesale and replaced by the
 configtree rebuild,
 [design/FABLE-SETUP-TUI-REBUILD-SPEC.md](../../design/FABLE-SETUP-TUI-REBUILD-SPEC.md) — this
@@ -189,7 +189,7 @@ WITNESSED
 this session (`python3 -m tools.setup_tui.app --dry-run --scripted <answers>
 --start-at fork-target`, declining the extension):
 ```
-facts [governed-files pattern exposure] -- aspiration: F33 (governance keyed to WHAT THE THING
+facts [governed-files pattern exposure] -- aspiration: [F33](../../FINDINGS.md) (governance keyed to WHAT THE THING
   IS, not an enumerated file list) -- house discipline, not an external standard
   (hooks/pretooluse_change_gate.py's own _load_governed_patterns). | external: none -- writes
   one JSON file inside the target directory (<dest>/.claude/governed_files.json), no new

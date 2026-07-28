@@ -172,11 +172,11 @@ honesty, because the model-identity string originates inside the unauthenticated
 itself. This is stated plainly in the sentry spec's own §7 standing rebuttals and carried
 forward here rather than oversold: everything on this page is audit-supporting
 evidence, never authentication (in NIST 800-53 terms, for readers who want the mapping: the
-AU control family, never IA-2). A dishonest or silent session is observed as nothing and
+AU control family (Audit and Accountability), never IA-2 (Identification and Authentication -- user identity proofing)). A dishonest or silent session is observed as nothing and
 defeats nothing — absence of telemetry proves nothing, permanently, in either direction.
 
 **How would I actually notice a model substitution as it happens?** The watchdog
-(`otel-watch`) is a small always-on process that tails the local OTel collector's export and
+(`otel-watch`) is a small always-on process that tails the local OTel (OpenTelemetry) collector's export and
 compares each request's observed model against the session's declared expected model; on a
 mismatch it calls a mail-notification script (on this host, the maintainer's own
 `notify.py`, the one that already makes his phone beep on turn completion — if you are not
@@ -575,9 +575,9 @@ points at rather than restates.
 `__SCHEMA__`) and writes to every scaffolded deployment's own `.claude/settings.json`, the file
 Claude Code itself reads at session start to learn which hooks fire on which tool events. Reading
 its own source (`bootstrap/templates/settings.json.tmpl`) rather than a description of it: it
-wires nine hook attachments across five lifecycle points — `PreToolUse` (the change gate, stamp
+wires nine hook attachments across five lifecycle points *[editorial correction, verified against `bootstrap/templates/settings.json.tmpl` at the suite's legibility loop: the template wires FOUR lifecycle points — PreToolUse, PostToolUse, Stop, SessionStart — through ten matcher blocks; "five" as preserved overcounts]* — `PreToolUse` (the change gate, stamp
 interception, the SQL-write block, and the doc-shapes gate, matched to `Write`/`Edit`/`Bash`/
-`AskUserQuestion`/`Read`/`Task|Agent|Workflow` respectively -- widened from `Task|Agent` by the
+`AskUserQuestion`/`Read`/`Task|Agent|Workflow` respectively -- *[editorial, verified against the template at the suite's legibility loop: "respectively" cannot carry the real mapping -- the change gate, stamp interception, and SQL block ride the `*` matcher; the demurral detector `AskUserQuestion`; the mutation observer `Bash`; the delegation observer `Task|Agent|Workflow`; the doc-shapes gate `Write|Edit`; the read observer `Read`]* -- widened from `Task|Agent` by the
 Workflow-tool-coverage work item, ledger row 1355; this sentence's own matcher text was stale,
 corrected 2026-07-26 doc sweep), `PostToolUse` (the mutation observer twice,
 bash completion, the apparatus-flip journal, the delegation observer), a single `Stop` entry
