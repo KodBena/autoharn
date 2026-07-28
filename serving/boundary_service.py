@@ -437,6 +437,10 @@ from bounds import (  # noqa: E402
 from boundary_models import (  # noqa: E402
     AnonymousWriteRefused,
     ArtifactWriteIntFields,
+    AttestationResponse,
+    BankedDoctorSummary,
+    BankedJudgeVerdict,
+    BankedVerifyChainVerdict,
     BodyReadTimeout,
     CapabilityAbsent,
     CapabilityManifest,
@@ -449,6 +453,7 @@ from boundary_models import (  # noqa: E402
     MetaResponse,
     MintedActorConflict,
     MissiveDisposeWriteIntFields,
+    NoBankedArtifact,
     ObligationRevokeWriteIntFields,
     ObligationWriteIntFields,
     PayloadTooLarge,
@@ -497,7 +502,7 @@ from boundary_models import (  # noqa: E402
 # row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
 # the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
 # caught missing.
-BOUNDARY_SERVICE_VERSION = "1.6.0"
+BOUNDARY_SERVICE_VERSION = "1.7.0"
 # Bumped to 1.5.0 (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
 # boundary-sse-events, ledger row 169): ONE new route SHAPE, `GET /d/{deployment}/events`
 # (text/event-stream, head-advancement-only) -- a genuinely new route shape, the same (a)/(b)/
@@ -519,6 +524,15 @@ BOUNDARY_SERVICE_VERSION = "1.6.0"
 # UPDATE survey erratum). `protocol_version`/`WIRE_PROTOCOL_VERSION` stays UNCHANGED -- every new
 # field is additive; an existing client that ignores an unknown `HealthResponse` key does not
 # misparse (the same rule `max_sse_clients`/`sse_poll_interval_secs` were held to one version ago).
+# Bumped to 1.7.0 (work item boundary-verdict-read-surface, ledger row 221): ONE new route
+# SHAPE, `GET /d/{deployment}/attestation` -- serves the latest BANKED verify-chain/judge/doctor
+# result labeled as this service's own last-known attestation (serving/README.md's two-trust-
+# roots section), never running any of the three instruments itself. Also gains one new
+# VIEW_REGISTRY member, `work_role_census` (work item boundary-role-census-view, ledger row
+# 203) -- registry-only growth, which per the 1.4.0(b) note above this version deliberately does
+# NOT count on its own; named here only for this comment's own completeness. protocol_version/
+# WIRE_PROTOCOL_VERSION stays UNCHANGED (a wholly new, opt-in route an existing client never
+# calls does not make it misparse anything it already relies on).
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -1822,6 +1836,110 @@ def _lineage_head(cfg: BoundaryConfig) -> str | None:
             break
         head = stem
     return head
+
+
+# boundary-verdict-read-surface (row 221): the two-trust-roots section (serving/README.md)'s own
+# verdicts-not-instruments rule, applied to a FILESYSTEM read this service has never needed
+# before -- judge/verify-chain/doctor are the deliberately-outside-the-boundary "independent
+# instruments" group (README's own words); this route serves their LATEST BANKED RESULT, never
+# runs one. `_REPO_ROOT` is this module's own repo checkout root (two directories up from
+# serving/) -- the SAME relative-path convention `sys.path.insert` above already establishes.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+# AUTOHARN_JUDGE_DERIVATIONS_ROOT (test-only escape hatch, read ONCE at import time): the
+# fixture's own seam for witnessing BOTH polarities (a scratch dir with a planted
+# `derivation.json`; an empty scratch dir with none) against a SEPARATE server SUBPROCESS
+# (`configure_judge_derivations_root` below is same-process only -- a fixture that spawns this
+# module as its own subprocess, as every seen-red suite here does, needs an env-var seam
+# instead; the SAME class of test-only override this repo's own `pghost_resolve.py` env-var
+# convention already establishes for a different constant). Unset in ordinary operation -- the
+# real bank is the real bank in production.
+_DEFAULT_JUDGE_DERIVATIONS_ROOT = (
+    Path(os.environ["AUTOHARN_JUDGE_DERIVATIONS_ROOT"])
+    if os.environ.get("AUTOHARN_JUDGE_DERIVATIONS_ROOT")
+    else _REPO_ROOT / "engine" / "docs" / "ledger-marriage" / "derivations")
+# The five differential families' own RETENTION roots (engine/ledger_differential.py,
+# engine/contemp_differential.py, engine/ordering_differential.py,
+# engine/preamble_differential.py, engine/review_gap_differential.py) -- named here ONCE so a
+# scan need not re-derive them; if a future differential module adds a sixth family this dict is
+# the one place to extend (ADR-0012 P1).
+_JUDGE_DERIVATION_DOMAINS: dict[str, Path] = {
+    "ledger": _DEFAULT_JUDGE_DERIVATIONS_ROOT,
+    "contemporaneity": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "contemporaneity",
+    "ordering-violations": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "ordering-violations",
+    "preamble-ordering": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "preamble-ordering",
+    "review-gap-audit": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "review-gap-audit",
+}
+_judge_derivations_root: Path = _DEFAULT_JUDGE_DERIVATIONS_ROOT
+
+
+def configure_judge_derivations_root(path: Path) -> None:
+    """Construction-time-defense-in-depth (the SAME pattern `configure_identity_enforcement`
+    above already uses): overrides `_JUDGE_DERIVATION_DOMAINS`' own roots wholesale, redirected
+    under ONE new parent -- the fixture's own seam for witnessing BOTH polarities (a scratch dir
+    with a planted `derivation.json`; an empty scratch dir with none) without touching this
+    checkout's own real, accumulating derivation bank. Never called in ordinary operation (`main`
+    below leaves the default in place unless a future CLI flag is added -- none is, this build:
+    the real bank IS the real bank in production)."""
+    global _judge_derivations_root, _JUDGE_DERIVATION_DOMAINS
+    _judge_derivations_root = path
+    _JUDGE_DERIVATION_DOMAINS = {
+        "ledger": path,
+        "contemporaneity": path / "contemporaneity",
+        "ordering-violations": path / "ordering-violations",
+        "preamble-ordering": path / "preamble-ordering",
+        "review-gap-audit": path / "review-gap-audit",
+    }
+
+
+def _latest_judge_derivation() -> dict[str, Any] | None:
+    """Scans every `derivation.json` under every `_JUDGE_DERIVATION_DOMAINS` root (recursively --
+    each domain nests one more `<target>/<ts>_<hash>/derivation.json` level, `engine/
+    ledger_differential.py`'s own `_run_unique_dir` docstring), returns the one with the LATEST
+    file mtime (never the lexicographically-last path -- a `--retain` run's own directory name
+    embeds ITS run timestamp, not necessarily this scan's notion of "most recent on disk", though
+    in practice the two agree; mtime is the honest, direct fact). Returns `None` if no
+    `derivation.json` exists anywhere under any domain -- read-only, no error on an absent/empty
+    tree (a fresh checkout that has never run `judge --retain` is the ordinary case, not a
+    defect). A malformed `derivation.json` (unparseable JSON, or missing an expected key) is
+    SKIPPED, not raised -- this route degrades to the next-most-recent valid record, or to `None`,
+    rather than 500ing the whole read surface over one corrupt retained artifact; ADR-0002's
+    loudness is still honored server-side (the server's own log records which files were
+    skipped, `_log_infra_failure`'s own house channel is not it -- see the route's own body)."""
+    best: tuple[float, str, dict[str, Any]] | None = None  # (mtime, domain, parsed)
+    skipped: list[str] = []
+    for domain, root in _JUDGE_DERIVATION_DOMAINS.items():
+        if not root.is_dir():
+            continue
+        for path in root.rglob("derivation.json"):
+            try:
+                mtime = path.stat().st_mtime
+                parsed = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(parsed, dict) or "target" not in parsed or "verdict" not in parsed:
+                    skipped.append(str(path))
+                    continue
+            except (OSError, ValueError):
+                skipped.append(str(path))
+                continue
+            if best is None or mtime > best[0]:
+                best = (mtime, domain, parsed)
+    if skipped:
+        print(f"boundary_service: _latest_judge_derivation skipped {len(skipped)} unreadable/"
+              f"malformed derivation.json path(s): {skipped}", file=sys.stderr)
+    if best is None:
+        return None
+    mtime, domain, parsed = best
+    asp_record = parsed.get("asp_record") or {}
+    sql_record = parsed.get("sql_record") or {}
+    return {
+        "domain": domain,
+        "target": parsed.get("target", ""),
+        "verdict": parsed.get("verdict", ""),
+        "asp_input_hash": asp_record.get("input_hash"),
+        "sql_input_hash": sql_record.get("input_hash"),
+        "computed_at": asp_record.get("ts") or sql_record.get("ts") or "",
+        "banked_at": datetime.datetime.fromtimestamp(
+            mtime, tz=datetime.timezone.utc).isoformat(),
+    }
 
 
 def _kind_vocabulary(cfg: BoundaryConfig) -> list[str]:
@@ -3523,6 +3641,59 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             kinds=_kind_vocabulary(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
         )
+
+    @app.get("/d/{deployment}/attestation", response_model=AttestationResponse)
+    def attestation(deployment: str) -> Response:
+        """Work item boundary-verdict-read-surface (row 221): serves the LATEST BANKED result
+        of each independent instrument (verify-chain, judge, doctor) labeled as THIS SERVICE'S
+        OWN last-known attestation -- serving/README.md's two-trust-roots section, verbatim:
+        "never a substitute for running the independent instrument, and never conflated with
+        it." NEVER runs verify-chain/judge/doctor itself (that would reopen exactly the
+        second-trust-root hazard the README section this route implements exists to avoid) --
+        this route only reads what one of THOSE THREE has already written to disk, if anything.
+
+        Investigated, not assumed (`boundary_models.py`'s own module-level note above has the
+        full account): `judge` genuinely banks (`--retain`, opportunistic); `verify-chain` and
+        `doctor` bank NOTHING today (both templates read in full, no write-to-disk found in
+        either) -- so those two classes always resolve to `NoBankedArtifact` in THIS build, an
+        honest, disclosed fact, not a bug in this route.
+
+        Deployment validation only (`_resolve_deployment`, the same discriminator gate every
+        other route enforces) -- the payload itself does NOT vary by `{deployment}`
+        (`AttestationResponse`'s own docstring: judge's bank is repo-checkout-relative, one
+        process serving N deployments shares one bank)."""
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        judge_derivation = _latest_judge_derivation()
+        judge_field: BankedJudgeVerdict | NoBankedArtifact
+        if judge_derivation is not None:
+            judge_field = BankedJudgeVerdict(**judge_derivation)
+        else:
+            judge_field = NoBankedArtifact(
+                would_produce="./autoharn judge --retain [target...]",
+                message="no derivation.json found under engine/docs/ledger-marriage/derivations/ "
+                        "(or its five differential-family subtrees) -- judge only banks under "
+                        "its own --retain flag, opportunistically, never on an ordinary run; "
+                        "this checkout has not retained one yet.")
+        # verify-chain and doctor bank NOTHING in this codebase as it stands (confirmed by
+        # reading both templates in full, module-level note above) -- always the typed absence,
+        # honestly, never a live re-run to manufacture a "present" answer this route does not
+        # have (row 221's own instruction: "NEVER runs the instrument server-side").
+        verify_chain_field: BankedVerifyChainVerdict | NoBankedArtifact = NoBankedArtifact(
+            would_produce="./autoharn verify-chain",
+            message="verify-chain prints its reconciliation result to stdout only -- this "
+                    "codebase's own verify-chain.tmpl has no write-to-disk of its own result "
+                    "(the operator's signed-genesis ceremony redirects stdout to a file BY HAND "
+                    "for GPG signing, a location this service cannot discover or trust as "
+                    "'the latest verdict'); nothing is banked for this route to serve.")
+        doctor_field: BankedDoctorSummary | NoBankedArtifact = NoBankedArtifact(
+            would_produce="./autoharn doctor",
+            message="doctor prints its PASS/FAIL/SKIP report to stdout only -- this codebase's "
+                    "own doctor.tmpl has no write-to-disk of its own report; nothing is banked "
+                    "for this route to serve.")
+        return AttestationResponse(
+            verify_chain=verify_chain_field, judge=judge_field, doctor=doctor_field)
 
     @app.get("/d/{deployment}/events")
     async def events(deployment: str, request: Request, after_head: int = 0) -> Response:

@@ -224,6 +224,9 @@ EXPECTED_ROUTES = {
     # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md (work item boundary-sse-events, ledger row 169):
     # the head-advancement-only SSE push signal's own new route.
     ("GET", "/d/{deployment}/events"),
+    # Work item boundary-verdict-read-surface (ledger row 221): the banked verify-chain/judge/
+    # doctor attestation read's own new route.
+    ("GET", "/d/{deployment}/attestation"),
 }
 
 
@@ -790,6 +793,59 @@ def main() -> int:
               up_b and st_h == 200 and body_h.get("capabilities", {}).get("s43_boundary") is True
               and body_h.get("service_principal") == "boundary-service",
               f"health status={st_h} body={body_h}", failures)
+
+        # -- W37 (row 221, boundary-verdict-read-surface): GET /attestation, BOTH polarities.
+        # PRESENT polarity, no special env needed: this REPO CHECKOUT's own real
+        # engine/docs/ledger-marriage/derivations/ tree already carries genuine `--retain`'d
+        # derivation.json files (from prior differential-suite dev work) -- WORLD B's own server
+        # was spawned with no AUTOHARN_JUDGE_DERIVATIONS_ROOT override, so it reads that SAME
+        # real tree, honestly proving the "present" shape without a fixture-manufactured plant.
+        st_att, body_att = http_get(base + "/attestation") if up_b else (0, {})
+        judge_att = body_att.get("judge", {}) if isinstance(body_att, dict) else {}
+        check("w37a-attestation-judge-present-from-real-repo-bank",
+              up_b and st_att == 200
+              and judge_att.get("banked") is True
+              and judge_att.get("label") == "last_known_attestation"
+              and judge_att.get("verdict") in
+                  ("AGREE", "DIVERGE_BY_DESIGN", "DIVERGE_DEFECT", "QUARANTINED")
+              and judge_att.get("banked_at"),
+              f"status={st_att} judge={judge_att}", failures)
+        check("w37b-attestation-verify-chain-and-doctor-always-absent",
+              up_b and st_att == 200
+              and body_att.get("verify_chain", {}).get("banked") is False
+              and body_att.get("verify_chain", {}).get("disposition") == "no_banked_artifact"
+              and body_att.get("doctor", {}).get("banked") is False
+              and body_att.get("doctor", {}).get("disposition") == "no_banked_artifact",
+              f"status={st_att} verify_chain={body_att.get('verify_chain')} "
+              f"doctor={body_att.get('doctor')}", failures)
+        # ABSENT polarity for judge: a SEPARATE server instance, pointed via
+        # AUTOHARN_JUDGE_DERIVATIONS_ROOT at a freshly-made, genuinely empty scratch directory --
+        # no derivation.json anywhere under it, so `_latest_judge_derivation` returns None and
+        # this route's own `judge` field resolves to the SAME NoBankedArtifact shape verify_chain/
+        # doctor always wear.
+        empty_derivations_dir = Path(tempfile.mkdtemp(prefix="w37-empty-derivations-"))
+        tmps.append(empty_derivations_dir)
+        env_w37 = dict(os.environ)
+        env_w37["AUTOHARN_JUDGE_DERIVATIONS_ROOT"] = str(empty_derivations_dir)
+        proc_w37, port_w37 = start_server(cfg_b, env_overrides=env_w37)
+        procs.append(proc_w37)
+        base_w37 = f"http://127.0.0.1:{port_w37}/d/{world_b}"
+        up_w37 = wait_health(base_w37)
+        st_att2, body_att2 = http_get(base_w37 + "/attestation") if up_w37 else (0, {})
+        judge_att2 = body_att2.get("judge", {}) if isinstance(body_att2, dict) else {}
+        check("w37c-attestation-judge-absent-when-nothing-banked",
+              up_w37 and st_att2 == 200
+              and judge_att2.get("banked") is False
+              and judge_att2.get("disposition") == "no_banked_artifact"
+              and "judge --retain" in judge_att2.get("would_produce", ""),
+              f"up_w37={up_w37} status={st_att2} judge={judge_att2}", failures)
+        check("w37d-attestation-unknown-deployment-still-typed-404",
+              # the discriminator gate applies here too (AttestationResponse's own docstring:
+              # deployment validation happens, even though the payload itself does not vary).
+              (lambda r: r[0] == 404 and r[1].get("disposition") == "unknown_deployment")(
+                  http_get(f"http://127.0.0.1:{port_w37}/d/does-not-exist-w37/attestation")
+                  if up_w37 else (0, {})),
+              f"up_w37={up_w37}", failures)
 
         # -- W1: accepted write, read back verbatim.
         st1, v1 = http_post(base + "/write/ledger",
