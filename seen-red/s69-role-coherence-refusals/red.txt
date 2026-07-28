@@ -1,0 +1,65 @@
+== scaffolding classic world s69fxpre (chain ends s68-typed-absence-dispositions.sql, NO s69) ==
+=== RED-CLOSE-BY-NEVER-CLAIMANT ===
+  [ok] pre-s69 world: closing an item NOBODY ever claimed is ACCEPTED today -- verdict={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RED-CLOSE-BY-SUPERSEDED-CLAIMANT ===
+  [ok] pre-s69 world: current claimant is '3' (claimant_now='3'), yet the SUPERSEDED claimant '1' closes successfully -- verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RED-WITNESS-ROW-WORK-CLAIMED-ACCEPTED ===
+  [ok] pre-s69 world: a --review-witness citing a work_claimed row (row 13, not a review/finding) is ACCEPTED as evidence today -- verdict={'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RED-REVIEW-REGARDS-SUPERSEDED-ACCEPTED ===
+  [ok] pre-s69 world: a review regarding row 15, superseded by 16, is ACCEPTED today -- verdict={'row_id': 17, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding classic world s69fxmain (chain ends s69-role-coherence-refusals.sql) ==
+=== GREEN-CLOSE-BY-NEVER-CLAIMANT-REFUSED ===
+  [ok] post-s69 world: closing a never-claimed item is REFUSED, teaching -- verdict={'row_id': None, 'message': "Ledger policy: close of work item 'never-claimed' refused — closing actor 1 is not the item's claimant-of-record (<none — this item was never claimed>), defined as the actor of the LATEST in-force work_claimed row for this slug (s69 §1, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md; the SAME resolution work_item_current.claimant already computes). A cross-identity close is a HANDOFF, and handoffs are claims: claim the item as yourself first (./autoharn led work claim never-claimed), then close. If the current claimant is inept or unavailable, a higher authority DEFEATS the claim with a fresh one (claim-stealing is legal by design, s47) and closes as the new claimant — nothing here forecloses reclaim.", 'sqlstate': 'P0001', 'refusal_id': 9, 'disposition': 'refused'}
+
+=== GREEN-CLOSE-BY-SUPERSEDED-CLAIMANT-REFUSED ===
+  [ok] post-s69 world: the SUPERSEDED claimant ('1') closing is now REFUSED (current claimant '3') -- verdict={'row_id': None, 'message': "Ledger policy: close of work item 'reclaim-item' refused — closing actor 1 is not the item's claimant-of-record (3), defined as the actor of the LATEST in-force work_claimed row for this slug (s69 §1, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md; the SAME resolution work_item_current.claimant already computes). A cross-identity close is a HANDOFF, and handoffs are claims: claim the item as yourself first (./autoharn led work claim reclaim-item), then close. If the current claimant is inept or unavailable, a higher authority DEFEATS the claim with a fresh one (claim-stealing is legal by design, s47) and closes as the new claimant — nothing here forecloses reclaim.", 'sqlstate': 'P0001', 'refusal_id': 14, 'disposition': 'refused'}
+
+=== HAPPY-DEFEAT-AND-RECLAIM ===
+  [ok] row 201 §0: A claims, B reclaims (last-claim-wins), B closes -- ACCEPTED end-to-end (a claim is defeatable-and-reclaimable, never frozen) -- verdict={'row_id': 15, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-WITNESS-ROW-WORK-CLAIMED-REFUSED ===
+  [ok] post-s69 world: a --review-witness citing a work_claimed row is now REFUSED -- verdict={'row_id': None, 'message': "Ledger policy: review-witness citation 'row:17' in work_review_ref is refused — row 17 exists but is not evidence: its kind is 'work_claimed', not 'review' or 'finding', and it is not an in-force work_opened row of a CHILD of this closing item (s69 §2, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md). Legal witnesses here are: a review or finding row (the judgment itself), or — for a planning/parent item discharged by decomposition — the work_opened row of a child slug naming THIS item as its --parent (the planning-close carve-in). A work_claimed row (or any other kind) is not a review, whatever it cites (the autoharn2 row-1265 specimen this refusal closes).", 'sqlstate': 'P0001', 'refusal_id': 19, 'disposition': 'refused'}
+
+=== HAPPY-ORDINARY-CLAIMANT-CLOSE ===
+  [ok] post-s69 world: claim-then-close as the SAME actor, citing a genuine review row, is ACCEPTED, unaffected -- verdict={'row_id': 23, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-PLANNING-CLOSE-CHILD-CARVE-IN-legal ===
+  [ok] post-s69 world: a parent's close citing its OWN child's work_opened row as witness -- ACCEPTED (the planning-close carve-in) -- verdict={'row_id': 27, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-PLANNING-CLOSE-CHILD-CARVE-IN-non-child-refused ===
+  [ok] post-s69 world: citing a work_opened row that is NOT a child of the closing slug is REFUSED (the same carve-in, negative polarity) -- verdict={'row_id': None, 'message': "Ledger policy: review-witness citation 'row:28' in work_review_ref is refused — row 28 exists but is not evidence: its kind is 'work_opened', not 'review' or 'finding', and it is not an in-force work_opened row of a CHILD of this closing item (s69 §2, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md). Legal witnesses here are: a review or finding row (the judgment itself), or — for a planning/parent item discharged by decomposition — the work_opened row of a child slug naming THIS item as its --parent (the planning-close carve-in). A work_claimed row (or any other kind) is not a review, whatever it cites (the autoharn2 row-1265 specimen this refusal closes).", 'sqlstate': 'P0001', 'refusal_id': 32, 'disposition': 'refused'}
+
+=== GREEN-REVIEW-REGARDS-SUPERSEDED-REFUSED ===
+  [ok] post-s69 world: a review of the now-superseded row 33 is REFUSED, naming the successor 34 -- verdict={'row_id': None, 'message': "Ledger policy: review refused — row 33 (this review's regards target) has an IN-FORCE SUPERSEDER, row 34 (s69 §3, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md) — a review of a superseded row is stale the moment it is written. Cite the successor instead: retry this review with regards=34.", 'sqlstate': 'P0001', 'refusal_id': 36, 'disposition': 'refused'}
+
+=== HAPPY-REVIEW-REGARDS-IN-FORCE-SUCCESSOR ===
+  [ok] post-s69 world: a review regarding the IN-FORCE successor 34 -- ACCEPTED -- verdict={'row_id': 37, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-S56-RESERVATION-STEP-1-accepted ===
+  [ok] the reservation-carrying review itself -- accepted -- verdict={'row_id': 39, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-S56-RESERVATION-DISCHARGE-UNAFFECTED ===
+  [ok] post-s69 world: a review REGARDING an in-force review row (the s56 reservation-discharge shape) is ACCEPTED, unaffected by §3 -- before=1 after=0 verdict={'row_id': 40, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== RIDER-TEACH-TEXT-DIFF ===
+  [ok] s63's validate_supersession_target body, with every './led ' occurrence mechanically replaced by './autoharn led ', is BYTE-IDENTICAL to s69 Element 4's body -- the rider changes ONLY the printed CLI spelling, nothing else
+
+=== REFUSALS-JOURNAL-AS-WRITE-REFUSED ===
+  [ok] every s69 refusal above journals as a committed write_refused row -- 5 refusal ids, 5 found as write_refused rows
+
+== scaffolding classic world s69fxbirth (chain ends s69-role-coherence-refusals.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s69 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=5 == sequence=5
+
+=== AGREE-sql-asp-work-differential ===
+  [ok] judge output (s69fxmain): ['AGREE', 'asp [\'w_own_leaf_unresolved("reclaim-item")\', \'w_tree_member("never-claimed","never-claimed")\', \'w_tree_member("ordinary-item","ordinary-item")\', \'w_tree_member("planning-child","planning-child")\', \'w_tree_member("planning-parent","planning-child")\', \'w_tree_member("planning-parent","planning-parent")\', \'w_tree_member("planning-parent-2","planning-parent-2")\', \'w_tree_member("reclaim-item","reclaim-item")\', \'w_tree_member("unrelated-item","unrelated-item")\', \'w_tree_member("witness-shape-item","witness-shape-item")\', \'w_tree_unresolved("planning-parent")\', \'w_tree_unresolved("reclaim-item")\']', 'sql [\'w_own_leaf_unresolved("reclaim-item")\', \'w_tree_member("never-claimed","never-claimed")\', \'w_tree_member("ordinary-item","ordinary-item")\', \'w_tree_member("planning-child","planning-child")\', \'w_tree_member("planning-parent","planning-child")\', \'w_tree_member("planning-parent","planning-parent")\', \'w_tree_member("planning-parent-2","planning-parent-2")\', \'w_tree_member("reclaim-item","reclaim-item")\', \'w_tree_member("unrelated-item","unrelated-item")\', \'w_tree_member("witness-shape-item","witness-shape-item")\', \'w_tree_unresolved("planning-parent")\', \'w_tree_unresolved("reclaim-item")\']']
+
+
+ALL GREEN
