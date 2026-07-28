@@ -1,20 +1,90 @@
-<!-- doc-attest-exempt: as-delivered consult record, filed verbatim 2026-07-28
+<!-- doc-attest-exempt: as-delivered consult record, two deliveries, both verbatim
 (maintainer commission: "run this all by a second Fable consult (ADR-0018-ish) ... with
 web access ... This is one thing I'd like to get right, then codified once and for all";
-brief CONSULT-WORK-ROLE-DOCTRINE.md, sealed two-phase shape). DISCLOSED DEVIATION: the
-brief mandated Phase 1 (blind independent derivation) be written out in full before the
-seal was opened; the consultant's final report carries only Phase 2, so the blind
-derivation is attested by the report's own claims, not inspectable. The coordinator
-weighed each correction on its argued evidence (every one cites the census, the kernel
-source, or fetched prior art), not on the independence claim. Removal condition:
-superseded by the maintainer's disposition of the doctrine. -->
+brief CONSULT-WORK-ROLE-DOCTRINE.md, sealed two-phase shape). INTEGRITY HISTORY, in
+order: (1) first delivery carried Phase 2 only -- no written Phase 1, no citations;
+(2) on the coordinator's recall the consultant disclosed that THE SEAL NEVER HELD -- the
+brief's Read returned the whole file, appendix included, in one call, so no blind phase
+existed at any point; (3) the completion below therefore presents Phase 1 as a
+RECONSTRUCTED derivation with per-point contamination markers ([INDEP] = self-evidencing
+via a recorded divergence from the commissioner; [CORR] = corroboration that cannot be
+certified uncontaminated), plus the fetched citation list with two honest downgrades
+(ALCOA primary PDF 404 -> WEAKENED on secondary witnesses; ITIL/CAB UNWITNESSED,
+load-bearing nowhere). The FAQ corrections this consult mandated were weighed on their
+argued evidence (census, kernel source, raw-fetched 21 CFR 820.100 and Gerrit docs),
+which survives the seal failure; the [CORR] corroborations are adjudicated agreement
+only, not independent confirmation. Removal condition: superseded by the maintainer's
+disposition of the doctrine. -->
 
-**Provenance:** produced by a second Fable-class consultant (2026-07-28) over the
-work-role doctrine (FAQ section at commit 5541e5d, census at
-WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md, the coordinator's sealed assessments). Filed
-verbatim; the corrections it mandates were applied to the FAQ in the same commit family.
+**Provenance:** second Fable-class consultant, 2026-07-28, two deliveries. The
+completion (Phase 1 reconstructed + citations) is first below; the originally-delivered
+Phase 2 follows verbatim as the second section, unrevised.
 
 ---
+
+# Consult report (complete): work-unit role assignment doctrine — second Fable derivation
+
+## Standing integrity disclosure
+
+Two deviations from the brief's procedure, on the record:
+
+1. **The seal was broken at read time.** The Read of the brief returned the entire file, sealed appendix included, in one call; I had no mechanism that stopped at the seal line. Everything labeled Phase 1 below was therefore written *after* the appendix entered my context. It is my derivation reconstructed on the record from the census, the kernel sources, the law, and the fetched prior art — not a blind derivation, and it is not presented as one. Per-point contamination markers: **[INDEP]** = self-evidencing as independent because my Phase-2 adjudication records a *divergence* from the commissioner on that point; **[CORR]** = agreement I cannot certify as uncontaminated — weigh it as adjudicated corroboration only.
+2. **The prior-art witnesses were fetched but not cited in my first delivered text.** Corrected below: every prior-art claim Phase 2 relies on now carries URL + verbatim quote + what the claim takes from it, with two honest downgrades where the primary source could not be raw-fetched.
+
+---
+
+## Phase 1 — derivation, written out in full (reconstructed; markers per the disclosure)
+
+### Evidence base (all read in full or spot-checked as noted, WITNESSED)
+
+- **Census** `design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md`: 100% of opens/claims/closes in all three worlds by one principal (`author`), one session (`main`); role separation appears only on the review surface; all 31 experience4 reviews honestly `independence='self-review'`; one dishonest `technical` claim kernel-refused (row 339); the fix-gate specimen rows 413→436 with a re-review twice regarding the superseded close, caught only by self-discipline; one witness-ref citing a `work_claimed` row as a "review witness" (autoharn2 row 1265, s48 checks existence only); claim-before-close is CLI-only (`led.tmpl` `_slug_claimant` ~line 2256: *some* claimant, identity unchecked); closer-is-claimant enforced nowhere; multiple claims legal by design (s47), last-claim-wins a view convention.
+- **LAW**: ADR-0000 in full (incl. the 2026-07-02 closure-statement amendment — "the class gets named at exactly the scope of the fix the executor has already built" — and the 2026-07-22 named-consumer anecdote), ADR-0011 in full (enforcement-surface vocabulary; recurrence→mechanism; life-critical amendment: mechanism ships with the first fix), ADR-0014 in full (independence of second opinions; grade-the-brief), ADR-0018; ADR-0008/0012/0017 by their governing postures. CLAUDE.md orchestration contract; runs-are-linear; class-ratified fail-safe deltas.
+- **Mechanisms**: s60 header (entitlement conjuncts; deliberately milestone-only close gating), s64 header (delegation conditions kernel-only; *"dispatch mechanics... NOT built here"*), `hooks/pretooluse_change_gate.py` `decomposition_review` (distinct-actor countersign of the claimed item's `work_opened`, riding `review_gap`; default `"observe"`), `led.tmpl` `cmd_work_close` (three-constructor disposition; claim-before-close gate), s22/s29/s39/s47/s48/s21/s34/s41 via the census's §4 trigger map which I spot-checked rather than re-derived.
+
+### What prior art transfers, and what is theater here
+
+From the fetched sources (citation list below): what regulated practice and single-repo review cultures actually *mandate* is **attributability and recorded verification** — ALCOA's "traceable to the specific individual who generated, collected, or reviewed it"; 820.100(a)(4)'s "verifying or validating the corrective and preventive action to ensure that such action is effective," which **contains no independent-personnel clause**; the kernel's `Signed-off-by` chain-of-custody; RACI's exactly-one-Accountable rule. What they leave to *deliberate configuration* is identity separation — Gerrit: "By default, there are no built-in restrictions preventing uploaders from voting on their own changes." **Transfers**: attributability; single accountable owner; verification as a recorded act naming verifier and object; typed attestation vocabulary; self-approval as a disclosed configuration choice. **Theater in a single-operator shop**: mandatory distinct-person approval, CAB boards, forced opener≠closer, a QA-unit hat. The kernel's existing posture — grade identity distinctness (computed `discharge_grade`), refuse only *dishonest* claims of independence (s21/s34/s41) — is the correct GxP translation for this shop. **[CORR** on the grade-vs-force conclusion; the *Gerrit anchoring* of it is my own.**]**
+
+### The doctrine
+
+**1. Opening.** A scoping act, not an accountability act; anyone entitled opens (s60 already gates the milestone-shaped acts); an unclaimed open is healthy backlog. Opening obligates: (a) the visible current rationale; (b) **[INDEP — recorded as a Phase-2 divergence]** a definition-of-done a zero-context closer could adjudicate against (ADR-0017 applied to item text), plus dependencies as typed edges — the close-attestation and regards-the-successor rules downstream have nothing to bite on without it. Change-control prior art puts acceptance criteria in the change request, not in the closer's head. Convention (SHOULD), not a gate.
+
+**2. Claiming.** The claim is where accountability attaches — permit-to-work plus RACI's single "A": the claimant-of-record is the one accountable principal for delivery. Therefore (a) the claim is made by the principal that will actually perform — the census's all-`author` claims while minted delegates exist is an attributability defect, not mechanically decidable (no trigger knows a claim "should" have been a delegate's), so visibility not refusal **[CORR]**; (b) a second claim over a live claim is a *handoff*, currently indistinguishable from a claim-steal. My first instinct was a new typed handoff act; under the named-consumer test I demote it myself: the handoff is already fully representable (claim by incoming owner), and the consumer — "who owned this when?" — is served by a derived view flagging claim-over-live-claim-by-distinct-actor. No new vocabulary. **[INDEP — the demotion and its reasoning are mine; recorded as a divergence from my own instinct and adjudicated in Phase 2.]**
+
+**3. Closing.** The closer must be the claimant-of-record, kernel-enforced, with claim-first adoption as the sanctioned cross-identity path — a close by a never-claimant is today representable and silent, the one hole where "who was accountable at close" is unanswerable from the record. **[CORR — same rule as sealed Tier 1 item 1.]** Opener==closer must NOT be required: author≠merger is normal in every fetched review culture, and the opener's interest is carried by the typed disposition and witness. **[CORR]**
+
+**4. Review/fix gates.** Reviewer distinctness is graded and disclosed, never forbidden — experience4's 31 honest self-reviews plus the refused dishonest `technical` claim is the system working; Gerrit independently shows self-approval restriction as opt-in policy even multi-human. The fix loop: performer fixes their own refused close (the CAPA owner executes the correction — 820.100 mandates the verification *occur and be recorded*, not that a different person perform it); re-close supersedes the refused close; **the re-review regards the successor — and this is mechanizable as a refusal**: a `review` whose `regards` row has an unsuperseded successor is refused with teaching ("cite the successor"). The census watched this exact failure happen twice (rows 431/435), caught only by self-discipline; ADR-0011's life-critical amendment says the mechanism ships with the first fix. **[INDEP — Phase 2 records this as a divergence from the committed FAQ, which describes the specimen but omits the delta.]** Same-reviewer re-review preferred, convention only. **[CORR]**
+
+**5. Enforcement buckets** (named-consumer test applied to each):
+- **Kernel refusals, fail-safe adds**: (i) closer-is-claimant-of-record (consumer: post-hoc RCA) **[CORR]**; (ii) witness-ref *shape* — but enumerated per close shape, not flat, or it refuses honest planning closes (see §6) **[INDEP in its restatement — Phase 2 records my sharpening against both the FAQ and the sealed wording]**; (iii) review-regards-in-force **[INDEP]**.
+- **CLI**: keep claim-before-close; teach the handoff path on the new refusals.
+- **Views/audit**: per-item role view (opener/claimant(s)/closer/reviewer with kernel-computed grades), consumer named: `./pickup` hydration and RCA; flags performer-identity coarseness and handoff-shaped claims. **[CORR on the view; INDEP on requiring its consumer be written into the doctrine text.]**
+- **Deliberately convention**: no forced opener≠closer; self-review never forbidden; `review_detail` not mandated per close (its zero adoption in two of three worlds proves mandate-before-doctrine yields ritual rows); performer-identity fidelity. **[CORR]**
+
+**6. Planning/decomposition.** (a) A decomposition is authored content, so the doctrine recurses one level up; the two-gate composition (blocks-start edges + `decomposition_review`, distinct-actor countersign, default `observe` with per-world promotion) already exists and is the right ordering. (b) The composite parent is structured, never performed: the decomposer claims it at decomposition time, the claim meaning "I own this tree's shape" — which makes its eventual close *ordinary* under closer-is-claimant, no trigger carve-out needed. **[Partly CORR (owner-of-shape), partly INDEP (claim-at-decomposition-time instead of a bookkeeping exemption in the refusal — Phase 2 records this as my sharpening).]** (c) A planning item's witness is its decomposition — child `work_opened` rows are the deliverable — hence the per-shape witness enumeration: for `row:` citations, `review`/`finding` generally, plus child `work_opened` rows where the closing slug has in-force parent edges to them (s28/s33); `bookkeeping` closes cite `commit:<sha>`, outside s48's `row:` scope by construction. **[INDEP in this decidable form; the underlying insight is in the sealed appendix.]** (d) Re-scoping is the live hazard: self-re-scoping is self-review in disguise — the performer narrowing the finish line until "done" is reachable, the work-item-grain instance of ADR-0000's closure-statement finding **[INDEP — the law anchor is mine]**. Scope changes get the close's verification posture and never solely by the identity whose finish line moves; convention-plus-visibility now, because no decidable refusal spares legitimate coordinator restructuring — saying so plainly is ADR-0011 Rule 1 honesty. **[CORR on the disposition.]**
+
+**7. Taxonomy verdict.** Slightly too coarse in practice, adequate in vocabulary, over-built nowhere. Missing at the *view* level only: the handoff/steal disambiguation and the per-shape witness legality — neither needs a new ledger kind. The independence vocabulary's near-unreachable `managerial`/`financial` rungs are honest ceiling-naming (the s34 idiom), not bloat. No new role nouns: the principal registry already carries the distinctions the census shows going unused — a practice gap, not a vocabulary gap. **[Mixed: "practice not schema" is CORR; the two view-level gaps are INDEP.]**
+
+---
+
+## Citation list — prior-art witnesses (raw-fetched this session)
+
+1. **Linux kernel, Submitting Patches** — https://www.kernel.org/doc/html/latest/process/submitting-patches.html — `Signed-off-by` verbatim: *"I certify that: (1) The contribution was created in whole or in part by me and I have the right to submit it under the open source license indicated in the file…"*; `Reviewed-by` verbatim: *"I have carried out a technical review of this patch… I believe it is… a worthwhile modification… free of known issues…"* — **Taken:** a typed, attributable attestation vocabulary whose mandatory element is provenance/attribution (self-signed), with review separation social rather than mechanical; chain-of-custody by each handler adding their own trailer.
+2. **Gerrit, Review Labels** — https://gerrit-review.googlesource.com/Documentation/config-labels.html — verbatim on the deprecated `ignoreSelfApproval`: *"If true, the label may be voted on by the uploader of the latest patch set, but their approval does not make a change submittable."* Fetched page confirms: by default no built-in restriction prevents uploaders voting on their own changes; restriction is per-project configuration (submit requirements, `user=non_uploader`). — **Taken:** uploader-cannot-approve is deliberate opt-in policy even in multi-human shops → grade-not-forbid is a defensible single-operator posture, not a compromise.
+3. **21 CFR 820.100(a)(4)** — https://www.law.cornell.edu/cfr/text/21/820.100 (raw-fetched) — verbatim: *"Verifying or validating the corrective and preventive action to ensure that such action is effective and does not adversely affect the finished device."* The fetched text contains **no clause requiring independent personnel** to perform the verification. — **Taken:** GxP CAPA mandates the verification *occur, be recorded, and be effective-checked* — object-correctness and recordedness, not person-separation → my review-regards-in-force refusal and grade-not-forbid split.
+4. **RACI failure modes** — [Tallyfy](https://tallyfy.com/raci-matrix/), [Wikipedia: Responsibility assignment matrix](https://en.wikipedia.org/wiki/Responsibility_assignment_matrix), [OVERBRING](https://overbring.com/articles/2024-01-23-raci-rapid-roles-responsibilities-blame-culture/) — search-surfaced content: every task has **exactly one Accountable** ("not zero, not two"); the A is the unique person with *"yes or no authority"* about whom *"the buck stops here"*; two A's = diffusion of responsibility. **Downgrade noted:** obtained via WebSearch result text, not a raw page fetch of each — the exactly-one-A rule is standard across the cited sources but I mark it WITNESSED-via-search-summary, not raw-quoted. — **Taken:** the claimant-of-record as the single accountable identity; last-claim-wins acceptable only if handoffs are visible.
+5. **ALCOA / FDA data-integrity guidance** — primary FDA PDF (fda.gov/media/119267/download) returned 404 twice; claim **honestly downgraded to secondary-source witness**: [TotalLab ALCOA guide](https://totallab.com/resources/alcoa-principles/) (raw-fetched), Attributable verbatim: *"Every piece of data must be traceable to the specific individual who generated, collected, or reviewed it – and to the instrument or system used."* FDA anchoring via search-surfaced quote of the 2018 guidance: *"Complete, consistent, and accurate data should be attributable, legible, contemporaneously recorded, original or a true copy, and accurate"* ([legalclarity.org](https://legalclarity.org/fda-data-integrity-guidance-alcoa-and-cgmp-compliance/), [Beckman](https://www.beckman.com/resources/industry-standards/alcoa)). — **Taken:** GxP's core demand is an un-fakeable, attributable record of who did what — the doctrine's cornerstone. The claim stands, on secondary witnesses; the FDA-verbatim anchoring is WEAKENED (not withdrawn) until the primary PDF is fetched from a working mirror.
+6. **ITIL/CAB re-baselining sign-off** — relied on from memory in Phase 1's theater-vs-transfers split only; **no fetch performed; marked UNWITNESSED** and load-bearing nowhere (the CAB appears only as an example of multi-human theater rejected).
+
+---
+
+## Phase 2 — adjudication (unchanged, as previously delivered)
+
+Delivered in my prior message and reproduced by reference, unrevised, per the coordinator's instruction. Its operative content: **agreements** (opening ownerless; accountability rides the claim; closer-is-claimant with claim-first handoff; performer/minted-delegate attribution as Tier-2 visibility; fix-gate rules 1–4; Tier 3 non-enforcements; sealed planning points 1–3). **Divergences** (all argued there): the FAQ omits the third delta (review-regards-in-force) its own worked specimen demands; the opener obligation is too thin (adjudicable definition-of-done as a SHOULD); the witness-shape check must be enumerated per close *shape* (review/finding generally + child `work_opened` where in-force parent edges exist; `bookkeeping`'s `commit:` refs untouched by construction) — "per resolution kind" as worded is unimplementable; closer-is-claimant's composite reading is claim-at-decomposition-time, not a trigger exemption; my own handoff-kind instinct demoted to a derived-view flag under the named-consumer test. **Corrections list** W1 (the FAQ's "since s64 the `dispatch mint` verb" misattribution — s64's header explicitly excludes dispatch mechanics; the real verb is repo-local `autoharn dispatch` under FABLE-DISPATCH-MECHANICS-SPEC.md, not scaffolded into fresh worlds), A1–A3, E1–E2, V1. **Delta verdicts:** all three survive in the forms stated there, and I put my name on all three in those forms only.
+
+---
+
+# Original first delivery (Phase 2 only), verbatim
 
 ## Phase 2 — adjudication (FAQ as committed at 5541e5d, plus the sealed assessments)
 
