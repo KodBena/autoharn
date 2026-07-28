@@ -223,9 +223,21 @@ def row_set_equal(a: list, b: list) -> bool:
 
 
 def direct_view_rows(world: str, view: str) -> list:
+    # Row 203: `work_role_census` names no stored relation (`boundary_service._view_from_clause`'s
+    # own docstring) -- `FROM {world}.{view}` would 404 against a relation that was never
+    # supposed to exist. The independent "direct" ground truth for a SERVING-SIDE derived view is
+    # the SAME SELECT text the served route itself runs (`_role_census_sql`), executed here
+    # directly rather than through the served route's own pagination wrapper -- still an
+    # independent check of THIS ROUTE's pagination/JSON-shaping code, which is WR1's own actual
+    # subject; it is not independent of the query TEXT itself (there is no second, independently-
+    # authored ground truth for a view this build itself defines) -- named honestly here rather
+    # than silently presented as equivalent to the stored-relation case.
+    from_clause = (f"({boundary_service._role_census_sql(world)}) t"
+                   if view in boundary_service._ROLE_CENSUS_DERIVED_VIEWS
+                   else f"{world}.{view} t")
     out = bs_fixtures.psql_tuples(
         f"SET ROLE {world}_rw; "
-        f"SELECT coalesce(jsonb_agg(t), '[]'::jsonb)::text FROM {world}.{view} t;")
+        f"SELECT coalesce(jsonb_agg(t), '[]'::jsonb)::text FROM {from_clause};")
     return json.loads(out)
 
 
@@ -1092,6 +1104,95 @@ def main() -> int:
         else:
             check("wr7-countersigned-in-force-true-s68-shape", False,
                   "UNEXERCISED: WR7's own s68-headed world never became healthy", failures)
+
+        # ==================== WR14 (row 203, boundary-role-census-view): the approved role
+        # census read -- an open item, a RECLAIM (claim-over-a-live-claim by a distinct actor,
+        # the handoff/steal shape IDENTITY-AND-AUTHORITY.md's role-assignment section names), a
+        # close, and TWO reviews (one attest, one refuse) regarding the close row ====================
+        print("== WR14: role-census view -- opener/claimants/claimant-of-record/closer/"
+              "reviewers, reclaim visible ==")
+        slug14 = f"wr14-census-{RUN_SUFFIX}"
+
+        def w14(payload: dict) -> dict:
+            status, body = bs_fixtures.http_post(f"{base}/write/ledger", payload)
+            if status != 200 or body.get("disposition") != "accepted":
+                raise RuntimeError(f"wr14 birth write refused: status={status} body={body}")
+            return body
+
+        status, reg14a = bs_fixtures.http_post(f"{base}/write/registration", {
+            "name": f"wr14-claimant2-{RUN_SUFFIX}", "agent_class": "tool", "actor": author,
+            "purpose": "WR14 second claimant (reclaim-by-distinct-actor witness)"})
+        status, reg14b = bs_fixtures.http_post(f"{base}/write/registration", {
+            "name": f"wr14-reviewer-a-{RUN_SUFFIX}", "agent_class": "tool", "actor": author,
+            "purpose": "WR14 first reviewer"})
+        status, reg14c = bs_fixtures.http_post(f"{base}/write/registration", {
+            "name": f"wr14-reviewer-b-{RUN_SUFFIX}", "agent_class": "tool", "actor": author,
+            "purpose": "WR14 second reviewer"})
+        claimant2 = int(bs_fixtures.psql_tuples(
+            f"SELECT id FROM {world}_kernel.principal WHERE name = 'wr14-claimant2-{RUN_SUFFIX}';"))
+        reviewer_a = int(bs_fixtures.psql_tuples(
+            f"SELECT id FROM {world}_kernel.principal WHERE name = 'wr14-reviewer-a-{RUN_SUFFIX}';"))
+        reviewer_b = int(bs_fixtures.psql_tuples(
+            f"SELECT id FROM {world}_kernel.principal WHERE name = 'wr14-reviewer-b-{RUN_SUFFIX}';"))
+
+        w14({"kind": "work_opened", "statement": "WR14 fixture item", "actor": author,
+             "work_slug": slug14, "work_title": "WR14 fixture item"})
+        w14({"kind": "work_claimed", "statement": "WR14 first claim (author)", "actor": author,
+             "work_slug": slug14})
+        # The RECLAIM: a claim over the live claim above, by a DISTINCT actor -- IDENTITY-AND-
+        # AUTHORITY.md's own words, verbatim: "that claim-over-a-live-claim by a distinct actor
+        # IS the handoff's entire record ... the same shape is also what a claim-steal would
+        # look like" -- exactly the transition `any_reclaim_by_distinct_actor`/
+        # `is_reclaim_by_distinct_actor` exist to make visible by inspection.
+        w14({"kind": "work_claimed", "statement": "WR14 reclaim (distinct actor)",
+             "actor": claimant2, "work_slug": slug14})
+        close14 = w14({"kind": "work_closed", "statement": "WR14 close by claimant of record",
+                       "actor": claimant2, "work_slug": slug14,
+                       "work_resolution": "shipped", "work_witness": "commit:0000000",
+                       "work_review_disposition": "deferred"})
+        status, rv14a = bs_fixtures.http_post(f"{base}/write/review", {
+            "regards": close14["row_id"], "statement": "WR14 review A (attest)",
+            "verdict": "attest", "independence": "self-review", "basis": "WR14 fixture",
+            "actor": reviewer_a})
+        status, rv14b = bs_fixtures.http_post(f"{base}/write/review", {
+            "regards": close14["row_id"], "statement": "WR14 review B (refuse)",
+            "verdict": "refuse", "independence": "self-review", "basis": "WR14 fixture",
+            "actor": reviewer_b})
+        if rv14a.get("disposition") != "accepted" or rv14b.get("disposition") != "accepted":
+            raise RuntimeError(f"wr14 review refused: a={rv14a} b={rv14b}")
+
+        status_c14, served14 = bs_fixtures.http_get(f"{base}/views/work_role_census?limit=1000")
+        row14 = None
+        if status_c14 == 200 and isinstance(served14, list):
+            for r in served14:
+                if r.get("slug") == slug14:
+                    row14 = r
+                    break
+        check("wr14-role-census-opener-and-closer",
+              row14 is not None and row14.get("opener") == author and row14.get("closer") == claimant2,
+              f"status={status_c14} row={row14}", failures)
+        claimants14 = row14.get("claimants") if row14 else None
+        check("wr14-role-census-claimants-in-order-with-reclaim-flag",
+              isinstance(claimants14, list) and len(claimants14) == 2
+              and claimants14[0].get("claimant") == author
+              and claimants14[0].get("is_reclaim_by_distinct_actor") is False
+              and claimants14[1].get("claimant") == claimant2
+              and claimants14[1].get("is_reclaim_by_distinct_actor") is True,
+              f"claimants={claimants14}", failures)
+        check("wr14-role-census-claimant-of-record-and-any-reclaim-flag",
+              row14 is not None and row14.get("claimant_of_record") == claimant2
+              and row14.get("any_reclaim_by_distinct_actor") is True,
+              f"row={row14}", failures)
+        reviewers14 = row14.get("reviewers") if row14 else None
+        reviewer_ids14 = sorted(r.get("reviewer") for r in reviewers14) if isinstance(reviewers14, list) else None
+        verdicts14 = sorted(r.get("verdict") for r in reviewers14) if isinstance(reviewers14, list) else None
+        grades14 = [r.get("discharge_grade") for r in reviewers14] if isinstance(reviewers14, list) else None
+        check("wr14-role-census-two-reviewers-with-kernel-computed-grades",
+              isinstance(reviewers14, list) and len(reviewers14) == 2
+              and reviewer_ids14 == sorted([reviewer_a, reviewer_b])
+              and verdicts14 == ["attest", "refuse"]
+              and all(g is not None for g in (grades14 or [])),
+              f"reviewers={reviewers14}", failures)
 
         # ==================== WR13 (row 173, boundary-capability-manifest): the extended
         # CapabilityManifest + identity_enforcement posture, BOTH POLARITIES ====================
