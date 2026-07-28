@@ -337,8 +337,8 @@ The construction, worked end to end (verbs and refusal text from `s39-blocks-sta
      antecedent(s) are not yet resolved: v2-release (item is not yet closed).
      Claim and finish each named antecedent first (./led work claim <antecedent>,
      then ./led work close <antecedent> <resolution> ...), or -- if the dependency
-     itself is wrong -- correct the record (see this section's own supersession
-     recipe, 'Correcting the record' above) ..."
+     itself is wrong -- correct the record (see the 'Correcting the record'
+     recipe, THE-RECORD.md in this recipe suite) ..."
 
 # ... months later, v2 ships. The flip, at whichever grade the act warrants:
 ./autoharn led work claim v2-release
@@ -527,7 +527,7 @@ the two distinguishable by inspection. A silent cross-identity close is exactly 
 that will *perform* claims. Here is where the census says our practice, not our
 schema, is too coarse: the principal registry already carries the finer identities
 (`author`, `reviewer`, subagent-class delegates, and the repo's own `autoharn
-dispatch` verb — design/FABLE-DISPATCH-MECHANICS-SPEC.md; s64 supplies the kernel
+dispatch` verb — [design/FABLE-DISPATCH-MECHANICS-SPEC.md](../../design/FABLE-DISPATCH-MECHANICS-SPEC.md); s64 supplies the kernel
 side, the delegation-condition columns and the scoped chain walk, while the mint verb
 itself is repo-local and not yet scaffolded into fresh worlds), yet every claim ever
 recorded was `author`'s. When a commissioned builder executes, the honest record is a
@@ -583,7 +583,7 @@ place independence and grade are recorded — has zero adoption outside experien
 (fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — all
 three only ADD refusals, and all three were RATIFIED 2026-07-28 as one delta, s69
 (maintainer disposition, autoharn3 row 201;
-design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md is the governing spec). His
+[design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md](../../design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md) is the governing spec). His
 ratification carried a proviso that binds the shape and this doctrine alike, his
 words: a higher authority "can be capable of judging another actor inept … so a
 claim must be able to be defeated and reclaimed" — autoharn must handle imperfect

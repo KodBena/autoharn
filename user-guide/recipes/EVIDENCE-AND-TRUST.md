@@ -589,7 +589,7 @@ mutable config" posture the rest of this project's verb surface follows. This fi
 home of that wiring (ADR-0012 P1): a scaffolded deployment's `.claude/HOOKS.md` documents what
 each hook does in prose, but the template above is what actually arms them, and the two are kept
 in sync by the scaffold writing both from the same run. UNWITNESSED beyond what a scaffold run
-already demonstrates elsewhere on this page (the `--new-world` scaffold transcript under
+already demonstrates elsewhere in this recipe suite (the `--new-world` scaffold transcript under
 ["Deployments can self-serve the harness changelog"](SETUP-AND-SCAFFOLD.md#deployments-can-self-serve-the-harness-changelog-orchlog-wrapper-at-scaffold) (in the setup-and-scaffold recipes) shows the scaffold writing this file's
 filled-in sibling among its output, but a session-start hook-firing trace was not separately
 re-captured for this entry) — the concrete blocker is that observing every one of the nine

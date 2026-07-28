@@ -10,7 +10,7 @@ the ONE page where the full truth lives (this project's single-source-of-truth d
 a grammar documented twice drifts). The dense per-mechanism inventory this page complements
 is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md); the front door for first-time setup is
 [USER-GUIDE.md](USER-GUIDE.md). Delegating authority, taint/license compartmentalization, and
-reviewer read zoning (ADR-0018) get their own worked-example page:
+reviewer read zoning ([ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)) get their own worked-example page:
 [USER-ACCESS-CONTROL-GUIDE.md](USER-ACCESS-CONTROL-GUIDE.md).
 
 ## Contents
