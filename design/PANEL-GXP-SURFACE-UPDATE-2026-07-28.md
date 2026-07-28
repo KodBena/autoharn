@@ -117,6 +117,8 @@ precedent.
 
 **Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"` (a *tie group* is a set of response rows that are byte-identical, so no cursor can distinguish them; the server serves such a group atomically, and one larger than the advertised bound refuses instead). Branch on the body's `disposition` field, never on the status code alone; the living contract home is [serving/README.md](../serving/README.md)'s refusal-taxonomy section.
 
+**Second erratum (2026-07-29, from the record-currency review, independently reproduced):** this survey's §2 consequence #4 ("Read `authn_mode` from `/health`" to detect the identity-enforcement posture) is WRONG as a detection method — `serving/boundary_models.py` hardcodes `authn_mode` to `"single-operator"` unconditionally; the actual grace/enforce posture is a deployment-config property (`identity_enforcement`) NOT surfaced on `/health` at this writing, so a client cannot currently detect it remotely. Surfacing it is queued under work item `boundary-capability-manifest` (autoharn3 row 173). The survey's underlying warning — a panel that works under grace gets typed 403s under enforce — stands unchanged.
+
 ---
 
 # PANEL-GXP-SURFACE UPDATE — autoharn's user-facing surface, second survey (2026-07-28)
