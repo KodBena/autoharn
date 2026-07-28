@@ -153,3 +153,94 @@ Full GREEN transcript (same commit, same live toy db):
           parsed, never coerced from another spelling; got <value>'
 
      ALL WR CHECKS OK (exit 0)
+
+4. FIX ROUND (2026-07-28, coordinator fresh-context review of commit 6a104c0 -- one CRITICAL,
+   one MODERATE, both addressed here). CRITICAL: `views_view`'s pre-fix-round pagination
+   predicate (`WHERE key_col > cursor ORDER BY key_col LIMIT`) silently drops rows when a
+   NON-unique key value straddles a page boundary -- live-reproduced on the reviewer's own two
+   named instances (discharging_attest, work_violation_history) AND, per ADR-0000 Rule 2(a)'s
+   "presumption inverted: check the universe outward," on a full re-audit of every OTHER
+   VIEW_REGISTRY member: the two pre-existing members the reviewer named as sharing the SAME
+   route code and defect (work_item_violations.slug, model_defeated_rows.attest_id), plus TWO
+   FURTHER instances this audit found and empirically confirmed (review_gap.id,
+   work_review_gap.slug) that the reviewer's own finding did not name. A seventh member,
+   missive_stale.id, is classified non-unique on STRUCTURAL grounds only (its JOIN can fan one
+   original send out across more than one matching reply) -- NOT empirically reproduced (this
+   fix round's own uniqueness probe could not clear the s58 missive-world-identity birth
+   ceremony in the time available); named honestly as UNEXERCISED rather than silently assumed
+   either way.
+
+   RED (`git stash push -- serving/boundary_service.py`, reverting to commit 6a104c0's own
+   pre-fix-round state, keeping THIS fixture file's own new WR7/WR8 additions; re-run via
+   `env -u PGOPTIONS python3 seen-red/boundary-read-surface/run_fixtures.py` -- the env -u
+   strips the session stamp hook's own PGOPTIONS, bound to autoharn3, unable to validate
+   against a scratch world's own kernel.stamp_secret):
+
+     FAILURES: ['wr8a-after-tie-refused-on-unique-view',
+                'wr8b-discharging_attest-lossless-limit1-walk',
+                'wr8b-work_violation_history-lossless-limit1-walk',
+                'wr8b-work_item_violations-lossless-limit1-walk',
+                'wr8b-model_defeated_rows-lossless-limit1-walk',
+                'wr8b-review_gap-lossless-limit1-walk',
+                'wr8b-work_review_gap-lossless-limit1-walk']
+
+   Each `wr8b` failure shows the exact data-loss shape (a constructed, genuine duplicate key
+   value, limit=1 keyset walk, paginated_total < direct_total):
+
+     wr8b-discharging_attest:       dup_value=29  direct_total=3 paginated_total=2 (LOST 1)
+     wr8b-work_violation_history:   dup_value='dupfx-viol-...' direct_total=4 paginated_total=3 (LOST 1)
+     wr8b-work_item_violations:     dup_value='dupfx-viol-...' direct_total=3 paginated_total=2 (LOST 1)
+     wr8b-model_defeated_rows:      dup_value=42  direct_total=2 paginated_total=1 (LOST 1)
+     wr8b-review_gap:               dup_value=44  direct_total=4 paginated_total=3 (LOST 1)
+     wr8b-work_review_gap:          dup_value='dupfx-wrg-...' direct_total=4 paginated_total=3 (LOST 1)
+
+   `wr8a-after-tie-refused-on-unique-view` failed too (pre-fix-round `after_tie` is not a
+   recognized param at all, so it is silently ignored -- `status=200`, not the fix round's own
+   typed 422).
+
+   THE FIX: a per-row CONTENT tiebreaker -- `(key_col, md5(the view row::text))` -- applied
+   ONLY to the seven now-non-unique VIEW_REGISTRY members (a new third element on every
+   registry tuple, `key_unique: bool`); a UNIQUE-key view's own code path is left BYTE-FOR-BYTE
+   UNTOUCHED (never routed through the new machinery), witnessed with a literal served-vs-direct
+   diff on `work_item_current` carrying NO `_page_tie` field. The served response for a
+   NON-unique view gains exactly one field per row, `_page_tie` (the client resupplies it as
+   the new `after_tie` query param to walk past a repeated key value losslessly); `after_tie` is
+   strictly typed (empty, or exactly 32 lowercase hex chars) and refused on a unique-key view or
+   a malformed value, never silently ignored or guessed at.
+
+   GREEN (same commit, serving/boundary_service.py restored; same live toy db, scratch world
+   wrfx3037839 plus a SEPARATE minimal wrfxs683037839 for WR7; 54/54 checks ok, 0 FAIL):
+
+     == WR8: composite-tiebreaker fix -- non-unique key pagination, limit=1, no loss ==
+     [ok] wr8a-unique-view-byte-identical: status=200 served_n=5 direct_n=5 no_page_tie_field=True
+     [ok] wr8a-after-tie-refused-on-unique-view: status=422, detail names after_tie and the
+          view's own unique key
+     [ok] wr8b-discharging_attest: dup_value=29 dup_count_direct=2 direct_total=3
+          paginated_total=3 dup_count_paginated=2 row_sets_equal=True
+     [ok] wr8b-work_violation_history: dup_count_direct=2 direct_total=4 paginated_total=4
+          dup_count_paginated=2 row_sets_equal=True
+     [ok] wr8b-work_item_violations: dup_count_direct=2 direct_total=3 paginated_total=3
+          dup_count_paginated=2 row_sets_equal=True
+     [ok] wr8b-model_defeated_rows: dup_value=42 dup_count_direct=2 direct_total=2
+          paginated_total=2 dup_count_paginated=2 row_sets_equal=True
+     [ok] wr8b-review_gap: dup_value=44 dup_count_direct=2 direct_total=4 paginated_total=4
+          dup_count_paginated=2 row_sets_equal=True
+     [ok] wr8b-work_review_gap: dup_count_direct=2 direct_total=4 paginated_total=4
+          dup_count_paginated=2 row_sets_equal=True
+
+   MODERATE: countersigned_in_force's true defining chain runs through s68 (+2 refusal-
+   disposition columns, refusal_attempted_kind_disposition/refusal_attempted_actor_disposition)
+   but the MAIN wrfx world's own CHAIN_FULL stops at s59 (the DOCUMENTED s61 key_binding_
+   possession_ref blocker -- see CHAIN_FULL's own comment), so its WR1 GREEN validates a
+   2-columns-short shape. Fixed by disclosure (VIEW_REGISTRY's own comment, this fixture file's
+   own module docstring) PLUS a live witness rather than a silent gap: WR7, a SEPARATE, minimal,
+   s68-headed scratch world (CHAIN_S68) that skips the ONE act (principal_key_bound) the s61
+   blocker constrains, so the blocker never fires:
+
+     == WR7: countersigned_in_force at the TRUE s68 lineage head (separate world) ==
+     [ok] wr7-setup-server-healthy: GET /d/wrfxs683037839/health up=True
+     [ok] wr7-countersigned-in-force-true-s68-shape: status=200 served_n=1 direct_n=1
+          has_s68_cols=True (both refusal_attempted_kind_disposition and
+          refusal_attempted_actor_disposition present per row)
+
+   Full boundary-service family (W1-W36m) re-run clean after the fix, no regressions.

@@ -121,6 +121,23 @@ CHAIN_FULL = CHAIN_B + [
     "s58-missive-substrate.sql", "s59-missive-views.sql",
 ]
 
+# MODERATE finding, fix round (ledger rows 153/154, coordinator fresh-context review of commit
+# 6a104c0): CHAIN_FULL above stops at s59 for a DOCUMENTED reason (s61's key_binding_possession_
+# ref requirement blocks THIS FILE's own birth_fixture_rows ceremony -- see CHAIN_FULL's own
+# comment). That means the MAIN wrfx world's WR1 pass validates countersigned_in_force's PRE-s68
+# shape (s67-headed, missing the two refusal-disposition columns kernel/lineage/
+# s68-typed-absence-dispositions.sql appends), not the true, current shape ledger row 153's own
+# build actually shipped. CHAIN_S68 is a SEPARATE chain, for a SEPARATE, minimal world (WR7
+# below) that reaches the true head WITHOUT the s61 blocker: it never attempts a
+# principal_key_bound act (the ONE act s61 constrains), so the blocker simply never fires.
+CHAIN_S68 = CHAIN_FULL + [
+    "s60-entitlement-enforcement.sql", "s61-signature-symmetry-and-key-binding.sql",
+    "s62-delegation-lifecycle-gating.sql", "s63-supersession-body-restoration.sql",
+    "s64-principal-stamps-delegation-conditions.sql", "s65-refusal-attempted-kind.sql",
+    "s66-forged-stamp-journal-totality.sql", "s67-refusal-digest-bound.sql",
+    "s68-typed-absence-dispositions.sql",
+]
+
 
 def birth_via_boundary_full(world: str) -> tuple[int, int]:
     """`seen-red/boundary-service/run_fixtures.py`'s own `birth_via_boundary` targets CHAIN_B
@@ -168,7 +185,13 @@ def birth_via_boundary_full(world: str) -> tuple[int, int]:
 
 
 def canon(row: dict) -> str:
-    return json.dumps(row, sort_keys=True)
+    # Ledger rows 153/154 fix round: `_page_tie` is a BOUNDARY-ADDED synthetic field (this
+    # route's own composite-keyset tiebreaker, never a kernel/view column) -- stripped here so
+    # every row_set_equal call in this file compares REAL row content uniformly, whether the
+    # served side came from a unique-key view (never carries the field) or a non-unique one
+    # (always does, post-fix). Excluding it here, once, is more honest than special-casing every
+    # call site that happens to touch a non-unique-key view.
+    return json.dumps({k: v for k, v in row.items() if k != "_page_tie"}, sort_keys=True)
 
 
 def row_set_equal(a: list, b: list) -> bool:
@@ -342,6 +365,155 @@ def birth_fixture_rows(base: str, world: str, author: int) -> dict[str, int]:
        "work_slug": bc_dependent, "work_depends_on": bc_antecedent, "edge_type": "blocks-close"})
 
     return {"superseded_row_id": opened["row_id"], "superseding_row_id": retraction["row_id"]}
+
+
+def birth_duplicate_key_probes(base: str, world: str, author: int) -> dict[str, object]:
+    """Ledger rows 153/154, fix round (coordinator fresh-context review of commit 6a104c0,
+    CRITICAL finding): constructs a genuine DUPLICATE key value on FIVE non-unique-key
+    VIEW_REGISTRY members, so WR8 below can prove the composite-tiebreaker fix actually closes
+    the silent-pagination-loss class rather than merely asserting it does on an accidentally-
+    clean fixture. Returns the (view name -> repeated key value) map WR8 walks.
+
+    discharging_attest.regards_id: TWO distinct reviewers both attest the SAME row.
+    work_violation_history.slug / work_item_violations.slug: ONE slug carrying TWO surviving
+    orphaned_by_retraction sub-forms (a work_claimed AND a work_closed, both citing the same
+    retracted opening act) -- reuses this file's own existing viol_slug construction one step
+    further rather than re-deriving a second recipe.
+    model_defeated_rows.attest_id: ONE model_identity_attested (verdict=mismatch) row whose
+    actor holds TWO separate, both-in-force model-identity-attestation competence grants -- the
+    JOIN fans the one attestation out across both grants.
+    review_gap.id: ONE undischarged row by an actor obliged under TWO distinct scopes at once.
+    work_review_gap.slug: ONE slug carrying a deferred work_closed AND a deferred
+    work_violation_disposition targeting a different row on the same slug.
+    """
+    def w(payload: dict) -> dict:
+        status, body = bs_fixtures.http_post(f"{base}/write/ledger", payload)
+        if status != 200 or body.get("disposition") != "accepted":
+            raise RuntimeError(f"dup-probe birth write refused/failed: status={status} body={body} payload={payload}")
+        return body
+
+    def register(name: str, agent_class: str = "tool") -> int:
+        status, reg = bs_fixtures.http_post(f"{base}/write/registration", {
+            "name": name, "agent_class": agent_class, "actor": author,
+            "purpose": f"dup-probe fixture principal {name}"})
+        if status != 200 or reg.get("disposition") != "accepted":
+            raise RuntimeError(f"dup-probe registration refused: status={status} body={reg}")
+        return int(bs_fixtures.psql_tuples(
+            f"SET ROLE {world}_rw; SELECT id FROM {world}_kernel.principal WHERE name = '{name}';"))
+
+    # ---- discharging_attest: two distinct reviewers, one attested row ----
+    dup_note = w({"kind": "note", "statement": f"dup-probe note {RUN_SUFFIX}", "actor": author})
+    rev_a = register(f"dupfx-rev-a-{RUN_SUFFIX}")
+    rev_b = register(f"dupfx-rev-b-{RUN_SUFFIX}")
+    for rid in (rev_a, rev_b):
+        status, rv = bs_fixtures.http_post(f"{base}/write/review", {
+            "regards": dup_note["row_id"], "statement": "dup-probe attest", "verdict": "attest",
+            "independence": "self-review", "basis": "dup-probe fixture", "actor": rid})
+        if status != 200 or rv.get("disposition") != "accepted":
+            raise RuntimeError(f"dup-probe review refused: status={status} body={rv}")
+
+    # ---- work_violation_history / work_item_violations: one slug, two orphaned_by_retraction
+    # sub-forms (a surviving work_claimed AND a surviving work_closed) ----
+    dv_slug = f"dupfx-viol-{RUN_SUFFIX}"
+    dv_opened = w({"kind": "work_opened", "statement": "dup-probe viol open", "actor": author,
+                   "work_slug": dv_slug, "work_title": "dup-probe viol"})
+    w({"kind": "work_claimed", "statement": "dup-probe viol claim", "actor": author,
+       "work_slug": dv_slug})
+    w({"kind": "work_closed", "statement": "dup-probe viol close", "actor": author,
+       "work_slug": dv_slug, "work_resolution": "shipped", "work_witness": "dup-probe witness",
+       "work_review_disposition": "deferred"})
+    w({"kind": "note", "statement": "dup-probe retracting the viol opening act", "actor": author,
+       "supersedes": dv_opened["row_id"]})
+
+    # ---- model_defeated_rows: one actor, two in-force model-identity-attestation grants,
+    # one mismatch attestation by that actor ----
+    dm_actor = register(f"dupfx-modelactor-{RUN_SUFFIX}", agent_class="model")
+    w({"kind": "principal_competence_granted", "statement": "dup-probe grant 1", "actor": author,
+       "principal_subject": dm_actor, "principal_competence_activity": "model-identity-attestation",
+       "principal_competence_band": "dupfx-band-1", "principal_competence_basis": "dup-probe fixture",
+       "principal_binding_active": True})
+    w({"kind": "principal_competence_granted", "statement": "dup-probe grant 2", "actor": author,
+       "principal_subject": dm_actor, "principal_competence_activity": "model-identity-attestation",
+       "principal_competence_band": "dupfx-band-2", "principal_competence_basis": "dup-probe fixture",
+       "principal_binding_active": True})
+    dm_target = w({"kind": "note", "statement": "dup-probe attested-row target", "actor": author})
+    dm_attest = w({"kind": "model_identity_attested", "statement": "dup-probe mismatch attest",
+                   "actor": dm_actor, "attest_row_id": dm_target["row_id"],
+                   "attest_model": "dupfx-model", "attest_grade": "exact-command",
+                   "attest_verdict": "mismatch", "attest_expected": "some-other-model",
+                   "attest_session": f"dupfx-session-{RUN_SUFFIX}", "attest_basis": "dup-probe fixture"})
+
+    # ---- review_gap: one actor obliged under two distinct scopes, one unreviewed note ----
+    dg_actor = register(f"dupfx-obliged-{RUN_SUFFIX}")
+    for scope_suffix in ("a", "b"):
+        status, ob = bs_fixtures.http_post(f"{base}/write/obligation", {
+            "scope": f"dupfx-scope-{scope_suffix}-{RUN_SUFFIX}", "assigned_by": author,
+            "obliges_actor": dg_actor})
+        if status != 200 or ob.get("disposition") != "accepted":
+            raise RuntimeError(f"dup-probe obligation refused: status={status} body={ob}")
+    dg_note = w({"kind": "note", "statement": "dup-probe obliged-actor note", "actor": dg_actor})
+
+    # ---- work_review_gap: one slug, a deferred work_closed PLUS a deferred
+    # work_violation_disposition targeting a different row on the same slug ----
+    wg_slug = f"dupfx-wrg-{RUN_SUFFIX}"
+    w({"kind": "work_opened", "statement": "dup-probe wrg open", "actor": author,
+       "work_slug": wg_slug, "work_title": "dup-probe wrg"})
+    wg_dep_edge = w({"kind": "work_depends_on", "statement": "dup-probe wrg dep edge",
+                     "actor": author, "work_slug": wg_slug,
+                     "work_depends_on": f"dupfx-wrg-nonexistent-{RUN_SUFFIX}"})
+    w({"kind": "work_closed", "statement": "dup-probe wrg close", "actor": author,
+       "work_slug": wg_slug, "work_resolution": "shipped", "work_witness": "dup-probe witness",
+       "work_review_disposition": "deferred"})
+    w({"kind": "work_violation_disposition", "statement": "dup-probe wrg viol-disp",
+       "actor": author, "work_violation_class": "depends_on_unknown_slug",
+       "work_violation_target_id": wg_dep_edge["row_id"], "work_resolution": "retired",
+       "rationale": "dup-probe: retiring the depends_on_unknown_slug violation as a probe leg",
+       "work_review_disposition": "deferred"})
+
+    return {
+        "discharging_attest_regards_id": dup_note["row_id"],
+        "work_violation_history_slug": dv_slug,
+        "work_item_violations_slug": dv_slug,
+        "model_defeated_rows_attest_id": dm_attest["row_id"],
+        "review_gap_id": dg_note["row_id"],
+        "work_review_gap_slug": wg_slug,
+    }
+
+
+def walk_paginated(base: str, view: str, key_col: str, key_kind: str, limit: int = 1) -> list[dict]:
+    """Ledger rows 153/154 fix round: a generic limit=1 keyset walker over GET /views/{view},
+    driving the SAME cursor contract a real client would (after_id/after_slug PLUS the fix
+    round's own after_tie, resupplied from the previous page's last row's own `_page_tie` field
+    when present, which the served response omits entirely on a UNIQUE-key view -- `.get(...,
+    "")` handles both shapes with one walker). Stops at the first page shorter than `limit` (or
+    empty). Used to prove the walk is lossless END TO END across many pages, not merely that one
+    page's own WHERE clause looks right in isolation."""
+    rows: list[dict] = []
+    after_id = 0
+    after_slug = ""
+    after_tie = ""
+    while True:
+        if key_kind == "id":
+            url = f"{base}/views/{view}?limit={limit}&after_id={after_id}"
+        else:
+            url = f"{base}/views/{view}?limit={limit}&after_slug={after_slug}"
+        if after_tie:
+            url += f"&after_tie={after_tie}"
+        status, page = bs_fixtures.http_get(url)
+        if status != 200 or not isinstance(page, list):
+            raise RuntimeError(f"walk_paginated: GET {url} -> status={status} body={page}")
+        if not page:
+            break
+        rows.extend(page)
+        if len(page) < limit:
+            break
+        last = page[-1]
+        if key_kind == "id":
+            after_id = last[key_col]
+        else:
+            after_slug = last[key_col]
+        after_tie = last.get("_page_tie", "")
+    return rows
 
 
 def main() -> int:
@@ -582,6 +754,111 @@ def main() -> int:
                   status_c == 422 and isinstance(body_c, dict) and "detail" in body_c
                   and "include_superseded" in body_c["detail"],
                   f"status={status_c} body={body_c}", failures)
+
+        # ==================== WR8: CRITICAL fix (ledger rows 153/154, coordinator fresh-context
+        # review of commit 6a104c0) -- non-unique-key views paginate WITHOUT silent loss =========
+        print("== WR8: composite-tiebreaker fix -- non-unique key pagination, limit=1, no loss ==")
+        dup_ids = birth_duplicate_key_probes(base, world, author)
+
+        # WR8a: a UNIQUE-key view's served response stays BYTE-IDENTICAL (no `_page_tie` field,
+        # same row set as before the fix round) -- the reviewer's own constraint (1).
+        status_u1, served_u1 = bs_fixtures.http_get(f"{base}/views/work_item_current?limit=1000")
+        direct_u = direct_view_rows(world, "work_item_current")
+        no_tie_field = isinstance(served_u1, list) and all("_page_tie" not in r for r in served_u1)
+        check("wr8a-unique-view-byte-identical",
+              status_u1 == 200 and isinstance(served_u1, list)
+              and row_set_equal(served_u1, direct_u) and no_tie_field,
+              f"status={status_u1} served_n={len(served_u1) if isinstance(served_u1, list) else '?'} "
+              f"direct_n={len(direct_u)} no_page_tie_field={no_tie_field}",
+              failures)
+        status_u2, body_u2 = bs_fixtures.http_get(
+            f"{base}/views/work_item_current?after_tie=" + "0" * 32)
+        check("wr8a-after-tie-refused-on-unique-view",
+              status_u2 == 422 and isinstance(body_u2, dict) and "detail" in body_u2
+              and "after_tie" in body_u2["detail"],
+              f"status={status_u2} body={body_u2}", failures)
+
+        # WR8b: SIX non-unique members (the reviewer's own two named instances, this build's two
+        # new instances, and the two further instances this fix round's own closure-statement
+        # audit found and empirically confirmed -- review_gap, work_review_gap), each carrying a
+        # REAL duplicate key value. limit=1 keyset walk; paginated total must equal direct total
+        # (the reviewer's own bar), and the duplicate value's own row COUNT must match too (not
+        # merely the totals, which could coincidentally agree while the WRONG rows were served).
+        NONUNIQUE_LEGS = [
+            ("discharging_attest", "regards_id", "id", dup_ids["discharging_attest_regards_id"]),
+            ("work_violation_history", "slug", "slug", dup_ids["work_violation_history_slug"]),
+            ("work_item_violations", "slug", "slug", dup_ids["work_item_violations_slug"]),
+            ("model_defeated_rows", "attest_id", "id", dup_ids["model_defeated_rows_attest_id"]),
+            ("review_gap", "id", "id", dup_ids["review_gap_id"]),
+            ("work_review_gap", "slug", "slug", dup_ids["work_review_gap_slug"]),
+        ]
+        for view, key_col, key_kind, dup_value in NONUNIQUE_LEGS:
+            direct = direct_view_rows(world, view)
+            dup_count_direct = sum(1 for r in direct if r[key_col] == dup_value)
+            paginated = walk_paginated(base, view, key_col, key_kind, limit=1)
+            dup_count_paginated = sum(1 for r in paginated if r[key_col] == dup_value)
+            stripped = [{k: v for k, v in r.items() if k != "_page_tie"} for r in paginated]
+            ok = (dup_count_direct >= 2 and len(paginated) == len(direct)
+                  and dup_count_paginated == dup_count_direct
+                  and row_set_equal(stripped, direct))
+            check(f"wr8b-{view}-lossless-limit1-walk",
+                  ok,
+                  f"dup_value={dup_value!r} dup_count_direct={dup_count_direct} "
+                  f"direct_total={len(direct)} paginated_total={len(paginated)} "
+                  f"dup_count_paginated={dup_count_paginated} row_sets_equal="
+                  f"{row_set_equal(stripped, direct)}",
+                  failures)
+
+        # ==================== WR7: MODERATE finding (ledger rows 153/154) -- countersigned_in_
+        # force's TRUE s68 shape, a separate minimal world (the s61 blocker skipped by construction,
+        # never attempting the one act -- principal_key_bound -- s61 constrains) =================
+        print("== WR7: countersigned_in_force at the TRUE s68 lineage head (separate world) ==")
+        world7 = f"wrfxs68{RUN_SUFFIX}"
+        bs_fixtures.teardown(world7)
+        wdir7 = bs_fixtures.scaffold_classic(world7, CHAIN_S68)
+        tmps.append(wdir7.parent)
+        author7, _svc7 = birth_via_boundary_full(world7)
+        cfg_path7 = bs_fixtures.write_scratch_multiplex_config(wdir7.parent, world7)
+        proc7, port7 = bs_fixtures.start_server(cfg_path7)
+        procs.append(proc7)
+        base7 = f"http://127.0.0.1:{port7}/d/{world7}"
+        up7 = bs_fixtures.wait_health(base7)
+        check("wr7-setup-server-healthy", up7, f"GET /d/{world7}/health up={up7}", failures)
+        if up7:
+            def w7(payload: dict) -> dict:
+                status, body = bs_fixtures.http_post(f"{base7}/write/ledger", payload)
+                if status != 200 or body.get("disposition") != "accepted":
+                    raise RuntimeError(f"wr7 birth write refused: status={status} body={body}")
+                return body
+            status, reg7 = bs_fixtures.http_post(f"{base7}/write/registration", {
+                "name": f"wr7-reviewer-{RUN_SUFFIX}", "agent_class": "tool", "actor": author7,
+                "purpose": "WR7 reviewer principal (s68 shape witness)"})
+            if status != 200 or reg7.get("disposition") != "accepted":
+                raise RuntimeError(f"wr7 registration refused: status={status} body={reg7}")
+            reviewer7 = int(bs_fixtures.psql_tuples(
+                f"SET ROLE {world7}_rw; SELECT id FROM {world7}_kernel.principal "
+                f"WHERE name = 'wr7-reviewer-{RUN_SUFFIX}';"))
+            note7 = w7({"kind": "note", "statement": f"WR7 fixture note {RUN_SUFFIX}", "actor": author7})
+            status, rv7 = bs_fixtures.http_post(f"{base7}/write/review", {
+                "regards": note7["row_id"], "statement": "WR7 fixture review", "verdict": "attest",
+                "independence": "self-review", "basis": "WR7 fixture", "actor": reviewer7})
+            if status != 200 or rv7.get("disposition") != "accepted":
+                raise RuntimeError(f"wr7 review refused: status={status} body={rv7}")
+
+            status_c7, served_c7 = bs_fixtures.http_get(f"{base7}/views/countersigned_in_force?limit=1000")
+            direct_c7 = direct_view_rows(world7, "countersigned_in_force")
+            has_s68_cols = (isinstance(served_c7, list) and len(served_c7) > 0
+                             and "refusal_attempted_kind_disposition" in served_c7[0]
+                             and "refusal_attempted_actor_disposition" in served_c7[0])
+            check("wr7-countersigned-in-force-true-s68-shape",
+                  status_c7 == 200 and isinstance(served_c7, list)
+                  and row_set_equal(served_c7, direct_c7) and has_s68_cols,
+                  f"status={status_c7} served_n={len(served_c7) if isinstance(served_c7, list) else '?'} "
+                  f"direct_n={len(direct_c7)} has_s68_cols={has_s68_cols}",
+                  failures)
+        else:
+            check("wr7-countersigned-in-force-true-s68-shape", False,
+                  "UNEXERCISED: WR7's own s68-headed world never became healthy", failures)
 
     finally:
         for p in procs:
