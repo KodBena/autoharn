@@ -110,9 +110,16 @@ witness-ref shape unchecked (closed by §1.2), review-regards staleness unchecke
 (closed by §2). Not covered, stated honestly: performer-identity fidelity (who SHOULD
 have claimed) is not mechanically decidable and stays doctrine + the approved
 role-census view; scope-change (re-scoping) review posture stays convention pending a
-decidable discriminator (the doctrine says so); claim-before-close stays CLI-side
-(mechanizing it in-kernel was neither asked nor refused — it is named here as an open
-candidate, not smuggled in); `review_detail` adoption stays doctrine (row 201 item 2).
+decidable discriminator (the doctrine says so); `review_detail` adoption stays
+doctrine (row 201 item 2). AMENDED 2026-07-28 at the build (coordinator adjudication,
+disclosed to the maintainer): the sentence that stood here — "claim-before-close
+stays CLI-side ... not smuggled in" — contradicted §1.1's own letter, under which a
+NEVER-claimed item has no claimant-of-record and its close is therefore refused (no
+closer can equal a claimant that does not exist). The builder read §1.1 strictly and
+disclosed it; the strict reading stands, because an unclaimed close is precisely the
+unattributable-accountability hole the ratifying ruling targets (and the run-5
+forensics' witnessed shape). Net: in-kernel claim-before-close arrives as an
+ENTAILMENT of closer-is-claimant-of-record, not as a separate rule.
 
 ## License
 
