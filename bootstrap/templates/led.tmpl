@@ -13,6 +13,10 @@ usage: led <kind> <statement...> [flags]        write an entry (decision, findin
            resolve-violation|supersede-cascade ...   (see `led work <sub-verb>` with no args)
        led artifact put <path> | get <hash> | stat <hash>
        led principal <sub-verb> ...                  (see `led principal` with no args)
+       led missive list
+       led missive dispose <receipt-row-id> <disposition> [statement...]
+           disposition (kernel/lineage/s58-missive-substrate.sql's own closed vocabulary):
+           consumed | declined | superseded-unread | escalated
        led decomposition-review-status | led briefing
        led --json <ledger|review|registration|obligation> <file|->
 
@@ -1807,6 +1811,50 @@ def cmd_obligate_revoke(cfg: bcc.ServedConfig, scope: str, reason: str) -> int:
     return bcc.write_and_report(cfg.base, "obligation_revoke", payload)
 
 
+def cmd_missive_list(cfg: bcc.ServedConfig) -> int:
+    """work item led-missive-verbs-gap (autoharn3 rows 118/119): reads GET /views/
+    missive_undisposed (design/FABLE-MISSIVES-KERNEL-SPEC.md §3 item 3, kernel/lineage/
+    s59-missive-views.sql) -- in-force `missive_received` rows, act <> 'acknowledgment', with no
+    in-force `missive_disposed` regarding them; the same view `./pickup` reads for hydration.
+    One line per missive (receipt row id, author world, thread, seq, act, and the statement's
+    first ~100 chars -- deliberately truncated here, a display convenience only, never a second
+    home for the full text `led show <id>` already reads back byte-complete). NO kernel
+    semantics reimplemented here: this is a plain read through the served view, formatted."""
+    rows = bcc.get_all_rows(cfg.base, "/views/missive_undisposed", cursor="after_id")
+    if not rows:
+        print("led missive list: no undisposed missives.")
+        return 0
+    for r in sorted(rows, key=lambda r: r["id"]):
+        statement = (r.get("statement") or "")
+        if len(statement) > 100:
+            statement = statement[:100] + "..."
+        print(f"[{r['id']}] from={r.get('missive_author_world')} "
+              f"thread={r.get('missive_thread')} seq={r.get('missive_seq')} "
+              f"act={r.get('missive_act')} statement: {statement}")
+    return 0
+
+
+def cmd_missive_dispose(cfg: bcc.ServedConfig, receipt: int, disposition: str,
+                         statement: str | None) -> int:
+    """work item led-missive-verbs-gap (autoharn3 rows 118/119): wraps POST /write/missive_dispose
+    (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.7, kernel/lineage/s58-missive-substrate.sql) -- the
+    two-row disposition+acknowledgment ceremony, exactly the `obligate revoke` precedent
+    immediately above (a tiny payload through `bcc.write_and_report`, no dedicated route). The
+    closed disposition vocabulary (consumed/declined/superseded-unread/escalated) is NOT
+    re-validated here: an unrecognized value is left to the kernel's own CHECK constraint, whose
+    refusal teach-text `bcc.write_and_report` already surfaces verbatim (ADR-0012 P1 -- no
+    kernel semantics reimplemented client-side). `statement` is OPTIONAL (the kernel's own
+    payload contract, §2.7: absent -> a kernel-generated close line, never a client-side
+    paraphrase)."""
+    actor = _resolve_actor(cfg)
+    payload: dict = {"receipt": receipt, "disposition": disposition}
+    if statement:
+        payload["statement"] = statement
+    if actor is not None:
+        payload["actor"] = actor
+    return bcc.write_and_report(cfg.base, "missive_dispose", payload)
+
+
 _ARTIFACT_MEDIA_EXT_MAP = {".md": "text/markdown", ".markdown": "text/markdown",
                            ".toml": "application/toml", ".json": "application/json"}
 
@@ -2955,6 +3003,11 @@ def _strip_shared_flags(argv: list[str]) -> tuple[dict[str, str], list[str]]:
 _EVENT_TIME_UNSUPPORTED_VERBS = {
     "--recent", "current", "question-status", "review-gap", "stamp-distinctness", "standing",
     "obligate", "review", "work", "decomposition-review-status", "briefing", "artifact",
+    # work item led-missive-verbs-gap (autoharn3 rows 118/119): kernel.missive_dispose's own
+    # payload contract (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.7) is closed to
+    # receipt/disposition/statement/actor -- no event_declared_ts slot, the same silent-drop
+    # hazard `artifact` above was added to foreclose.
+    "missive",
 }
 
 
@@ -3154,6 +3207,32 @@ def main(argv: list[str]) -> int:
         return 4
     if argv and argv[0] == "principal":
         return cmd_principal(cfg, argv[1:], shared)
+    if argv and argv[0] == "missive":
+        sub = argv[1] if len(argv) > 1 else ""
+        if sub == "list":
+            if len(argv) != 2:
+                print("usage: led missive list", file=sys.stderr)
+                return 4
+            return cmd_missive_list(cfg)
+        if sub == "dispose":
+            p = argparse.ArgumentParser(prog="led missive dispose", add_help=False)
+            p.add_argument("receipt", type=int)
+            p.add_argument("disposition")
+            p.add_argument("statement", nargs="*")
+            try:
+                ns = p.parse_args(argv[2:])
+            except SystemExit:
+                print("usage: led missive dispose <receipt-row-id> <disposition> [statement...]",
+                      file=sys.stderr)
+                print("  disposition (kernel/lineage/s58-missive-substrate.sql's own closed "
+                      "vocabulary): consumed | declined | superseded-unread | escalated",
+                      file=sys.stderr)
+                return 4
+            return cmd_missive_dispose(cfg, ns.receipt, ns.disposition,
+                                        " ".join(ns.statement) if ns.statement else None)
+        print(f"led missive {sub}: REFUSED -- usage: led missive list | dispose "
+              f"<receipt-row-id> <disposition> [statement...]", file=sys.stderr)
+        return 4
 
     # The generic <kind> <statement...> write path -- the shared flags (-f/-e/--supersedes/
     # --amends/--amends-scope/--answers/--refs/--concern/--evidence/--confidence/--event-time)

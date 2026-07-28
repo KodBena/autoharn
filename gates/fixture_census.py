@@ -308,10 +308,10 @@ REGISTRY: dict[str, str] = {
     # two concurrency races (dedup, re-disposition -- both RED pre-fix, both GREEN post-fix,
     # real psycopg concurrency), and (c) AMENDMENT 2's reviewer reproduction (missive_outbound
     # silently dropping a superseded-before-poll missive, RED pre-fix / GREEN post-fix).
-    # run_fixtures.py is the ONE registered fixture for this directory (the census keys one
-    # entry per seen-red dir); it invokes concurrent_race_fixtures.py and
-    # amendment2_transport_fixture.py, its own sibling modules in this same directory, as
-    # subprocesses, so this one entry exercises the whole family.
+    # run_fixtures.py is the ONE registered fixture for this directory (the census keys one entry
+    # per seen-red dir); it invokes concurrent_race_fixtures.py, amendment2_transport_fixture.py,
+    # courier_witness_fixtures.py, and (led-missive-verbs-gap, rows 118/119, `led missive`
+    # CLI coverage, added to THIS family rather than a new entry) led_cli_verbs_fixture.py.
     "missives-kernel-family":          "seen-red/missives-kernel-family/run_fixtures.py",
     # work item tui-ceremony-chain-authorship (ledger rows 1390/1391): tools/setup_tui/
     # principals_authority.py's register_principal_act/grant_competence_act/relate_act stop
