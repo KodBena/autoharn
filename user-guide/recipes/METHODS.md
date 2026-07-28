@@ -311,7 +311,9 @@ enters the next world via the scaffold (it usually already has), and the finding
 the ledger. This is a ruling, not a limitation looking for a workaround. Ruling text:
 [../CLAUDE.md](../../CLAUDE.md), ORCHESTRATION section.
 
-## Recusal and independent RCA — root cause analysis (a conflict-of-interest method harvested downstream)
+## Recusal and independent RCA (a conflict-of-interest method harvested downstream)
+
+RCA = root cause analysis, the after-the-fact investigation of why a failure happened.
 
 This section covers a five-step method for what an orchestrator should do when the thing it
 would need to judge is a decision it made itself — recuse from the judgment, then dispatch an

@@ -458,13 +458,13 @@ truly solo, fully-suspended world still needs a schema-owner act to recover.
 
 <!-- doc-attest-exempt: this whole "Work-unit role assignment" section is new prose,
 Fable-authored 2026-07-28 under work item work-role-doctrine-faq (autoharn3 row 170,
-maintainer-commissioned row 168c: current practice "hap-hazard", taxonomy possibly too
+maintainer-commissioned row 168 item (c): current practice "hap-hazard", taxonomy possibly too
 coarse, careful treatment wanted). Every empirical claim cites the filed census
 design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall. A second-Fable
 ADR-0018 consult reviewed this section same-day with web prior art
 (design/CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md, incl. its disclosed deviation) and
 its corrections are applied below; that is a consult, not an A:B:C legibility loop,
-and this marker claims only what ran. RATIFIED 2026-07-28 (autoharn3 row 201, the
+and this marker claims only what ran. RATIFIED 2026-07-28 (autoharn3 -- this project's own current world/ledger, third of the autoharnN line -- row 201, the
 maintainer's disposition verbatim there): the SHOULD-clauses below now bind as
 convention, and the three candidate deltas are ratified as s69
 (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, build in flight) — with his
@@ -579,9 +579,10 @@ three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
 enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
 a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
 place independence and grade are recorded — has zero adoption outside experience4 (the sibling panel project's world — the fourth live deployment alongside the autoharnN worlds).
-(a) and (b) are fail-safe kernel deltas, joined by (d) review-regards-in-force
-(fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — all
-three only ADD refusals, and all three were RATIFIED 2026-07-28 as one delta, s69
+Of these, (a) and (b) became kernel deltas, joined by a FOURTH item (d) review-regards-in-force
+(fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — the delta
+set is thus (a)+(b)+(d) -- (c) is doctrine, not a delta -- all three deltas only ADD
+refusals, and all three were RATIFIED 2026-07-28 as one delta, s69
 (maintainer disposition, autoharn3 row 201;
 [design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md](../../design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md) is the governing spec). His
 ratification carried a proviso that binds the shape and this doctrine alike, his

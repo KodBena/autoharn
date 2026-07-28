@@ -13,6 +13,11 @@ is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md); the front door for first-tim
 reviewer read zoning ([ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)) get their own worked-example page:
 [USER-ACCESS-CONTROL-GUIDE.md](USER-ACCESS-CONTROL-GUIDE.md).
 
+A note on two terms used unglossed across the suite: the **kernel** is this
+project's enforced Postgres layer (schema, functions, constraints -- the thing that
+accepts or refuses every write); a **world** is one scaffolded, database-backed
+deployment of it (defined once in SETUP-AND-SCAFFOLD.md, used everywhere).
+
 ## Contents
 
 The sections below, in page order — each link jumps to that section's own

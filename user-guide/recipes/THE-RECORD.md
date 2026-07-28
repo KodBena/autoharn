@@ -106,8 +106,8 @@ Because the record model this project imports requires it, independent of anyone
 preference: [the safety-critical-logging BRIEF](../../law/briefs/safety-critical-logging/BRIEF.md)'s
 invariant I3 (a correction is a new, linked entry that never obscures the prior state),
 I7 (every discharged obligation carries the conditions under which it ceases to hold),
-and the nuclear/aviation clusters' change-through-re-verification linkage (IEC 60880,
-DO-178C) all demand that a close — and the reviews that discharged it — can be superseded
+and the nuclear/aviation clusters' change-through-re-verification linkage (IEC 60880 -- nuclear safety software;
+DO-178C -- airborne software certification) all demand that a close — and the reviews that discharged it — can be superseded
 or lapse when their basis is defeated, append-only, with the defeat linked. The kernel
 already delivers the core of this (superseding a close re-opens the item and re-surfaces
 its review debt, witnessed in the consult above); s37's validity-bounded dispositions

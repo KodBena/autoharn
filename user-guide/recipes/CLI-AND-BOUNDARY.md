@@ -7,9 +7,9 @@
 shared boundary service, and compiling workflow units (2026-07-18)", "CLI quality-of-life:
 row-id echo and `judge` auto-layer detection", and "`led` help tokens, `--json` payload mode,
 and `work list`'s default filter (led.tmpl trio)"; byte-preserving (mechanical `../` depth
-repairs and named cross-file link rewrites only). One residue is flagged, not fixed, per this
+repairs and named cross-file link rewrites only). One residue named at the split was SINCE FIXED (suite legibility loop, blind round 1) -- per this
 work item's execution report: a pre-existing wrong-direction pointer ("... section below"
-where the target is actually earlier in this same file) survives verbatim inside this file,
+where the target is actually earlier in this same file) is now corrected in place with an inline editorial note,
 same as it stood in the original page.*
 
 **Charter:** the verbs and the service that carries them. Belongs: endpoint shapes, exit codes,
@@ -36,8 +36,10 @@ s43's four `SECURITY DEFINER` functions, plus the derived views) stays the sole 
 surface.** The paragraph above once said `led`/`judge`/`pickup` were "explicitly NOT
 deprecated by this — routing them through the service is a reserved v2 question." That v2
 question is now answered and built: `led`, `pickup`, `asof-export`, and `distance-to-clean`
-became thin HTTP clients of this service (the "boundary multiplex and CLI rebase, and the
-workflow-unit compiler" section below has the full story, including the two new
+became thin HTTP clients of this service (the ["Reaching the ledger through a shared boundary service, and compiling workflow
+units (2026-07-18)"](#reaching-the-ledger-through-a-shared-boundary-service-and-compiling-workflow-units-2026-07-18)
+section below -- pre-split working title "boundary multiplex and CLI rebase, and the
+workflow-unit compiler" -- has the full story, including the two new
 `deployment.json` keys this rebase needs and what happens when they're missing). `judge` and
 `audit` do **not** rebase — they drive `clingo` plus a differential against the world directly,
 "not a ledger client in the boundary's sense" (the rebase spec's own words) — and neither does
