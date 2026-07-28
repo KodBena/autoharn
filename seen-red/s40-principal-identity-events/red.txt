@@ -29,7 +29,7 @@
   [FAIL] exit=1; excerpt='refused row 11 -- the refusal itself is now a committed, hash-chained ledger record, s43):\n  duplicate key value violates unique constraint "principal_name_key"'
 
 === purpose-optional-with-placeholder ===
-  [ok] exit=0; purpose landed='registered via ./led register-principal' (expect the CLI's own placeholder text -- --purpose is optional by ratified, already-shipped design, bootstrap/templates/led.tmpl's own dated comment); excerpt='led: row 12 written.'
+  [ok] exit=0; purpose landed='registered via ./autoharn led register-principal' (expect the CLI's own placeholder text -- --purpose is optional by ratified, already-shipped design, bootstrap/templates/led.tmpl's own dated comment); excerpt='led: row 12 written.'
 
 === suspend-refuses-writes ===
   [ok] exit=1; excerpt='ipal remains available too: ./led register-principal <new-name> <class> --purpose "<why>", then record the succession (kernel/lineage/s40-principal-identity-events.sql, Element 4).'

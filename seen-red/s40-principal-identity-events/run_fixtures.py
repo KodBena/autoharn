@@ -527,7 +527,7 @@ def main() -> int:
                 f"AND principal_subject = (SELECT id FROM {K2}.principal WHERE name='nopurpose');")
             check("purpose-optional-with-placeholder",
                   rp.returncode == 0
-                  and purpose_landed == "registered via ./led register-principal",
+                  and purpose_landed == "registered via ./autoharn led register-principal",
                   f"exit={rp.returncode}; purpose landed={purpose_landed!r} (expect the CLI's "
                   f"own placeholder text -- --purpose is optional by ratified, already-shipped "
                   f"design, bootstrap/templates/led.tmpl's own dated comment); excerpt="

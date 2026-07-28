@@ -133,7 +133,7 @@ def standing_decisions(cfg: bcc.ServedConfig) -> None:
     remaining = len(rows) - shown
     if remaining > 0:
         rendered.append(f"ACTION REQUIRED: {remaining} more standing decision(s) omitted -- run "
-                         f"`./led standing` NOW to read them before proceeding.")
+                         f"`./autoharn led standing` NOW to read them before proceeding.")
     print("\n".join(rendered))
 
 

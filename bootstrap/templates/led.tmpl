@@ -132,7 +132,7 @@ def _resolve_actor(cfg: bcc.ServedConfig) -> int | None:
         if r.get("name") == name:
             return r["id"]
     print(f"led: REFUSED -- LED_ACTOR={name!r} is not a registered principal.", file=sys.stderr)
-    print(f"  Register it first: ./led register-principal {name} <human|model|subagent|tool>", file=sys.stderr)
+    print(f"  Register it first: ./autoharn led register-principal {name} <human|model|subagent|tool>", file=sys.stderr)
     sys.exit(1)
 
 
@@ -770,7 +770,7 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                     print(f"led principal suspend: REFUSED -- '{name}' already carries an "
                           f"in-force suspension (row {cur_id}); no duplicate active truth. To "
                           f"correct its rationale, re-suspend WITH --supersedes {cur_id}; to "
-                          f"lift it instead: ./led principal lift-suspension {name}",
+                          f"lift it instead: ./autoharn led principal lift-suspension {name}",
                           file=sys.stderr)
                     return 1
                 if sup_id and str(cur_id) != str(sup_id):
@@ -901,7 +901,7 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                 if cur_id:
                     print(f"led principal relate: REFUSED -- an active '{rel}' assertion "
                           f"already exists for this exact pair (row {cur_id}); no duplicate "
-                          f"active truth. To retract it: ./led principal unrelate {subj_name} "
+                          f"active truth. To retract it: ./autoharn led principal unrelate {subj_name} "
                           f"{rel} {obj_name} --supersedes {cur_id}", file=sys.stderr)
                     return 1
                 stmt = f"principal '{subj_name}' {rel} principal '{obj_name}' (relation asserted)"
@@ -1021,7 +1021,7 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                 if not possession_ref:
                     print(f"led principal bind-key: REFUSED -- a FRESH bind needs "
                           f"--possession-ref <id> (s61 item 3, proof of possession). Run "
-                          f"./led principal attest-possession {fp} --asc <detached-signature-"
+                          f"./autoharn led principal attest-possession {fp} --asc <detached-signature-"
                           f"path> first (verifies a signature over the canonical proof text "
                           f"against THIS deployment's committed keys/ entry for {fp}), then "
                           f"bind citing the returned row id.", file=sys.stderr)
@@ -1087,7 +1087,7 @@ def cmd_principal(cfg: bcc.ServedConfig, argv: list[str], shared: dict[str, str]
                     print(f"led principal grant-competence: REFUSED -- an active grant "
                           f"already exists for '{name}' / activity '{activity}' (row "
                           f"{cur_id}); no duplicate active truth. To correct its band/basis, "
-                          f"re-grant WITH --supersedes {cur_id}; to withdraw it: ./led "
+                          f"re-grant WITH --supersedes {cur_id}; to withdraw it: ./autoharn led "
                           f"principal withdraw-competence {name} --activity \"{activity}\" "
                           f"--supersedes {cur_id}", file=sys.stderr)
                     return 1
@@ -1305,7 +1305,7 @@ def _check_review_queue(trimmed: str) -> bool:
         print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
         print("  RANK must be a positive integer (1 = most important -- the queue's sort key)", file=sys.stderr)
         print("  WHAT must be non-empty (plain words: what you are reviewing)", file=sys.stderr)
-        print("  POINTER must be non-empty (where to look: a repo path, './led show N', or a URL)", file=sys.stderr)
+        print("  POINTER must be non-empty (where to look: a repo path, './autoharn led show N', or a URL)", file=sys.stderr)
         print(f"  received ({len(parts)} field(s), whitespace-normalized): {normalized}", file=sys.stderr)
         print("  NOTHING was written -- fix the statement and re-run.", file=sys.stderr)
         return False
@@ -1320,7 +1320,7 @@ def _check_review_queue(trimmed: str) -> bool:
     if not what:
         return refuse("WHAT field is empty -- state what you are reviewing, for a human reader")
     if not pointer:
-        return refuse("POINTER field is empty -- state where to look (a repo path, './led show N', or a URL)")
+        return refuse("POINTER field is empty -- state where to look (a repo path, './autoharn led show N', or a URL)")
     return True
 
 
@@ -1777,7 +1777,7 @@ def cmd_register_principal(cfg: bcc.ServedConfig, name: str, agent_class: str,
     when --event-time preceded it on the command line."""
     actor = _resolve_actor(cfg)
     payload: dict = {"name": name, "agent_class": agent_class,
-                      "purpose": purpose or "registered via ./led register-principal"}
+                      "purpose": purpose or "registered via ./autoharn led register-principal"}
     if actor is not None:
         payload["actor"] = actor
     if event_time:
@@ -2045,12 +2045,12 @@ _BRIEFING_TEXT = """\
 Fresh-agent rules briefing -- three rules a new agent otherwise discovers only by tripping them.
 
 1. The ledger change-gate. A source-file edit must be preceded by a ledger entry naming that
-   file: `./led -f <basename> decision "<why>"`. Then RE-ISSUE THE SAME EDIT -- the gate re-checks
+   file: `./autoharn led -f <basename> decision "<why>"`. Then RE-ISSUE THE SAME EDIT -- the gate re-checks
    on every attempt, so retrying after the insert is the whole fix. Do not write the file first
    and ledger it after; the gate blocks the write, not the record.
 
-2. Flag-order asymmetry. Generic ledger flags go BEFORE the kind word: `./led --refs row:N
-   decision "..."`. `led work <sub>` flags go AFTER the slug/title/verdict instead: `./led work
+2. Flag-order asymmetry. Generic ledger flags go BEFORE the kind word: `./autoharn led --refs row:N
+   decision "..."`. `led work <sub>` flags go AFTER the slug/title/verdict instead: `./autoharn led work
    open <slug> "<title>" --parent <parent-slug>`. A flag placed on the wrong side of that boundary
    is REFUSED, never silently swallowed into the statement's own prose -- move it to the other
    side and re-issue.
@@ -2059,7 +2059,7 @@ Fresh-agent rules briefing -- three rules a new agent otherwise discovers only b
    when the countersigning actor authored the row it regards -- keyed on actor/principal
    identity alone, unconditionally, regardless of the independence value chosen (the ledger
    INSERT that fires this check lands before independence is even known). The only fix:
-   register a distinct principal (`./led register-principal <name> <class>`) and set
+   register a distinct principal (`./autoharn led register-principal <name> <class>`) and set
    LED_ACTOR=<name> before re-issuing the review. Solo-world fallback (no second principal
    genuinely available): register one anyway for the same operator, and countersign through
    it disclosing `independence self-review` -- honest labeling of the countersign, not a
@@ -2314,7 +2314,7 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     # claim ever landing, unflagged.
     if _slug_claimant(cfg, slug) is None:
         print(f"led work close: REFUSED -- slug '{slug}' has no work_claimed row (claim it "
-              f"first): ./led work claim {slug}", file=sys.stderr)
+              f"first): ./autoharn led work claim {slug}", file=sys.stderr)
         return 1
     rc_count = sum([bool(review_witness), review_deferred, review_bookkeeping])
     if rc_count > 1:
@@ -2596,7 +2596,7 @@ def cmd_work_resolve_violation(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         if not classes:
             print(f"led work resolve-violation: REFUSED -- target {target_id} is not currently "
                   f"an in-force work_item_violations member (re-derived against the view "
-                  f"itself). Run './led work violations' to see what is currently answerable. "
+                  f"itself). Run './autoharn led work violations' to see what is currently answerable. "
                   f"(If you are CORRECTING a wrong disposition rather than answering a fresh "
                   f"violation, add --supersedes <the wrong disposition's row id>.)", file=sys.stderr)
             return 1
@@ -3020,7 +3020,7 @@ def main(argv: list[str]) -> int:
     event_time = shared.get("--event-time")
     if event_time and argv and argv[0] in _EVENT_TIME_UNSUPPORTED_VERBS:
         print(f"led: REFUSED -- --event-time is only supported on the generic <kind> "
-              f"<statement...> path today (e.g. './led --event-time <ts> finding \"...\"'), "
+              f"<statement...> path today (e.g. './autoharn led --event-time <ts> finding \"...\"'), "
               f"plus register-principal and 'led principal <sub-verb>' (kernel/lineage/"
               f"s40-principal-identity-events.sql); '{argv[0]}' has its own INSERT that does "
               f"not carry event_declared_ts, so the value would otherwise be silently dropped. "
