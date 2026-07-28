@@ -40,22 +40,61 @@ You should see per-class counts and then, loudly:
 `MANIFEST IS UNREVIEWED ... ingest refuses it wholesale`. That refusal is correct — it is
 the maintainer's veto surface. Extraction is pure SELECTs; it needs no running boundary.
 
-**Step 1b — sweep for never-graded process rules (added 2026-07-28, after a witnessed
-drop).** The extract's durable-decision carry-forward, and the compaction hook that
-re-asserts standing decisions into rebuilt contexts, both read ONLY rows graded
-`durable` — a maintainer ruling ledgered as an ungraded `decision` is structurally
-invisible to both, and one real pattern (the +A:B:C pre-review rule, autoharn2 rows
-1455–1504 family) silently dropped at the autoharn3 rebirth exactly this way
-(autoharn3 rows 209/210 are the re-grade and the finding). Before the maintainer
-reviews the manifest, run this against the OLD world and eyeball every hit — anything
-that binds future process gets re-ledgered `--grade durable` in the old world so the
-extract carries it:
+**Step 1b — the STANDING-FORCE SURVIVAL AUDIT (generalized 2026-07-28 from the
+never-graded-rules sweep, after the maintainer's ADR-0000 direction: "the class as
+first named is presumed too narrow" — it was; the enumerated universe and its
+per-kind classification live in
+[design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md](../design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md),
+read it before running a phoenix).**
 
-    psql -h <db host> -U <you> -d <db> -c "
-      SELECT id, left(statement,160) FROM <oldworld>.ledger
-      WHERE kind='decision' AND decision_grade IS NULL
-        AND statement ~* '(ruling|standing|pattern|from now on|always|never|every)'
-      ORDER BY id"
+**Closure statement (ADR-0000 Rule 2(a)).** Quantification universe: every datum with
+FUTURE FORCE — anything that binds or informs behavior after the old world dies —
+enumerated from the system itself in the matrix above: the 33 ledger kinds (each
+classified historical vs standing-force), the 8 statement grammars (all riding
+`kind=decision`, so carried ONLY when graded durable), the kernel side-tables
+(principal registry and its suspension/revocation/standing/relation/binding/
+competence/entitlement families), the config surfaces (courier.toml, features.json,
+governed_files.json, world_identity, keys/), and cross-world state (open missive
+threads, counterpart courier address books). Deliberately mortal, and correctly so:
+historical records die with their world — runs-are-linear working as designed; the
+audit's job is to make that boundary CHOSEN, never accidental. Known gaps at this
+writing, ranked in the matrix and tracked as autoharn3 work items: principal
+revocations/suspensions carried by NOTHING (the top hazard — a revoked principal
+could be re-admitted post-phoenix), ungraded `resource:` deontic tiers, the courier
+principal and world_identity birth steps, the courier.toml counterpart handover.
+
+Before the maintainer reviews the manifest, run BOTH sweeps against the OLD world and
+disposition every hit:
+
+1. Never-graded process rules (the original sweep — anything binding future process
+   gets re-ledgered `--grade durable` in the old world so the extract carries it):
+
+       psql -h <db host> -U <you> -d <db> -c "
+         SELECT id, left(statement,160) FROM <oldworld>.ledger
+         WHERE kind='decision' AND decision_grade IS NULL
+           AND statement ~* '(ruling|standing|pattern|from now on|always|never|every)'
+         ORDER BY id"
+
+2. Standing-force rows the extract structurally ignores (until the extract itself
+   carries them — work item extract-standing-force-classes): principal suspensions/
+   revocations/standing declarations/relations/bindings/competences, entitlement
+   config, ungraded statement-grammar rows (especially `resource:` tiers), and any
+   in-force `missive_undisposed` entries (an open thread at cut time must be
+   dispositioned or explicitly handed to the successor via the counterpart's
+   courier):
+
+       psql -h <db host> -U <you> -d <db> -c "
+         SELECT kind, count(*) FROM <oldworld>.ledger l
+         WHERE kind IN ('principal_suspended','principal_revoked',
+           'principal_standing_declared','principal_relation_asserted',
+           'principal_role_bound','principal_key_bound',
+           'principal_competence_granted','entitlement_class_configured')
+           AND NOT EXISTS (SELECT 1 FROM <oldworld>.ledger s WHERE s.supersedes=l.id)
+         GROUP BY kind"
+
+   Any nonzero count is a maintainer decision at the manifest: re-assert in the
+   successor, or record the deliberate drop with its reason. REVOCATIONS ARE NEVER
+   SILENTLY DROPPED.
 
 ## Step 2 — **MAINTAINER**: review and countersign the manifest
 
