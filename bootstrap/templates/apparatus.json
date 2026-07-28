@@ -1,5 +1,5 @@
 {
-  "deny_hint": "Run:  ./led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.",
+  "deny_hint": "Run:  ./autoharn led -f <basename-of-the-file-you-are-editing> decision \"<why this change>\"   then re-issue the SAME edit -- the gate re-checks on every attempt, so retrying is the whole fix.",
   "mechanisms": {
     "change_gate": {"mode": "enforce"},
     "permit_to_work": {"mode": "enforce"},

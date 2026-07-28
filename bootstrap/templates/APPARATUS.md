@@ -14,7 +14,7 @@ tool call, no re-scaffold needed. Format:
 
 ```json
 {
-  "deny_hint": "Run:  ./led -f <file> decision \"<why>\"   then re-issue the SAME edit -- ...",
+  "deny_hint": "Run:  ./autoharn led -f <file> decision \"<why>\"   then re-issue the SAME edit -- ...",
   "mechanisms": {
     "change_gate":      {"mode": "enforce"},
     "permit_to_work":   {"mode": "enforce"},

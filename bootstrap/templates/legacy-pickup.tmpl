@@ -24,7 +24,7 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         capped (`byte_cap`, default 4000) AND optionally item-capped (`max_items`,
                         default null = no count limit), both independent guards, whichever bites
                         first truncates, with the SAME loud-truncation convention (never silent,
-                        and now IMPERATIVE -- an instruction to run `./led standing`, not an
+                        and now IMPERATIVE -- an instruction to run `./autoharn led standing`, not an
                         aside) hooks/sessionstart_durable_decisions.py's own SessionStart hook
                         uses, sharing the identical config resolution (filing/
                         standing_decisions_config.py, ONE home, ADR-0012 P1). A pre-s36 world (no
@@ -115,7 +115,7 @@ Sections emitted, each under a machine-parseable `### SECTION: <NAME>` header (g
                         rendered queue (nothing is deleted — it is simply no longer the latest
                         state), and a later `review:` row RE-OPENS a ticked-off item. Open entries
                         print rank-ascending (tie-broken by SLUG), each with the exact
-                        `./led decision "review-done: <slug> | <disposition>"` one-liner that
+                        `./autoharn led decision "review-done: <slug> | <disposition>"` one-liner that
                         ticks it — copy-paste, no grammar to recall. An empty queue prints its own
                         explicit "(no open review-queue entries on record)" line — never silence.
                         A malformed row (wrong field count, non-integer RANK) prints flagged
@@ -386,7 +386,7 @@ def standing_decisions(dep) -> None:
         # hooks/sessionstart_durable_decisions.py's own _render(): a DIRECTIVE, not a footnote --
         # the witnessed failure was an agent reader that saw an aside and did not act on it.
         rendered.append(f"ACTION REQUIRED: {remaining} more standing decision(s) omitted -- run "
-                         f"`./led standing` NOW to read them before proceeding.")
+                         f"`./autoharn led standing` NOW to read them before proceeding.")
     print("\n".join(rendered))
 
 
@@ -852,7 +852,7 @@ def review_queue(dep) -> None:
             print(f"[{rank}] {slug}  (ledger row id={row_id})")
             print(f"  what:    {fields['WHAT']}")
             print(f"  pointer: {fields['POINTER']}")
-            print(f"  tick:    ./led decision \"review-done: {slug} | <disposition>\"")
+            print(f"  tick:    ./autoharn led decision \"review-done: {slug} | <disposition>\"")
     for m in malformed:
         print(m)
 
