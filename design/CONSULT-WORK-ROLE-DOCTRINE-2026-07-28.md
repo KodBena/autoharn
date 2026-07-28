@@ -1,7 +1,9 @@
 <!-- doc-attest-exempt: as-delivered consult record, two deliveries, both verbatim
 (maintainer commission: "run this all by a second Fable consult (ADR-0018-ish) ... with
 web access ... This is one thing I'd like to get right, then codified once and for all";
-brief CONSULT-WORK-ROLE-DOCTRINE.md, sealed two-phase shape). INTEGRITY HISTORY, in
+commissioned via an untracked session brief file -- see the Vocabulary entry "The
+brief"; terms of art in this comment are all defined in the Vocabulary block below,
+read it first if any stops you). INTEGRITY HISTORY, in
 order: (1) first delivery carried Phase 2 only -- no written Phase 1, no citations;
 (2) on the coordinator's recall the consultant disclosed that THE SEAL NEVER HELD -- the
 brief's Read returned the whole file, appendix included, in one call, so no blind phase
@@ -28,11 +30,13 @@ Phase 2 follows verbatim as the second section, unrevised. Filed verbatim at com
 `ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop
 (2026-07-28: an A-side pre-review swept against
 [attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md),
-then blind-round-1 repairs) — an orientation line, a vocabulary block, editorial
-signposts, and one markup normalization; no factual claim, verdict, or quoted passage
-altered; the as-delivered original is the `ded5d89` version. (One A-side vocabulary
-entry mischaracterized the sealed appendix and was corrected in the blind-round-1
-repair — the entry below is the corrected one.)
+then repairs from the loop's fresh-context blind review rounds — "blind round N"
+below means the Nth such fresh reading, per ADR-0017's A:B:C loop) — an orientation
+line, a vocabulary block, editorial signposts, and one markup normalization; no
+factual claim, verdict, or quoted passage altered; the as-delivered original is the
+`ded5d89` version. (One A-side vocabulary entry mischaracterized the sealed appendix
+and was corrected in the blind-round-1 repair — the corrected entry is the
+**"The brief" / "the sealed appendix"** entry below.)
 
 **Vocabulary and citation conventions (added for the zero-context reader):**
 - **GxP** — the family of "Good x Practice" life-science regulations (GMP, GLP, GCP,
@@ -89,6 +93,29 @@ repair — the entry below is the corrected one.)
   [ADR-0017](../law/adr/0017-the-zero-context-reader.md)'s Instance bindings).
 - **[INDEP] / [CORR]** — this consult's own per-point contamination markers, defined
   at first use in the Standing integrity disclosure immediately below.
+- **`work_opened` / `work_claimed` / `work_closed`** — the three ledger row kinds of
+  a work item's lifecycle: the row recording that an item was opened (slug, title,
+  rationale), that a principal claimed it, and that it was closed (with its
+  `work_resolution` and review disposition). Every census claim about "opens/
+  claims/closes" counts rows of these kinds.
+- **`review_detail`** — the kernel side-table where a `review` row's structured
+  fields live (its verdict, its claimed independence, and the kernel-computed
+  `discharge_grade`); "zero adoption" below means the table has no rows in a given
+  world — reviews there recorded a disposition on the close only, with no
+  structured review row behind it.
+- **The fix-gate specimen (rows 413→436)** — one experience4 episode cited
+  piecemeal below; the full map: row 413 = the close a review refused, row 419 =
+  the refusing review, row 427 = the superseding (corrected) close, rows 431/435 =
+  the re-review that first wrongly cited dead row 413 and then corrected itself to
+  427, row 436 = the decision row owning the mistake.
+- **§N** (in the consultant's prose, "§4", "§6") — item N of the numbered "The
+  doctrine" list in Phase 1 below (§4 = Review/fix gates, §6 = Planning/
+  decomposition), not a section of this file.
+- **"Milestone-shaped acts"** — closes gated by s60's entitlement check (acts whose
+  item carries inbound blocks-start edges, i.e. things other work waits on).
+  **"Dispatch mechanics"** — the minting of a delegate principal + its delegation
+  edge + stamp injection when a sub-agent is commissioned (built repo-side as
+  `autoharn dispatch`; s64 supplies only the kernel columns).
 - **"The census"** —
   [design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md](WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md),
   the read-only work-item-lifecycle survey this consult's evidence base rests on.
