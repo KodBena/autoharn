@@ -454,3 +454,116 @@ class ArtifactWriteIntFields(BaseModel):
     model's scope."""
 
     actor: int | None = None
+
+
+# ================================================================================================
+# boundary-verdict-read-surface (work item, ledger row 221): serve.md/README.md's "two trust
+# roots" section, verbatim -- "work item boundary-verdict-read-surface (row 221) serves the
+# latest banked verdicts (chain, judge, doctor) as boundary reads labeled as THIS SERVICE'S OWN
+# last-known attestation with freshness visible -- never a substitute for running the
+# independent instrument, and never conflated with it." `label` below is that non-negotiable
+# wording, a literal constant on every PRESENT sub-object (never a free-text field a caller
+# could mistake for something the writer chose per-response) -- ADR-0012 P1, one label, not one
+# phrasing per class. See `serving/boundary_service.py`'s `attestation()` route and
+# `_latest_judge_derivation`'s own docstring for WHERE each class's banked artifact lives today
+# (investigated, not assumed): judge genuinely banks -- the LIBRARY's bare CLI
+# (`engine/ledger_differential.py`) treats `--retain` as opt-in, but THIS REPO'S OWN operator
+# verb (`bootstrap/templates/judge.tmpl`) hardcodes it and calls that its "ordinary run" (that
+# file's own header, verbatim) -- fix-round MODERATE, corrected from this module's own first-cut
+# text, which had it backwards; verify-chain and doctor bank NOTHING in this codebase as it
+# stands -- confirmed by
+# reading `bootstrap/templates/verify-chain.tmpl`/`doctor.tmpl` in full for any write to disk,
+# finding none. Their own PRESENT shapes are modeled below anyway (forward-compatible if a future
+# build adds banking for either) but are UNEXERCISED in this build's own witness plan, named
+# rather than silently absent -- there is no code path today that could construct one.
+_ATTESTATION_LABEL = "last_known_attestation"
+
+
+class NoBankedArtifact(BaseModel):
+    """The ONE typed-absence shape every attestation class returns when it has nothing banked
+    (row 221's own instruction, verbatim: "if a result class has NO banked artifact, the read
+    serves a typed absence naming what would produce one, NEVER runs the instrument
+    server-side"). `would_produce` names the exact operator command that WOULD create a banked
+    artifact this route could then serve -- never a hint to run it now, never run here."""
+
+    banked: bool = False
+    disposition: str = "no_banked_artifact"
+    would_produce: str = Field(description="the operator command that would create a banked artifact of this class (never executed by this route)")
+    message: str = Field(description="teach-text: this class has nothing banked right now, and why")
+
+
+class BankedJudgeVerdict(BaseModel):
+    """`./judge`'s own banked derivation record (`engine/ledger_differential.py`'s `retain()`).
+    The LIBRARY function itself only banks under its own `--retain` flag -- but THIS REPO'S OWN
+    operator verb, `bootstrap/templates/judge.tmpl`, hardcodes that flag and calls the result its
+    "ordinary run" (that file's own header, verbatim) -- fix-round MODERATE correction, this
+    class's own docstring had it backwards on first cut. `verdict` is the closed AGREE/
+    DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED vocabulary that module's own docstring names.
+    `asp_input_hash`/`sql_input_hash` are reported SEPARATELY, honestly (that module's own
+    `DerivationRecord` docstring: the two producers hash DIFFERENT true inputs -- edb-text vs
+    live-db rows -- so a single collapsed "input hash" would assert a shared artifact that does
+    not exist). `domain` names WHERE under `engine/docs/ledger-marriage/derivations/` the record
+    was found -- the bare `ledger` root itself, or one of the FOUR sibling subtrees nested inside
+    it (`contemporaneity`/`ordering-violations`/`preamble-ordering`/`review-gap-audit`) --
+    derived from the matched file's OWN path (fix-round CRITICAL correction: `serving/
+    boundary_service.py`'s `_latest_judge_derivation` used to derive this from scan-iteration
+    order over a domain dict instead, which is a `ledger`-biased answer whenever the SAME nested
+    file is reachable through more than one scan -- see that function's own docstring for the
+    live-witnessed specimen)."""
+
+    banked: bool = True
+    label: str = _ATTESTATION_LABEL
+    domain: str = Field(description="which differential family this record was retained under (ledger/contemporaneity/ordering-violations/preamble-ordering/review-gap-audit)")
+    target: str = Field(description="the judge run's own --target argument this record was retained against (a layer name or a world label, whatever the retaining invocation passed)")
+    verdict: str = Field(description="AGREE / DIVERGE_BY_DESIGN / DIVERGE_DEFECT / QUARANTINED -- engine/ledger_differential.py's own closed vocabulary")
+    asp_input_hash: str | None = Field(description="the ASP producer's own DerivationRecord.input_hash (its edb-text input) -- null if that producer quarantined")
+    sql_input_hash: str | None = Field(description="the SQL producer's own DerivationRecord.input_hash (its live-db input) -- null if that producer quarantined")
+    computed_at: str = Field(description="the banked record's own DerivationRecord.ts -- when the differential actually RAN, distinct from banked_at below")
+    banked_at: str = Field(description="the derivation.json file's own mtime, ISO-8601 -- when this artifact was WRITTEN to disk (staleness is visible against this, per row 221's own instruction)")
+
+
+class BankedDoctorSummary(BaseModel):
+    """UNEXERCISED in this build (boundary_models.py's own module-level note above): `doctor`
+    banks nothing today (`bootstrap/templates/doctor.tmpl` read in full, no write to disk found).
+    Modeled so a future build that adds doctor banking has a shape to fill, not a shape to
+    invent under time pressure."""
+
+    banked: bool = True
+    label: str = _ATTESTATION_LABEL
+    summary: str = Field(description="doctor's own PASS/FAIL/SKIP summary line, verbatim, from the banked report")
+    ran_at: str = Field(description="when doctor itself ran, from the banked report's own timestamp")
+    banked_at: str = Field(description="the banked report's own file mtime, ISO-8601 -- staleness visible against this")
+
+
+class BankedVerifyChainVerdict(BaseModel):
+    """UNEXERCISED in this build (boundary_models.py's own module-level note above):
+    `verify-chain` banks nothing today (`bootstrap/templates/verify-chain.tmpl` read in full --
+    it prints its JSON result to stdout only; the operator's own signed-genesis ceremony
+    redirects that stdout to a file BY HAND for GPG signing, which is not a location this
+    service can reliably discover or trust as "the latest verdict"). Modeled so a future build
+    that adds verify-chain banking has a shape to fill, not a shape to invent under time
+    pressure."""
+
+    banked: bool = True
+    label: str = _ATTESTATION_LABEL
+    verdict: str = Field(description="verify-chain's own reconciliation verdict, verbatim, from the banked report")
+    computed_at: str = Field(description="when verify-chain itself ran, from the banked report's own timestamp")
+    banked_at: str = Field(description="the banked report's own file mtime, ISO-8601 -- staleness visible against this")
+
+
+class AttestationResponse(BaseModel):
+    """`GET /d/{deployment}/attestation`'s own response shape (row 221) -- three independent
+    sub-objects, each EITHER its class's `Banked*` shape or the shared `NoBankedArtifact` typed
+    absence; a caller checks `banked` per class rather than the whole route ever refusing
+    umbrella-style (ADR-0012 P1: one absence shape, applied per class, not a route-wide 404/409
+    that would hide the two classes that DO have something to say). HONESTLY SCOPED (stated once
+    here rather than only in the route's own docstring): `judge`'s banked-derivation tree
+    (`engine/docs/ledger-marriage/derivations/`) is a REPO-CHECKOUT-RELATIVE fact, not a
+    per-`{deployment}` one -- one server process, one checkout, N multiplexed deployments all see
+    the SAME bank. The `{deployment}` path segment is still validated (an unknown deployment
+    still typed-404s `unknown_deployment`, the same discriminator every other route enforces),
+    but this route's own PAYLOAD does not vary by which known deployment was named."""
+
+    verify_chain: BankedVerifyChainVerdict | NoBankedArtifact
+    judge: BankedJudgeVerdict | NoBankedArtifact
+    doctor: BankedDoctorSummary | NoBankedArtifact

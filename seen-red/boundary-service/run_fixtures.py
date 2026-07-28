@@ -224,6 +224,9 @@ EXPECTED_ROUTES = {
     # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md (work item boundary-sse-events, ledger row 169):
     # the head-advancement-only SSE push signal's own new route.
     ("GET", "/d/{deployment}/events"),
+    # Work item boundary-verdict-read-surface (ledger row 221): the banked verify-chain/judge/
+    # doctor attestation read's own new route.
+    ("GET", "/d/{deployment}/attestation"),
 }
 
 
@@ -790,6 +793,119 @@ def main() -> int:
               up_b and st_h == 200 and body_h.get("capabilities", {}).get("s43_boundary") is True
               and body_h.get("service_principal") == "boundary-service",
               f"health status={st_h} body={body_h}", failures)
+
+        # -- W37 (row 221, boundary-verdict-read-surface): GET /attestation, BOTH polarities.
+        # PRESENT polarity, no special env needed: this REPO CHECKOUT's own real
+        # engine/docs/ledger-marriage/derivations/ tree already carries genuine `--retain`'d
+        # derivation.json files (from prior differential-suite dev work) -- WORLD B's own server
+        # was spawned with no AUTOHARN_JUDGE_DERIVATIONS_ROOT override, so it reads that SAME
+        # real tree, honestly proving the "present" shape without a fixture-manufactured plant.
+        st_att, body_att = http_get(base + "/attestation") if up_b else (0, {})
+        judge_att = body_att.get("judge", {}) if isinstance(body_att, dict) else {}
+        check("w37a-attestation-judge-present-from-real-repo-bank",
+              up_b and st_att == 200
+              and judge_att.get("banked") is True
+              and judge_att.get("label") == "last_known_attestation"
+              and judge_att.get("verdict") in
+                  ("AGREE", "DIVERGE_BY_DESIGN", "DIVERGE_DEFECT", "QUARANTINED")
+              and judge_att.get("banked_at"),
+              f"status={st_att} judge={judge_att}", failures)
+        check("w37b-attestation-verify-chain-and-doctor-always-absent",
+              up_b and st_att == 200
+              and body_att.get("verify_chain", {}).get("banked") is False
+              and body_att.get("verify_chain", {}).get("disposition") == "no_banked_artifact"
+              and body_att.get("doctor", {}).get("banked") is False
+              and body_att.get("doctor", {}).get("disposition") == "no_banked_artifact",
+              f"status={st_att} verify_chain={body_att.get('verify_chain')} "
+              f"doctor={body_att.get('doctor')}", failures)
+        # ABSENT polarity for judge: a SEPARATE server instance, pointed via
+        # AUTOHARN_JUDGE_DERIVATIONS_ROOT at a freshly-made, genuinely empty scratch directory --
+        # no derivation.json anywhere under it, so `_latest_judge_derivation` returns None and
+        # this route's own `judge` field resolves to the SAME NoBankedArtifact shape verify_chain/
+        # doctor always wear.
+        empty_derivations_dir = Path(tempfile.mkdtemp(prefix="w37-empty-derivations-"))
+        tmps.append(empty_derivations_dir)
+        env_w37 = dict(os.environ)
+        env_w37["AUTOHARN_JUDGE_DERIVATIONS_ROOT"] = str(empty_derivations_dir)
+        proc_w37, port_w37 = start_server(cfg_b, env_overrides=env_w37)
+        procs.append(proc_w37)
+        base_w37 = f"http://127.0.0.1:{port_w37}/d/{world_b}"
+        up_w37 = wait_health(base_w37)
+        st_att2, body_att2 = http_get(base_w37 + "/attestation") if up_w37 else (0, {})
+        judge_att2 = body_att2.get("judge", {}) if isinstance(body_att2, dict) else {}
+        check("w37c-attestation-judge-absent-when-nothing-banked",
+              up_w37 and st_att2 == 200
+              and judge_att2.get("banked") is False
+              and judge_att2.get("disposition") == "no_banked_artifact"
+              # MODERATE fix-round correction: would_produce no longer names --retain (this
+              # repo's own ./autoharn judge hardcodes it and calls that the ordinary run,
+              # bootstrap/templates/judge.tmpl's own header) -- the assertion below checks for
+              # the corrected, --retain-free command instead of the pre-fix wording.
+              and judge_att2.get("would_produce") == "./autoharn judge [target...]",
+              f"up_w37={up_w37} status={st_att2} judge={judge_att2}", failures)
+        check("w37d-attestation-unknown-deployment-still-typed-404",
+              # the discriminator gate applies here too (AttestationResponse's own docstring:
+              # deployment validation happens, even though the payload itself does not vary).
+              (lambda r: r[0] == 404 and r[1].get("disposition") == "unknown_deployment")(
+                  http_get(f"http://127.0.0.1:{port_w37}/d/does-not-exist-w37/attestation")
+                  if up_w37 else (0, {})),
+              f"up_w37={up_w37}", failures)
+
+        # -- W37e (fix-round CRITICAL, reviewer's own live-witnessed specimen reproduced here):
+        # the multi-domain mtime race. Two derivation.json files planted directly (bypassing
+        # judge/retain() entirely -- this leg tests THIS ROUTE's own domain attribution, not the
+        # differential engine) into the SAME `empty_derivations_dir` the w37c server already
+        # reads live (no caching, no restart needed) -- an OLDER one directly under the bare
+        # `ledger` root, a NEWER one under the `contemporaneity` subtree. The pre-fix code
+        # attributed domain by WHICH DOMAIN'S SCAN REACHED A FILE FIRST (dict iteration order,
+        # 'ledger' always first) rather than by the file's own location -- since the bare
+        # 'ledger' root's own rglob ALSO discovers files nested under contemporaneity/ (the
+        # subtree is INSIDE the bare root, not beside it), the newer contemporaneity-stored
+        # record was mis-scanned once as domain 'ledger' (at the correct, newer mtime) BEFORE the
+        # correct 'contemporaneity' domain's own scan ever reached the identical file -- and a
+        # strict `>` mtime tiebreak never let the second (correctly-domained) sighting of the
+        # SAME mtime replace the first. This leg is domain-race-honest: the OLDER file lives at
+        # the bare root (so a domain bug that always won on iteration order for 'ledger' would
+        # otherwise still coincidentally look right); only the NEWER, subtree-stored, distinct-
+        # verdict record proves the fix, because a wrong implementation would report it as
+        # 'ledger' with the OLDER file's own verdict/target lost, or would report the newer
+        # verdict under the WRONG domain -- either way failing the assertion below.
+        def _plant_derivation(root: Path, domain_subdir: str, target: str, verdict: str,
+                               mtime: float) -> None:
+            d = root / domain_subdir / target / "20260101T000000Z_deadbeefdead"
+            d.mkdir(parents=True, exist_ok=True)
+            record = {"target": target, "verdict": verdict, "only_asp": [], "only_sql": [],
+                      "asp_record": {"engine": "clingo", "version": "test", "config": [],
+                                      "input_basis": "edb-text", "input_hash": f"asp-{target}",
+                                      "program_hash": "x", "output_hash": "x", "target": target,
+                                      "ts": "2026-01-01T00:00:00"},
+                      "sql_record": {"engine": "postgres", "version": "test", "config": [],
+                                      "input_basis": "live-db", "input_hash": f"sql-{target}",
+                                      "program_hash": "x", "output_hash": "x", "target": target,
+                                      "ts": "2026-01-01T00:00:00"},
+                      "asp_quarantine": None, "sql_quarantine": None}
+            p = d / "derivation.json"
+            p.write_text(json.dumps(record), encoding="utf-8")
+            os.utime(p, (mtime, mtime))
+
+        _plant_derivation(empty_derivations_dir, ".", "w37e-old-ledger-target", "AGREE",
+                          mtime=1_700_000_000.0)
+        _plant_derivation(empty_derivations_dir, "contemporaneity", "w37e-new-contemp-target",
+                          "DIVERGE_DEFECT", mtime=1_800_000_000.0)
+        st_att3, body_att3 = http_get(base_w37 + "/attestation") if up_w37 else (0, {})
+        judge_att3 = body_att3.get("judge", {}) if isinstance(body_att3, dict) else {}
+        check("w37e-attestation-judge-domain-attributed-from-file-location-not-scan-order",
+              up_w37 and st_att3 == 200
+              and judge_att3.get("banked") is True
+              and judge_att3.get("domain") == "contemporaneity"
+              and judge_att3.get("target") == "w37e-new-contemp-target"
+              and judge_att3.get("verdict") == "DIVERGE_DEFECT",
+              f"up_w37={up_w37} status={st_att3} judge={judge_att3} (expected domain="
+              f"'contemporaneity', target='w37e-new-contemp-target', verdict='DIVERGE_DEFECT' -- "
+              f"the NEWER, subtree-stored record; a domain-attribution bug reports this same "
+              f"verdict/target under domain 'ledger' instead, or loses it to the older "
+              f"bare-root record entirely)",
+              failures)
 
         # -- W1: accepted write, read back verbatim.
         st1, v1 = http_post(base + "/write/ledger",
