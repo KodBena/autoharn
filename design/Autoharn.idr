@@ -26,16 +26,60 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s68 (this pass pays down the prior LAGGING note, below, per gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics genuinely catch up). LAGGING: s69 (kernel/lineage/s69-role-coherence-refusals.sql, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, ledger row 201) is NOT rendered here -- named honestly rather than bumped on faith.
-||| THE s69 GAP (this build's own note, not a modeling obstacle): s69's three refusals
-||| (closer-is-claimant-of-record over work_item_current's existing claimant derivation;
-||| witness-ref shape per close shape; review-regards-in-force naming the successor) and its
-||| teach-text-only rider are additive, decidable, single-hop checks over facts this model
-||| ALREADY renders (workClaimed resolution, the reviewWitness field, the supersedes chain) -- a
-||| faithful transcription is plausible next-pass work, deferred here because this build's own
-||| commission scoped it to the kernel delta and its scratch witness, not a model refresh, and
-||| rendering three new refusal shapes correctly is exactly the kind of claim ADR-0000 Rule 2(a)
-||| says is not discharged by a rushed pass.
+||| AS-OF: kernel chain through s69 (this pass pays down the prior LAGGING note per
+||| gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics
+||| genuinely catch up -- s69's three refusals are all rendered below, so the suffix is retired).
+||| THE s69 PASS (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, kernel/lineage/
+||| s69-role-coherence-refusals.sql, ledger row 201): MODEL-VISIBLE, all three refusals -- each
+||| an additive, decidable, single-hop check over facts this model already carried the shape for.
+|||   §1 CLOSER-IS-CLAIMANT-OF-RECORD -- an ENTRY-level premise (closerIsClaimantOkB, boundaryOk),
+|||     the beliefSupersedeIdentityOk precedent one mechanism over: it needs e.actor (the WRITER),
+|||     which ValidPayload's payload-only signature cannot see. claimantOf is the new raw-fold
+|||     helper (the hasCloseCur/edgesCur idiom, one field over) resolving work_item_current
+|||     .claimant's OWN definition -- the LATEST in-force work_claimed row's actor for a slug,
+|||     cited via the SAME "keep the last in-force match" fold those readers already use, never
+|||     re-derived. RCloseNotClaimant is the new RefusalReason arm. The §0 governing principle
+|||     (defeat-and-reclaim must compose) is representable FOR FREE: claimantOf always resolves to
+|||     the CURRENT holder, so a later PWorkClaimed row automatically wins the fold and its actor
+|||     becomes the new binding claimant -- g69a-c below witness the fold picking up a reclaim,
+|||     and b69a-e witness boundaryOk flipping polarity across it. THE ENTAILMENT (spec §5's own
+|||     2026-07-28 AMENDMENT, row 201): claimantOf returns Nothing for a never-claimed slug, and
+|||     no actor can equal Nothing (Just e.actor), so an unclaimed close refuses FOR FREE, with no
+|||     separate premise -- b69e witnesses this polarity directly.
+|||   §2 WITNESS-REF SHAPE PER CLOSE SHAPE -- a ValidPayload-level premise (witnessShapeOk,
+|||     threaded through checkPayload/VClose, one payload+ledger fact, no actor needed, unlike
+|||     §1). Legal WRRow citations: kind IN (review, PProse KFinding) -- s48's existing WitnessRef
+|||     sum already carries the ROW arm as Fin n (existence unrepresentable-if-dangling); this
+|||     widens WHICH existing row is an acceptable citation, exactly the s67/s68 "widen what is
+|||     ACCEPTED, never loosen a refusal" shape -- OR an in-force PWorkOpened row naming the
+|||     closing slug as ITS OWN parent (the planning-close carve-in). WRCommit/WRArtifact stay
+|||     untouched by construction (this check only ever inspects a WRRow's cited kind). RED: a
+|||     `row:` citation of a bare PWorkClaimed row (the autoharn2 row-1265 specimen, g69h/r69a) or
+|||     of an unrelated slug's PWorkOpened row (g69e/r69c). GREEN: a review-kind citation (g69f),
+|||     a same-composite child's own PWorkOpened citation (g69d) -- r33b (§7, already on file)
+|||     is EXACTLY this carve-in and is RE-VERIFIED, not re-derived, to still construct under the
+|||     widened check.
+|||   §3 REVIEW-REGARDS-IN-FORCE -- collapses onto a premise THIS FILE ALREADY NAMES: "no in-force
+|||     superseder" is precisely `inForce l r` (equivalently `not (supersededIn l r)`), the same
+|||     reader every other in-force fact in this file already reads, one field over -- no new
+|||     helper needed, because the kernel's own query (`ORDER BY id DESC LIMIT 1` over ANY row
+|||     superseding the target, successor-identity for the teach-text only) collapses to plain
+|||     existence at this model's altitude (WHICH successor, if more than one claims to supersede
+|||     the same target, is prose-message detail below this rendering's altitude -- the SAME
+|||     "per-arm SQLSTATE granularity" carve-out RefusalReason's own header already takes, named
+|||     rather than silently matched). VReview gains one erased premise (targetInForce);
+|||     RReviewRegardsSuperseded is the new RefusalReason arm. Scope, re-verified against the
+|||     spec's own disclosure: a review regarding an in-force row -- INCLUDING a review regarding
+|||     another review (the s56 reservation-discharge shape) -- is unaffected, because its own
+|||     `inForce` reads True (r69f witnesses a review-of-review, both in force, unrefused).
+|||   THE RIDER (row 201 item 5) needs NO model change, stated plainly rather than silently
+|||   skipped: it re-spells ONE teach-text literal (`./led` -> `./autoharn led`) inside
+|||   validate_supersession_target's RAISE EXCEPTION strings -- zero condition, column, or control
+|||   -flow change, so nothing in this file's row algebra or refusal vocabulary MOVES. The
+|||   identical "printed string, not a rule" carve-out this file already grants s66's control-flow
+|||   -invisible fix, applied here to a literal's CONTENTS instead of its branch.
+|||   Both new premises (§1/§2) plus VReview's targetInForce are erased (`0`-quantities, zero
+|||   runtime cost) -- the SAME idiom every prior premise in this file already uses.
 ||| THE s68 PASS (design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md, ledger rows 1541/1542 --
 ||| the maintainer's own merge-hold answer, "As for the NUL sentinel, that shoulde be fixed",
 ||| verbatim): MODEL-VISIBLE, the same DigestF idiom applied to the two remaining implicit-
@@ -1614,6 +1658,27 @@ deferredUndischarged l s = anyB bad (allIds n)
              s == s' && not (anyB (attests (finToNat t) e.actor) (allIds n))
            _ => False)
 
+||| s69 §1 (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, row 201): the CLAIMANT-OF-RECORD
+||| for slug s -- the actor of the LATEST in-force work_claimed row for s, exactly
+||| work_item_current.claimant's own resolution (`DISTINCT ON (work_slug) ... ORDER BY id DESC`),
+||| cited here rather than re-derived. `allIds n` enumerates ascending by construction (FZ then
+||| FS ...), so a left fold that OVERWRITES the accumulator on every further in-force match
+||| already yields the highest-id (latest) winner -- the SAME "last write wins" reading
+||| hasCloseCur/edgesCur already take, one field over. Nothing here reads history for a
+||| superseded claim differently than any other in-force fact in this file. Per §0: this always
+||| resolves to the CURRENT holder, so a later PWorkClaimed row (s47's own legal claim-stealing)
+||| automatically becomes the new binding claimant with no extra machinery -- g69a-c below.
+claimantOf : {n : Nat} -> Ledger n -> Slug -> Maybe PrincipalId
+claimantOf l s = foldl pick Nothing (allIds n)
+  where
+    pick : Maybe PrincipalId -> Fin n -> Maybe PrincipalId
+    pick acc t = if inForce l t
+      then case entryAt l t of
+             (_ ** e) => case e.payload of
+               PWorkClaimed s' => if s == s' then Just e.actor else acc
+               _               => acc
+      else acc
+
 record Blocker where
   constructor MkBlocker
   blockingSlug : Slug
@@ -2163,6 +2228,20 @@ beliefSupersedeIdentityOk l e = case e.supersedes of
       PBelief _ _ _ _ _ _ _ _ _ => te.actor == e.actor
       _                         => True
 
+||| s69 §1 (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, row 201 items 1(a)/(b)):
+||| CLOSER-IS-CLAIMANT-OF-RECORD, an Entry-level fact for the identical reason
+||| beliefSupersedeIdentityOk lives here rather than in ValidPayload -- it needs the WRITER's own
+||| identity (e.actor), which the payload-only judgment cannot see. A work_closed row's actor must
+||| equal claimantOf l s -- including claimantOf l s = Nothing (a never-claimed slug), so `Just
+||| e.actor == Nothing` is False and an unclaimed close refuses with NO separate rule (row 201's
+||| own closure-statement AMENDMENT: claim-before-close is an ENTAILMENT of this premise). Per §0,
+||| claimantOf is bound to the CURRENT/latest claimant only -- a later claim (s47) always wins the
+||| fold, so this premise composes transparently with a higher authority's reclaim-then-close.
+closerIsClaimantOkB : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
+closerIsClaimantOkB l e = case e.payload of
+  PWorkClosed s _ _ _ _ _ => Just e.actor == claimantOf l s
+  _                       => True
+
 ||| s58 dedup (validate_missive_dedup): raw-HISTORY reads -- a superseded prior claim on the SAME
 ||| (thread, seq) still blocks a duplicate, the identical "slug burned" reasoning everOpened
 ||| already carries, one mechanism over.
@@ -2679,6 +2758,30 @@ bsReach l from = reach n bsEdges [from] [from]
             PWorkDepends dep ant BlocksStart => [(dep, ant)]
             _                                => []
 
+||| s69 §2 (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, row 201 item 1(b)): WITNESS-REF
+||| SHAPE PER CLOSE SHAPE. s48 already forecloses a DANGLING row:<id> citation by TYPE (WRRow :
+||| Fin n) -- this widens what an EXISTING cited row must additionally BE to count as evidence: a
+||| review (PReview) or finding (PProse KFinding), OR an in-force PWorkOpened row that names s
+||| (the closing slug) as ITS OWN parent (the planning-close carve-in -- a composite's discharge
+||| is witnessed by pointing at the child that carries the actual work, s33's own convention).
+||| WRCommit/WRArtifact stay untouched by construction (only a WRRow ever reaches the cited-kind
+||| branch below); DDeferred's own Maybe wrapper and DBookkeeping's CommitRef are threaded by
+||| case-splitting on `disp` FIRST so `ref`'s own constructor is known at the match site -- the
+||| identical idiom strictPremise (below) already uses for the same dependently-typed field.
+witnessShapeOk : {n : Nat} -> Ledger n -> Slug -> (disp : ReviewDisposition)
+              -> reviewRefTy disp n -> Bool
+witnessShapeOk l s DWitnessed (WRRow t)    = case entryAt l t of
+  (_ ** te) => case te.payload of
+    PReview _ _                => True
+    PProse KFinding            => True
+    PWorkOpened _ _ (Just p) _ => inForce l t && p == s
+    _                          => False
+witnessShapeOk l s DWitnessed (WRCommit _)   = True
+witnessShapeOk l s DWitnessed (WRArtifact _) = True
+witnessShapeOk l s DDeferred  Nothing        = True
+witnessShapeOk l s DDeferred  (Just wr)      = witnessShapeOk l s DWitnessed wr
+witnessShapeOk l s DBookkeeping _            = True
+
 ||| s29 Element C at the root: strict close needs a witnessed disposition and
 ||| an empty blocker set (IN-FORCE, via strictBlockers, §4); non-strict
 ||| closes carry no premise. s38's ELSIF: a strict BOOKKEEPING close is a
@@ -2708,8 +2811,12 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| the SQL trigger's own deeper check, not re-derived here (noted, not
   ||| hidden).
   VViolationDisposition : ValidPayload l (PViolationDisposition c t r w)
-  ||| regards earlier-row: already unrepresentable via Fin n (unchanged).
-  VReview : ValidPayload l (PReview r d)
+  ||| regards earlier-row: already unrepresentable via Fin n (unchanged). s69 §3: the regarded
+  ||| row must additionally carry NO in-force superseder -- `inForce l r` IS that premise (no new
+  ||| reader needed, see the s69 header note); a review of a superseded row is refused, teaching
+  ||| "cite the successor" (checkPayload below). A review regarding an in-force row -- including
+  ||| another IN-FORCE review, the s56 reservation-discharge shape -- is unaffected (r69f, §7).
+  VReview : (0 targetInForce : So (inForce l r)) -> ValidPayload l (PReview r d)
   ||| s43: a write_refused row's payload judgment carries no premise of its
   ||| own -- the SQL's guard on WHO may mint it (only the boundary's own
   ||| journaler; a caller-supplied kind='write_refused' is the refused forgery
@@ -2794,7 +2901,13 @@ data ValidPayload : {n : Nat} -> Ledger n -> Payload Draft n -> Type where
   ||| byte-for-byte); only what ROUTES a close into it widens. A composite
   ||| slug's close is therefore ALWAYS strict, regardless of the strict field
   ||| the writer supplied (r33a below: refused even at strict=False).
+  ||| s69 §2: witnessShapeOk is the NEW middle premise (row 201 item 1(b)) -- a row: witness must
+  ||| be evidence (review/finding) or an in-force child work_opened row, checked BEFORE the strict
+  ||| premise (checkPayload's own order below); r33a/r33b (unchanged fixtures) are RE-VERIFIED to
+  ||| still construct/refuse identically under the widened middle premise (r33b's own WRRow 1
+  ||| citation IS the child-carve-in, for free).
   VClose  : (0 opened   : So (everOpened l s))
+         -> (0 wsOk     : So (witnessShapeOk l s disp ref))
          -> (0 strictOk : So (strictPremise l s (strict || isComposite l s) disp))
          -> ValidPayload l (PWorkClosed s res w disp ref strict)
   ||| s53: NO type-level proof carried here, a scoped simplification named plainly: relating a
@@ -3023,6 +3136,7 @@ independenceScopeOkB l e = case e.payload of
 ||| target class.
 ||| Premise (h): s64 Elements 6/8, the two extra delegation conjuncts (depth-budget,
 ||| must-countersign), candidate class only.
+||| Premise (i): s69 §1, closer-is-claimant-of-record (closerIsClaimantOkB).
 boundaryOk : {n : Nat} -> Ledger n -> Entry Draft n -> Bool
 boundaryOk l e =
      actorStandingOkB l e
@@ -3034,6 +3148,7 @@ boundaryOk l e =
   && signatureSymmetryOk l e
   && entitlementOk l e
   && delegationConditionsOk l e (entitlementActClassOf l e)
+  && closerIsClaimantOkB l e
 
 ||| The sanctioned growth step: the write boundary as the ONLY exported
 ||| introduction form for a bigger ledger (in a multi-module rendering (:<)
@@ -3105,6 +3220,9 @@ data RefusalReason
   | RBeliefEdgeInvalid         -- (e') s53: a contests/concurs target fails kind/in-force/different-actor
   | RBeliefPremisesEmpty       -- s53: belief_premises_coupling's nonempty half, BDerived only
   | RMissiveDup                -- s58: (author_world, thread, seq) or (thread, seq) duplicate
+  | RCloseNotClaimant          -- (i) s69 §1: closer is not the slug's claimant-of-record
+  | RWitnessShapeInvalid       -- s69 §2: row: witness cites a row that is not evidence/child-open
+  | RReviewRegardsSuperseded   -- s69 §3: a review's regards target has an in-force superseder
 
 ||| Which SQL boundary function would have carried this write -- refusal
 ||| surfaces are per-FUNCTION (s43's closed CHECK), and the function is
@@ -3228,6 +3346,9 @@ refusalText RSupersedeMissiveDiscipline = MkNonEmptyText "missive supersession d
 refusalText RBeliefEdgeInvalid          = MkNonEmptyText "a belief's contests/concurs target must exist, be a belief, be unsuperseded, and belong to a different actor (s53)" Oh
 refusalText RBeliefPremisesEmpty        = MkNonEmptyText "a derived belief must cite at least one premise (s53 belief_premises_coupling)" Oh
 refusalText RMissiveDup                 = MkNonEmptyText "duplicate (author_world, thread, seq) or (thread, seq) -- missive dedup (s58)" Oh
+refusalText RCloseNotClaimant           = MkNonEmptyText "close of work item refused: closing actor is not the item's claimant-of-record (s69 §1) -- claim it first, or a higher authority reclaims then closes" Oh
+refusalText RWitnessShapeInvalid        = MkNonEmptyText "review-witness citation exists but is not evidence: not a review/finding, and not an in-force work_opened row of a CHILD of this closing item (s69 §2)" Oh
+refusalText RReviewRegardsSuperseded    = MkNonEmptyText "review refused: its regards target has an in-force superseder -- cite the successor instead (s69 §3)" Oh
 
 ||| SQLSTATE at headline altitude: the model journals every policy refusal as
 ||| P0001 (RAISE EXCEPTION's default). Per-arm granularity (23514 for CHECKs,
@@ -3259,7 +3380,10 @@ checkPayload : {n : Nat} -> (l : Ledger n) -> (p : Payload Draft n)
 checkPayload l (PProse k)                      = Right VProse
 checkPayload l (PDecision g)                   = Right VDecision
 checkPayload l (PViolationDisposition c t r w) = Right VViolationDisposition
-checkPayload l (PReview r d)                   = Right VReview
+checkPayload l (PReview r d) =
+  case chooseB (inForce l r) of
+    Left ok => Right (VReview ok)
+    Right _ => Left RReviewRegardsSuperseded
 checkPayload l (PWriteRefused q m sf disp d adisp aa ar kdisp ak) = Right VWriteRefused
 checkPayload l (PModelAttested t m g os jb he v ex) = Right VModelAttested
 checkPayload l (PPrincipalRegistered s c p)    = Right VPrincipalRegistered
@@ -3323,9 +3447,11 @@ checkPayload l (PWorkDepends s ant (Just BlocksStart)) =
 checkPayload l (PWorkClosed s res w disp ref strict) =
   case chooseB (everOpened l s) of
     Right _ => Left RCloseUnopened
-    Left op => case chooseB (strictPremise l s (strict || isComposite l s) disp) of
-      Left ok => Right (VClose op ok)
-      Right _ => Left RStrictUnresolved
+    Left op => case chooseB (witnessShapeOk l s disp ref) of
+      Right _   => Left RWitnessShapeInvalid
+      Left wsh  => case chooseB (strictPremise l s (strict || isComposite l s) disp) of
+        Left ok => Right (VClose op wsh ok)
+        Right _ => Left RStrictUnresolved
 checkPayload l (PBelief polarity basis universe witness source premises subject contests concurs) =
   if premisesNonEmptyOk basis premises
     then Right VBelief
@@ -3346,8 +3472,9 @@ checkPayload l (PKeyPossessionVerified fingerprint) = Right VKeyPossessionVerifi
 
 ||| Which entry-level premise refused (called only on the not-boundaryOk
 ||| path; total anyway -- the unreachable arms return the nearest reason).
-||| Extended (e)-(h) in boundaryOk's own && order: belief holder-identity, signature symmetry,
-||| entitlement (candidate then target class), the two delegation-conditions conjuncts.
+||| Extended (e)-(i) in boundaryOk's own && order: belief holder-identity, signature symmetry,
+||| entitlement (candidate then target class), the two delegation-conditions conjuncts, and
+||| (i) s69 §1's closer-is-claimant-of-record.
 boundaryReason : {n : Nat} -> Ledger n -> Entry Draft n -> RefusalReason
 boundaryReason l e =
   if      not (actorStandingOkB l e)    then RActorStanding
@@ -3360,6 +3487,7 @@ boundaryReason l e =
   else if not (entitlementEnforceClass l e.actor candClass) then REntitlementCandidate
   else if not (entitlementEnforceClass l e.actor targetClass) then REntitlementTarget
   else if not (candidateDepthOk) then REntitlementDepthBudget
+  else if not (closerIsClaimantOkB l e) then RCloseNotClaimant
   else REntitlementCountersign
   where
     candClass : Maybe ActClass
@@ -3728,7 +3856,7 @@ failing
 failing
   r8d : ValidPayload Autoharn.worldA
           (PWorkClosed "a" RDropped Nothing DDeferred Nothing True)
-  r8d = VClose Oh Oh
+  r8d = VClose Oh Oh Oh
 
 -- R2a RED: a WRITER-SUPPLIED grade is now unrepresentable, not just
 -- unconventional -- a Draft review's grade field has type ().
@@ -3816,17 +3944,20 @@ failing
   r33a : ValidPayload Autoharn.worldD
            (PWorkClosed "p" RDropped Nothing DWitnessed
               (WRRow 1) False)
-  r33a = VClose Oh Oh
+  r33a = VClose Oh Oh Oh
 
 -- R33b GREEN: the SAME composite close (strict=False, worldE this time --
 -- child "c1" now closed) succeeds, because composite-ness routed it into the
 -- strict branch and the obligation tree IS resolved -- "the type sets the
 -- flag" (spec's own words) does not mean composite closes are unconditionally
--- refused, only that they are unconditionally strict.
+-- refused, only that they are unconditionally strict. s69 §2, RE-VERIFIED: the
+-- WRRow 1 citation here IS the planning-close carve-in for free -- row 1 (in
+-- BOTH worldD/worldE) is c1's own work_opened row naming "p" as its parent, so
+-- witnessShapeOk now ALSO holds (the middle Oh below), never just strictOk.
 r33b : ValidPayload Autoharn.worldE
          (PWorkClosed "p" RDropped Nothing DWitnessed
             (WRRow 1) False)
-r33b = VClose Oh Oh
+r33b = VClose Oh Oh Oh
 
 -- ===========================================================================
 -- §7b  THE s36-s41 PARITY FIXTURES (both polarities per new mechanism; a
@@ -3894,7 +4025,7 @@ failing
   r38 : ValidPayload Autoharn.worldA
           (PWorkClosed "a" RDropped Nothing DBookkeeping
              (MkCommitRef "commit:abc1234" Oh) True)
-  r38 = VClose Oh Oh
+  r38 = VClose Oh Oh Oh
 
 -- s39: blocks-start claim-time foreclosure.
 worldBS : Ledger 3
@@ -4741,3 +4872,129 @@ w65a = Refl
 w65b : headAttemptedKind (write 9 Autoharn.wbRole Autoharn.worldP (mkD 3 Nothing (PPrincipalSuspended 2 True)))
      = Nothing
 w65b = Refl
+
+-- ===========================================================================
+-- §7d  THE s69 FIXTURES (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, ledger row 201):
+--      both polarities per refusal, matching the b41/b64/w65 idiom above (a direct Refl equality
+--      on the entry-level premise/reader, no `failing` block needed for the entry-level checks --
+--      the SAME reason b41a-e need none) plus `failing`/ValidPayload constructions for the two
+--      payload-level premises (witnessShapeOk, VReview's targetInForce).
+-- ===========================================================================
+
+-- s69 §1: claimant-of-record, the defeat-and-reclaim path (§0).
+-- worldCC: "cc" opened (row0) and claimed by actor 1 (row1).
+worldCC : Ledger 2
+worldCC = Lin :< mkE 1 Nothing (PWorkOpened "cc" "t" Nothing False)
+              :< mkE 1 Nothing (PWorkClaimed "cc")
+
+-- worldCC2: a HIGHER AUTHORITY (actor 2) reclaims "cc" (row2) -- s47's own legal claim-stealing,
+-- no supersession needed; claimantOf's own last-in-force-match fold picks it up for free.
+worldCC2 : Ledger 3
+worldCC2 = worldCC :< mkE 2 Nothing (PWorkClaimed "cc")
+
+-- worldNC: "nc" opened, NEVER claimed.
+worldNC : Ledger 1
+worldNC = Lin :< mkE 1 Nothing (PWorkOpened "nc" "t" Nothing False)
+
+-- g69a-c GREEN/Refl: claimantOf resolves to the LATEST in-force claimant, and to Nothing when
+-- the slug was never claimed at all (the entailment's own premise).
+g69a : claimantOf Autoharn.worldCC "cc" = Just 1
+g69a = Refl
+g69b : claimantOf Autoharn.worldCC2 "cc" = Just 2   -- the reclaim wins
+g69b = Refl
+g69c : claimantOf Autoharn.worldNC "nc" = Nothing
+g69c = Refl
+
+-- b69a-e GREEN/RED: boundaryOk flips on closerIsClaimantOkB alone (every other premise is
+-- vacuously True for a plain, non-composite, non-supersession, non-blocks-start close).
+b69a : boundaryOk Autoharn.worldCC
+         (mkD 1 Nothing (PWorkClosed "cc" RDropped Nothing DDeferred Nothing False)) = True
+b69a = Refl   -- the claimant closes: legal
+b69b : boundaryOk Autoharn.worldCC
+         (mkD 2 Nothing (PWorkClosed "cc" RDropped Nothing DDeferred Nothing False)) = False
+b69b = Refl   -- a stranger closes: refused
+b69c : boundaryOk Autoharn.worldCC2
+         (mkD 2 Nothing (PWorkClosed "cc" RDropped Nothing DDeferred Nothing False)) = True
+b69c = Refl   -- the RECLAIMER closes: legal -- defeat-and-reclaim composes for free
+b69d : boundaryOk Autoharn.worldCC2
+         (mkD 1 Nothing (PWorkClosed "cc" RDropped Nothing DDeferred Nothing False)) = False
+b69d = Refl   -- the DEFEATED former claimant can no longer close
+b69e : boundaryOk Autoharn.worldNC
+         (mkD 1 Nothing (PWorkClosed "nc" RDropped Nothing DDeferred Nothing False)) = False
+b69e = Refl   -- THE ENTAILMENT: a never-claimed close refuses with no separate rule
+
+-- s69 §2: witness-ref shape per close shape.
+-- worldWS: "p" (composite parent, row0); "c" (row1, a CHILD of "p" -- legal witness); "sib"
+-- (row2, an UNRELATED work_opened -- illegal witness for "p" OR "sib" itself); a review of row0
+-- (row3, legal witness); a work_claimed row on "sib" (row4 -- the autoharn2 row-1265 specimen,
+-- illegal witness: a claim is not evidence).
+worldWS : Ledger 5
+worldWS = Lin :< mkE 1 Nothing (PWorkOpened "p" "parent" Nothing True)
+              :< mkE 1 Nothing (PWorkOpened "c" "child" (Just "p") False)
+              :< mkE 1 Nothing (PWorkOpened "sib" "sibling" Nothing False)
+              :< mkE 2 Nothing (PReview 0 (MkReviewDetail Attest Technical
+                                   "reviewed p's opening" Nothing DistinctSession))
+              :< mkE 3 Nothing (PWorkClaimed "sib")
+
+-- g69d-j GREEN/RED/Refl: witnessShapeOk, every named leg.
+g69d : witnessShapeOk Autoharn.worldWS "p" DWitnessed (WRRow 1) = True    -- child-of-"p" carve-in
+g69d = Refl
+g69e : witnessShapeOk Autoharn.worldWS "p" DWitnessed (WRRow 2) = False   -- "sib" is not p's child
+g69e = Refl
+g69f : witnessShapeOk Autoharn.worldWS "sib" DWitnessed (WRRow 3) = True  -- a review is evidence
+g69f = Refl
+g69g : witnessShapeOk Autoharn.worldWS "sib" DWitnessed (WRRow 1) = False -- "c" is p's child, not sib's
+g69g = Refl
+g69h : witnessShapeOk Autoharn.worldWS "sib" DWitnessed (WRRow 4) = False -- a claim is not evidence (1265)
+g69h = Refl
+g69i : witnessShapeOk Autoharn.worldWS "p" DDeferred (Just (WRRow 1)) = True
+g69i = Refl
+g69j : witnessShapeOk Autoharn.worldWS "p" DDeferred (Just (WRRow 2)) = False
+g69j = Refl
+
+-- r69a RED: a close of "sib" citing the bare work_claimed row (row4) is refused -- witnessShapeOk
+-- fails (g69h), so wsOk (the middle Oh) does not typecheck.
+failing
+  r69a : ValidPayload Autoharn.worldWS (PWorkClosed "sib" RDropped Nothing DWitnessed (WRRow 4) False)
+  r69a = VClose Oh Oh Oh
+
+-- r69b GREEN: the SAME close of "sib", citing the review (row3) instead -- legal evidence.
+r69b : ValidPayload Autoharn.worldWS (PWorkClosed "sib" RDropped Nothing DWitnessed (WRRow 3) False)
+r69b = VClose Oh Oh Oh
+
+-- r69c RED: closing composite "p" citing "sib"'s work_opened row (row2) -- exists, but names the
+-- WRONG parent (Nothing, not "p") -- the non-child-work_opened polarity of the same premise
+-- r33a/r33b's own WRRow 1 citation witnesses GREEN (§7, re-verified above).
+failing
+  r69c : ValidPayload Autoharn.worldWS (PWorkClosed "p" RDropped Nothing DWitnessed (WRRow 2) False)
+  r69c = VClose Oh Oh Oh
+
+-- s69 §3: review-regards-in-force.
+-- worldRV: row0 an assumption; row1 supersedes row0 -- row0 now has an in-force superseder.
+worldRV : Ledger 2
+worldRV = Lin :< mkE 1 Nothing (PProse KAssumption)
+              :< mkE 1 (Just 0) (PProse KRevision)
+
+-- r69d RED: a review regarding the now-SUPERSEDED row0 is refused -- targetInForce demands
+-- So (inForce worldRV 0) = So False, uninhabited.
+failing
+  r69d : ValidPayload Autoharn.worldRV (PReview 0 (MkReviewDetail Attest Technical "stale" Nothing ()))
+  r69d = VReview Oh
+
+-- r69e GREEN: a review regarding row1 (in force, nothing supersedes it) constructs. (Draft grade
+-- is (), the R2a idiom above -- a DRAFT review's grade field is unrepresentable as anything else.)
+r69e : ValidPayload Autoharn.worldRV (PReview 1 (MkReviewDetail Attest Technical "current" Nothing ()))
+r69e = VReview Oh
+
+-- worldRV2: world RV + a review regarding row1 (row2, itself in force) -- the s56 reservation-
+-- discharge SHAPE (a review regarding an in-force review), spec §1 item 3's own disclosed
+-- non-scope.
+worldRV2 : Ledger 3
+worldRV2 = worldRV :< mkE 2 Nothing
+              (PReview 1 (MkReviewDetail Attest Technical "reservation-ish" Nothing DistinctSession))
+
+-- r69f GREEN: a review REGARDING A REVIEW, both in force -- unaffected by §3 (its own regards
+-- target, row2, carries no superseder at all), matching the spec's own disclosed scope.
+r69f : ValidPayload Autoharn.worldRV2
+         (PReview 2 (MkReviewDetail Attest Technical "review of a review, in force (s56 shape)" Nothing ()))
+r69f = VReview Oh
