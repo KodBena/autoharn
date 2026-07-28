@@ -809,6 +809,113 @@ def main() -> int:
                   f"{row_set_equal(stripped, direct)}",
                   failures)
 
+        # ==================== WR9: round-2 CRITICAL-adjacent finding (ledger rows 153/154,
+        # coordinator's SECOND fresh-context re-review) -- byte-identical rows within a
+        # non-unique-key group are REACHABLE UNDER ORDINARY USE (the same reviewer double-
+        # attesting the same row; nothing in the kernel refuses a repeat attest), not dormant.
+        # See _nonunique_tie_group_sql's own docstring (serving/boundary_service.py) for the
+        # full analysis this witness proves out empirically. ==================================
+        print("== WR9: byte-identical rows within a tie group -- atomic-group fix ==")
+
+        def attest_note(regards_row_id: int, reviewer_id: int) -> dict:
+            status, rv = bs_fixtures.http_post(f"{base}/write/review", {
+                "regards": regards_row_id, "statement": "wr9 repeat attest", "verdict": "attest",
+                "independence": "self-review", "basis": "wr9 fixture", "actor": reviewer_id})
+            if status != 200 or rv.get("disposition") != "accepted":
+                raise RuntimeError(f"wr9 review refused: status={status} body={rv}")
+            return rv
+
+        def fresh_note_and_reviewer(tag: str) -> tuple[int, int]:
+            status, note = bs_fixtures.http_post(f"{base}/write/ledger", {
+                "kind": "note", "statement": f"wr9 {tag} note {RUN_SUFFIX}", "actor": author})
+            if status != 200 or note.get("disposition") != "accepted":
+                raise RuntimeError(f"wr9 note refused: status={status} body={note}")
+            status, reg = bs_fixtures.http_post(f"{base}/write/registration", {
+                "name": f"wr9-{tag}-{RUN_SUFFIX}", "agent_class": "tool", "actor": author,
+                "purpose": f"wr9 {tag} reviewer principal"})
+            if status != 200 or reg.get("disposition") != "accepted":
+                raise RuntimeError(f"wr9 registration refused: status={status} body={reg}")
+            rid = int(bs_fixtures.psql_tuples(
+                f"SET ROLE {world}_rw; SELECT id FROM {world}_kernel.principal "
+                f"WHERE name = 'wr9-{tag}-{RUN_SUFFIX}';"))
+            return int(note["row_id"]), rid
+
+        # ---- WR9a: the reviewer's OWN exact reproduction -- one reviewer attests the SAME row
+        # TWICE. discharging_attest's own column list is (regards_id, reviewer) ONLY, so two
+        # attests by the same reviewer on the same row are byte-identical BY CONSTRUCTION (no
+        # need to also match statement/basis text -- those columns are not even projected).
+        note_a, reviewer_a = fresh_note_and_reviewer("wr9a")
+        attest_note(note_a, reviewer_a)
+        attest_note(note_a, reviewer_a)
+        direct_a = direct_view_rows(world, "discharging_attest")
+        twins_a = [r for r in direct_a if r["regards_id"] == note_a]
+        paginated_a = walk_paginated(base, "discharging_attest", "regards_id", "id", limit=1)
+        twins_paginated_a = [r for r in paginated_a if r["regards_id"] == note_a]
+        check("wr9a-double-attest-both-rows-served",
+              len(twins_a) == 2 and len(paginated_a) == len(direct_a)
+              and len(twins_paginated_a) == 2
+              and row_set_equal(twins_paginated_a, twins_a),
+              f"note_a={note_a} direct_twins={len(twins_a)} paginated_twins="
+              f"{len(twins_paginated_a)} direct_total={len(direct_a)} "
+              f"paginated_total={len(paginated_a)} multiset_equal="
+              f"{row_set_equal(twins_paginated_a, twins_a)}",
+              failures)
+
+        # ---- WR9b: three byte-identical rows (not just two) -- the atomic-group fix must not
+        # be a two-only special case.
+        note_b, reviewer_b = fresh_note_and_reviewer("wr9b")
+        attest_note(note_b, reviewer_b)
+        attest_note(note_b, reviewer_b)
+        attest_note(note_b, reviewer_b)
+        direct_b = direct_view_rows(world, "discharging_attest")
+        triplets_b = [r for r in direct_b if r["regards_id"] == note_b]
+        paginated_b = walk_paginated(base, "discharging_attest", "regards_id", "id", limit=1)
+        triplets_paginated_b = [r for r in paginated_b if r["regards_id"] == note_b]
+        check("wr9b-triple-identical-rows-all-served",
+              len(triplets_b) == 3 and len(paginated_b) == len(direct_b)
+              and len(triplets_paginated_b) == 3
+              and row_set_equal(triplets_paginated_b, triplets_b),
+              f"note_b={note_b} direct_triplets={len(triplets_b)} paginated_triplets="
+              f"{len(triplets_paginated_b)} direct_total={len(direct_b)} "
+              f"paginated_total={len(paginated_b)} multiset_equal="
+              f"{row_set_equal(triplets_paginated_b, triplets_b)}",
+              failures)
+
+        # ---- WR9c: the mid-walk append case, constructed so the append lands on a group the
+        # cursor has NOT YET REACHED (never on one already passed -- that is the SAME
+        # pre-existing, already-disclosed "behind the cursor" residual A11 already names, not
+        # what this leg tests). note_y (attested ONCE) sorts BEFORE note_x (created after it,
+        # so its own ledger id -- discharging_attest's own key column -- is numerically
+        # greater); walk reaches note_y's own singleton group FIRST, THEN -- between that page
+        # response and the next request -- note_x is attested TWICE (a brand-new, two-member
+        # group, entirely unwritten when the walk started), and the immediately following page
+        # request must serve BOTH note_x rows together, in one page, with no drop.
+        note_y, reviewer_y = fresh_note_and_reviewer("wr9c-y")
+        attest_note(note_y, reviewer_y)
+        status_p1, page1 = bs_fixtures.http_get(
+            f"{base}/views/discharging_attest?limit=1&after_id={note_y - 1}")
+        if status_p1 != 200 or not isinstance(page1, list) or len(page1) != 1 \
+           or page1[0]["regards_id"] != note_y:
+            raise RuntimeError(
+                f"wr9c setup failed to isolate note_y's own page: status={status_p1} "
+                f"page={page1} note_y={note_y}")
+        cursor_id, cursor_tie = page1[0]["regards_id"], page1[0].get("_page_tie", "")
+        # THE APPEND -- happens HERE, between the request that served note_y's page and the
+        # request that will serve note_x's page below. note_x does not exist in ANY form yet.
+        note_x, reviewer_x = fresh_note_and_reviewer("wr9c-x")
+        attest_note(note_x, reviewer_x)
+        attest_note(note_x, reviewer_x)
+        status_p2, page2 = bs_fixtures.http_get(
+            f"{base}/views/discharging_attest?limit=1&after_id={cursor_id}&after_tie={cursor_tie}")
+        check("wr9c-mid-walk-append-not-yet-reached-group-served-whole",
+              status_p2 == 200 and isinstance(page2, list) and len(page2) == 2
+              and all(r["regards_id"] == note_x for r in page2)
+              and row_set_equal(page2, [r for r in direct_view_rows(world, "discharging_attest")
+                                          if r["regards_id"] == note_x]),
+              f"status={status_p2} page2_n={len(page2) if isinstance(page2, list) else '?'} "
+              f"page2={page2} note_x={note_x}",
+              failures)
+
         # ==================== WR7: MODERATE finding (ledger rows 153/154) -- countersigned_in_
         # force's TRUE s68 shape, a separate minimal world (the s61 blocker skipped by construction,
         # never attempting the one act -- principal_key_bound -- s61 constrains) =================

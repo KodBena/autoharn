@@ -541,10 +541,37 @@ BOUNDARY_SERVICE_VERSION = "1.4.0"
 # red.txt). `after_tie` is strictly typed (empty, or exactly 32 lowercase hex chars -- an md5
 # digest's own shape) and refused, typed 422, on a unique-key view (meaningless there, never
 # silently ignored -- A10's own lesson, extended a third time) or on a malformed value (never
-# guessed at). The one further-honest residual this fix does NOT close: two rows that are
-# BYTE-IDENTICAL in every column (not merely sharing the key) still collide on `_page_tie` too --
-# an unaddressable case without a real per-row id the view does not carry; unreached by every
-# reproduction on file, named rather than silently assumed away.
+# guessed at).
+#
+# ROUND 2 (coordinator's second fresh-context re-review of 6a104c0+15b2f78): round 1's own text
+# here called the byte-identical-row case "unreached by every reproduction on file" -- WRONG,
+# live-corrected. The reviewer constructed it with an ORDINARY write sequence (the same
+# reviewer attesting the same regarded row twice; nothing in the kernel refuses a repeat
+# attest), witnessed `discharging_attest` emit two rows identical including `_page_tie`, and
+# watched a `limit=1` walk silently drop one forever (`> cursor` excludes BOTH twins once one
+# is served, since they compare equal). REACHABLE UNDER ORDINARY USE, not dormant -- the class
+# is now closed for real, not merely disclosed. `_nonunique_tie_group_sql`'s own docstring has
+# the full analysis (including why a third `row_number()` ordinal was evaluated and REJECTED as
+# unsound under a mid-walk append, and the mid-walk-append case worked through in full); the
+# short version: a byte-identical CONTENT GROUP is now served ATOMICALLY, never split across a
+# page, so there is no per-row discriminator to manufacture at all -- `limit` becomes a soft
+# floor for a non-unique-key view (a page may carry more rows than requested, by exactly the
+# straddling group's own size), bounded by `MAX_TIE_GROUP_EXTRA_ROWS` against a pathologically
+# large duplicate-content group (a typed `tie_group_too_large` refusal, never an unbounded
+# response). Witnessed (seen-red/boundary-read-surface/red.txt's own round-2 section): the
+# reviewer's exact double-attest reproduction (paginated_total == direct_total == 2, BOTH rows
+# served, multiset-equal); a three-identical-rows case; the mid-walk-append case itself (walk
+# page 1, append a byte-identical twin, walk the remainder -- no drop, the twin joins whichever
+# page reaches that group's boundary); the full 54-check round-1 suite still green; a
+# unique-key view still byte-identical (no ordinal/tie leakage of any kind).
+#
+# A cheap, NON-blocking, PRE-EXISTING observation folded in from this same review round: an
+# unbound/unrecognized query parameter is silently dropped SERVICE-WIDE by this file's own
+# FastAPI routing (e.g. `after_tie` supplied on `/rows/current`, a route that never declares
+# it, or any unknown param on any route here) -- ordinary FastAPI/Starlette behavior, not
+# specific to this fix, and not addressed here (service-wide param strictness is its own,
+# separate commission; named so it is not silently unnoticed, per the SAME "surface a hazard
+# you see, don't silently pass it" reflex this whole fix round is an instance of).
 #
 # Key-column choice, per entry, named once here rather than re-derived per request:
 #   question_status.question_id           -- kernel/lineage/s31 (q.id, a ledger row id, aliased).
@@ -895,6 +922,19 @@ BODY_READ_TIMEOUT_S = 30
 # A5.2 reuses this SAME constant to bound integer-typed WRITE-payload fields too (the id-domain
 # class, completed from path/query onto the write body).
 MAX_ID = 2**63 - 1
+
+# Round-2 fix (ledger rows 153/154, coordinator's second fresh-context re-review of 6a104c0+
+# 15b2f78): a byte-identical-content tie group (see `views_view`'s non-unique-key branch and
+# VIEW_REGISTRY's own leading comment for the full reasoning) is served ATOMICALLY -- never
+# split across a page -- which means a page can legitimately carry more rows than `limit` asked
+# for, by however many extra members the tie group at the page boundary happens to have. This
+# is the ONE named exception to the transport-level `1 <= limit <= 1000` bound every other route
+# in this file enforces. MAX_TIE_GROUP_EXTRA_ROWS bounds how far that exception is allowed to
+# stretch: if the group truly has more members than this, the boundary refuses the page loudly
+# (ADR-0002) rather than serve an unboundedly large response -- a pathologically large content-
+# identical group (an actor writing the same duplicate act thousands of times) is a real,
+# if unlikely, denial-of-service shape a keyset route must not absorb silently.
+MAX_TIE_GROUP_EXTRA_ROWS = 1000
 
 # A9: the concurrency admission bound (ADR-0012 P1: one named constant, not a per-handler
 # literal). Deliberately UNDER the ASGI threadpool's own default concurrency (anyio's 40 tokens
@@ -1892,6 +1932,110 @@ def _composite_cursor_tie_format_failure(name: str, value: str) -> JSONResponse 
                   f"or omitted; got {value!r}"})
 
 
+def _nonunique_tie_group_sql(schema: str, view: str, key_col: str, cursor_key_sql: str,
+                              limit: int) -> str:
+    """Round-2 fix (ledger rows 153/154, coordinator's second fresh-context re-review of
+    6a104c0+15b2f78). The reviewer constructed the round-1 fix's own disclosed residual LIVE:
+    two rows byte-identical in EVERY column (same `key_col` AND same `_page_tie`, since
+    `_page_tie` is derived from the row's own full content) are genuinely indistinguishable --
+    no per-row discriminator exists in the view's own output, and NONE can be manufactured
+    stably. A THIRD cursor component (a `row_number() OVER (PARTITION BY key_col, _page_tie
+    ORDER BY <a constant>)` ordinal, the reviewer's own first candidate to evaluate) was
+    considered and REJECTED here: Postgres does not guarantee a stable row-to-ordinal
+    assignment across SEPARATE query executions when the ORDER BY carries no real ordering
+    key (only a same-execution guarantee) -- a byte-identical twin ARRIVING between two page
+    requests (the ledger is append-only; nothing refuses a second identical write) can grow the
+    group's membership between the query that computed page N's cursor and the query that
+    computes page N+1, and the ordinal each physical row receives is then free to reshuffle: a
+    row NOT YET served can be assigned an ordinal at or below the already-passed cursor
+    position, which the `WHERE ordinal > cursor_ordinal` predicate then EXCLUDES FOREVER -- a
+    silent, permanent drop, worked through by hand across every possible reshuffle in this
+    fix's own commit message. The ordinal candidate is UNSOUND under the exact mid-walk-append
+    case the coordinator asked to be reasoned through; it is not used.
+
+    THE ACTUAL FIX needs no per-row discriminator at all: a byte-identical CONTENT GROUP
+    (every row sharing this key_col value AND this exact `_page_tie`) is served ATOMICALLY --
+    NEVER split across a page. `page` is the raw `LIMIT`-bounded fetch; `cutoff` is the last
+    row `page` actually contains; the outer SELECT then serves every row in `filtered` up to
+    AND INCLUDING the full `cutoff` group, not merely whatever fraction of it `LIMIT` happened
+    to cut off mid-group -- so a page never ends inside a tie group, and there is no notion of
+    "some group members served, some not" for an ordinal to ever have to break a tie within.
+    This makes `limit` a SOFT floor for a non-unique-key view (a page MAY carry more rows than
+    requested, by exactly the size of its own boundary group) -- disclosed here and in
+    VIEW_REGISTRY's own comment, and bounded by `MAX_TIE_GROUP_EXTRA_ROWS` (`_tie_group_too_
+    large`'s own docstring) against a pathologically large duplicate-content group.
+
+    THE MID-WALK-APPEND CASE, worked through explicitly (this is what round-3 review will
+    attack first, per the coordinator's own framing, so it is worked through here in full
+    rather than asserted): a NEW byte-identical twin can only ever land in ONE of two temporal
+    relationships to a client's in-flight walk, cut along the SAME (key_col, _page_tie) pair
+    every page boundary is drawn on:
+      (a) It arrives for a group the cursor has NOT YET REACHED (the client has not yet
+          requested the page whose boundary would include that group). When that page IS
+          requested, the query re-evaluates `filtered`/`page`/`cutoff` FRESH, sees the NOW-
+          LARGER group, and serves the WHOLE group -- old member(s) and the new twin together,
+          atomically, in that one page. No drop; the twin is served exactly once, alongside its
+          siblings, on the FIRST request that reaches that group's boundary.
+      (b) It arrives for a group the cursor has ALREADY PASSED (the client's own `after_tie`/
+          `after_id`/`after_slug` cursor is already strictly greater than that group's own
+          (key_col, _page_tie) pair). This twin is EXCLUDED from the remainder of THIS walk --
+          but this is NOT a new hazard this fix introduces: it is the IDENTICAL, already-
+          disclosed residual A11 already names for `/work/items`' own `after_slug` keyset ("a
+          row inserted BEHIND an in-flight cursor is not visible to THAT walk -- no snapshot-
+          free scheme over a non-append-monotonic key can promise otherwise -- it simply joins
+          the NEXT walk"), extended here from "a row with a new key value" to "a row with a
+          value tying an already-passed key". EVERY keyset-paginated route in this file --
+          unique-key or not -- already carries this exact class of residual; this fix neither
+          creates it nor makes it worse for the non-unique case.
+    There is NO third case: a group's own (key_col, _page_tie) pair is a fixed coordinate on
+    the SAME total order every page's WHERE/ORDER BY already walks, so "the cursor is mid-way
+    through consuming this exact group, with some members served and some not" cannot occur --
+    the atomic-extension design is exactly what forecloses that state from ever existing, which
+    is why no per-row ordinal is needed to break a tie WITHIN it. The class is CLOSED for the
+    append-before-reaching case (a), and the residual for the append-behind-cursor case (b) is
+    the SAME pre-existing, already-disclosed one every other view already lives with -- not a
+    new, silently-introduced gap.
+
+    `cursor_key_sql` is a caller-validated SQL fragment (a checked-int literal for an id-shaped
+    key, or a bound `:'after_slug'` placeholder for a slug-shaped key) -- never unvalidated
+    caller text. `limit` is the ALREADY-validated `1 <= limit <= 1000` value; the group
+    extension is deliberately NOT included in that same bound (see MAX_TIE_GROUP_EXTRA_ROWS'
+    own docstring for the separate, wider bound that governs it instead)."""
+    return (
+        f"WITH candidate AS ("
+        f"  SELECT v.*, md5(v::text) AS _page_tie FROM {schema}.{view} v"
+        f"), filtered AS ("
+        f"  SELECT * FROM candidate "
+        f"  WHERE ({key_col}, _page_tie) > ({cursor_key_sql}, :'after_tie')"
+        f"), page AS ("
+        f"  SELECT * FROM filtered ORDER BY {key_col}, _page_tie LIMIT {limit}"
+        f"), cutoff AS ("
+        f"  SELECT {key_col} AS ck, _page_tie AS ct FROM page "
+        f"  ORDER BY {key_col} DESC, _page_tie DESC LIMIT 1"
+        f") "
+        f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}, t._page_tie), '[]'::jsonb) "
+        f"FROM filtered t, cutoff c "
+        f"WHERE (t.{key_col}, t._page_tie) <= (c.ck, c.ct);"
+    )
+
+
+def _tie_group_too_large(view: str, extra: int) -> JSONResponse:
+    """Round-2 fix (ledger rows 153/154): the loud refusal `views_view`'s non-unique-key branch
+    returns instead of serving an unboundedly large page when the byte-identical content group
+    at the page boundary has more members than `MAX_TIE_GROUP_EXTRA_ROWS` can atomically extend
+    past. Typed, named disposition (the same shape `capability_absent`/`unknown_view` already
+    establish) rather than a generic 500 -- this is a boundary-enforced business rule, not a
+    psql-level failure the A4 exception net would otherwise classify."""
+    return JSONResponse(status_code=500, content={
+        "disposition": "tie_group_too_large",
+        "view": view,
+        "message": f"GET /views/{view}: the byte-identical row group at this page's own "
+                   f"boundary has {extra} more member(s) than this boundary's own "
+                   f"MAX_TIE_GROUP_EXTRA_ROWS={MAX_TIE_GROUP_EXTRA_ROWS} bound -- refused rather "
+                   f"than served as one unboundedly large page (ADR-0002); this is a real, if "
+                   f"unlikely, denial-of-service shape a keyset route must not absorb silently."})
+
+
 def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
     """A11 item 2: the leading existence check `GET /rows/{id}/history` shares with its sibling
     `GET /rows/{id}` -- named ONCE (ADR-0012 P1) so a nonexistent in-domain id gets the IDENTICAL
@@ -2851,12 +2995,15 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             )
             return JSONResponse(content=rows)
 
-        # NON-UNIQUE key: the fix-round composite (key_col, _page_tie) keyset (ledger rows
-        # 153/154, CRITICAL finding, coordinator fresh-context review of commit 6a104c0) -- see
-        # VIEW_REGISTRY's own leading comment for the full reasoning. `_page_tie` is `md5(the row
-        # ::text)`, computed once in an inner subquery and carried through to the served output
-        # as an extra field every non-unique-key view's response now legibly carries -- the
-        # client-visible cursor contract change the fix round discloses, never silent.
+        # NON-UNIQUE key: the round-2 atomic-tie-group keyset (ledger rows 153/154 -- round 1's
+        # CRITICAL finding fixed the plain-non-unique-key case; round 2's CRITICAL-adjacent
+        # finding closed the byte-identical-row residual round 1 left open. See VIEW_REGISTRY's
+        # own leading comment and `_nonunique_tie_group_sql`'s own docstring for the full
+        # reasoning, including the mid-walk-append analysis and why a THIRD ordinal cursor
+        # component is NOT used.). `_page_tie` is `md5(the row::text)`, carried through to the
+        # served output as an extra field every non-unique-key view's response now legibly
+        # carries -- the client-visible cursor contract change the fix round discloses, never
+        # silent.
         tie_fmt_err = _composite_cursor_tie_format_failure("after_tie", after_tie)
         if tie_fmt_err is not None:
             return tie_fmt_err
@@ -2871,44 +3018,38 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 return oor
             rows = _query_json(
                 cfg,
-                f"SELECT coalesce(jsonb_agg(t2 ORDER BY t2.{key_col}, t2._page_tie), "
-                f"'[]'::jsonb) FROM "
-                f"(SELECT * FROM ("
-                f"   SELECT v.*, md5(v::text) AS _page_tie FROM {cfg.schema}.{view} v"
-                f" ) inner_t "
-                f"WHERE (inner_t.{key_col}, inner_t._page_tie) > ({after_id}, :'after_tie') "
-                f"ORDER BY inner_t.{key_col}, inner_t._page_tie "
-                f"LIMIT {limit}) t2;",
+                _nonunique_tie_group_sql(cfg.schema, view, key_col, str(after_id), limit),
                 extra_v={"after_tie": after_tie},
             )
-            return JSONResponse(content=rows)
-        # key_kind == "slug", non-unique.
-        if after_id:
-            return JSONResponse(status_code=422, content={
-                "detail": f"after_id is not accepted on GET /views/{view} -- this view pages on "
-                          f"after_slug (a text-shaped key, {view}.{key_col}); got "
-                          f"after_id={after_id}, resupply as after_slug=<last-served-value> "
-                          f"instead"})
-        after_slug_bytes = len(after_slug.encode("utf-8"))
-        if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
-            return JSONResponse(status_code=422, content={
-                "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
-                          f"{after_slug_bytes} bytes"})
-        repr_oor = _query_string_representability_failure("after_slug", after_slug)
-        if repr_oor is not None:
-            return repr_oor
-        rows = _query_json(
-            cfg,
-            f"SELECT coalesce(jsonb_agg(t2 ORDER BY t2.{key_col}, t2._page_tie), "
-            f"'[]'::jsonb) FROM "
-            f"(SELECT * FROM ("
-            f"   SELECT v.*, md5(v::text) AS _page_tie FROM {cfg.schema}.{view} v"
-            f" ) inner_t "
-            f"WHERE (inner_t.{key_col}, inner_t._page_tie) > (:'after_slug', :'after_tie') "
-            f"ORDER BY inner_t.{key_col}, inner_t._page_tie "
-            f"LIMIT {limit}) t2;",
-            extra_v={"after_slug": after_slug, "after_tie": after_tie},
-        )
+        else:
+            # key_kind == "slug", non-unique.
+            if after_id:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_id is not accepted on GET /views/{view} -- this view pages "
+                              f"on after_slug (a text-shaped key, {view}.{key_col}); got "
+                              f"after_id={after_id}, resupply as after_slug=<last-served-value> "
+                              f"instead"})
+            after_slug_bytes = len(after_slug.encode("utf-8"))
+            if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
+                              f"{after_slug_bytes} bytes"})
+            repr_oor = _query_string_representability_failure("after_slug", after_slug)
+            if repr_oor is not None:
+                return repr_oor
+            rows = _query_json(
+                cfg,
+                _nonunique_tie_group_sql(cfg.schema, view, key_col, ":'after_slug'", limit),
+                extra_v={"after_slug": after_slug, "after_tie": after_tie},
+            )
+        # MAX_TIE_GROUP_EXTRA_ROWS' own bound: a page legitimately exceeds `limit` ONLY by the
+        # size of the byte-identical group straddling its own boundary (never for any other
+        # reason -- `_nonunique_tie_group_sql`'s own docstring proves this). If that extension
+        # is itself pathologically large, refuse loudly rather than serve it.
+        if isinstance(rows, list) and len(rows) > limit:
+            extra = len(rows) - limit
+            if extra > MAX_TIE_GROUP_EXTRA_ROWS:
+                return _tie_group_too_large(view, extra)
         return JSONResponse(content=rows)
 
     @app.get("/d/{deployment}/rows/asof/{ts}")

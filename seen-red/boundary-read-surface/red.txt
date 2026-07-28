@@ -244,3 +244,96 @@ Full GREEN transcript (same commit, same live toy db):
           refusal_attempted_actor_disposition present per row)
 
    Full boundary-service family (W1-W36m) re-run clean after the fix, no regressions.
+
+5. ROUND 2 (coordinator's SECOND fresh-context re-review of 6a104c0+15b2f78, CRITICAL-adjacent
+   finding). Round 1's own text (both in VIEW_REGISTRY's comment and this file's own commit
+   message) called the byte-identical-row case "unreached by every reproduction on file" --
+   WRONG. The reviewer constructed it LIVE with an ordinary write sequence: the SAME reviewer
+   attesting the SAME regarded row TWICE (nothing in the kernel refuses a repeat attest), and
+   watched `discharging_attest` emit two rows identical in EVERY column INCLUDING `_page_tie`
+   (round 1's own content tiebreaker, `md5(row::text)`, is by definition identical for two
+   byte-identical rows) -- a `limit=1` walk then silently dropped one forever, because `> cursor`
+   excludes anything tying the already-served cursor position, and the two twins tie with EACH
+   OTHER as much as with themselves. Same silent-data-loss class round 1 fixed, one grain finer.
+
+   THE CANDIDATE EVALUATED AND REJECTED: a third cursor component, a `row_number() OVER
+   (PARTITION BY key_col, _page_tie ORDER BY <a constant>)` ordinal (the coordinator's own first
+   candidate to try). Analysis (full text in `_nonunique_tie_group_sql`'s own docstring,
+   serving/boundary_service.py): Postgres does NOT guarantee a stable row-to-ordinal assignment
+   across SEPARATE query executions when the ORDER BY carries no real ordering key -- only a
+   same-execution guarantee. Worked through by hand: group {A, B}, A served (ordinal 1 on
+   execution 1), B pending (ordinal 2). A byte-identical twin C is appended (the ledger is
+   append-only; nothing forecloses a further identical write) before the next page request.
+   Execution 2 re-assigns ordinals 1..3 across the NOW-THREE-MEMBER group in an order Postgres
+   does not promise reproduces execution 1's assignment. If this execution assigns B (still
+   unserved) ordinal 1, `WHERE ordinal > 1` (the client's own cursor, carried over from
+   execution 1) EXCLUDES B -- a silent, permanent drop of a row that was NEVER served, purely
+   because group reshuffling coincided with the already-passed cursor value. The ordinal
+   candidate is UNSOUND under the exact mid-walk-append case asked to be reasoned through; it
+   is not used.
+
+   THE ACTUAL FIX: no per-row discriminator is manufactured at all. A byte-identical CONTENT
+   GROUP (same key_col AND same `_page_tie`) is served ATOMICALLY -- never split across a page.
+   `_nonunique_tie_group_sql` computes the raw `LIMIT`-bounded page, finds its own last row's
+   own (key_col, _page_tie) pair (`cutoff`), then serves every row up to AND INCLUDING the full
+   cutoff group -- so `limit` becomes a SOFT floor for a non-unique-key view (a page may exceed
+   it by exactly the size of the group straddling its own boundary), bounded by the new
+   MAX_TIE_GROUP_EXTRA_ROWS=1000 constant against a pathologically large duplicate-content
+   group (a typed `tie_group_too_large` 500 refusal instead of an unbounded response).
+
+   THE MID-WALK-APPEND CASE, worked through in full (the reasoning `_nonunique_tie_group_sql`'s
+   own docstring carries verbatim, reproduced here as the banked record): a new byte-identical
+   twin can only ever land in one of two temporal relationships to an in-flight walk, cut along
+   the SAME (key_col, _page_tie) coordinate every page boundary is drawn on. (a) It arrives for
+   a group the cursor has NOT YET REACHED: the next request that reaches that group's boundary
+   re-evaluates the whole CTE chain fresh, sees the now-larger group, and serves it WHOLE --
+   the twin joins its siblings in ONE page, no drop, witnessed as WR9c below. (b) It arrives for
+   a group the cursor has ALREADY PASSED: excluded from the REMAINDER of this walk -- but this
+   is the IDENTICAL, already-disclosed residual A11 already names for `/work/items`'s own
+   `after_slug` keyset ("a row inserted BEHIND an in-flight cursor is not visible to THAT walk
+   ... it simply joins the NEXT walk"), extended one axis (a value tying an already-passed key,
+   not merely a new key value) -- every keyset route in this file, unique-key or not, already
+   carries this exact residual class; this fix neither creates it nor deepens it. There is no
+   third case: the atomic-group design means a cursor is never "mid-way through" a group (some
+   members served, some not) -- that state cannot exist, which is exactly why no per-row
+   ordinal is ever needed to break a tie inside one.
+
+   RED (`git stash push -- serving/boundary_service.py`, reverting to commit 15b2f78's own
+   round-1-only state, keeping this fixture file's own new WR9 legs; re-run via
+   `env -u PGOPTIONS python3 seen-red/boundary-read-surface/run_fixtures.py`):
+
+     FAILURES: ['wr9a-double-attest-both-rows-served', 'wr9b-triple-identical-rows-all-served',
+                'wr9c-mid-walk-append-not-yet-reached-group-served-whole']
+
+     wr9a: note_a=49 direct_twins=2 paginated_twins=1 direct_total=5 paginated_total=4
+           multiset_equal=False  (one of the two identical attests silently dropped)
+     wr9b: note_b=53 direct_triplets=3 paginated_triplets=1 direct_total=8 paginated_total=5
+           multiset_equal=False  (two of the three identical attests silently dropped)
+     wr9c: status=200 page2_n=1 page2=[{one of the two identical note_x rows}] note_x=61
+           (the freshly-appended twin's OWN sibling silently dropped from the very first page
+           that ever touched that group -- not even an "already passed" case, a genuine same-
+           page loss under round 1's own naive LIMIT-then-tiebreak query)
+
+   GREEN (same commit, serving/boundary_service.py restored; same live toy db, scratch world
+   wrfx3079273; 57/57 checks ok, 0 FAIL):
+
+     == WR9: byte-identical rows within a tie group -- atomic-group fix ==
+     [ok] wr9a-double-attest-both-rows-served: note_a=49 direct_twins=2 paginated_twins=2
+          direct_total=5 paginated_total=5 multiset_equal=True
+     [ok] wr9b-triple-identical-rows-all-served: note_b=53 direct_triplets=3
+          paginated_triplets=3 direct_total=8 paginated_total=8 multiset_equal=True
+     [ok] wr9c-mid-walk-append-not-yet-reached-group-served-whole: status=200 page2_n=2,
+          both rows carry regards_id=note_x and the SAME _page_tie (byte-identical content),
+          served together in the FIRST page that ever reaches that group -- the append,
+          which happened strictly between the request that served note_y's own page and the
+          request that served note_x's, is fully absorbed with no drop
+
+   Full boundary-service family (W1-W36m) and the full round-1 suite (WR1-WR8) re-run clean
+   after this fix, no regressions (57/57, 0 FAIL covers both).
+
+   ONE cheap, pre-existing, NON-blocking observation folded in from this review round (not
+   fixed, named): an unbound/unrecognized query parameter is silently dropped SERVICE-WIDE by
+   this file's own FastAPI routing (ordinary FastAPI/Starlette behavior, not specific to this
+   fix) -- e.g. `after_tie` supplied on `/rows/current`, a route that never declares it. Noted
+   in VIEW_REGISTRY's own leading comment; service-wide query-parameter strictness is out of
+   this fix round's own scope, a separate commission.
