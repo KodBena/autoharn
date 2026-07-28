@@ -37,6 +37,29 @@ matrix's #2-ranked hazard: a `forbidden:`-tier deontic MUST-NOT, silently grade-
 1.2 whenever it isn't `--grade durable`). These items carry a `"principal_fields"` dict
 (subject/object NAMES, never dust-world-local ids -- the successor's own roster is what
 `led principal <verb>` resolves against at ingest) in place of 1.1's `actor_attribution` shape.
+1.1's own `actor_attribution` now also carries `"purpose"` (the registration event's free-text
+field) -- needed so ingestion can tell a benign birth-standard name duplicate from a genuine
+identity collision (see `_compare_existing_principal` below).
+
+FIX ROUND 2 (same work item, four independently witnessed defects closed): (1) `_rows()` now
+fails LOUDLY on a nonzero psql exit instead of silently returning `[]` -- a query that references
+a column absent on the source kernel's vintage used to look identical to "this world genuinely
+has none of these rows"; `extract_principal_lifecycle`'s own SELECT is additionally shaped per
+detected vintage so the s40-only kinds never reference an s41-only column in the first place.
+(2) PROVENANCE SIDECAR: `led principal declare-standing`/`relate`/`bind-role`/`bind-key`/
+`grant-competence` accept no free-text or --refs field, so a bare re-enactment through one of
+them is byte-indistinguishable from a fresh maintainer act. Ingest now follows every such
+successful re-enactment with a second, ordinary `decision` row (`--refs row:<new-id>`) narrating
+"carried from `<world>` row `<id>` at phoenix ingest, `<timestamp>`" -- see
+`_reenact_with_provenance` below; the ingest outcome line for these classes carries a
+`"provenance_sidecar"` sub-record showing whether it landed. (3) A genuine principal-name
+collision between the dust world's principal and an already-registered successor principal is
+now DETECTED (the tool's original dedup check never matched any real refusal) and, when the two
+identities differ, REFUSED loudly rather than silently treated as the same principal -- see
+`_is_principal_name_collision`/`_compare_existing_principal`. (4) A carried `resource:` row's
+statement keeps its grammar prefix verbatim (provenance moves to `--refs` only) so the tier
+validator, pickup's RESOURCES reader, and this tool's own next-phoenix re-extraction all still
+recognize it.
 
 MANIFEST SHAPE (JSONL — one JSON object per line, per the consult §2.3's "provenance block plus
 per-item records", chosen over a single nested JSON document so the file is greppable,
@@ -136,6 +159,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -219,7 +243,28 @@ def _psql_tuples(dep, sql: str) -> subprocess.CompletedProcess:
 def _rows(r: subprocess.CompletedProcess) -> list[list[str]]:
     """Drop the echoed leading `SET` line (the SET ROLE statement's own one-word confirmation,
     psql's normal non-csv echo for a non-SELECT statement -- it precedes the CSV block, is never
-    part of it) and the CSV block's own header row (column names), leaving just data rows."""
+    part of it) and the CSV block's own header row (column names), leaving just data rows.
+
+    FAILS LOUDLY ON A NONZERO psql EXIT (fix round 2, finding 1 -- the class fix, not a one-off
+    patch): every caller in this file funnels a SELECT's result through this one function, so
+    this is the SINGLE choke point where "the query failed" and "the query returned zero rows"
+    must never be conflated. Before this fix they WERE conflated -- `extract_principal_lifecycle`
+    unconditionally selected s41-only columns (principal_object etc.) for kinds that are actually
+    s40-native (principal_suspended/revoked/standing_declared); on an s40-only dust world psql
+    errors on the unknown column, and this function, reading only `r.stdout` with no check of
+    `r.returncode`/`r.stderr`, silently returned `[]` -- indistinguishable from "this world
+    genuinely carries none of these rows". A revoked principal's revocation would vanish from
+    the manifest with NO error printed anywhere: matrix hazard #1 reproduced through the
+    extractor's OWN new code, the exact silent-loss shape this whole commission exists to close.
+    The per-kind query shape is ALSO fixed at the call site (extract_principal_lifecycle no
+    longer references a column absent on the detected vintage) -- this check is the second,
+    independent net: ANY future query mistake in ANY class (not just lifecycle) now fails the
+    whole run loudly instead of degrading to an empty, unremarkable-looking result."""
+    if r.returncode != 0:
+        print(f"extract-context: REFUSED -- a SELECT failed (psql exit {r.returncode}); "
+              f"never treating this the same as a genuine empty result:\n{r.stderr.strip()}",
+              file=sys.stderr)
+        sys.exit(2)
     text = r.stdout
     if text.startswith("SET\n"):
         text = text[len("SET\n"):]
@@ -305,15 +350,34 @@ def build_provenance(dep, deployment_path: Path, mode: str, extracting_principal
 # ---------------------------------------------------------------------------------- class queries
 
 def extract_principals(dep) -> list[dict]:
-    """1.1 Identity: the principal roster — carry-reopened (RE-ENACT)."""
-    r = _psql_tuples(dep, f"SELECT id, name, agent_class FROM {dep.kern}.principal ORDER BY id;")
+    """1.1 Identity: the principal roster — carry-reopened (RE-ENACT).
+
+    CARRIES `purpose` (fix round 2, finding 3): a re-registration attempt that collides on name
+    with an EXISTING successor principal is not automatically a benign birth-standard duplicate
+    (the tool's prior dead dedup check assumed exactly that, wrongly) -- it is only benign when
+    the colliding identity actually matches. `purpose` (the registration event's own free-text
+    field, `principal_purpose`) is read alongside `agent_class` so ingestion can compare BOTH
+    against whatever the successor already holds for that name before deciding. Read from
+    `principal_standing_current` (s40+; that view's own "first in-force registration event's
+    purpose" -- ADR-0012 P1, reused rather than re-derived) when it exists; honestly `None` on a
+    pre-s40 kernel where no registration-event purpose concept exists at all (the `kern.principal`
+    table alone, this function's only source pre-s40, carries no purpose column)."""
+    if _relation_exists(dep, dep.schema, "principal_standing_current"):
+        r = _psql_tuples(dep, f"SELECT id, name, agent_class, purpose FROM "
+                              f"{dep.schema}.principal_standing_current ORDER BY id;")
+        rows = [(pid, name, agent_class, purpose)
+                for pid, name, agent_class, purpose in _rows(r)]
+    else:
+        r = _psql_tuples(dep, f"SELECT id, name, agent_class FROM {dep.kern}.principal ORDER BY id;")
+        rows = [(pid, name, agent_class, None) for pid, name, agent_class in _rows(r)]
+
     items = []
-    for pid, name, agent_class in _rows(r):
+    for pid, name, agent_class, purpose in rows:
         items.append({
             "record": "item", "class": "1.1_principal_roster", "disposition": "carry-reopened",
             "dust_row_ids": [], "row_kind": "principal", "principal_id": pid,
             "statement": f"principal '{name}' (class {agent_class})",
-            "actor_attribution": {"agent_class": agent_class, "name": name},
+            "actor_attribution": {"agent_class": agent_class, "name": name, "purpose": purpose},
             "refs": f"{dep.name}:principal:{pid}",
             "reason": None,
         })
@@ -561,7 +625,18 @@ def extract_principal_lifecycle(dep) -> list[dict]:
     s41 adds principal_binding_active plus the four binding-family columns): a kernel missing a
     needed column gets an honest UNAVAILABLE class-summary for exactly the kinds it cannot
     carry, never a silent empty result indistinguishable from "nothing to carry" (the same
-    UNAVAILABLE idiom extract_open_work/extract_open_questions already use above)."""
+    UNAVAILABLE idiom extract_open_work/extract_open_questions already use above).
+
+    QUERY SHAPED PER DETECTED VINTAGE (fix round 2, finding 1): the three s40-native kinds
+    (principal_suspended/principal_revoked/principal_standing_declared) are selectable on an
+    s40-only kernel that has NEVER applied s41 -- but s41's own columns (principal_object,
+    principal_relation, principal_role_name, principal_key_fingerprint, principal_competence_*)
+    do not exist there at all. Referencing them unconditionally in one shared SELECT (as this
+    function used to) makes psql fail on the unknown column for EVERY kind, s40-native ones
+    included -- `_rows()`'s own fix (above) now turns that into a loud refusal rather than a
+    silent `[]`, but the right fix is to never issue the doomed query in the first place: the
+    column list itself is chosen once, per call, from `has_s41_cols`, and every kind reads
+    through that one shared shape (still one code path, not seven -- ADR-0012 P1)."""
     if not _column_exists(dep, "ledger", "principal_subject"):
         return [{"record": "class-summary", "class": label, "disposition": "drop-with-reason",
                   "count": 0,
@@ -575,6 +650,18 @@ def extract_principal_lifecycle(dep) -> list[dict]:
     names = _principal_id_to_name(dep)
     active_clause = " AND principal_binding_active IS NOT FALSE" if has_binding_active else ""
 
+    if has_s41_cols:
+        columns = ("id", "statement", "principal_subject", "principal_object",
+                   "principal_relation", "principal_role_name", "principal_key_fingerprint",
+                   "principal_competence_activity", "principal_competence_band",
+                   "principal_competence_basis", "principal_db_role")
+    else:
+        # s40-only vintage: ONLY the columns s40 itself adds. Referencing an s41 column here
+        # would fail psql outright on every one of the three s40-native kinds below -- the exact
+        # silent-loss shape this fix round closes.
+        columns = ("id", "statement", "principal_subject", "principal_db_role")
+    col_list = ", ".join(columns)
+
     items: list[dict] = []
     for kind, label in _PRINCIPAL_LIFECYCLE_KINDS.items():
         if kind in _S41_ONLY_KINDS and not has_s41_cols:
@@ -585,16 +672,22 @@ def extract_principal_lifecycle(dep) -> list[dict]:
                                     "columns this kind needs do not exist."})
             continue
         r = _psql_tuples(dep, f"""
-            SELECT id, statement, principal_subject, principal_object, principal_relation,
-                   principal_role_name, principal_key_fingerprint,
-                   principal_competence_activity, principal_competence_band,
-                   principal_competence_basis, principal_db_role
+            SELECT {col_list}
             FROM {dep.schema}.ledger_current
             WHERE kind = '{kind}'{active_clause}
             ORDER BY id;
         """)
-        for (rid, statement, subj_id, obj_id, relation, role_name, fingerprint,
-             activity, band, basis, db_role) in _rows(r):
+        for row in _rows(r):
+            rec = dict(zip(columns, row))
+            rid, statement, subj_id = rec["id"], rec["statement"], rec.get("principal_subject")
+            obj_id = rec.get("principal_object")
+            relation = rec.get("principal_relation")
+            role_name = rec.get("principal_role_name")
+            fingerprint = rec.get("principal_key_fingerprint")
+            activity = rec.get("principal_competence_activity")
+            band = rec.get("principal_competence_band")
+            basis = rec.get("principal_competence_basis")
+            db_role = rec.get("principal_db_role")
             subj_name = names.get(subj_id) if subj_id else None
             if subj_id and subj_name is None:
                 print(f"extract-context: REFUSED — {kind} row {rid} names principal_subject "
@@ -843,6 +936,108 @@ def _generic_outcome(cls: str, disp: str, r: subprocess.CompletedProcess, **extr
             "reason": f"led refused: {r.stderr.strip()}", **extra}
 
 
+# --------------------------------------------------------------- fix round 2: provenance sidecar
+
+_ROW_WRITTEN_RE = re.compile(r"row (\d+) written")
+
+# PROVENANCE-SIDECAR CONVENTION (fix round 2, finding 2): `led principal declare-standing`/
+# `relate`/`bind-role`/`bind-key`/`grant-competence` carry NO free-text or --refs field at all
+# (row 1173's own strict-flag parsers -- unlike suspend/revoke/lift-suspension, these five verbs
+# build their statement entirely from typed arguments, refusing every shared flag including
+# --refs by name, see `_refuse_other_shared_flags` in bootstrap/templates/led.tmpl). A bare
+# re-enactment through one of them is therefore BYTE-INDISTINGUISHABLE from a fresh maintainer
+# act -- an attribution lie the successor's own ledger cannot see through. The fix: immediately
+# after such a re-enactment succeeds, write a SECOND, ordinary `decision` row citing the NEW row
+# by id (`--refs row:<new-id>`) and narrating the carry in its statement -- the decision grammar
+# is the one place in this file's own vocabulary that both accepts free text AND accepts --refs,
+# so it is reused rather than inventing a new mechanism (ADR-0012 P1). The sidecar is its own
+# ledger row, queryable like any other decision (`led --recent`, `led show <id>`) -- it does NOT
+# change the re-enacted row itself, which stays exactly what the successor's own kernel verb
+# would have produced for a fresh act, by design (RE-ENACT, not RE-ASSERT, per the module
+# docstring's own disposition vocabulary). Applied to every carry-reopened principal-lifecycle
+# class whose verb carries no such field: 1.15/1.16/1.17/1.18/1.19 (suspend/revoke, 1.13/1.14,
+# keep the existing marker-in-reason convention -- those two verbs DO accept free text).
+def _new_row_id(stdout: str) -> int | None:
+    m = _ROW_WRITTEN_RE.search(stdout)
+    return int(m.group(1)) if m else None
+
+
+def _reenact_with_provenance(cls: str, disp: str, r: subprocess.CompletedProcess, *,
+                              world: str, dust_row_ids: list[int], led: list[str], actor: str,
+                              project_root: Path, **extra) -> dict:
+    outcome = _generic_outcome(cls, disp, r, **extra)
+    if outcome["outcome"] != "RE-ENACTED":
+        return outcome
+    new_id = _new_row_id(r.stdout)
+    if new_id is None:
+        outcome["provenance_sidecar"] = {
+            "outcome": "SKIPPED",
+            "reason": "could not parse a new row id out of led's own stdout -- no sidecar "
+                      "written; the re-enacted row itself still landed (see led_stdout above).",
+        }
+        return outcome
+    dust_ref = dust_row_ids[0] if dust_row_ids else "?"
+    stmt = (f"carried from {world} row {dust_ref} at phoenix ingest, "
+            f"{datetime.now(timezone.utc).isoformat()}")
+    sc = _run_led(led, ["--refs", f"row:{new_id}", "decision", stmt], actor=actor, cwd=project_root)
+    if sc.returncode == 0:
+        outcome["provenance_sidecar"] = {"outcome": "WRITTEN", "led_stdout": sc.stdout.strip()}
+    else:
+        outcome["provenance_sidecar"] = {"outcome": "FAILED",
+                                          "reason": f"led refused: {sc.stderr.strip()}"}
+    return outcome
+
+
+# ------------------------------------------------------------ fix round 2: real collision check
+
+def _is_principal_name_collision(stderr: str) -> bool:
+    """Fix round 2, finding 3: the tool's ORIGINAL dedup check (`"already registered" in
+    r.stderr`) never matched ANY real refusal -- `register-principal`'s actual duplicate-name
+    refusal is the kernel write boundary's own SQLSTATE 23505 report, `duplicate key value
+    violates unique constraint "principal_name_key"` (witnessed against a live collision), which
+    contains neither substring. That dead branch is replaced by detecting the REAL refusal
+    shape."""
+    return "principal_name_key" in stderr and (
+        "23505" in stderr or "duplicate key value violates unique constraint" in stderr)
+
+
+def _compare_existing_principal(dep, name: str, agent_class: str | None,
+                                 purpose: str | None) -> bool | None:
+    """Fix round 2, finding 3: on a name collision, is it a BENIGN duplicate (the successor
+    already holds this exact identity -- birth-standard or an earlier ingestion pass) or a
+    GENUINE identity collision (two different principals that happen to share a name)? Read-only
+    against the SUCCESSOR (`dep` here is cmd_ingest's TARGET deployment, not a source) via
+    `principal_standing_current` (s40+; the same view extract_principals() itself now reads) --
+    never a second hand-derivation of "how to look up a principal's registered shape" (ADR-0012
+    P1). Returns True (matches), False (differs -- a genuine collision), or None (the successor
+    has no such view, or no row for this name at all -- inconclusive, never silently treated as a
+    match).
+
+    `name` crosses the psql boundary as DATA via a bound `-v` variable, never spliced into the SQL
+    text (ADR-0000's 2026-07-18 amendment: a value that becomes program is a type/mechanism
+    hazard, not a convenience) -- an externally-carried manifest's principal name is exactly the
+    untrusted value that amendment names, unlike this file's other f-string-interpolated
+    identifiers (dep.schema/dep.kern/kind/etc.), which are all operator-config or a closed,
+    internally-enumerated vocabulary, never manifest-carried text. Piped over STDIN, not passed
+    to `-c` (witnessed live: psql's `:'var'` substitution is honored reading a script off stdin
+    but NOT inside a `-c` argument -- the SAME reason every OTHER bound-variable write in this
+    tree, e.g. bootstrap/new-project.sh's own `decode(:'hex','hex')` idiom, is always piped in
+    rather than passed via `-c`)."""
+    if not _relation_exists(dep, dep.schema, "principal_standing_current"):
+        return None
+    full = (f"SET ROLE {dep.role};\n"
+            f"SELECT agent_class, purpose FROM {dep.schema}.principal_standing_current "
+            f"WHERE name = :'name';")
+    r = subprocess.run(["psql", "-h", dep.host, "-d", dep.db, "--csv", "-v", "ON_ERROR_STOP=1",
+                        "-v", f"name={name}"],
+                       input=full, capture_output=True, text=True, timeout=60)
+    rows = _rows(r)
+    if not rows:
+        return None
+    existing_class, existing_purpose = rows[0][0], rows[0][1]
+    return existing_class == (agent_class or "") and existing_purpose == (purpose or "")
+
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest).resolve()
     provenance, items, review = _load_manifest(manifest_path)
@@ -888,18 +1083,43 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         if cls == "1.1_principal_roster":
             attrib = item.get("actor_attribution", {})
             name, agent_class = attrib.get("name"), attrib.get("agent_class")
+            purpose_src = attrib.get("purpose")
             r = _run_led(led, ["register-principal", name, agent_class, "--purpose",
                                f"{marker} re-registered per extract from {world}"],
                         actor=args.actor, cwd=project_root)
             if r.returncode == 0:
                 outcomes.append({"class": cls, "disposition": disp, "outcome": "RE-ENACTED",
                                   "principal": name, "led_stdout": r.stdout.strip()})
-            elif "already registered" in r.stderr:
-                outcomes.append({"class": cls, "disposition": disp,
-                                  "outcome": "SUPERSEDED-BY-KERNEL",
-                                  "principal": name,
-                                  "reason": "already registered in target world (birth-standard "
-                                            "or an earlier ingestion pass) -- not re-registered"})
+            elif _is_principal_name_collision(r.stderr):
+                match = _compare_existing_principal(dep, name, agent_class, purpose_src)
+                if match is True:
+                    outcomes.append({"class": cls, "disposition": disp,
+                                      "outcome": "SUPERSEDED-BY-KERNEL", "principal": name,
+                                      "reason": "already present in the successor with the "
+                                                "SAME agent_class and purpose (birth-standard "
+                                                "or an earlier ingestion pass) -- not "
+                                                "re-registered"})
+                else:
+                    # False (genuinely differs) and None (inconclusive -- no comparison view, or
+                    # no matching row despite the name-unique-constraint refusal) are BOTH
+                    # refused loudly here: a name collision is never silently merged into
+                    # whichever identity already holds the name, matching or not.
+                    detail = ("differs from" if match is False else
+                              "could not be compared against (no principal_standing_current "
+                              "view, or no row for this name, on the successor)")
+                    outcomes.append({"class": cls, "disposition": disp, "outcome": "DROPPED",
+                                      "principal": name,
+                                      "reason": f"REFUSED -- '{name}' already exists in the "
+                                                f"successor as a DIFFERENT identity ({detail} "
+                                                f"the dust world's own agent_class={agent_class!r}"
+                                                f"/purpose={purpose_src!r}) -- this is a genuine "
+                                                f"name collision between two distinct "
+                                                f"principals, not a duplicate registration. The "
+                                                f"maintainer must disposition it explicitly at "
+                                                f"the manifest (rename-carry the dust principal "
+                                                f"under a new name, or drop-with-reason) -- "
+                                                f"never silently merged into the existing "
+                                                f"identity."})
             else:
                 outcomes.append({"class": cls, "disposition": disp, "outcome": "DROPPED",
                                   "principal": name, "reason": f"led refused: {r.stderr.strip()}"})
@@ -939,19 +1159,25 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             pf = item["principal_fields"]
             r = _run_led(led, ["principal", "declare-standing", pf["subject_name"],
                                "--db-role", pf["db_role"]], actor=args.actor, cwd=project_root)
-            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+            outcomes.append(_reenact_with_provenance(
+                cls, disp, r, world=world, dust_row_ids=item.get("dust_row_ids", []), led=led,
+                actor=args.actor, project_root=project_root, **pf))
 
         elif cls == "1.16_principal_relation_asserted":
             pf = item["principal_fields"]
             r = _run_led(led, ["principal", "relate", pf["subject_name"], pf["relation"],
                                pf["object_name"]], actor=args.actor, cwd=project_root)
-            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+            outcomes.append(_reenact_with_provenance(
+                cls, disp, r, world=world, dust_row_ids=item.get("dust_row_ids", []), led=led,
+                actor=args.actor, project_root=project_root, **pf))
 
         elif cls == "1.17_principal_role_bound":
             pf = item["principal_fields"]
             r = _run_led(led, ["principal", "bind-role", pf["subject_name"],
                                "--role", pf["role_name"]], actor=args.actor, cwd=project_root)
-            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+            outcomes.append(_reenact_with_provenance(
+                cls, disp, r, world=world, dust_row_ids=item.get("dust_row_ids", []), led=led,
+                actor=args.actor, project_root=project_root, **pf))
 
         elif cls == "1.18_principal_key_bound":
             pf = item["principal_fields"]
@@ -960,21 +1186,37 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             # keys/ (`led principal attest-possession`), which this tool cannot perform on the
             # operator's behalf -- there is no signature to forge one from. Attempted without
             # it deliberately, so `led`'s OWN teach-text (missing --possession-ref) is what
-            # lands in this outcome's reason -- never invented, never silently skipped.
+            # lands in this outcome's reason -- never invented, never silently skipped. IF a
+            # manifest editor supplied --possession-ref by hand upstream (out of THIS tool's
+            # own reach) and the bind succeeds, it still gets the same provenance sidecar every
+            # other free-text-less verb does.
             r = _run_led(led, ["principal", "bind-key", pf["subject_name"],
                                "--fingerprint", pf["fingerprint"]],
                         actor=args.actor, cwd=project_root)
-            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+            outcomes.append(_reenact_with_provenance(
+                cls, disp, r, world=world, dust_row_ids=item.get("dust_row_ids", []), led=led,
+                actor=args.actor, project_root=project_root, **pf))
 
         elif cls == "1.19_principal_competence_granted":
             pf = item["principal_fields"]
             r = _run_led(led, ["principal", "grant-competence", pf["subject_name"],
                                "--activity", pf["activity"], "--band", pf["band"],
                                "--basis", pf["basis"]], actor=args.actor, cwd=project_root)
-            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+            outcomes.append(_reenact_with_provenance(
+                cls, disp, r, world=world, dust_row_ids=item.get("dust_row_ids", []), led=led,
+                actor=args.actor, project_root=project_root, **pf))
 
         elif cls == "1.21_resource_tier_ungraded":
-            statement = f"{marker} {item['statement']}"
+            # THE STATEMENT KEEPS ITS GRAMMAR PREFIX INTACT -- fix round 2, finding 4 (the
+            # sharpest one): prepending the marker ("re-asserted from X: resource: ...") made the
+            # carried row FAIL `statement.startswith('resource:')`, so it silently bypassed
+            # cmd_generic's own tier validator, would never be recognized by pickup's RESOURCES
+            # reader, and would be MISSED by this very extractor's own `ILIKE 'resource:%'` query
+            # at the successor's own next phoenix -- matrix hazard #2, reproduced by this tool's
+            # first attempt at closing it. Provenance moves entirely to --refs (`refs` already
+            # carries the marker + dust world's own refs citation); the statement written here is
+            # the ORIGINAL, unprefixed, grammar-valid text, verbatim.
+            statement = item["statement"]
             r = _run_led(led, ["--refs", refs, "decision", statement],
                         actor=args.actor, cwd=project_root)
             outcomes.append(_generic_outcome(cls, disp, r))
