@@ -26,9 +26,16 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s68 (this pass pays down the prior LAGGING note, below, per
-||| gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics
-||| genuinely catch up).
+||| AS-OF: kernel chain through s68 (this pass pays down the prior LAGGING note, below, per gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics genuinely catch up). LAGGING: s69 (kernel/lineage/s69-role-coherence-refusals.sql, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, ledger row 201) is NOT rendered here -- named honestly rather than bumped on faith.
+||| THE s69 GAP (this build's own note, not a modeling obstacle): s69's three refusals
+||| (closer-is-claimant-of-record over work_item_current's existing claimant derivation;
+||| witness-ref shape per close shape; review-regards-in-force naming the successor) and its
+||| teach-text-only rider are additive, decidable, single-hop checks over facts this model
+||| ALREADY renders (workClaimed resolution, the reviewWitness field, the supersedes chain) -- a
+||| faithful transcription is plausible next-pass work, deferred here because this build's own
+||| commission scoped it to the kernel delta and its scratch witness, not a model refresh, and
+||| rendering three new refusal shapes correctly is exactly the kind of claim ADR-0000 Rule 2(a)
+||| says is not discharged by a rushed pass.
 ||| THE s68 PASS (design/FABLE-S68-TYPED-ABSENCE-DISPOSITIONS-SPEC.md, ledger rows 1541/1542 --
 ||| the maintainer's own merge-hold answer, "As for the NUL sentinel, that shoulde be fixed",
 ||| verbatim): MODEL-VISIBLE, the same DigestF idiom applied to the two remaining implicit-
