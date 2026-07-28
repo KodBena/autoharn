@@ -573,6 +573,39 @@ BOUNDARY_SERVICE_VERSION = "1.4.0"
 # separate commission; named so it is not silently unnoticed, per the SAME "surface a hazard
 # you see, don't silently pass it" reflex this whole fix round is an instance of).
 #
+# ROUND 3 (coordinator's THIRD fresh-context re-review). ONE CRITICAL, the other half of this
+# whole stack's own contract: `serving/boundary_cli_client.py`'s `get_all_rows` -- the ACTUAL,
+# PRODUCTION walker `bootstrap/templates/led.tmpl`/`pickup.tmpl` use, as opposed to this
+# fixture family's own test-only walker -- was never taught the `after_tie` contract rounds 1-2
+# minted server-side. Since `after_tie` defaults to `""` server-side and any real md5 digest
+# sorts strictly greater than `""`, every "next page" request this production client issued
+# kept re-supplying the SAME already-served key group forever -- live-witnessed by the reviewer
+# as a genuine infinite loop against `review_gap` (a view `led.tmpl` genuinely walks) at
+# `limit=1`. Fixed in `get_all_rows` itself (see its own docstring); rounds 1-2's SQL design was
+# correct and UNREACHED by its one real consumer until this round. Two client-visible contract
+# changes land alongside it, both DISCLOSED here rather than left implicit: (a)
+# `tie_group_too_large` (`_tie_group_too_large`, above) now answers HTTP 409, not 500 -- this
+# file's own convention reserves 500 for `unclassified_failure` alone, and this refusal is a
+# boundary-understood business rule, not an unclassifiable psql failure; (b) `GET /meta` gains
+# a fourth fact, `max_tie_group_extra_rows` (`MetaResponse`'s own amendment note,
+# boundary_models.py), the `MAX_TIE_GROUP_EXTRA_ROWS` bound made visible so a caller can plan
+# around a `tie_group_too_large` refusal rather than discover the bound only by hitting it
+# (ADR-0016: an advertised limit is part of the contract).
+#
+# A SIBLING HAZARD in the SAME table, fixed in the SAME pass (boundary_cli_client.py's own
+# `_ID_FIELD_OVERRIDE`/`_SLUG_FIELD_OVERRIDE`, its own disclosed duplication of this registry's
+# key-column choices): `discharging_attest` and `work_bookkeeping_closes` (this build's own new
+# views) had no override entry for their non-'id' key columns, so a `get_all_rows(cursor=
+# "after_id")` caller would KeyError on page 1 -- the reviewer's own named instances. Auditing
+# EVERY registry member the same way (this stack's own by-now-standing discipline) found the
+# identical, PRE-EXISTING gap on `work_edge_blocks_close` (this build's own third new view) and
+# on FOUR views predating this build entirely -- `principal_relations`/`principal_role_
+# bindings`/`principal_keys`/`principal_competences` (kernel/lineage/s41's own D-5 views,
+# registered in this dict since the legacy-led-retirement inventory pass, ledger row 1149) --
+# none of which ever had an override entry despite all four keying on `row_id`, not `id`. Fixed
+# in the same commit; see `boundary_cli_client.py`'s own `_ID_FIELD_OVERRIDE` comment for the
+# full accounting.
+#
 # Key-column choice, per entry, named once here rather than re-derived per request:
 #   question_status.question_id           -- kernel/lineage/s31 (q.id, a ledger row id, aliased).
 #                                             UNIQUE (plain WHERE over ledger_current, q.id is the
@@ -2024,9 +2057,14 @@ def _tie_group_too_large(view: str, extra: int) -> JSONResponse:
     returns instead of serving an unboundedly large page when the byte-identical content group
     at the page boundary has more members than `MAX_TIE_GROUP_EXTRA_ROWS` can atomically extend
     past. Typed, named disposition (the same shape `capability_absent`/`unknown_view` already
-    establish) rather than a generic 500 -- this is a boundary-enforced business rule, not a
-    psql-level failure the A4 exception net would otherwise classify."""
-    return JSONResponse(status_code=500, content={
+    establish). Round-3 fix (coordinator's third fresh-context re-review): status 409, not 500
+    -- this file's own convention reserves 500 for `unclassified_failure` (a psql-level failure
+    this boundary genuinely cannot classify further); this refusal is the OPPOSITE, a boundary-
+    ENFORCED business rule the boundary understands completely and names precisely, the same
+    shape every other typed 4xx refusal in this file already is. 409 (Conflict) is
+    `boundary_cli_client.py`'s own `_READ_REFUSAL_STATUSES` set already recognizes as a read-side
+    boundary refusal, so no client-side change was needed for this half of the fix."""
+    return JSONResponse(status_code=409, content={
         "disposition": "tie_group_too_large",
         "view": view,
         "message": f"GET /views/{view}: the byte-identical row group at this page's own "
@@ -3115,6 +3153,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             known_views=sorted(VIEW_REGISTRY),
             lineage_head=_lineage_head(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
+            max_tie_group_extra_rows=MAX_TIE_GROUP_EXTRA_ROWS,
         )
 
     @app.get("/d/{deployment}/kinds", response_model=KindsResponse)

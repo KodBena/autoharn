@@ -337,3 +337,126 @@ Full GREEN transcript (same commit, same live toy db):
    fix) -- e.g. `after_tie` supplied on `/rows/current`, a route that never declares it. Noted
    in VIEW_REGISTRY's own leading comment; service-wide query-parameter strictness is out of
    this fix round's own scope, a separate commission.
+
+6. ROUND 3 (coordinator's THIRD fresh-context re-review). Round 1-2's SQL design held: "single-
+   statement atomicity confirmed, no mid-group cursor constructible, tie_group_too_large
+   witnessed firing, round-2 RED independently reproduced from a mid-stack checkout." ONE
+   CRITICAL remained: `serving/boundary_cli_client.py`'s `get_all_rows` -- the ACTUAL,
+   PRODUCTION pagination walker `bootstrap/templates/led.tmpl`/`pickup.tmpl` call, as distinct
+   from this fixture family's own former hand-rolled test-only walker -- was never taught the
+   `after_tie` contract rounds 1-2 minted server-side. Since `after_tie` defaults to `""`
+   server-side and any real md5 digest sorts strictly greater than `""`, every "next page"
+   request this production client issued kept re-admitting the SAME already-served key group.
+   Rounds 1-2's fix was correct and UNREACHED by its one real consumer.
+
+   THE FIX: `get_all_rows` now tracks `after_tie_value` (starts `None`; set from the last
+   served row's own `_page_tie` field whenever the response carries one) and includes
+   `after_tie` in the next request's params ONLY once that value is known -- a unique-key
+   view's own walk (whose responses never carry `_page_tie`) never sends `after_tie` at all,
+   byte-identical to pre-round-3 behavior.
+
+   LIVE RED, via a standalone driver (not part of the committed fixture -- these reproduce a
+   PRE-round-3 client against the CURRENT, already-fixed server; a permanent fixture leg always
+   runs the current/fixed code, so a true "before" demonstration is a one-time, banked
+   verification, the same shape every prior round's own RED witness has used):
+
+   Leg (a) -- the reviewer's own exact reproduction, `limit=1` against `review_gap` (a genuine
+   duplicate `id` key, same-id-different-content -- two obligation scopes on one actor):
+   the pre-round-3 `get_all_rows` body run in a real subprocess, bounded at 10s:
+
+     TIMEOUT EXPIRED (confirmed hang, bounded at 10s): Command [...python3 round3_red_probe.py
+     http://127.0.0.1:<port>/d/r3red<pid> 1] timed out after 10.0 seconds
+
+   (`review_gap direct_total=2 dup_id=21 dup_count=2` -- the duplicate genuinely exists; the
+   old client's own request loop cycles the SAME two rows forever since neither the `after_id`
+   cursor nor a same-value tie ever advances past them.)
+
+   Leg (b) -- "below the hang threshold it silently accumulates duplicate rows" (the
+   coordinator's own second framing): constructed with 2 clean (non-duplicate) review_gap rows
+   BEFORE the duplicate pair and 1 clean row AFTER it, `limit` set to land page 1's own
+   boundary exactly at the duplicate group's tail (`clean_before + dup_group_size`):
+
+     review_gap direct_total=5 dup_id=43 dup_count=2 ids=[9, 10, 43, 43, 49]
+     OLD client (limit=4): paginated_total=7 direct_total=5 dup_count_direct=2
+     dup_count_paginated=4
+
+   The old client TERMINATES (no hang) but the duplicate pair is counted FOUR times instead of
+   two -- page 1 serves it once (filling the page exactly, so the `len(page) < limit`
+   termination check does not fire), page 2 re-admits the WHOLE pair again (the server's own
+   default `after_tie=""` still matches both real tie values) alongside the one genuinely new
+   row, and THAT shorter page finally terminates the walk -- silently over-counting, never
+   silently dropping, the OPPOSITE-shaped defect from round 1's finding but the SAME root cause
+   (missing `after_tie` propagation).
+
+   GREEN (current/fixed code, same live toy db, scratch world wrfx3188937; full suite 62/62
+   checks ok, 0 FAIL -- includes every round 1/2 leg plus):
+
+     == WR10: the REAL production client (get_all_rows) -- the reviewer's own repro ==
+     [ok] wr10-real-client-review-gap-limit1-no-hang-no-loss: timed_out=False dup_id=44
+          dup_count_direct=2 direct_total=4 paginated_total=4 dup_count_paginated=2
+     == WR11: below-hang-threshold duplicate accumulation -- gone ==
+     [ok] wr11-realistic-limit-no-duplicate-accumulation: direct_total=4 paginated_total=4
+          dup_count_direct=2 dup_count_paginated=2
+     == WR12: real-client unique-key walk; tie_group_too_large 409; /meta field ==
+     [ok] wr12a-real-client-unique-key-view-byte-identical: direct_total=5 paginated_total=5
+          no_page_tie_field=True (work_item_current, walked via the REAL get_all_rows, no
+          after_tie ever sent)
+     [ok] wr12b-meta-advertises-max-tie-group-extra-rows: status=200
+          max_tie_group_extra_rows=1000 (matches boundary_service.MAX_TIE_GROUP_EXTRA_ROWS)
+     [ok] wr12c-tie-group-too-large-shape-is-409-not-500: status_code=409,
+          disposition=tie_group_too_large
+
+   SIBLING HAZARD, fixed in the same pass: `boundary_cli_client.py`'s `_ID_FIELD_OVERRIDE` had
+   no entries for `discharging_attest`/`work_bookkeeping_closes` (the reviewer's own named
+   instances) -- a `get_all_rows(cursor="after_id")` caller would KeyError on page 1. Auditing
+   EVERY VIEW_REGISTRY member the same way (this stack's own by-now-standing discipline) found
+   THREE MORE: `work_edge_blocks_close` (this build's own third new view) and FOUR predating
+   this build entirely -- `principal_relations`/`principal_role_bindings`/`principal_keys`/
+   `principal_competences` (registered since the legacy-led-retirement inventory pass, ledger
+   row 1149, never given an override despite all four keying on `row_id`). All seven entries
+   added; WR8/WR9/WR10/WR12's own real-client walks exercise `discharging_attest` and
+   `work_item_current` directly, and the added entries were verified by code inspection against
+   each view's own SELECT list (kernel/lineage source cited in the dict's own new comment) --
+   the four principal_* views were NOT separately live-walked this round (their own shape is
+   identical in kind to the already-witnessed `model_attestations`/`principal_*` row_id-keyed
+   family; a live walk of all four was judged disproportionate to add for this round, named
+   rather than silently assumed).
+
+   A STATUS-CODE COLLISION found and fixed in reach (not named by the coordinator, found via
+   the SAME consumer grep constraint (f) required): `tie_group_too_large`'s new 409 status
+   collides with `capability_absent`'s own PRE-EXISTING 409 usage on the identical
+   `GET /views/{view}` route family. `bootstrap/templates/distance-to-clean.tmpl`'s own
+   `_view_debt` and THREE sites in `bootstrap/templates/pickup.tmpl` (`standing_decisions`,
+   `review_gap`, `mail`'s missive views) all branched on bare `e.status == 409` to mean
+   "capability_absent" -- a real `tie_group_too_large` refusal on `review_gap`/`missive_stale`
+   (both non-unique-key views) would have been silently misreported as "view UNAVAILABLE /
+   this world's kernel predates the feature" instead of the true cause. Fixed by checking
+   `disposition == "capability_absent"` alongside the status code at all four sites, rather
+   than trusting the status code alone -- named as touched OUTSIDE the coordinator's own
+   explicit scope list, per constraint (f)'s own instruction to report and disclose rather than
+   touch silently.
+
+   CONSUMER AUDIT (constraint (f)): grepped every `boundary_cli_client`/`get_all_rows` consumer
+   (`led.tmpl`, `pickup.tmpl`, `distance-to-clean.tmpl`, `asof-export.tmpl`,
+   `libexec/autoharn/courier`, `serving/ensure_running.py`) for local pagination assumptions.
+   Found: (1) the four 409-disposition sites above, fixed; (2) several `json.dumps(r,
+   sort_keys=True)` operator-facing print sites (`led.tmpl`'s `cmd_work_violations`/
+   `cmd_work_list`-family commands, `pickup.tmpl`'s `open_questions`/`review_debt`/`mail`) will
+   now print an extra `_page_tie` field per row for any NON-unique-key view walked through
+   them -- a real, visible CLI-output change (cosmetic, presentation-layer only; no crash, no
+   data loss, no hang) NOT fixed this round -- outside the round's own named scope
+   (get_all_rows contract propagation, the `_ID_FIELD_OVERRIDE` sibling hazard, and the two
+   named disclosure changes), named here rather than silently left for a future round to
+   discover independently. No caller does `.keys()`/CSV/`DictWriter`/strict-key-count
+   comparisons that `_page_tie`'s presence would break structurally -- the only consequence
+   found is the extra printed field.
+
+   FIXTURE-WALKER UNIFICATION (round-4's own stated first target, addressed proactively): this
+   fixture's own former hand-rolled `walk_paginated` is now a THIN pass-through to the
+   PRODUCTION `boundary_cli_client.get_all_rows` -- not a second, parallel implementation that
+   can drift again. WR8/WR9's own call sites are unchanged; WR10/WR11/WR12 call the production
+   walker (via a wall-clock-bounded subprocess helper, `get_all_rows_bounded`, for the two legs
+   that need a real hang/duplicate-accumulation comparison) directly. The client and fixture
+   walker are now the SAME code path.
+
+   Full boundary-service family (W1-W36m) re-run clean after this fix, no regressions.

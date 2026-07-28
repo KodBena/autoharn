@@ -32,6 +32,7 @@ import importlib.machinery
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -53,6 +54,7 @@ sys.path.insert(0, str(REPO / "serving"))
 sys.path.insert(0, str(REPO / "bootstrap"))
 import deployment_record  # noqa: E402  (boundary_service's own import chain expects filing/ on sys.path first)
 import boundary_service  # noqa: E402  (VIEW_REGISTRY -- the ONE enumeration authority, never re-typed here)
+import boundary_cli_client  # noqa: E402  (round-3 fix, ledger rows 153/154: the PRODUCTION pagination walker -- walk_paginated below delegates to it rather than re-deriving a second one)
 import migrate_core  # noqa: E402  (bootstrap/migrate_core.py -- the SAME manifest _lineage_head reuses, for WR4's ground truth)
 
 import os
@@ -481,39 +483,54 @@ def birth_duplicate_key_probes(base: str, world: str, author: int) -> dict[str, 
 
 
 def walk_paginated(base: str, view: str, key_col: str, key_kind: str, limit: int = 1) -> list[dict]:
-    """Ledger rows 153/154 fix round: a generic limit=1 keyset walker over GET /views/{view},
-    driving the SAME cursor contract a real client would (after_id/after_slug PLUS the fix
-    round's own after_tie, resupplied from the previous page's last row's own `_page_tie` field
-    when present, which the served response omits entirely on a UNIQUE-key view -- `.get(...,
-    "")` handles both shapes with one walker). Stops at the first page shorter than `limit` (or
-    empty). Used to prove the walk is lossless END TO END across many pages, not merely that one
-    page's own WHERE clause looks right in isolation."""
-    rows: list[dict] = []
-    after_id = 0
-    after_slug = ""
-    after_tie = ""
-    while True:
-        if key_kind == "id":
-            url = f"{base}/views/{view}?limit={limit}&after_id={after_id}"
-        else:
-            url = f"{base}/views/{view}?limit={limit}&after_slug={after_slug}"
-        if after_tie:
-            url += f"&after_tie={after_tie}"
-        status, page = bs_fixtures.http_get(url)
-        if status != 200 or not isinstance(page, list):
-            raise RuntimeError(f"walk_paginated: GET {url} -> status={status} body={page}")
-        if not page:
-            break
-        rows.extend(page)
-        if len(page) < limit:
-            break
-        last = page[-1]
-        if key_kind == "id":
-            after_id = last[key_col]
-        else:
-            after_slug = last[key_col]
-        after_tie = last.get("_page_tie", "")
-    return rows
+    """Round-3 fix (ledger rows 153/154, coordinator's THIRD fresh-context re-review): this used
+    to be a SECOND, hand-rolled keyset walker living only in this fixture -- the round-3 finding
+    is exactly that a second implementation of "walk every page" can silently drift from the
+    real one (`serving/boundary_cli_client.py`'s `get_all_rows`, the ACTUAL function
+    `led.tmpl`/`pickup.tmpl` call in production, which had NOT been taught the round-1/2
+    `after_tie` contract even though this fixture's own former hand-rolled copy had). Rather than
+    fix this fixture's copy a second time and leave two walkers that can diverge again (round-4
+    review's own stated first question), this is now a THIN pass-through to the production
+    walker itself -- `key_col` is accepted only to preserve this function's existing call-site
+    signature across WR8/WR9 (every caller still filters/groups served rows by their own
+    `key_col` value after the walk returns); the production walker derives its OWN id/slug field
+    name internally, from the SAME `_ID_FIELD_OVERRIDE`/`_SLUG_FIELD_OVERRIDE` dicts this whole
+    fix round audited and repaired, never re-derived here a second time (ADR-0012 P1)."""
+    return boundary_cli_client.get_all_rows(base, f"/views/{view}", cursor=f"after_{key_kind}",
+                                             limit=limit)
+
+
+def get_all_rows_bounded(base: str, view: str, limit: int, timeout_s: float = 30.0,
+                          cursor: str = "after_id") -> list[dict]:
+    """Round-3 fix (ledger rows 153/154): calls the REAL, production `boundary_cli_client.
+    get_all_rows` -- not this fixture's own in-process import, a genuinely SEPARATE Python
+    process -- wall-clock-bounded by `timeout_s`. Two reasons this runs out-of-process rather
+    than simply calling the function directly: (1) it is the SAME mechanism this fix round's
+    own one-time RED verification uses to reproduce the reviewer's exact infinite-loop finding
+    against the round-1/2 (pre-round-3) client with a real subprocess timeout standing in for
+    "the reviewer eventually killed it" (banked in red.txt, not run here); (2) as a STANDING
+    safety net, a permanent fixture leg that calls a pagination walker in-process would hang the
+    ENTIRE suite forever if a future change ever reintroduced the bug this round fixes --
+    out-of-process with a timeout means a regression fails FAST and namely ("exceeded the time
+    budget, likely an infinite pagination loop"), never silently wedges CI. Raises
+    `subprocess.TimeoutExpired` on a genuine hang (the caller decides what that means -- a
+    round-3-era caller treats it as a FAILURE; the one-time RED verification treats it as
+    confirmation)."""
+    script = (
+        "import sys; sys.path.insert(0, sys.argv[1]); sys.path.insert(0, sys.argv[2]); "
+        "import deployment_record, boundary_cli_client, json; "
+        "rows = boundary_cli_client.get_all_rows(sys.argv[3], sys.argv[4], "
+        "cursor=sys.argv[6], limit=int(sys.argv[5])); "
+        "print(json.dumps(rows))"
+    )
+    cp = subprocess.run(
+        [sys.executable, "-c", script, str(REPO / "filing"), str(REPO / "serving"),
+         base, f"/views/{view}", str(limit), cursor],
+        capture_output=True, text=True, timeout=timeout_s)
+    if cp.returncode != 0:
+        raise RuntimeError(f"get_all_rows_bounded subprocess failed: rc={cp.returncode} "
+                           f"stdout={cp.stdout[-2000:]!r} stderr={cp.stderr[-2000:]!r}")
+    return json.loads(cp.stdout.strip().splitlines()[-1])
 
 
 def main() -> int:
@@ -914,6 +931,93 @@ def main() -> int:
                                           if r["regards_id"] == note_x]),
               f"status={status_p2} page2_n={len(page2) if isinstance(page2, list) else '?'} "
               f"page2={page2} note_x={note_x}",
+              failures)
+
+        # ==================== WR10: round-3 CRITICAL finding (ledger rows 153/154, coordinator's
+        # THIRD fresh-context re-review) -- the REAL, production `boundary_cli_client.
+        # get_all_rows` (not this fixture's own walker) against `review_gap`, the view the
+        # reviewer's own reproduction used (a view `led.tmpl`/`pickup.tmpl` genuinely walk), at
+        # `limit=1`, over a genuine duplicate key (`dup_ids["review_gap_id"]`, born in WR8 above)
+        # -- exactly the reviewer's own repro shape. Wall-clock-bounded (get_all_rows_bounded) so
+        # a regression fails fast rather than hanging this whole suite. ======================
+        print("== WR10: the REAL production client (get_all_rows) -- the reviewer's own repro ==")
+        direct_rg = direct_view_rows(world, "review_gap")
+        rg_dup_id = dup_ids["review_gap_id"]
+        rg_dup_count_direct = sum(1 for r in direct_rg if r["id"] == rg_dup_id)
+        try:
+            paginated_rg = get_all_rows_bounded(base, "review_gap", limit=1, timeout_s=30.0)
+            rg_timed_out = False
+        except subprocess.TimeoutExpired:
+            paginated_rg = []
+            rg_timed_out = True
+        rg_dup_count_paginated = sum(1 for r in paginated_rg if r.get("id") == rg_dup_id)
+        check("wr10-real-client-review-gap-limit1-no-hang-no-loss",
+              not rg_timed_out and rg_dup_count_direct >= 2
+              and len(paginated_rg) == len(direct_rg)
+              and rg_dup_count_paginated == rg_dup_count_direct
+              and row_set_equal([{k: v for k, v in r.items() if k != "_page_tie"}
+                                  for r in paginated_rg], direct_rg),
+              f"timed_out={rg_timed_out} dup_id={rg_dup_id} dup_count_direct={rg_dup_count_direct} "
+              f"direct_total={len(direct_rg)} paginated_total={len(paginated_rg)} "
+              f"dup_count_paginated={rg_dup_count_paginated}",
+              failures)
+
+        # ==================== WR11: below-the-hang-threshold duplicate accumulation -- the
+        # reviewer's own second framing ("below the hang threshold it silently accumulates
+        # duplicate rows"). Same review_gap duplicate, but at a REALISTIC limit (1000, the SAME
+        # default get_all_rows/led.tmpl/pickup.tmpl actually use) -- a group smaller than `limit`
+        # never trips the pre-round-3 client's own `len(page) < limit` termination test on its
+        # FIRST encounter, but a pre-round-3 client would still re-fetch (and thus double-count)
+        # that exact group on the NEXT page (after_tie was never sent, so the server's own
+        # default `""` re-admits it) before finally terminating on the SHORTER page that follows
+        # -- silent duplication, not a hang. Verified GONE on the current (fixed) client. =======
+        print("== WR11: below-hang-threshold duplicate accumulation -- gone ==")
+        paginated_rg_1000 = get_all_rows_bounded(base, "review_gap", limit=1000, timeout_s=30.0)
+        rg_dup_count_1000 = sum(1 for r in paginated_rg_1000 if r.get("id") == rg_dup_id)
+        check("wr11-realistic-limit-no-duplicate-accumulation",
+              len(paginated_rg_1000) == len(direct_rg)
+              and rg_dup_count_1000 == rg_dup_count_direct
+              and row_set_equal([{k: v for k, v in r.items() if k != "_page_tie"}
+                                  for r in paginated_rg_1000], direct_rg),
+              f"direct_total={len(direct_rg)} paginated_total={len(paginated_rg_1000)} "
+              f"dup_count_direct={rg_dup_count_direct} dup_count_paginated={rg_dup_count_1000}",
+              failures)
+
+        # ==================== WR12: unique-key walk byte-identical via the REAL client; the 409
+        # status + /meta field the reviewer's own recommendation folds in (ledger rows 153/154).
+        print("== WR12: real-client unique-key walk; tie_group_too_large 409; /meta field ==")
+        direct_wic = direct_view_rows(world, "work_item_current")
+        paginated_wic = get_all_rows_bounded(base, "work_item_current", limit=1000, timeout_s=30.0,
+                                             cursor="after_slug")
+        check("wr12a-real-client-unique-key-view-byte-identical",
+              len(paginated_wic) == len(direct_wic)
+              and row_set_equal(paginated_wic, direct_wic)
+              and all("_page_tie" not in r for r in paginated_wic),
+              f"direct_total={len(direct_wic)} paginated_total={len(paginated_wic)} "
+              f"no_page_tie_field={all('_page_tie' not in r for r in paginated_wic)}",
+              failures)
+
+        status_meta, meta_body = bs_fixtures.http_get(f"{base}/meta")
+        check("wr12b-meta-advertises-max-tie-group-extra-rows",
+              status_meta == 200 and isinstance(meta_body, dict)
+              and meta_body.get("max_tie_group_extra_rows") == boundary_service.MAX_TIE_GROUP_EXTRA_ROWS,
+              f"status={status_meta} max_tie_group_extra_rows="
+              f"{meta_body.get('max_tie_group_extra_rows') if isinstance(meta_body, dict) else meta_body} "
+              f"(expected {boundary_service.MAX_TIE_GROUP_EXTRA_ROWS})",
+              failures)
+
+        # A tie_group_too_large 409 is NOT forced live here (it would need
+        # MAX_TIE_GROUP_EXTRA_ROWS+1 -- 1001 -- byte-identical rows born through real writes,
+        # disproportionate to construct in a fixture birth pass); `_tie_group_too_large`'s own
+        # status/disposition/message shape is asserted directly instead (unit-level, not a
+        # live network round trip) -- an HONEST distinction from a live-fired witness, named
+        # rather than silently presented as equivalent.
+        tgl_response = boundary_service._tie_group_too_large("some_view", 5)
+        check("wr12c-tie-group-too-large-shape-is-409-not-500",
+              tgl_response.status_code == 409
+              and json.loads(bytes(tgl_response.body)).get("disposition") == "tie_group_too_large",
+              f"status_code={tgl_response.status_code} "
+              f"body={json.loads(bytes(tgl_response.body))}",
               failures)
 
         # ==================== WR7: MODERATE finding (ledger rows 153/154) -- countersigned_in_

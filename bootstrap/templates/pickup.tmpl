@@ -98,7 +98,14 @@ def standing_decisions(cfg: bcc.ServedConfig) -> None:
     try:
         rows = bcc.get_all_rows(cfg.base, "/views/standing_decisions", cursor="after_id")
     except bcc.BoundaryRefusal as e:
-        if e.status == 409:
+        # Ledger rows 153/154 (coordinator's third fresh-context re-review): disambiguated by
+        # disposition, not bare status, since 409 is no longer capability_absent's alone on a
+        # /views/{view} route (tie_group_too_large answers 409 too) -- standing_decisions is a
+        # unique-key view (VIEW_REGISTRY, boundary_service.py) so tie_group_too_large can never
+        # actually fire here, but the check is unified with review_gap/mail's own sites below
+        # rather than left as a status-only special case that the NEXT registry change could
+        # silently miscolor.
+        if e.status == 409 and (e.body.get("disposition") if isinstance(e.body, dict) else None) == "capability_absent":
             print("(this world's kernel predates kernel/lineage/s36-decision-grade.sql -- no "
                   "standing decisions to show; apply s36 to this schema as a maintainer act to "
                   "adopt graded decisions, or there is nothing more to do here)")
@@ -168,7 +175,11 @@ def review_debt(cfg: bcc.ServedConfig) -> None:
     try:
         rows = bcc.get_all_rows(cfg.base, "/views/review_gap", cursor="after_id")
     except bcc.BoundaryRefusal as e:
-        if e.status == 409:
+        # Ledger rows 153/154 (coordinator's third fresh-context re-review): review_gap is a
+        # NON-unique-key view (VIEW_REGISTRY, boundary_service.py) whose pagination can
+        # genuinely answer `tie_group_too_large` (also 409) -- disambiguated by disposition, not
+        # bare status, so that real refusal is never printed as a stale-kernel capability_absent.
+        if e.status == 409 and (e.body.get("disposition") if isinstance(e.body, dict) else None) == "capability_absent":
             print("BLOCKED: pre-s20 grants, OR this world's kernel predates review_gap "
                   "(autoharn BACKLOG.md, 2026-07-09) -- the boundary reports this as a typed "
                   "capability_absent (see its own message below), not a bug in this script.")
@@ -208,7 +219,12 @@ def mail(cfg: bcc.ServedConfig) -> None:
         stale = bcc.get_all_rows(cfg.base, "/views/missive_stale", cursor="after_id")
         open_threads = bcc.get_all_rows(cfg.base, "/views/missive_open_threads", cursor="after_slug")
     except bcc.BoundaryRefusal as e:
-        if e.status == 409:
+        # Ledger rows 153/154 (coordinator's third fresh-context re-review): missive_stale is a
+        # NON-unique-key view (VIEW_REGISTRY, boundary_service.py, marked non-unique on
+        # structural grounds) whose pagination can genuinely answer `tie_group_too_large` (also
+        # 409) -- disambiguated by disposition, not bare status, so that refusal is never
+        # printed as a stale-kernel capability_absent.
+        if e.status == 409 and (e.body.get("disposition") if isinstance(e.body, dict) else None) == "capability_absent":
             print("BLOCKED: this world's kernel predates s58 (design/FABLE-MISSIVES-KERNEL-"
                   "SPEC.md) -- the boundary reports this as a typed capability_absent (see its "
                   "own message below), not a bug in this script.")

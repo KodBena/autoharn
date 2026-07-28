@@ -287,13 +287,22 @@ class MetaResponse(BaseModel):
     introspection it no longer has credentials for"). Three facts, no more (v1 scope, per the
     amendment's own three-item mechanism list) -- this is deliberately NOT a superset of
     `HealthResponse`'s `CapabilityManifest` (that shape stays `/health`'s own; `/meta` answers a
-    different question, "what can a served-read verb ask for", not "is this world alive")."""
+    different question, "what can a served-read verb ask for", not "is this world alive").
+
+    AMENDMENT (ledger rows 153/154, coordinator's third fresh-context re-review, ADR-0016): a
+    fourth fact, `max_tie_group_extra_rows`, added past the "three facts, no more" v1 scope
+    above -- an advertised numeric LIMIT is part of a boundary's contract with its callers (a
+    client must be able to plan around it, e.g. deciding whether a `tie_group_too_large`
+    refusal is worth retrying with a narrower query), not an internal implementation detail to
+    leave undisclosed. See `serving/boundary_service.py`'s own `MAX_TIE_GROUP_EXTRA_ROWS`
+    docstring for what it bounds."""
 
     known_views: list[str] = Field(description="VIEW_REGISTRY's full key set, sorted -- identical to what a GET /views/{view} 404 would report")
     lineage_head: str | None = Field(description="the highest kernel/lineage/*.sql manifest entry (basename, minus .sql) this deployment's own .detect.sql siblings confirm applied, walked in the SAME order bootstrap/migrate_core.py's own `_current_head_and_missing` uses -- null if even the first manifest entry's detect fails (a pre-birth-chain world, or a manifest/detect defect)")
     boundary_version: str = Field(description="this boundary_service.py build's own declared version string -- a service-owned fact, never a kernel fact")
     protocol_version: str = Field(default=WIRE_PROTOCOL_VERSION, description="see HealthResponse.protocol_version -- the same wire-shape contract, repeated here so a client that only calls /meta still gets the handshake fact")
     authn_mode: str = Field(default=AUTHN_MODE, description="see HealthResponse.authn_mode")
+    max_tie_group_extra_rows: int = Field(description="serving/boundary_service.py's own MAX_TIE_GROUP_EXTRA_ROWS -- the bound on how far a non-unique-key view's atomic tie-group page extension may stretch past the requested `limit` before GET /views/{view} refuses with a typed tie_group_too_large (409) rather than serve an unbounded page")
 
 
 class KindsResponse(BaseModel):

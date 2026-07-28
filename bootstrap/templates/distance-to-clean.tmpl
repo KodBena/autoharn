@@ -177,7 +177,16 @@ def _view_debt(cfg: bcc.ServedConfig, view: str, cursor: str,
     try:
         rows = bcc.get_all_rows(cfg.base, f"/views/{view}", cursor=cursor)
     except bcc.BoundaryRefusal as e:
-        if e.status == 409:
+        # Ledger rows 153/154 (coordinator's third fresh-context re-review): status 409 alone no
+        # longer implies `capability_absent` on this route -- `tie_group_too_large` (a genuinely
+        # DIFFERENT, non-view-absence refusal a non-unique-key view's pagination can now return)
+        # answers 409 too, the SAME status this function used to treat as capability_absent
+        # unconditionally. Disambiguated by `disposition`, never by bare status alone (a hazard
+        # this file's own author found in reach of THAT change, not a pre-existing defect) --
+        # anything else, including a genuine tie_group_too_large, falls through to the generic
+        # ERROR/BLOCKED branch below, which already prints the boundary's own message verbatim.
+        disposition = e.body.get("disposition") if isinstance(e.body, dict) else None
+        if e.status == 409 and disposition == "capability_absent":
             message = e.body.get("message") if isinstance(e.body, dict) else None
             return 0, [], (f"UNAVAILABLE ({message or capability_hint})")
         detail = e.body.get("message") if isinstance(e.body, dict) else e.body
