@@ -24,7 +24,8 @@ item) — commissioned by the maintainer, produced by a second AI consultant, de
 twice; the notes above and below record an integrity problem in how it was delivered
 and what that does and does not taint.
 
-**Provenance:** second Fable-class consultant, 2026-07-28, two deliveries. The
+**Provenance:** second Fable-class consultant (the term is defined in the Vocabulary
+block below), 2026-07-28, two deliveries. The
 completion (Phase 1 reconstructed + citations) is first below; the originally-delivered
 Phase 2 follows verbatim as the second section, unrevised. Filed verbatim at commit
 `ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop
@@ -67,13 +68,21 @@ and was corrected in the blind-round-1 repair — the corrected entry is the
   [ADR-0011](../law/adr/0011-mechanization-discipline.md),
   [ADR-0014](../law/adr/0014-executor-second-opinion.md),
   [ADR-0017](../law/adr/0017-the-zero-context-reader.md) (the standard this repair
-  pass itself follows). ADR-0018 is the consult-loop precedent this commission
-  invoked when proposing a second-consultant check.
+  pass itself follows).
+  [ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md) ("Consults are not
+  front-loaded") is the consult discipline this commission invoked — a consult
+  receives the problem and evidence, never the commissioner's candidate answers;
+  the maintainer's "ADR-0018-ish" hedge acknowledged up front that this consult
+  would eventually need to SEE the commissioner's answers to judge them, which is
+  what the sealed two-phase shape (and its failure) was about.
 - **sNN** (s21, s28, s34, s41, s47, s48, s60, s64, …) — the Nth numbered kernel
   migration delta, one file each under
   [`kernel/lineage/`](../kernel/lineage/README.md); "sNN header" means the rule or
   requirement text at the top of that delta's own file.
 - **Ledger-row citations** ("row 339", "autoharn2 row 1265", "rows 431/435") — a row
+  number cited WITHOUT a world name belongs to the world under discussion in its
+  passage (the Phase-2 W1 correction's "rows 1463/1467/1468/1471" are `autoharn2`
+  rows); otherwise the world is named. Mechanically: a row
   number in this project's append-only decision ledger (a Postgres-backed record
   kept outside this repository); resolve one with `./led show <row>` against the
   world the number belongs to (the worlds named here are `autoharn2` and the three
@@ -81,9 +90,9 @@ and was corrected in the blind-round-1 repair — the corrected entry is the
 - **The named-consumer test** — the maintainer's standing check that a proposed
   mechanism or view must name the specific reader who will use it before it is
   built; an unnameable consumer marks the proposal as ritual, not a requirement
-  (this project's orchestration contract, `CLAUDE.md`).
+  (this project's orchestration contract, [CLAUDE.md](../CLAUDE.md)).
 - **Fail-safe delta / strictly-additive refusal** — a kernel change that only adds a
-  refusal, view, or vocabulary without loosening anything existing; `CLAUDE.md`'s
+  refusal, view, or vocabulary without loosening anything existing; [CLAUDE.md](../CLAUDE.md)'s
   "class-ratified fail-safe deltas" rule pre-clears this shape without a per-delta
   maintainer question.
 - **`discharge_grade`, `review_gap`** — kernel-computed surfaces: `discharge_grade`
@@ -170,7 +179,7 @@ and was corrected in the blind-round-1 repair — the corrected entry is the
   assessments; "the maintainer" is always the human project owner, a third and
   distinct party whose disposition this whole document awaits.
 - **Fable / "Fable-class"** — the maintainer's primary AI-collaborator authoring
-  model (this project's `CLAUDE.md` and `GLOSSARY.md` define the role); "second
+  model (this project's [CLAUDE.md](../CLAUDE.md) and [GLOSSARY.md](../GLOSSARY.md) define the role); "second
   Fable-class consultant" means a separate instance of that same model class, with
   none of the coordinator's working context.
 - **WITNESSED / UNWITNESSED / raw-fetched / search-surfaced** — this project's
@@ -272,7 +281,7 @@ Delivered in my prior message and reproduced by reference, unrevised, per the co
 
 ---
 
-# Original first delivery (Phase 2 only), verbatim
+## Original first delivery — Phase 2 full text, verbatim (the appendix the condensed restatement above refers back to)
 
 ## Phase 2 — adjudication (FAQ as committed at 5541e5d, plus the sealed assessments)
 
