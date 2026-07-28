@@ -464,10 +464,12 @@ design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall. A second-Fa
 ADR-0018 consult reviewed this section same-day with web prior art
 (design/CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md, incl. its disclosed deviation) and
 its corrections are applied below; that is a consult, not an A:B:C legibility loop,
-and this marker claims only what ran. The maintainer has not yet ratified the
-SHOULD-clauses or the three candidate deltas — until he has, they are reasoned
-proposals, binding nobody. Removal condition: strike when a real A:B:C attestation
-covers this section and the maintainer has dispositioned the proposals. -->
+and this marker claims only what ran. RATIFIED 2026-07-28 (autoharn3 row 201, the
+maintainer's disposition verbatim there): the SHOULD-clauses below now bind as
+convention, and the three candidate deltas are ratified as s69
+(design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, build in flight) — with his
+imperfect-agents proviso woven into the section text where it bears. Removal
+condition: strike when a real A:B:C attestation covers this section. -->
 
 ## Work-unit role assignment: who opens, claims, closes, and reviews
 
@@ -577,11 +579,19 @@ three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
 enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
 a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
 place independence and grade are recorded — has zero adoption outside experience4.
-(a) and (b) are candidate fail-safe kernel deltas, joined by (d)
-review-regards-in-force (fix-gate rule 3's mechanization, added on the 2026-07-28
-consult's finding) — all three only ADD refusals; the class-ratification of
-2026-07-09 covers them — proposed here, not decided; the maintainer's disposition
-governs. Delta (b) ships ONLY in the per-close-shape enumeration the planning
+(a) and (b) are fail-safe kernel deltas, joined by (d) review-regards-in-force
+(fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — all
+three only ADD refusals, and all three were RATIFIED 2026-07-28 as one delta, s69
+(maintainer disposition, autoharn3 row 201;
+design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md is the governing spec). His
+ratification carried a proviso that binds the shape and this doctrine alike, his
+words: a higher authority "can be capable of judging another actor inept … so a
+claim must be able to be defeated and reclaimed" — autoharn must handle imperfect
+agents. Consequence, stated here as doctrine: NOTHING in this section freezes a role
+assignment — a claim is defeated by a later claim (the reclaim path), an open item
+is superseded or overturned through ordinary append-only supersession, and s69's
+closer refusal binds to the LATEST in-force claimant precisely so the reclaim path
+composes with it. Delta (b) ships ONLY in the per-close-shape enumeration the planning
 subsection below states; its flat "review/finding only" form would refuse honest
 planning closes and must not ship. (c) is not a delta at all: it is this section,
 applied — and the role-census view that serves it has its consumers named:
