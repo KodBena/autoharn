@@ -75,7 +75,14 @@ groups, each deliberate:
   `dispatch`, and — since the 2026-07-28 root repoint (ledger row 220) — the root
   editions of `pickup`, `distance-to-clean`, `asof-export`, same as every scaffolded
   world already ran. `./legacy/` keeps the direct originals as the operator recovery
-  path for when this service is down, unchanged in capability.
+  path for when this service is down, unchanged in capability. Know one non-obvious
+  behavior of the served shims (witnessed at the repoint, from
+  `ensure_running_or_leave_unreachable`'s own docstring): on a boundary-unreachable
+  first attempt they do not merely refuse — they attempt to SPAWN the boundary
+  process (or adopt a concurrent winner) and retry once before printing the refusal.
+  A "read" verb against a down boundary is therefore also a service-control act;
+  `doctor` staying direct is what keeps at least one diagnostic free of that side
+  effect.
 - **Independent instruments** (direct psql or no DB at all, DELIBERATELY outside this
   service): `verify-chain` — a tamper-evidence auditor that routes through the
   component it audits would trust the very thing a compromise would subvert; `judge` —
