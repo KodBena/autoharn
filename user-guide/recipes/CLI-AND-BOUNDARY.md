@@ -1,6 +1,14 @@
-# CLI and boundary — recipes
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
 
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- the content below is byte-preserved prose moved verbatim out of user-guide/USER-RECIPES-FAQ.md (commit `178ec789439044bebb664e7374c2be757d064d11`; sections named in the provenance line above), plus mechanical `../` link-depth repairs and named cross-file link/anchor rewrites for content that relocated to a sibling factor file; no other prose was reworded (ADR-0020's clause 1: a residue disposition and a link gate are the mechanical floor, never a substitute for a cold meaning-preservation read -- that read DID run, by a fresh-context Agent invocation distinct from the session that performed the move; see this work item's execution report for the per-file outcome). The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge, per this work item's adjudication conditions (ledger row 185). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
+# CLI and boundary — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit
 `178ec789439044bebb664e7374c2be757d064d11`, sections "The ledger boundary service (`serving/`)", "Reaching the ledger through a
@@ -472,7 +480,7 @@ quote it if it is genuinely intended prose.
 `led --json <ledger|review|registration|obligation> <file|->` routes a JSON object straight to
 the matching s43 [write boundary](../../GLOSSARY.md#write-boundary) function
 (`ledger_write`/`review_write`/`registration_write`/`obligation_write`) — the exact same four
-functions "The ledger boundary service (`serving/`)" section above (editorial fix at the suite's legibility loop: the original said "below", wrong-direction even pre-split — the residue filing anticipated exactly this deliberate correction) documents for its own HTTP
+functions that "The ledger boundary service (`serving/`)" section above (editorial fix at the suite's legibility loop: the original said "below", wrong-direction even pre-split — the residue filing anticipated exactly this deliberate correction) documents for its own HTTP
 endpoints, so the payload shape is the one documented there (payload keys are the target table's own
 column names, verbatim, no second vocabulary). Validation at this layer is well-formedness and
 top-level-shape only (parses as JSON, is an object) — everything else is the kernel's own

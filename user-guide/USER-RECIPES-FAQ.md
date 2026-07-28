@@ -1,3 +1,13 @@
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
+
 # Can I do that? — recipes FAQ for operators
 
 This page is written for an operator of a scaffolded project who wants to know whether the
@@ -9,19 +19,19 @@ ceremony in full — each recipe names the intent, the one-line shape, the hones
 the ONE page where the full truth lives (this project's single-source-of-truth discipline:
 a grammar documented twice drifts). The dense per-mechanism inventory this page complements
 is [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md); the front door for first-time setup is
-[USER-GUIDE.md](USER-GUIDE.md). Delegating authority, taint/license compartmentalization, and
+[USER-GUIDE.md](USER-GUIDE.md). Delegating authority, taint (license/provenance contamination) compartmentalization, and
 reviewer read zoning ([ADR-0018](../law/adr/0018-consults-are-not-front-loaded.md)) get their own worked-example page:
 [USER-ACCESS-CONTROL-GUIDE.md](USER-ACCESS-CONTROL-GUIDE.md).
 
 A note on two terms used unglossed across the suite: the **kernel** is this
 project's enforced Postgres layer (schema, functions, constraints -- the thing that
 accepts or refuses every write); a **world** is one scaffolded, database-backed
-deployment of it (defined once in SETUP-AND-SCAFFOLD.md, used everywhere).
+deployment of it (the one defining home is [GLOSSARY.md#world](../GLOSSARY.md#world), used everywhere).
 
 ## Contents
 
-The sections below, in page order — each link jumps to that section's own
-question-and-recipe entries.
+The sections below, in the order the original single page listed them — each link
+now opens the recipe file that section moved to at the split.
 
 - [Planning and retrospectives](recipes/DECLARING-AND-QUEUES.md#planning-and-retrospectives)
 - [Workflow patterns](recipes/METHODS.md#workflow-patterns)
@@ -54,8 +64,6 @@ question-and-recipe entries.
 - [Recusal and independent RCA (a conflict-of-interest method harvested downstream)](recipes/METHODS.md#recusal-and-independent-rca-a-conflict-of-interest-method-harvested-downstream)
 - [What this page is not](#what-this-page-is-not)
 
-
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- 29 of this file's 31 sections moved verbatim to user-guide/recipes/*.md (byte-preserving; per-file provenance lines and their own markers there), leaving this file as a thin index: the original intro, a Contents list retargeted at recipes/<file>.md#<anchor>, one H2 stub per moved section (heading text verbatim, a one-line charter, and a link -- no moved content restated here), and "What this page is not" (unchanged). See this work item's execution report for the full residue-disposition summary. The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge (ledger row 185's adjudication conditions). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
 
 ## Planning and retrospectives
 
@@ -99,7 +107,7 @@ The GPG web-of-trust layer's ceremonies. Full recipe: [recipes/EVIDENCE-AND-TRUS
 
 ## Review discipline
 
-Countersign obligations, `decomposition_review`, content-free-review detection. Full recipe: [recipes/REVIEW-AND-GATING.md](recipes/REVIEW-AND-GATING.md#review-discipline).
+Countersign obligations, `decomposition_review`, content-free-review detection, the changeset-vs-commit and precondition-gating recipes. Full recipe: [recipes/REVIEW-AND-GATING.md](recipes/REVIEW-AND-GATING.md#review-discipline).
 
 ## Work-unit role assignment: who opens, claims, closes, and reviews
 
@@ -181,4 +189,3 @@ mechanism carries witnessed output or an honest UNWITNESSED mark), it is not a s
 enforced — where an entry says "declaration only," the enforcement genuinely does not
 exist yet, and the cited spec names the stage that would build it.
 
-<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- carried forward from the pre-split version of this file's own trailing marker (usability review, ledger row 1180, 2026-07-23), split in two at the faq-refactor-by-concern move (ledger row 185, 2026-07-28) per its own two disjoint span sets. THIS half covers the Contents TOC retitled by operator intent with (sNN)/date tags kept parenthetical (finding 8: four headings -- "Principal identity (s40/s41)", "Typed verdicts and refusal recording (s42/s43)", "Standing lifecycle (s45)", "Boundary multiplex, CLI rebase, and the workflow-unit compiler (2026-07-18)" -- were indexed by generation number/build date, not reader intent; retitled, with every cross-reference and anchor in this file and USER-GUIDE.md updated to match). The setup-TUI teletype/`screens.py` correction half of the original marker moved to recipes/SETUP-AND-SCAFFOLD.md along with the 'Getting started' section it scopes. The original marker's own note about "an unrelated, narrowly-scoped exempt marker higher up (a single Q&A entry)" no longer applies to THIS file: that marker (M1) relocated to recipes/REVIEW-AND-GATING.md along with the "Review discipline" section it scopes. Neither this disclosure nor any marker in the pre-split file constituted a genuine fresh-context A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch tool available to spawn a truly separate B invocation at the time this marker was first written, the same disclosed gap USER-CONFIGURATION.md's own marker names. Waived here only to unblock the original commit and carried forward across the move rather than silently dropped. Removal condition: strike when a real A:B:C attestation covers this file. -->

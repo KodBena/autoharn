@@ -1,6 +1,14 @@
-# Setup and scaffold — recipes
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
 
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- the content below is byte-preserved prose moved verbatim out of user-guide/USER-RECIPES-FAQ.md (commit `178ec789439044bebb664e7374c2be757d064d11`; sections named in the provenance line above), plus mechanical `../` link-depth repairs and named cross-file link/anchor rewrites for content that relocated to a sibling factor file; no other prose was reworded (ADR-0020's clause 1: a residue disposition and a link gate are the mechanical floor, never a substitute for a cold meaning-preservation read -- that read DID run, by a fresh-context Agent invocation distinct from the session that performed the move; see this work item's execution report for the per-file outcome). The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge, per this work item's adjudication conditions (ledger row 185). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
+# Setup and scaffold — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit
 `178ec789439044bebb664e7374c2be757d064d11`, sections "Getting started: the guided setup TUI" and "Deployments can self-serve the
@@ -13,8 +21,6 @@ belong: anything an operator does to a running world's record (see the other sev
 files in this directory, and the [index](../USER-RECIPES-FAQ.md)).
 
 ---
-
-<!-- doc-attest-exempt: disclosed gap, not a clean exemption -- carried forward from the pre-split user-guide/USER-RECIPES-FAQ.md's own trailing marker (usability review, ledger row 1180, 2026-07-23), split in two at the faq-refactor-by-concern move (ledger row 185, 2026-07-28) per its own two disjoint span sets. THIS half covers the setup-TUI section's stale "teletype" paragraph corrected to describe the actual current Tree-based UI (the in-reach hazard named in that round's brief), plus its immediately-adjacent stale `screens.py` references (that module no longer exists post-rebuild) and mis-ordered/miscounted section list -- all of it below, in the 'Getting started' section this file now carries whole. The Contents-TOC-retitling half of the original marker stayed at user-guide/USER-RECIPES-FAQ.md (the retained index) along with the Contents section it scopes. The original marker's own note about "an unrelated, narrowly-scoped exempt marker higher up (a single Q&A entry)" no longer applies to THIS file: that marker (the same one the index's half now calls M1) relocated to recipes/REVIEW-AND-GATING.md along with the "Review discipline" section it scopes. Neither this disclosure nor any marker in the pre-split file constituted a genuine fresh-context A:B:C loop (user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md): the executing session had no Agent/Task-dispatch tool available to spawn a truly separate B invocation at the time this marker was first written, the same disclosed gap USER-CONFIGURATION.md's own marker names. Waived here only to unblock the original commit and carried forward across the move rather than silently dropped. Removal condition: strike when a real A:B:C attestation covers this file. -->
 
 ## Getting started: the guided setup TUI (`python3 -m tools.setup_tui`)
 

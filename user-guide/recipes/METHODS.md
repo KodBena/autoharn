@@ -1,6 +1,14 @@
-# Methods — recipes
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
 
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- the content below is byte-preserved prose moved verbatim out of user-guide/USER-RECIPES-FAQ.md (commit `178ec789439044bebb664e7374c2be757d064d11`; sections named in the provenance line above), plus mechanical `../` link-depth repairs and named cross-file link/anchor rewrites for content that relocated to a sibling factor file; no other prose was reworded (ADR-0020's clause 1: a residue disposition and a link gate are the mechanical floor, never a substitute for a cold meaning-preservation read -- that read DID run, by a fresh-context Agent invocation distinct from the session that performed the move; see this work item's execution report for the per-file outcome). The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge, per this work item's adjudication conditions (ledger row 185). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
+# Methods — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit
 `178ec789439044bebb664e7374c2be757d064d11`, sections "Workflow patterns", "Capturing errors so they cannot quietly recur (ADR-0000
@@ -319,7 +327,7 @@ This section covers a five-step method for what an orchestrator should do when t
 would need to judge is a decision it made itself — recuse from the judgment, then dispatch an
 independent, evidence-only investigation rather than adjudicate its own work. It is a documented
 practice (a discipline to follow by hand), not a mechanism that refuses anything; nothing here
-gates a write. Provenance: harvested from the autoharn-panel deployment's own orchestrator
+gates a write. Provenance: harvested from the autoharn-panel deployment (the sibling operator-dashboard project riding this system's boundary; glossed fully in SETUP-AND-SCAFFOLD.md)'s own orchestrator
 behavior, reconstructed and generalized in this project's own ledger, `recusal-rca-recipe` (row
 1358, still open at the time of this writing — a ledger row, not a committed page: `./autoharn led show
 1358` at the repository root reads it in full).

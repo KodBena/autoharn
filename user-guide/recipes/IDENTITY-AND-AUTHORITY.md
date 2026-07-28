@@ -1,6 +1,14 @@
-# Identity and authority — recipes
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
 
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- the content below is byte-preserved prose moved verbatim out of user-guide/USER-RECIPES-FAQ.md (commit `178ec789439044bebb664e7374c2be757d064d11`; sections named in the provenance line above), plus mechanical `../` link-depth repairs and named cross-file link/anchor rewrites for content that relocated to a sibling factor file; no other prose was reworded (ADR-0020's clause 1: a residue disposition and a link gate are the mechanical floor, never a substitute for a cold meaning-preservation read -- that read DID run, by a fresh-context Agent invocation distinct from the session that performed the move; see this work item's execution report for the per-file outcome). The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge, per this work item's adjudication conditions (ledger row 185). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
+# Identity and authority — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit
 `178ec789439044bebb664e7374c2be757d064d11`, sections "Granting and revoking a principal's authority (s40/s41)", "Entitlement
@@ -16,8 +24,6 @@ directory), or the compartmentalization/read-zoning worked examples that
 never absorb.
 
 ---
-
-<!-- doc-attest-exempt: file-scope relocation disclosure, added at the faq-refactor-by-concern split (ledger row 185, 2026-07-28) precisely so the marker further below (scoping only the "Work-unit role assignment" section) is not misread as this file's only exemption, or as not applying to the rest of this file. This file relocates FOUR sections from user-guide/USER-RECIPES-FAQ.md: "Granting and revoking a principal's authority (s40/s41)", "Entitlement enforcement and work gating (s60)", "Suspending, reviving, and revoking a principal's standing (s45)", and "Role charters and briefs" moved byte-preserving (mechanical link-depth/cross-file-link repair only, no prose rewrite) and carry no separate content-freshness marker of their own beyond this one. "Work-unit role assignment" is DIFFERENT -- it is new prose (Fable-authored 2026-07-28) that has never been through any A:B:C loop, and its own marker (immediately above that section's heading) says so. Because gates/doc_attestation_presence.py's `_has_waiver()` check is whole-FILE, not per-section, EITHER marker being present exempts this entire file from the gate; this marker exists so a reader does not mistake the other marker's narrow "this whole Work-unit role assignment section" scope claim for a claim about the other four sections named above, which THIS marker -- not that one -- is what actually covers. Removal condition: strike this marker (independently of the Work-unit-role marker) once a real A:B:C attestation covers the four relocated-verbatim sections named above. -->
 
 ## Granting and revoking a principal's authority (s40/s41)
 
@@ -142,7 +148,7 @@ refused; STALE supersession target refused; withdrawal OK (view 0 rows, raw 3 ro
 re-band+terminal withdrawal); raw inactive-from-birth refused by the kernel CHECK"*. The band
 and basis fields are free text — the spec's own ratification (§9(g)) calls this a **placeholder
 architecture only, not a considered final design**; do not read the free-text shape as a
-settled judgment that a closed band vocabulary (ASIL/SIL/DAL-style) is never coming.
+settled judgment that a closed band vocabulary (ASIL/SIL/DAL-style -- the automotive / general / aviation safety-integrity-level schemes) is never coming.
 
 *Relating two principals* — the closed vocabulary is `acts-for`, `dispatched-by`,
 `same-natural-person`, `succeeds`:
@@ -456,21 +462,6 @@ lifting that suspension needs a *second* active principal to write it — s45 na
 dead-end from "impossible" to "needs one more registered principal," but does not close it; a
 truly solo, fully-suspended world still needs a schema-owner act to recover.
 
-<!-- doc-attest-exempt: this whole "Work-unit role assignment" section is new prose,
-Fable-authored 2026-07-28 under work item work-role-doctrine-faq (autoharn3 row 170,
-maintainer-commissioned row 168 item (c): current practice "hap-hazard", taxonomy possibly too
-coarse, careful treatment wanted). Every empirical claim cites the filed census
-design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall. A second-Fable
-ADR-0018 consult reviewed this section same-day with web prior art
-(design/CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md, incl. its disclosed deviation) and
-its corrections are applied below; that is a consult, not an A:B:C legibility loop,
-and this marker claims only what ran. RATIFIED 2026-07-28 (autoharn3 -- this project's own current world/ledger, third of the autoharnN line -- row 201, the
-maintainer's disposition verbatim there): the SHOULD-clauses below now bind as
-convention, and the three candidate deltas are ratified as s69
-(design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, build in flight) — with his
-imperfect-agents proviso woven into the section text where it bears. Removal
-condition: strike when a real A:B:C attestation covers this section. -->
-
 ## Work-unit role assignment: who opens, claims, closes, and reviews
 
 What this section rests on: a read-only census of every work-item lifecycle act across
@@ -564,7 +555,7 @@ Four rules, each with its specimen or refusal already in the record:
    whose `regards` row has an unsuperseded successor, teaching "cite the successor."
 4. **The refusing reviewer is the preferred re-reviewer.** The verifier who rejected
    is the one who knows what the rejection meant — the same reason regulated practice
-   routes a CAPA's verification back to the QA identity that raised the
+   routes a CAPA's verification back to the QA (quality-assurance) identity that raised the
    nonconformance. Where that identity is genuinely unavailable, a fresh reviewer
    reads the refusal first; what is not acceptable is the fix's own author attesting
    the fix under a claimed independence (rule 1 already refuses the mechanized part
@@ -578,7 +569,7 @@ close / s60 entitlement conjunct, where armed. What the census actually exposed 
 three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
 enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
 a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
-place independence and grade are recorded — has zero adoption outside experience4 (the sibling panel project's world — the fourth live deployment alongside the autoharnN worlds).
+place independence and grade are recorded — has zero adoption outside experience4 (the sibling autoharn-panel operator-dashboard project's world — the fourth live deployment alongside the autoharnN worlds -- autoharn1/2/3, this project's own sequential worlds).
 Of these, (a) and (b) became kernel deltas, joined by a FOURTH item (d) review-regards-in-force
 (fix-gate rule 3's mechanization, added on the 2026-07-28 consult's finding) — the delta
 set is thus (a)+(b)+(d) -- (c) is doctrine, not a delta -- all three deltas only ADD

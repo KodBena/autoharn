@@ -1,6 +1,14 @@
-# Review and gating — recipes
+<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
+pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
+coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
+records with the full round history are appended to the attestations jsonl the same
+day). This waiver marker persists ONLY because the record schema's own two-round cap
+(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
+represent a three-round adjudicated loop -- filed as work item
+attestation-schema-multiround; strike this marker when the schema can carry the loop
+that actually ran. -->
 
-<!-- doc-attest-exempt: relocation-class mechanical move (work item faq-refactor-by-concern, ledger row 185 adjudication, 2026-07-28) -- the content below is byte-preserved prose moved verbatim out of user-guide/USER-RECIPES-FAQ.md (commit `178ec789439044bebb664e7374c2be757d064d11`; sections named in the provenance line above), plus mechanical `../` link-depth repairs and named cross-file link/anchor rewrites for content that relocated to a sibling factor file; no other prose was reworded (ADR-0020's clause 1: a residue disposition and a link gate are the mechanical floor, never a substitute for a cold meaning-preservation read -- that read DID run, by a fresh-context Agent invocation distinct from the session that performed the move; see this work item's execution report for the per-file outcome). The ADR-0017 A:B:C legibility loop is a SEPARATE read this session did not run: the coordinator schedules it after merge, per this work item's adjudication conditions (ledger row 185). Waived here only to unblock this commit. Removal condition: strike this marker and run the real ADR-0017 A:B:C loop next time this file is touched for content, not just link repair. -->
+# Review and gating — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit
 `178ec789439044bebb664e7374c2be757d064d11`, sections "Review discipline", "Classifying audit/diagnostic findings", "The
@@ -36,21 +44,6 @@ the "test"-shaped instance, not the class, and never substitutes for a human rea
 This exit code (6) is reachable only through `--review-gap`, and only when nothing earlier
 already raised the exit and at least one review is flagged. Witnessed both polarities:
 [seen-red/content-free-review-audit/](../../seen-red/content-free-review-audit).
-
-<!-- doc-attest-exempt: this single Q&A entry (kernel/lineage/s56-reservation-residue.sql,
-design/FABLE-RESERVATION-RESIDUE-SPEC.md) is new prose added by a single-session Sonnet builder;
-no live A:B:C loop was run (this session cannot fork a genuinely fresh reviewer, the same limit
-named at ADR-0012's own doc-attest-exempt marker) and this marker does not claim one did. Content
-is witnessed against a live fixture (seen-red/reservation-residue/), not merely asserted. Flagged
-to the maintainer as a standing exemption on this entry rather than a wholesale one -- a genuine
-A:B:C pass over this page should still happen, and this marker's scope is exactly the one
-paragraph immediately below, not the rest of THIS file (recipes/REVIEW-AND-GATING.md,
-397 lines after the faq-refactor-by-concern split, ledger row 185, 2026-07-28 --
-materially smaller than the 3375-line page this marker originally scoped against, so the
-same per-file-not-per-paragraph gate mechanics now exempt a much larger FRACTION of this
-file's surrounding content than when this marker was first written; still cannot express
-more narrowly than file-grain). Removal condition: strike when a
-real A:B:C attestation covers this page. -->
 
 **I countersigned with a concern instead of a clean pass — does that discharge the review
 obligation, or does it leave the gate stuck open?** It discharges (kernel/lineage/
