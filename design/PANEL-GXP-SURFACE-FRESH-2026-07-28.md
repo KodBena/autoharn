@@ -2,14 +2,14 @@
 row 168 part b, brief COMMISSION-PANEL-GXP-SURFACE-FRESH.md; the INDEPENDENT fresh-eyes
 variant -- its independence clause forbade it both prior survey documents, and it states
 compliance in its own preamble. Opus exception -- to the project's Sonnet-default authoring policy -- maintainer-granted by the request itself).
-ADR-0017 legibility loop NOT yet run; pending, same as its siblings. Removal condition:
+ADR-0017 legibility loop (the zero-context-reader standard, law/adr/0017-the-zero-context-reader.md) NOT yet run; pending, same as its siblings. Removal condition:
 the loop's attestation record supersedes this exemption. -->
 
 **Provenance:** produced by the commissioned fresh-eyes surveyor (Opus, 2026-07-28), the
 anchoring-free second variant the maintainer requested alongside the delta survey
 ([PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](PANEL-GXP-SURFACE-UPDATE-2026-07-28.md)). The two are designed to be read against each
 other: this one derives the surface from primary sources alone. The text below now
-carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop (2026-07-28: pre-review pass,
+carries LEGIBILITY REPAIRS from an [ADR-0017](../law/adr/0017-the-zero-context-reader.md) +A:B:C loop (2026-07-28: pre-review pass,
 then blind-round-1 repairs) — a "Vocabulary and citation conventions" block, resolving
 links, and bracketed editorial notes; no factual claim, verdict, or table value was
 altered, with two disclosed exceptions from blind round 1: an authoring-residue line
@@ -45,7 +45,19 @@ precedent.
   not an NRC compliance claim.
 - **clingo** — the Answer Set Programming solver `judge` runs alongside a direct SQL read
   of the same ledger data, to independently re-derive the same views and check the two
-  agree.
+  agree; `judge`'s closed verdict vocabulary is `AGREE` / `DIVERGE_BY_DESIGN` /
+  `DIVERGE_DEFECT` / `QUARANTINED` (only the first two appear in this document's prose).
+- **The coordinator** — the orchestrating session that commissioned this survey and
+  filed it; the surveyor is a separate, context-free instance. **Missive** — a message
+  one world sends another through the kernel's typed substrate (sent/received/disposed
+  states; §1.4's views read them). **seen-red/** — this repository's bank of
+  red-first fixtures (each family witnesses the failing state before the fix, kept
+  runnable). **P0/P1** — the panel SPEC.md's own priority tiers (P0 highest).
+  **`LED_BIN`** — the retired panel backend's subprocess path to the `led` CLI,
+  explained where §3.1 describes that backend. **"Commission row 168 part b"** — the
+  second lettered part of the commission recorded at ledger row 168.
+  **`COMMISSION-PANEL-GXP-SURFACE-FRESH.md`** — the commissioning prompt, an
+  untracked session file per this project's ephemera rule, not in this tree.
 - **C1–C29** — the numbered clauses of [ADR-0019's appendix](../law/adr/0019-appendix-ui-proscriptions.md)
   (UI proscriptions); the clauses this document actually cites carry a parenthetical
   gloss at first use (most in §2.0/§2.1; C29's is in §2.2); the rest of C1-C28 are
@@ -72,7 +84,10 @@ precedent.
   ledger column; **world / deployment** — one world (a born ledger instance) is served
   as one deployment under the boundary's `/d/{name}/` multiplex.
 - Citations of the form "panel `BACKLOG.md`, entry N" are POSITIONAL into a mutable
-  file in the sibling repository — they index that file as it stood at survey time
+  file in the sibling repository — specifically the LIVE panel checkout of §3.2
+  (`/home/bork/w/vdc/2/autoharn-panel`, git remote `autoharn-gui`), NOT the §3.1
+  `tools/autoharn-panel` submodule; both answer to the name "autoharn-panel" (the
+  collision §4.C C15 reports) — they index that file as it stood at survey time
   (2026-07-28) and may dangle after it is reordered; retained verbatim as surveyed.
 
 ---

@@ -83,6 +83,20 @@ precedent.
   named in prose below are linked at their first occurrence.
 - Plain code-formatted paths (`serving/boundary_service.py:2242-2244`) resolve from this
   repository's root, matching the sibling kickstart document's own convention.
+- **ALCOA(+)** — the data-integrity mnemonic (Attributable, Legible, Contemporaneous,
+  Original, Accurate, + Complete/Consistent/Enduring/Available); §2's table rows ARE
+  these attributes, unlabeled there as surveyed.
+- **Stamp** — this project's name for the HMAC value above as attached to a row;
+  `stamp_verified`, `stamp-distinctness`, and `stamp_invocation` all name aspects of
+  it. **Port 8433** — the shared boundary hub every deployment here is served on
+  (§1.3). **`capability_absent`** — the typed 409 refusal returned when a requested
+  surface isn't in the serving deployment's capability manifest. **`put`/`get`/`stat`**
+  — store / retrieve / inspect a content-addressed artifact blob. **"Commission row
+  152 part 3"** — the third numbered item of the commission recorded at ledger row
+  152; "the request itself" in the header comment is that same row's quoted
+  maintainer text. **"Hard boundary"** (§0) — the commission's touch-nothing-live
+  constraints, quoted in §0 itself. s64's "five delegation-condition columns" are
+  enumerated in §1.6.
 - **Witness classes** (carried from the prior doc, restated for a reader who opens this
   document alone): **WITNESSED** — the surveyor ran the command/probe and shows the
   observed output; **DOC-SOURCED** — quoted from a named file at a cited location, not
