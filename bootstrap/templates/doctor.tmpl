@@ -65,7 +65,8 @@ if any(a in ("--help", "-h") for a in sys.argv[1:]):
         "\n"
         "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
         "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
-        "high-water/epoch, ./autoharn led answers a read query, boundary URL, principals registered.\n"
+        "high-water/epoch, ./autoharn led answers a read query, boundary URL, principals registered,\n"
+        "courier principal registered, world_identity populated.\n"
         "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
         "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
         "least one FAIL line. Takes no arguments beyond --help/-h."
@@ -295,6 +296,65 @@ def check_principals(dep: deployment_record.DeploymentRecord) -> tuple[str, str]
     return _line("principals registered", PASS, f"{count or '0'} row(s) in {dep.kern}.principal"), PASS
 
 
+def check_courier_registered(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """work item birth-standing-steps-scaffold: the `courier` principal is now a birth act
+    (bootstrap/new-project.sh's s58 courier birth act, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.6)
+    for every world whose kernel lineage includes s58-missive-substrate.sql -- witnessed missing
+    at the experience4 birth until the first courier pull refused (autoharn3 row 122's by-hand
+    fix). A world with s58 applied but no 'courier' row is the same class of gap, caught here
+    rather than at the first courier pull."""
+    r = _psql(dep.host, dep.db, "SELECT count(*) FROM :\"kern\".principal WHERE name = 'courier';",
+              {"kern": dep.kern})
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return _line("courier principal registered", SKIP,
+                         f"no {dep.kern}.principal (kernel lineage not applied to this world)"), SKIP
+        return _line("courier principal registered", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    count = r.stdout.strip()
+    r2 = _psql(dep.host, dep.db, 'SELECT count(*) FROM :"kern".world_identity;', {"kern": dep.kern})
+    if r2.returncode != 0 and "does not exist" in r2.stderr and count in ("", "0"):
+        return _line("courier principal registered", SKIP,
+                     f"no {dep.kern}.world_identity (this world's kernel predates "
+                     f"kernel/lineage/s58-missive-substrate.sql -- courier has no scope trigger "
+                     f"to bind to here)"), SKIP
+    if count not in ("", "0"):
+        return _line("courier principal registered", PASS, f"registered ({dep.kern}.principal)"), PASS
+    return _line("courier principal registered", FAIL,
+                 f"no 'courier' principal in {dep.kern}.principal -- every missive receipt this "
+                 f"world pulls needs this identity to record arrivals as (design/"
+                 f"FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix: ./autoharn led register-principal "
+                 f"courier tool --purpose \"Records cross-world missive arrivals pulled over the "
+                 f"boundary service -- and can write nothing else (kernel-scoped: "
+                 f"validate_missive_courier_scope, s58; consult §4.3, Q3 ratified row 1157). "
+                 f"Never a deciding identity.\""), FAIL
+
+
+def check_world_identity(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """work item birth-standing-steps-scaffold: kernel.world_identity is now seeded at birth
+    (bootstrap/new-project.sh, design/FABLE-MISSIVES-KERNEL-SPEC.md §2.1) for every world whose
+    kernel lineage includes s58-missive-substrate.sql -- an empty table makes
+    validate_missive_identity abort every missive write loudly (fail-safe by the kernel's own
+    design), but the autoharn3 cutover had to populate the row by hand; this check catches the
+    gap before the first missive write hits it."""
+    r = _psql(dep.host, dep.db, 'SELECT world_name FROM :"kern".world_identity;', {"kern": dep.kern})
+    if r.returncode != 0:
+        if "does not exist" in r.stderr:
+            return _line("world_identity populated", SKIP,
+                         f"no {dep.kern}.world_identity (this world's kernel predates "
+                         f"kernel/lineage/s58-missive-substrate.sql)"), SKIP
+        return _line("world_identity populated", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    world_name = r.stdout.strip()
+    if world_name:
+        return _line("world_identity populated", PASS, f"world_name='{world_name}'"), PASS
+    return _line("world_identity populated", FAIL,
+                 f"{dep.kern}.world_identity has no row -- every missive write (send/receive/"
+                 f"dispose) will refuse loudly until this is populated (design/"
+                 f"FABLE-MISSIVES-KERNEL-SPEC.md §2.1). Fix (owner connection -- the granted role "
+                 f"'{dep.role}' holds no INSERT here by design, s58 §2.1's own grants): psql -h "
+                 f"{dep.host} -d {dep.db} -v ON_ERROR_STOP=1 -c \"INSERT INTO {dep.kern}."
+                 f"world_identity (world_name) VALUES ('<this-world's-own-name>');\""), FAIL
+
+
 def main() -> int:
     print("### doctor -- is this world set up right?")
     print(f"    ({PROJECT_ROOT})")
@@ -310,7 +370,8 @@ def main() -> int:
         skip_reason = "deployment.json did not parse (see line above)"
         for label in ("database reachable", "schema + kern schema exist",
                       "lineage high-water/epoch", "./autoharn led answers a read query",
-                      "boundary URL", "principals registered"):
+                      "boundary URL", "principals registered", "courier principal registered",
+                      "world_identity populated"):
             print(_line(label, SKIP, skip_reason))
             verdicts.append(SKIP)
         print()
@@ -323,12 +384,14 @@ def main() -> int:
     verdicts.append(db_verdict)
 
     if db_verdict == PASS:
-        for line, verdict in (check_namespaces(dep), check_lineage(dep), check_principals(dep)):
+        for line, verdict in (check_namespaces(dep), check_lineage(dep), check_principals(dep),
+                               check_courier_registered(dep), check_world_identity(dep)):
             print(line)
             verdicts.append(verdict)
     else:
         skip_reason = "database unreachable (see line above)"
-        for label in ("schema + kern schema exist", "lineage high-water/epoch", "principals registered"):
+        for label in ("schema + kern schema exist", "lineage high-water/epoch", "principals registered",
+                      "courier principal registered", "world_identity populated"):
             print(_line(label, SKIP, skip_reason))
             verdicts.append(SKIP)
 

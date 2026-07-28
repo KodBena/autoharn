@@ -1280,6 +1280,48 @@ fi
         echo "   ${KERN}.chain_genesis does not exist -- this world's kernel predates s26-row-hash-chain.sql; skipping (not an error, an older lineage)"
     fi
 
+    # WORLD IDENTITY SEED (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.1, kernel/lineage/
+    # s58-missive-substrate.sql): kernel.world_identity is the one-row "which world am I"
+    # setting every missive write checks (validate_missive_identity aborts loudly, teach-text, on
+    # an empty table -- fail-safe, s43 Element 6's write-boundary-principal precedent). This row
+    # was PREVIOUSLY left unpopulated by this scaffold on purpose (s58's own header: "a future
+    # world's own birth act") -- that future has arrived; work item birth-standing-steps-scaffold
+    # closes the gap the autoharn3 cutover had to populate by hand (design/
+    # PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md §3/§7 ranks an undiscovered-until-loud-refusal gap
+    # here below the courier/revocation gaps, but still nowhere scripted before this).
+    #
+    # Seeded the SAME WAY the genesis seed immediately above is: a plain, idempotent, un-SET-
+    # ROLE'd owner INSERT, NOT through kernel.registration_write/ledger_write (the s40/s43
+    # boundary-ceremony path the principal acts below use). This is not a shortcut around the
+    # boundary -- the table's own grants (s58 §2.1) are `REVOKE ALL ... GRANT SELECT ... TO
+    # :role`: the granted role holds no INSERT here at all, so there IS no boundary-function path
+    # to route this through, and the spec's own witness plan (§11, "per world: ... INSERT
+    # world_identity (worlda/worldb) as owner") seeds it exactly this way -- an owner-direct
+    # INSERT is what "boundary ceremony" cashes out to for this one table, the same footing as
+    # genesis.
+    #
+    # world_name is $SCRATCH_NAME_CHECK -- this run's own world name ($NEW_WORLD for --new-world,
+    # $NAME for --profile tracker; the same variable the preflight teardown-command hint above
+    # keys off of), already validated earlier in this script against the exact `[a-z0-9]{1,64}`
+    # intersection this column's own CHECK (`world_name ~ '^[a-z0-9-]{1,64}$'`, s58 §2.1, byte-
+    # identical to serving/boundary_multiplex_config.py's _DEPLOYMENT_NAME_RE) requires -- EXCEPT
+    # when --profile tracker is invoked with both --boundary-url and --boundary-deployment given
+    # explicitly (the one case that skips this script's own --name charclass check, ~line 635);
+    # that pre-existing gap is unchanged by this addition and would surface here as a loud
+    # CHECK-constraint abort (ON_ERROR_STOP=1), never a silent bad row.
+    echo "-- $WORLD_LABEL: seeding kernel.world_identity (idempotent) --"
+    HAVE_WORLD_IDENTITY=$(_psql_in "SELECT count(*) FROM :\"kern\".world_identity;" \
+        | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA 2>/dev/null || echo "0")
+    if [ "$HAVE_WORLD_IDENTITY" = "1" ]; then
+        echo "   ${KERN}.world_identity already carries a row; not re-seeding"
+    elif [ "$HAVE_WORLD_IDENTITY" = "0" ]; then
+        _psql_in "INSERT INTO :\"kern\".world_identity (world_name) VALUES (:'world_name') ON CONFLICT (one_row) DO NOTHING;" \
+            | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN" -v world_name="$SCRATCH_NAME_CHECK"
+        echo "   world_identity seeded: world_name = '$SCRATCH_NAME_CHECK' (DB ${KERN}.world_identity)"
+    else
+        echo "   ${KERN}.world_identity does not exist -- this world's kernel predates s58-missive-substrate.sql; skipping (not an error, an older lineage)"
+    fi
+
     # THE s40 BIRTH SEQUENCE (kernel/lineage/s40-principal-identity-events.sql §3.7; replaces
     # the pre-s40 ON CONFLICT DO NOTHING block that stood here -- the silent-no-op idiom s40
     # deleted from the verb is replaced at the scaffold by EXISTENCE CHECKS that print "already
@@ -1408,6 +1450,48 @@ SQL
             echo "   (3/4) '${_pname}' registered through the boundary ceremony (class ${_pclass}, registrar author)"
         fi
     done
+
+    # THE s58 COURIER BIRTH ACT (design/FABLE-MISSIVES-KERNEL-SPEC.md §2.6, kernel/lineage/
+    # s58-missive-substrate.sql): the `courier` principal, birth-registered through the SAME
+    # registration_write ceremony as reviewer/commissioner/write-boundary above -- witnessed
+    # missing at the experience4 birth until the first courier pull refused (autoharn3 row 122 is
+    # the by-hand fix this closes structurally); this scaffold now registers it every time, no
+    # operator memory required. Purpose text is the spec's own §2.6 wording, verbatim (mirrors the
+    # loop above's registrar/statement shape exactly, kept as its own block rather than folded
+    # into that loop's `case` because this one act is gated on s58 being present in the applied
+    # chain -- reviewer/commissioner/write-boundary need only s40/s43, always present here, so
+    # their loop stays unconditional). Held to the SAME idempotent existence-check shape.
+    HAVE_COURIER=$(_psql_in "SELECT count(*) FROM :\"kern\".principal WHERE name = 'courier';" \
+        | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)
+    if [ "$HAVE_COURIER" != "0" ]; then
+        echo "   'courier' already registered; skipping"
+    else
+        case "$HAVE_WORLD_IDENTITY" in
+            0|1)
+                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+        SET ROLE :"role";
+        SET search_path = :"schema", :"kern";
+        DO \$bw\$
+        DECLARE v ${KERN}.write_verdict;
+        BEGIN
+          SELECT * INTO v FROM ${KERN}.registration_write(jsonb_build_object(
+            'name', 'courier',
+            'agent_class', 'tool',
+            'purpose', 'Records cross-world missive arrivals pulled over the boundary service -- and can write nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified row 1157). Never a deciding identity.',
+            'statement', 'principal ''courier'' registered (class tool) -- s58 birth act, registrar: author',
+            'actor', (SELECT id FROM principal WHERE name = 'author')));
+          IF v.disposition <> 'accepted' THEN
+            RAISE EXCEPTION 's58 courier birth act refused (SQLSTATE %): %', v.sqlstate, v.message;
+          END IF;
+        END \$bw\$;
+SQL
+                echo "   (courier) registered through the boundary ceremony (class tool, registrar author, s58)"
+                ;;
+            *)
+                echo "   ${KERN}.world_identity does not exist -- this world's kernel predates s58-missive-substrate.sql; 'courier' has no scope trigger to bind to here, skipping (not an error, an older lineage)"
+                ;;
+        esac
+    fi
 
     # THE s60 BIRTH SEQUENCE (kernel/lineage/s60-entitlement-enforcement.sql §1.3, spec §1 item
     # 3): "solo-world zero-friction by construction... the same birth run binds the roles the
