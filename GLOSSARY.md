@@ -737,7 +737,7 @@ refuses every missive write loudly rather than guessing a name (fail-safe). **Ho
 populating this row at birth is presently an unscripted, hand-run operator step
 (`bootstrap/new-project.sh` deliberately leaves it empty) — a disclosed, not a closed, gap.
 Source: [`kernel/lineage/s58-missive-substrate.sql`](kernel/lineage/s58-missive-substrate.sql);
-[`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §1.
+[`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §2.1.
 
 <a id="courier"></a>
 ### `courier`
@@ -779,10 +779,17 @@ run on every boundary HTTP request — **minted** (a `dispatch`ed sub-agent's st
 header `x-autoharn-minted-principal` — this case governs when both are present), **vendor**
 (an interactive operator session's own vendor stamp — `x-autoharn-vendor-
 session|agent|ts|hmac|invocation` — with no minted principal), or **anonymous** (neither).
-`grace`/`enforce` (a deployment property, read from `/health`'s `authn_mode`) governs whether
-an anonymous write is accepted or 403-refused. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md)
-§2–3; [design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2 (header names,
-`IdentityHeaderInvalid`/`AnonymousWriteRefused` refusal codes).
+`grace`/`enforce` (`boundary-multiplex.toml`'s per-deployment `identity_enforcement` key,
+default `grace`) governs whether an anonymous write is accepted or 403-refused
+(`AnonymousWriteRefused`) — held as module state (`_identity_enforcement_posture`,
+`serving/boundary_service.py`), consulted at write time. **Correction to the 2026-07-28 GxP
+survey's own §2 claim:** this posture is NOT surfaced on `/health` today — `HealthResponse.
+authn_mode` (`serving/boundary_models.py`) is a SEPARATE, unconditionally hardcoded constant
+(`AUTHN_MODE = "single-operator"`) that never reflects `identity_enforcement`; a panel cannot
+today read a deployment's grace/enforce posture from any served response, a disclosed gap, not
+a built affordance. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md)
+§2–3 (header names, `IdentityHeaderInvalid`/`AnonymousWriteRefused` refusal codes);
+`serving/boundary_multiplex_config.py`; `serving/boundary_service.py`.
 
 <a id="entitlement"></a>
 ### entitlement (s60 conjuncts)
@@ -791,8 +798,13 @@ A kernel-enforced access-control gate on ledger act classes (s60,
 a "factored acceptance predicate" with exactly two conjuncts an actor must both satisfy for a
 given `entitlement_act_class`. **(a) Role conjunct:** the actor holds an in-force role binding
 the world's configured role name for that act class (`entitlement_class_configured`, read via
-view `entitlement_class_roles`) — refusal remedy (verbatim): *"a principal who ALREADY holds
-the '%' role … binds it to you: `./led principal bind-role <your-principal-name> '%'`"*.
+view `entitlement_class_roles`) — refusal remedy (verbatim,
+`kernel/lineage/s60-entitlement-enforcement.sql:573`): *"Remedy: a principal who ALREADY holds
+the '%' role (or genesis-chain authority) binds it to you: ./led principal bind-role
+<your-principal-name>* `"%"` *(kernel/lineage/s41-principal-bindings-and-relations.sql), then
+retry this act."* (note the source's own quote-mark switch mid-sentence — single quotes around
+the role name, a literal double-quoted arg in the CLI example — reproduced here byte-for-byte,
+not normalized).
 **(b) Authority conjunct**, for authority-bearing acts (principal registration, role binding,
 standing lifecycle, allocation/milestone closure/supersession, gate-edge supersession, and —
 per the s62 amendment — delegation acts themselves): the actor's own authority chain must
@@ -873,8 +885,10 @@ boundary exceeds `MAX_TIE_GROUP_EXTRA_ROWS` (the same bound `/meta`'s
 HTTP 409, the **409-shared-status rule**: 409 in this served boundary is reserved for
 boundary-understood business-rule refusals and is shared across disposition kinds —
 `tie_group_too_large` and `capability_absent` both return it, branch-on-disposition-never-
-status being the general rule a client must follow ([`serving/README.md`](serving/README.md)'s own documented
-211cbda errata). 500 stays reserved solely for `unclassified_failure`. Source:
+status being the general rule a client must follow — documented in
+[`serving/README.md`](serving/README.md)'s own "409 IS NOT ONE DISPOSITION" section (added at
+commit 211cbda; the commit hash is provenance for this glossary entry, not text appearing in
+that file). 500 stays reserved solely for `unclassified_failure`. Source:
 [`serving/boundary_service.py`](serving/boundary_service.py).
 
 <a id="include-superseded"></a>

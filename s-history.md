@@ -381,8 +381,11 @@ header for the full account.)*
   A strengthened-tier fresh review cleared this build with two non-blocking findings on the
   record rather than folded in silently: the chain-of-supersessions teach-text names the direct,
   not the terminal, successor (MODERATE, a future teaching-quality pass); Element 3's
-  `search_path` widening is now disclosed in-file (MINOR, ledger row 253). `design/Autoharn.idr`
-  is honestly LAGGING at s69 as of this writing (not yet refreshed past s65).
+  `search_path` widening is now disclosed in-file (MINOR, ledger row 253). The Idris model is
+  refreshed in step with the chain on its own cadence, not necessarily same-commit with a kernel
+  delta — see [`design/Autoharn.idr`](design/Autoharn.idr)'s own AS-OF/LAGGING banner for current
+  standing rather than trusting a number hand-copied here (this document's own "Staying current"
+  warning, below, applies to that banner too).
 
 ## Birth-selection: does choosing scaffold capabilities prune this chain?
 
