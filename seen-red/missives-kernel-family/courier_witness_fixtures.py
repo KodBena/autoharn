@@ -480,6 +480,12 @@ def _reverted_courier_no_batch_report(tmp_path: str) -> None:
                 payload["missive_responds_to"] = r["missive_responds_to"]
             if r.get("missive_cites") is not None:
                 payload["missive_cites"] = r["missive_cites"]
+            # missive_disposition rides ONLY on acknowledgment missives (spec §2.3 note ²'s
+            # second licensed home) -- omitted here until 2026-07-28, when the FIRST live ack
+            # crossing refused on missive_disposition_mandatory_on_ack (autoharn3 row 131):
+            # the "served envelope columns verbatim" contract was false by exactly this column.
+            if r.get("missive_disposition") is not None:
+                payload["missive_disposition"] = r["missive_disposition"]
             exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
             if exit_code == 0:
                 recorded.append(verdict["row_id"])
@@ -506,6 +512,11 @@ def _reverted_courier_no_batch_report(tmp_path: str) -> None:
         "pulled": len(outbound), "new": len(candidates),
         "recorded": recorded, "dedup_raced": dedup_raced, "errors": errors, "outcomes": outcomes,
     }'''
+    # NOTE (hazard fix, found in reach of work item courier-ack-disposition-drop, row 131,
+    # 2026-07-28): `old` above must stay byte-identical to courier's CURRENT `run_counterpart`
+    # body, including the missive_disposition-forwarding block commit 86cb5c4 added -- this
+    # revert only removes the outcomes/completed/finally batch-witness mechanism (round-1/round-2
+    # fixes), never the row-131 forwarding fix, so `new` below keeps that block intact too.
     new = '''    for r in candidates:
         payload = {
             "kind": "missive_received",
@@ -523,6 +534,8 @@ def _reverted_courier_no_batch_report(tmp_path: str) -> None:
             payload["missive_responds_to"] = r["missive_responds_to"]
         if r.get("missive_cites") is not None:
             payload["missive_cites"] = r["missive_cites"]
+        if r.get("missive_disposition") is not None:
+            payload["missive_disposition"] = r["missive_disposition"]
         exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
         if exit_code == 0:
             recorded.append(verdict["row_id"])
