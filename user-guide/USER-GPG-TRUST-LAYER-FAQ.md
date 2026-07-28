@@ -333,14 +333,14 @@ want to see `VERIFIED` before a real key exists.
 ### 5a. The setup TUI's own "Signed genesis" screen — the same ceremony, automated
 
 If you scaffolded with `python3 -m tools.setup_tui.app` (the guided wizard —
-[USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)),
+[recipes/SETUP-AND-SCAFFOLD.md](recipes/SETUP-AND-SCAFFOLD.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)),
 the "Signed genesis" screen drives exactly the Step 1–3 ceremony above for you, in order, showing
 every command before it runs (`design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md`;
 `tools/setup_tui/signed_genesis.py`) — it is a driver of the same `led`/`gpg`/`verify-commission`
 verbs this FAQ already covers, not a second implementation. It sits between "Principals &
 authority" and "Boundary" in the eleven-screen flow (the full ordered list, with what each
 screen does, is
-[USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)'s
+[recipes/SETUP-AND-SCAFFOLD.md](recipes/SETUP-AND-SCAFFOLD.md#getting-started-the-guided-setup-tui-python3--m-toolssetup_tui)'s
 own — not repeated here), on by default (declining is one recorded keypress, never nagged
 again). Everything below was exercised for real, this witness pass, against a scratch world (a
 disposable `--new-world` scaffold on a scratch Postgres cluster) and a scratch `GNUPGHOME` (a
