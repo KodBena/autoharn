@@ -1,7 +1,10 @@
 #!/bin/sh
-# This repo's own world is an EXISTING deployment: per the multiplex spec sec.6
-# (runs are linear, dust-and-settled), it keeps the direct-psql original
-# (legacy-*.tmpl). New worlds scaffold the served shims via new-project.sh.
+# Root-verbs-served-repoint (ledger row 220/224, serving/README.md's "Two trust roots" section):
+# this repo's OWN root deployment now runs the SAME served, boundary-backed edition every
+# scaffolded world already runs (bootstrap/templates/asof-export.tmpl, via
+# serving/boundary_cli_client.py) -- it no longer lags its own worlds by exec'ing the direct-psql
+# legacy original. `./legacy/asof-export` remains, unchanged, as the operator recovery path for
+# when the boundary service is down.
 # Relocated under libexec/autoharn/ by the umbrella-CLI build (ledger rows 1151-1183): semantics
 # unchanged, HERE now climbs two directories to the repo root.
 # FIXTURE SANDBOX FORECLOSURE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §2):
@@ -17,4 +20,4 @@ else
 fi
 
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/legacy-asof-export.tmpl" "$@"
+exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/asof-export.tmpl" "$@"
