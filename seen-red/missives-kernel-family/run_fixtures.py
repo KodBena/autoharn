@@ -422,7 +422,18 @@ END $$;
         print(courier_cp.stderr, file=sys.stderr)
     courier_ok = courier_cp.returncode == 0
 
-    if FAILURES or not race_ok or not a2_ok or not courier_ok:
+    # work item led-missive-verbs-gap (autoharn3 rows 118/119): `led missive list`/`led missive
+    # dispose` (bootstrap/templates/led.tmpl) CLI-surface coverage -- same one-registered-
+    # fixture-per-dir invocation discipline as the three siblings above.
+    led_cli_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "led_cli_verbs_fixture.py")
+    led_cli_cp = sh([sys.executable, led_cli_script])
+    print(led_cli_cp.stdout)
+    if led_cli_cp.stderr:
+        print(led_cli_cp.stderr, file=sys.stderr)
+    led_cli_ok = led_cli_cp.returncode == 0
+
+    if FAILURES or not race_ok or not a2_ok or not courier_ok or not led_cli_ok:
         if FAILURES:
             print(f"\nmissives-kernel-family seen-red: {len(FAILURES)} FAILURE(S): {FAILURES}")
         if not race_ok:
@@ -434,6 +445,9 @@ END $$;
         if not courier_ok:
             print("\nmissives-kernel-family seen-red: courier_witness_fixtures.py FAILED "
                   f"(exit {courier_cp.returncode})")
+        if not led_cli_ok:
+            print("\nmissives-kernel-family seen-red: led_cli_verbs_fixture.py FAILED "
+                  f"(exit {led_cli_cp.returncode})")
         return 1
     print("\nmissives-kernel-family seen-red: all cases behaved as expected. ✓")
     return 0
