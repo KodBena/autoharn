@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+# autoharn-verb-desc: pull new missives from this world's configured counterparts and record them locally (design/FABLE-MISSIVES-KERNEL-SPEC.md §5, receiver-pull, local-boundary-only)
+"""courier -- this world's own entry to autoharn's scripted, receiver-pull, local-boundary-only
+courier verb (design/FABLE-MISSIVES-KERNEL-SPEC.md §5; the closed enumeration of what it does and
+NEVER does lives there and in libexec/autoharn/courier's own module docstring -- this file does
+not restate or alter any of it, per the scaffold-courier-verb-gap work item (autoharn3 ledger row
+101): "author courier.tmpl (routing to the checkout's libexec/autoharn/courier with the world's
+own courier.toml/deployment env, the same shape as the other ten templates)").
+
+PURE ROUTING, same idiom every sibling bootstrap/templates/*.tmpl already uses (AUTOHARN resolves
+the exec-root checkout providing the live libexec/ implementation; PICKUP_DEPLOYMENT resolves
+THIS world's own deployment.json, whose parent directory is this world's own repo root -- the
+courier.toml courier expects lives right beside it, per spec §5: "a courier.toml beside
+boundary-multiplex.toml"). No courier semantics are reimplemented or touched here -- this file's
+only job is to hand libexec/autoharn/courier the correct --courier-toml for THIS world before
+exec'ing straight into it (os.execv, not subprocess -- stdio/exit code passthrough is exact, and
+the fixture-sandbox preamble libexec/autoharn/courier itself runs at the top of its own main()
+sees the REAL argv it would see if invoked directly, never a shape mutated by an intervening
+subprocess wrapper).
+
+--help/-h: forwarded UNTOUCHED (argv not modified at all) -- libexec/autoharn/courier's own
+fixture-sandbox preamble uses a STRICT two-token exemption (the whole invocation must be exactly
+one argument, --help or -h) before it ever needs a courier.toml to exist; injecting our own
+--courier-toml ahead of a --help call would break that exemption for no reason, since --help
+needs no config at all.
+
+Missing courier.toml: NOT re-implemented here -- --courier-toml is pointed at this world's own
+expected path and handed straight to libexec/autoharn/courier's load_courier_config(), whose own
+teach-text (naming the exact path and design/FABLE-MISSIVES-KERNEL-SPEC.md §5) is the ONE home for
+that refusal (ADR-0012 P1) -- a second, hand-duplicated existence check here would drift from it.
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file."""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AUTOHARN = Path(os.environ.get("AUTOHARN", str(HERE / ".." / ".."))).resolve()
+DEPLOYMENT_PATH = Path(os.environ.get("PICKUP_DEPLOYMENT", str(HERE / "deployment.json")))
+PROJECT_ROOT = DEPLOYMENT_PATH.parent
+
+COURIER_BIN = AUTOHARN / "libexec" / "autoharn" / "courier"
+# Worlds keep courier.toml at their OWN repo root beside boundary-multiplex.toml (spec §5) -- same
+# directory deployment.json already lives in, i.e. PROJECT_ROOT, never AUTOHARN's.
+WORLD_COURIER_TOML = PROJECT_ROOT / "courier.toml"
+
+
+def main(argv: list[str]) -> int:
+    if not (COURIER_BIN.is_file() and os.access(COURIER_BIN, os.X_OK)):
+        print(f"courier: cannot find an executable libexec/autoharn/courier under AUTOHARN={AUTOHARN}",
+              file=sys.stderr)
+        print("        set AUTOHARN=/path/to/autoharn, or place a sibling checkout at ../autoharn",
+              file=sys.stderr)
+        return 4
+
+    if len(argv) == 1 and argv[0] in ("--help", "-h"):
+        # Strict two-token exemption, forwarded verbatim -- see module docstring above.
+        os.execv(str(COURIER_BIN), [str(COURIER_BIN), argv[0]])
+
+    call_argv = list(argv)
+    if "--courier-toml" not in call_argv:
+        call_argv = ["--courier-toml", str(WORLD_COURIER_TOML)] + call_argv
+    os.execv(str(COURIER_BIN), [str(COURIER_BIN)] + call_argv)
+    return 4  # unreachable -- os.execv never returns on success; satisfies the type checker only.
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

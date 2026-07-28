@@ -1,0 +1,187 @@
+Witnessed 2026-07-28, work item scaffold-courier-verb-gap (autoharn3 ledger row 101, maintainer
+class-fix amendment): seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py genuinely goes RED
+under two independent conditions this fixture family is built to catch -- a
+bootstrap/templates/*.tmpl file missing its '# autoharn-verb-desc: ...' header line, and
+--refresh-dispatcher pointed at a directory that is not a recognizable scaffolded world.
+
+--------------------------------------------------------------------------------------------
+CASE 1: missing-header-refuses-generation (during development, before the "not
+(dest3/'autoharn').exists()" fix landed -- the fixture's own first draft asserted the WHOLE dest
+directory stayed absent, which does not match this scaffold's own non-transactional shape:
+deployment.json/.claude/legacy/ are all written before dispatcher generation runs late in the
+script)
+
+$ python3 seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py
+=== scaffold-ran-clean ===
+  [ok] exit=0 dispatcher_exists=True stderr_tail=''
+
+=== dispatcher-lists-courier ===
+  [ok] roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] in_roster=True reaches_real_courier_tmpl=True courier_help_exit=0
+
+=== unknown-verb-still-refuses ===
+  [ok] exit=2 stderr_tail=" read: hydrate an orchestrator from the ledger instead of session replay\n  verify-chain         reconcile the row-hash chain and the refusal_seq completeness oracle (Rung 3, design/MAINT-GPG-TRUST-LAYER.md)\n  verify-commission    verify a SIGNED commission against this world's own GPG keyring (Rung 2, design/MAINT-GPG-TRUST-LAYER.md)\n\nRun 'autoharn --help' for the full roster. Nothing was touched."
+
+=== missing-header-refuses-generation ===
+  [FAIL] exit=2 dest_created=True stderr_tail="rier.tmpl carries no '# autoharn-verb-desc: ...' header line.\n                bootstrap/new-project.sh's dispatcher generation derives the verb roster\n                from the bootstrap/templates/*.tmpl glob (autoharn3 ledger row 101's class\n                fix) -- every dispatched verb template must carry this header, or be added\n                to _write_world_dispatcher()'s own NON_VERB_TEMPLATES exclusion list in this\n                script if it genuinely is not a verb. Nothing was touched."
+
+=== refresh-fixture-birth-scaffold-clean ===
+  [ok] exit=0 dispatcher_exists=True deployment_json_exists=True
+
+=== refresh-dispatcher-upgrades ===
+  [ok] stale_roster=['led'] refresh_exit=0 refreshed_roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] deployment_json_unchanged=True
+
+=== refresh-dispatcher-refuses-non-world ===
+  [ok] exit=1 autoharn_created=False stderr_tail='new-project.sh --refresh-dispatcher: REFUSED -- no deployment.json at /tmp/.../not-a-world\n                                       (not a recognizable scaffolded world). Nothing touched.'
+
+FAILURES: ['missing-header-refuses-generation']
+
+This RED run genuinely exercised the intended defect: new-project.sh (run against a throwaway
+COPY of the checkout with courier.tmpl's header line stripped) refused generation loudly, exit 2,
+naming the file and the remedy -- proving bootstrap/new-project.sh's own refusal path fires for
+real, not merely that this fixture's assertion happened to be miswritten. The assertion was then
+corrected (checking that ONLY the dispatcher file itself was never written, not the whole
+directory tree) to match the scaffold's own known non-transactional shape, and the fixture now
+reports [ok] on the SAME underlying scaffold behavior -- the refusal itself is unchanged; only
+this fixture's own check of it was fixed.
+
+--------------------------------------------------------------------------------------------
+CASE 2: dispatch table / roster drift, standing negative-control reproduction of the class this
+family exists to close (mirrors seen-red/umbrella-cli-dispatch-parity/red.txt's own "case a"
+demonstration, one level down -- the WORLD dispatcher rather than this repo's own root one):
+hand-editing a scaffolded world's ./autoharn to a stale, pre-courier stub (this fixture's own
+"refresh-dispatcher-upgrades" case does exactly this as its SETUP step, captured here as its own
+red specimen) reproduces the defect class row 101 found live -- a world's dispatcher missing a
+verb its checkout's own bootstrap/templates/ directory already carries:
+
+$ dispatcher4.write_text(stale_stub)  # "led (stale pre-courier stub, no other verbs)" only
+$ ./autoharn --help   # (against the hand-stubbed dispatcher, BEFORE --refresh-dispatcher runs)
+usage: autoharn <verb> [args...]
+verbs:
+  led                  (stale pre-courier stub, no other verbs)
+
+-- 'courier' absent, exactly the row-101 defect, reproduced on demand. --refresh-dispatcher
+(this work item's own item 4 deliverable) is the fix: re-running it against the SAME world
+directory rewrites ONLY ./autoharn from the current bootstrap/templates/*.tmpl roster --
+'courier' (and every other current verb) reappears, deployment.json is untouched:
+
+$ sh bootstrap/new-project.sh --refresh-dispatcher <world-dir>
+-- --refresh-dispatcher: rewriting <world-dir>/autoharn from the current bootstrap/templates/*.tmpl roster (EXEC_ROOT=...) --
+wrote autoharn (dispatcher -> .../bootstrap/templates/<verb>.tmpl, roster: asof-export attest-doc audit courier distance-to-clean doctor judge led pickup verify-chain verify-commission )
+refresh-dispatcher: done -- only <world-dir>/autoharn was touched.
+
+--------------------------------------------------------------------------------------------
+Fresh full-family transcript after both fixes above (this workspace):
+
+$ python3 seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py
+=== scaffold-ran-clean ===
+  [ok] exit=0 dispatcher_exists=True stderr_tail=''
+
+=== dispatcher-lists-courier ===
+  [ok] roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] in_roster=True reaches_real_courier_tmpl=True courier_help_exit=0
+
+=== unknown-verb-still-refuses ===
+  [ok] exit=2 stderr_tail="...verify-commission    verify a SIGNED commission against this world's own GPG keyring (Rung 2, design/MAINT-GPG-TRUST-LAYER.md)\n\nRun 'autoharn --help' for the full roster. Nothing was touched."
+
+=== missing-header-refuses-generation ===
+  [ok] exit=2 dispatcher_written=False stderr_tail="...rier.tmpl carries no '# autoharn-verb-desc: ...' header line.\n...Nothing was touched."
+
+=== refresh-fixture-birth-scaffold-clean ===
+  [ok] exit=0 dispatcher_exists=True deployment_json_exists=True
+
+=== refresh-dispatcher-upgrades ===
+  [ok] stale_roster=['led'] refresh_exit=0 refreshed_roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] deployment_json_unchanged=True
+
+=== refresh-dispatcher-refuses-non-world ===
+  [ok] exit=1 autoharn_created=False stderr_tail='new-project.sh --refresh-dispatcher: REFUSED -- no deployment.json at /tmp/.../not-a-world\n                                       (not a recognizable scaffolded world). Nothing touched.'
+
+ALL CASES OK -- scaffold-dispatcher-verb-glob proof (courier reaches a fresh world's roster via
+the bootstrap/templates/*.tmpl glob, unknown-verb refusal intact, a header-less template refuses
+generation loudly, --refresh-dispatcher upgrades a stale world's dispatcher in place while
+leaving the rest of it untouched, and refuses on a non-world directory).
+
+--------------------------------------------------------------------------------------------
+FIX ROUND (2026-07-28): fresh-context re-review of commit c395071 BLOCKED MERGE at strengthened
+tier with two MODERATE honesty-of-output findings (routing/exclusions/the six cases above all
+CONFIRMED-SOUND, not touched):
+
+  FINDING 1: the missing-header refusal's "Nothing was touched" text was true on the CLASSIC
+  path the original case exercised, but FALSE on --new-world -- _write_world_dispatcher() ran
+  near the END of the scaffold sequence, discovering a broken template only AFTER deployment.json
+  et al (and, on --new-world, live kernel DDL) were already written.
+
+  FINDING 2: --refresh-dispatcher silently discarded a hand-edited ./autoharn with no trace.
+
+Both fixed (bootstrap/new-project.sh: _scan_verb_templates() factored out and called at the
+earliest point TEMPLATES is resolvable on every scaffold path, before any write; _write_world_
+dispatcher() now compares new-vs-existing bytes and reports exactly one of fresh-write/SKIPPED-
+IDENTICAL/REPLACED+backup). Five new cases added to this fixture family to witness both fixes;
+each one, reproduced against the PRE-fix code (git stash of bootstrap/new-project.sh back to
+commit c395071's committed content, this fixture file itself left at its NEW, extended state),
+genuinely goes RED:
+
+$ git stash push --keep-index -- bootstrap/new-project.sh   # revert to c395071's committed code
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py
+=== scaffold-ran-clean ===
+  [ok] exit=0 dispatcher_exists=True stderr_tail=''
+
+=== dispatcher-lists-courier ===
+  [ok] roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] in_roster=True reaches_real_courier_tmpl=True courier_help_exit=0
+
+=== unknown-verb-still-refuses ===
+  [ok] exit=2 stderr_tail="...verify-commission    verify a SIGNED commission against this world's own GPG keyring (Rung 2, design/MAINT-GPG-TRUST-LAYER.md)\n\nRun 'autoharn --help' for the full roster. Nothing was touched."
+
+=== missing-header-refuses-generation ===
+  [FAIL] exit=2 dest_created=True stderr_tail="...carries no '# autoharn-verb-desc: ...' header line...Nothing was touched." -- FINDING 1, live: dest_created=True on the pre-fix code (this
+  case's assertion was strengthened from "the dispatcher alone is absent" to "the WHOLE
+  destination is absent" as part of this same fix round, so it now genuinely distinguishes the
+  two).
+
+=== missing-header-refuses-new-world-db-untouched ===
+  [FAIL] exit=2 dest_created=True db_touched=True world='scfglob5125992a' stderr_tail="...carries no '# autoharn-verb-desc: ...' header line...Nothing was touched." -- FINDING 1, the
+  stronger witness: db_touched=True -- a REAL Postgres schema/kernel-schema/role WAS created for
+  this scratch world by the pre-fix code before the header defect was ever discovered, on a REAL
+  --new-world scaffold. This is the live reproduction of finding 1's own DB-touching case.
+
+=== refresh-fixture-birth-scaffold-clean ===
+  [ok] exit=0 dispatcher_exists=True deployment_json_exists=True
+
+=== refresh-dispatcher-fresh-write-disclosed ===
+  [FAIL] 'autoharn dispatcher: fresh-write' present=False -- FINDING 2: the pre-fix code never
+  disclosed which of the three outcomes happened at all.
+
+=== refresh-dispatcher-skipped-identical ===
+  [FAIL] exit=0 skipped_identical_disclosed=False dispatcher_unchanged=True backup_created=False -- FINDING 2: the pre-fix code silently re-wrote an already-identical dispatcher (a harmless
+  no-op in this leg's case, but with no SKIPPED-IDENTICAL disclosure at all -- indistinguishable
+  from a real overwrite by reading its own output).
+
+=== refresh-dispatcher-replaces-with-backup ===
+  [FAIL] exit=0 replaced_disclosed=False backup_path_named=False backup_exists=False backup_byte_matches_pre_refresh=False -- FINDING 2, live: the pre-fix code overwrote the HAND-EDITED
+  ./autoharn with no backup and no disclosure at all -- backup_exists=False is the direct
+  reproduction of "silently discards a hand-edited ./autoharn."
+
+=== refresh-dispatcher-upgrades ===
+  [ok] stale_roster=['led'] refresh_exit=0 refreshed_roster=['asof-export', 'attest-doc', 'audit', 'courier', 'distance-to-clean', 'doctor', 'judge', 'led', 'pickup', 'verify-chain', 'verify-commission'] deployment_json_unchanged=True
+
+=== refresh-dispatcher-refuses-non-world ===
+  [ok] exit=1 autoharn_created=False stderr_tail='new-project.sh --refresh-dispatcher: REFUSED -- no deployment.json at /tmp/scaffold-dispatcher-verb-glob-nonworld-tiz1bs7w/not-a-world\n                                       (not a recognizable scaffolded world). Nothing touched.'
+
+FAILURES: ['missing-header-refuses-generation', 'missing-header-refuses-new-world-db-untouched', 'refresh-dispatcher-fresh-write-disclosed', 'refresh-dispatcher-skipped-identical', 'refresh-dispatcher-replaces-with-backup']
+
+Both the classic-mode and the REAL --new-world negative-control legs left transient state behind
+on the pre-fix code (a scratch destination directory; a real Postgres schema/kernel-schema/role
+for `missing-header-refuses-new-world-db-untouched`'s own scratch world) -- this fixture's own
+`teardown_world()` (called in a `finally`, unconditionally) and `shutil.rmtree` calls cleaned up
+that transient state regardless of the RED result, confirmed by a live schema-name query
+returning zero rows for the scratch world immediately afterward. The stash was then popped
+(`git stash pop`), restoring the fix, and the SAME command re-run clean:
+
+$ git stash pop
+$ HARNESS_PGHOST=192.168.122.1 python3 seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py
+[... all ten cases ok ...]
+ALL CASES OK -- scaffold-dispatcher-verb-glob proof (courier reaches a fresh world's roster via
+the bootstrap/templates/*.tmpl glob, unknown-verb refusal intact, a header-less template refuses
+generation loudly with the WHOLE destination left absent -- witnessed on both classic and a REAL
+--new-world scaffold with the DB schema/role provably never created -- --refresh-dispatcher
+upgrades a stale world's dispatcher in place while leaving the rest of it untouched, refuses on a
+non-world directory, and discloses exactly which of fresh-write/SKIPPED-IDENTICAL/REPLACED
+happened each time, with a REPLACED backup byte-identical to the pre-refresh original).

@@ -98,9 +98,11 @@
 #     subsystems more generally: harmless, not a defect (see "Why the full chain, unwired" in
 #     user-guide/USER-WORK-STATUS-OFFERING.md, generalized here to the stamp secret specifically).
 #   - writes deployment.json + this deployment's OWN keys/ (its GPG keyring, never autoharn's own
-#     law/keys/), attestations/, roles/, the full live-verb shim set (SHIM_VERBS_ALL,
-#     bootstrap/shim-verbs.sh), legacy/, and orchlog -- the SAME unconditional scaffold-writing
-#     code every mode already runs below.
+#     law/keys/), attestations/, roles/, the ./autoharn dispatcher (verb roster derived live from
+#     the bootstrap/templates/*.tmpl glob, see _write_world_dispatcher() near this script's own
+#     top -- bootstrap/shim-verbs.sh's SHIM_VERBS_ALL still governs the separate legacy/ loop and
+#     the pre-migration ten-shim scripts), legacy/, and orchlog -- the SAME unconditional
+#     scaffold-writing code every mode already runs below.
 #   - configures the boundary to be SERVED VIA ensure-running rather than a standing daemon: picks
 #     a free port, writes boundary-multiplex.toml, and writes boundary_url/boundary_deployment
 #     into deployment.json -- but does NOT start the service now. serving/ensure_running.py's
@@ -136,6 +138,227 @@ for _a in "$@"; do
 done
 CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# ---------------------------------------------------------------------------------------------
+# _write_world_dispatcher() -- THE ONE HOME for a world's ./autoharn dispatcher generation
+# (autoharn3 work item scaffold-courier-verb-gap, ledger row 101; maintainer ruling 2026-07-28
+# amending the original brief: "the world-dispatcher generation ... derives its verb table from
+# the bootstrap/templates/*.tmpl directory glob -- a template that exists IS a verb; the
+# hardcoded ten-entry table is deleted, not extended"). Defined here, near the top of the file,
+# so BOTH call sites below -- the ordinary --new-world/--profile scaffold flow (further down,
+# where PROJECT_ROOT/EXEC_ROOT/TEMPLATES are already resolved) and the --refresh-dispatcher
+# early-exit mode (immediately after usage(), before any of that resolution) -- share the exact
+# same generation logic (ADR-0012 P1: one mechanism, not two that drift). Requires PROJECT_ROOT,
+# EXEC_ROOT, TEMPLATES already set by the caller; writes ONLY $PROJECT_ROOT/autoharn.
+#
+# CLASS FIX, superseding the prior SHIM_VERBS_ALL-driven table (bootstrap/shim-verbs.sh is
+# UNCHANGED and still governs the ./legacy/ recovery-original loop and the pre-migration
+# ten-shim scripts -- convert-to-submodule.sh/upgrade-submodule.sh/freeze-at-stamp.sh -- this
+# fix touches ONLY the world-dispatcher table a fresh --new-world/--profile/--refresh-dispatcher
+# run writes): the old table was a SECOND, hand-maintained home for "which .tmpl file is a
+# verb" -- exactly the drift class lineage-chain-lags-directory (ledger rows 1392/1393) closed
+# for the kernel chain, reopened here for the verb roster (found live: courier.tmpl did not
+# exist and the hardcoded table could not have noticed even if it had).
+#
+# ADR-0000 RULE 2(a) CLOSURE STATEMENT: the quantification universe is EXACTLY the set of
+# basenames matching bootstrap/templates/*.tmpl, MINUS the enumerated NON_VERB_TEMPLATES
+# exclusion list immediately below -- every OTHER *.tmpl file in that directory IS a dispatched
+# verb, by construction. A future verb template landing in bootstrap/templates/ cannot be
+# forgotten from a freshly-generated world's roster: forgetting it is unrepresentable, because
+# shipping the template IS shipping the verb (this generation's own read of the directory,
+# every time it runs, never a frozen snapshot). The one way a template can legitimately sit in
+# this directory without becoming a verb is to be named, with a reason, in the exclusion list
+# below -- silence is never a valid way to exclude one.
+#
+# NON_VERB_TEMPLATES -- the loud, enumerated, commented exclusion list Rule 2(a) demands. Every
+# member is either a config/doc scaffold-time template (sedsubst'd or copied into a plain file
+# at birth, never exec'd as an operator verb) or a legacy/ recovery original (routed through
+# $PROJECT_ROOT/legacy/<verb> by this script's own separate loop elsewhere, sourced from
+# bootstrap/shim-verbs.sh, never through ./autoharn) -- named here rather than silently dropped:
+#   CLAUDE.md.tmpl                 -- sedsubst'd into $PROJECT_ROOT/CLAUDE.md, a doc, not a verb
+#   HOOKS.md.tmpl                  -- sedsubst'd into .claude/HOOKS.md, a doc, not a verb
+#   settings.json.tmpl             -- sedsubst'd into .claude/settings.json, config, not a verb
+#   attestations-README.md.tmpl    -- sedsubst'd into attestations/README.md, a doc, not a verb
+#   keys-README.md.tmpl            -- sedsubst'd into keys/README.md, a doc, not a verb
+#   roles-README.md.tmpl           -- sedsubst'd into roles/README.md, a doc, not a verb
+#   legacy-pickup.tmpl             -- the direct-psql original, reached via ./legacy/pickup only
+#   legacy-distance-to-clean.tmpl  -- the direct-psql original, reached via ./legacy/distance-to-clean only
+#   legacy-asof-export.tmpl        -- the direct-psql original, reached via ./legacy/asof-export only
+NON_VERB_TEMPLATES="CLAUDE.md.tmpl HOOKS.md.tmpl settings.json.tmpl attestations-README.md.tmpl keys-README.md.tmpl roles-README.md.tmpl legacy-pickup.tmpl legacy-distance-to-clean.tmpl legacy-asof-export.tmpl"
+
+_is_non_verb_template() {
+    _nvt_target="$1"
+    for _nvt in $NON_VERB_TEMPLATES; do
+        [ "$_nvt_target" = "$_nvt" ] && return 0
+    done
+    return 1
+}
+
+_scan_verb_templates() {
+    # WRITES NOTHING (fix-round finding 1, autoharn3 row 101 re-review, 2026-07-28): the glob +
+    # header-validation pass, factored out of _write_world_dispatcher() below so it can be run as
+    # a PRE-WRITE gate, before any scaffold file exists on disk, on every path that reaches this
+    # dispatcher generation (--new-world/classic/--profile all resolve TEMPLATES at one shared
+    # point in this script, immediately followed by a call to this function -- see that call
+    # site's own comment). A header-less template refusing generation used to be true only when
+    # DISCOVERED by _write_world_dispatcher() itself, which runs near the END of the scaffold
+    # sequence -- by then deployment.json/.autoharn-world.json/.gitignore/.claude/*/keys/
+    # attestations/roles/ were already written, so that refusal's own "Nothing was touched" text
+    # was FALSE on that one path (of 14 such messages in this script) -- the ONE deviation from
+    # this script's own refuse-before-touching invariant. Fixing the WORDING would have left the
+    # invariant broken; this fixes the CLASS instead -- the validation itself moved earlier, so
+    # nothing before it can have run yet on any code path that calls it before its own first
+    # write. _write_world_dispatcher() below still calls this (a cheap, already-validated
+    # re-check on the ordinary scaffold flow; the ONLY validation on --refresh-dispatcher, which
+    # never had the ordering hazard to begin with -- it writes nothing else before or after
+    # ./autoharn) -- it is simply no longer positioned to be the FIRST place a broken template is
+    # discovered on the ordinary flow.
+    #
+    # Sets DISPATCH_TABLE (tab-separated verb\tdesc lines, sorted) and VERB_ROSTER (space-joined
+    # verb names) as a side effect; refuses loudly and exits 2, writing nothing, on a
+    # non-excluded template with no '# autoharn-verb-desc: ...' header.
+    _svt_table=""
+    for _svt_file in "$TEMPLATES"/*.tmpl; do
+        [ -e "$_svt_file" ] || continue  # literal, never-matched glob guard (POSIX sh fallback)
+        _svt_base="$(basename "$_svt_file")"
+        if _is_non_verb_template "$_svt_base"; then
+            continue
+        fi
+        _svt_verb="${_svt_base%.tmpl}"
+        # Header-line convention (this class fix's chosen single home for help-text descriptions,
+        # applied to every dispatched verb template in the same commit): the FIRST line matching
+        # '^# autoharn-verb-desc: ' anywhere in the file, grep -m1 so a template is free to place
+        # it wherever its own header comment block reads best (line 2, typically, right after the
+        # shebang). A template that lacks it refuses generation LOUDLY -- never a silent blank
+        # description -- naming exactly what to add or, if the file genuinely isn't a verb, that
+        # it belongs in NON_VERB_TEMPLATES above instead.
+        _svt_desc="$(grep -m1 '^# autoharn-verb-desc: ' "$_svt_file" | sed 's/^# autoharn-verb-desc: //')"
+        if [ -z "$_svt_desc" ]; then
+            echo "new-project.sh: REFUSED -- $_svt_file carries no '# autoharn-verb-desc: ...' header line." >&2
+            echo "                bootstrap/new-project.sh's dispatcher generation derives the verb roster" >&2
+            echo "                from the bootstrap/templates/*.tmpl glob (autoharn3 ledger row 101's class" >&2
+            echo "                fix) -- every dispatched verb template must carry this header, or be added" >&2
+            echo "                to _scan_verb_templates()'s own NON_VERB_TEMPLATES exclusion list in this" >&2
+            echo "                script if it genuinely is not a verb. Nothing was touched." >&2
+            exit 2
+        fi
+        _svt_line="$(printf '%s\t%s' "$_svt_verb" "$_svt_desc")"
+        if [ -z "$_svt_table" ]; then
+            _svt_table="$_svt_line"
+        else
+            _svt_table="$_svt_table
+$_svt_line"
+        fi
+    done
+    # Stable, deterministic order regardless of the filesystem's own glob enumeration order.
+    DISPATCH_TABLE="$(printf '%s\n' "$_svt_table" | sort)"
+    VERB_ROSTER="$(printf '%s\n' "$DISPATCH_TABLE" | cut -f1 | tr '\n' ' ')"
+}
+
+_write_world_dispatcher() {
+    _scan_verb_templates  # cheap, already-validated re-check on the ordinary flow -- see its own comment
+
+    # NEVER OVERWRITE A DIFFERING FILE BLIND (fix-round finding 2, autoharn3 row 101 re-review,
+    # 2026-07-28): --refresh-dispatcher (and any --force re-scaffold of an existing world, which
+    # shares this same function) used to `cat >` straight over $PROJECT_ROOT/autoharn -- an
+    # operator's own hand-edit there (a local patch, an experiment, a manual fix ahead of this
+    # generator catching up) was silently discarded with no trace. Write the NEW content to a
+    # scratch file on the SAME filesystem first (mktemp under $PROJECT_ROOT itself -- portable
+    # `mv` afterward, never a cross-device copy), THEN decide, by comparing bytes, which of
+    # exactly three things this run does -- never a fourth, unnamed one:
+    #   SKIPPED-IDENTICAL  the existing file already matches byte-for-byte -- nothing written,
+    #                      nothing backed up (there is nothing to lose).
+    #   REPLACED           the existing file differs -- moved aside to $PROJECT_ROOT/autoharn.
+    #                      pre-refresh (overwriting any EARLIER backup of that exact name --
+    #                      disclosed below, not hidden) BEFORE the new file lands, so the prior
+    #                      content survives on disk under a named, discoverable path rather than
+    #                      being silently lost.
+    #                      fresh-write     no prior $PROJECT_ROOT/autoharn existed at all (the
+    #                      ordinary --new-world/classic/--profile birth path, every time).
+    # Every one of the three is printed, by name, in this function's own success line -- a caller
+    # reading stdout always knows which one happened, never has to guess or diff by hand.
+    _wwd_target="$PROJECT_ROOT/autoharn"
+    _wwd_new="$(mktemp "$PROJECT_ROOT/.autoharn-dispatcher-new.XXXXXX")"
+    cat > "$_wwd_new" <<DISPATCHEREOF
+#!/bin/sh
+# autoharn -- this world's ONE operator-surface dispatcher (design/FABLE-AUTOHARN-UMBRELLA-CLI-
+# SPEC.md §6 amendment, ledger rows 1357/1365/1366/1367; verb-roster generation CLASS-FIXED
+# 2026-07-28, autoharn3 row 101/scaffold-courier-verb-gap -- see bootstrap/new-project.sh's own
+# _write_world_dispatcher() for the full closure statement). Routes \`autoharn <verb> [args...]\`
+# to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with THIS world's own deployment.json
+# (PICKUP_DEPLOYMENT) -- byte-identical routing/env to what each retired per-verb shim did.
+#
+# ADR-0000 RULE 2(a) CLOSURE STATEMENT: the verb roster below is EXACTLY the set of
+# bootstrap/templates/*.tmpl basenames (minus that checkout's own enumerated NON_VERB_TEMPLATES
+# exclusion list) at the moment THIS dispatcher was generated -- a template that exists IS a
+# verb; there is no second, hand-maintained list this roster could have drifted from. Re-run
+# this world's own scaffold generation (bootstrap/new-project.sh --refresh-dispatcher $PROJECT_ROOT)
+# to pick up a verb template added to the checkout after this world was born.
+set -eu
+
+HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+
+_dispatch_table() {
+    cat <<'DISPATCHVERBS'
+$DISPATCH_TABLE
+DISPATCHVERBS
+}
+
+_print_help() {
+    echo "usage: autoharn <verb> [args...]"
+    echo
+    echo "Each verb below is a thin dispatch to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with"
+    echo "this world's own deployment.json -- semantics, refusal texts and exit codes are"
+    echo "unchanged from the per-verb shims this dispatcher replaces."
+    echo
+    echo "verbs:"
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}'
+    echo
+    echo "For a verb's own full usage, run 'autoharn <verb> --help'."
+}
+
+if [ \$# -eq 0 ] || [ "\$1" = "--help" ] || [ "\$1" = "-h" ] || [ "\$1" = "help" ]; then
+    _print_help
+    exit 0
+fi
+
+VERB="\$1"; shift
+
+if ! _dispatch_table | cut -f1 | grep -qx "\$VERB"; then
+    echo "autoharn: REFUSED -- unrecognized verb '\$VERB'." >&2
+    echo >&2
+    echo "Known verbs:" >&2
+    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}' >&2
+    echo >&2
+    echo "Run 'autoharn --help' for the full roster. Nothing was touched." >&2
+    exit 2
+fi
+
+exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/"\$VERB".tmpl "\$@"
+DISPATCHEREOF
+    chmod +x "$_wwd_new"
+
+    if [ -f "$_wwd_target" ] && cmp -s "$_wwd_target" "$_wwd_new"; then
+        rm -f "$_wwd_new"
+        echo "autoharn dispatcher: SKIPPED-IDENTICAL -- $_wwd_target already matches the current bootstrap/templates/*.tmpl roster byte-for-byte; nothing written."
+    elif [ -f "$_wwd_target" ]; then
+        _wwd_backup="$PROJECT_ROOT/autoharn.pre-refresh"
+        if [ -e "$_wwd_backup" ]; then
+            echo "autoharn dispatcher: NOTE -- an earlier $_wwd_backup already existed; it is being overwritten by the file replaced THIS run (only the most recent pre-refresh copy is kept)."
+        fi
+        mv -f "$_wwd_target" "$_wwd_backup"
+        mv -f "$_wwd_new" "$_wwd_target"
+        chmod +x "$_wwd_target"
+        echo "autoharn dispatcher: REPLACED -- prior $_wwd_target differed from the current roster; its content was moved to $_wwd_backup (byte-identical backup) before the new one was written -- it was never discarded."
+        echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $VERB_ROSTER)"
+    else
+        mv -f "$_wwd_new" "$_wwd_target"
+        chmod +x "$_wwd_target"
+        echo "autoharn dispatcher: fresh-write -- no prior $_wwd_target existed."
+        echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $VERB_ROSTER)"
+    fi
+}
+# ---------------------------------------------------------------------------------------------
+
 # LINEAGE HEAD, derived live from kernel/lineage/*.sql itself (never hand-typed) -- usability
 # review finding 14 (ledger row 1180): this usage text used to name a fixed generation ("s20
 # through s43 + s45") that fell 12 generations stale the moment a later delta landed and nobody
@@ -150,6 +373,12 @@ LINEAGE_HEAD="$(cd "$_LINEAGE_DIR" && ls s*.sql 2>/dev/null | grep -v '\.detect\
 usage() {
     echo "usage: $0 <dest-dir> --db <db> --host <host> --schema <schema> --kern <kern> --role <role> [--name <name>] [--governed <patterns>] [--force]" >&2
     echo "       $0 <dest-dir> --new-world <world> --db <db> --host <host> [--name <name>] [--governed <patterns>] [--force]" >&2
+    echo "       $0 --refresh-dispatcher <world-dir>" >&2
+    echo "         (rewrites ONLY <world-dir>/autoharn from the CURRENT bootstrap/templates/*.tmpl" >&2
+    echo "          verb roster against that world's OWN existing deployment.json -- touches" >&2
+    echo "          nothing else in that world; refuses if <world-dir>/deployment.json is absent." >&2
+    echo "          autoharn3 ledger row 101 item 4: a world's operator wiring is updatable in" >&2
+    echo "          place -- runs-are-linear governs the kernel/record, not this wiring file.)" >&2
     echo "       $0 <dest-dir> --profile tracker --name <name> --db <db> --host <host> [--schema <schema>]" >&2
     echo "           [--kern <kern>] [--role <role>] [--force]" >&2
     echo "         (--profile tracker: a STANDING work tracker, not a governed world -- retires" >&2
@@ -201,6 +430,49 @@ usage() {
     echo "          keep the existing deployment.json-exists / --force gate above)" >&2
     exit 2
 }
+
+# --refresh-dispatcher <world-dir> (autoharn3 ledger row 101 amendment, item 4: "worlds' operator
+# wiring IS updatable in place -- runs-are-linear governs the kernel/record, not wiring files").
+# A SELF-CONTAINED early exit, intercepted before any of the --new-world/--profile machinery
+# below (which needs a whole DDL-apply/deployment.json-write ceremony this mode must NOT run) --
+# rewrites ONLY $WORLD_DIR/autoharn from the CURRENT bootstrap/templates/*.tmpl roster (the same
+# _write_world_dispatcher() the ordinary scaffold flow calls further down, ADR-0012 P1), touching
+# nothing else in that world. Refuses on anything that is not a recognizable, already-scaffolded
+# world (no deployment.json) -- never guesses, never creates one.
+if [ "${1:-}" = "--refresh-dispatcher" ]; then
+    shift
+    if [ $# -lt 1 ] || [ -z "$1" ]; then
+        echo "usage: $0 --refresh-dispatcher <world-dir>" >&2
+        echo "       rewrites ONLY <world-dir>/autoharn from the current bootstrap/templates/*.tmpl" >&2
+        echo "       roster against that world's OWN existing deployment.json -- refuses if" >&2
+        echo "       <world-dir>/deployment.json is absent (not a recognizable scaffolded world)." >&2
+        exit 2
+    fi
+    _RD_WORLD_DIR="$1"
+    if [ ! -f "$_RD_WORLD_DIR/deployment.json" ]; then
+        echo "new-project.sh --refresh-dispatcher: REFUSED -- no deployment.json at $_RD_WORLD_DIR" >&2
+        echo "                                       (not a recognizable scaffolded world). Nothing touched." >&2
+        exit 1
+    fi
+    PROJECT_ROOT="$(cd "$_RD_WORLD_DIR" && pwd)"
+    AUTOHARN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+    TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
+    # Same EXEC_ROOT heuristic the --pin submodule scaffold path uses at birth (this script's own
+    # EXEC_ROOT block, further down): a world pinned via --pin submodule carries its own
+    # $PROJECT_ROOT/.autoharn checkout and every verb (including ./autoharn itself) points at
+    # THAT copy, never this live one -- a refresh must route the same way or it would silently
+    # re-point a pinned world at this live checkout, exactly the coupling design/ORCH-DEPLOYMENT-
+    # PINNING.md exists to prevent. An unpinned world (the common case) has no .autoharn/ and
+    # keeps routing at this live checkout, same as it did at birth.
+    EXEC_ROOT="$AUTOHARN_ROOT"
+    if [ -d "$PROJECT_ROOT/.autoharn" ]; then
+        EXEC_ROOT="$PROJECT_ROOT/.autoharn"
+    fi
+    echo "-- --refresh-dispatcher: rewriting $PROJECT_ROOT/autoharn from the current bootstrap/templates/*.tmpl roster (EXEC_ROOT=$EXEC_ROOT) --"
+    _write_world_dispatcher
+    echo "refresh-dispatcher: done -- only $PROJECT_ROOT/autoharn was touched."
+    exit 0
+fi
 
 [ $# -ge 1 ] || usage
 DEST="$1"; shift
@@ -583,6 +855,20 @@ fi
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
+
+# PRE-WRITE VALIDATION (fix-round finding 1, autoharn3 row 101 re-review, 2026-07-28): the ONE
+# place, on the --new-world/classic/--profile flow, where TEMPLATES first becomes resolvable --
+# so this is the earliest point _scan_verb_templates()'s glob-plus-header check CAN run, and
+# nothing this script writes (deployment.json, .autoharn-world.json, .gitignore, .claude/*,
+# keys/, attestations/, roles/, the dispatcher itself, ...) has been written yet. Calling it here
+# makes every one of this script's "Nothing was touched" refusal messages true on every path,
+# including this one -- _write_world_dispatcher()'s own later call to the same function (near the
+# END of the scaffold sequence, where the roster is actually consumed to write ./autoharn) is now
+# a cheap, already-validated re-check, never the first place a header-less template is caught.
+# Discards the DISPATCH_TABLE/VERB_ROSTER this validation-only call computes as a side effect --
+# _write_world_dispatcher() recomputes them later itself (the templates directory cannot change
+# mid-run) rather than threading state across the many intervening scaffold-writing sections.
+_scan_verb_templates
 
 # design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §3: the FOREIGN-content refusal, BEFORE
 # `mkdir -p` (this used to `mkdir -p` and merge into ANY occupied directory lacking
@@ -1742,106 +2028,21 @@ sedsubst < "$TEMPLATES/roles-README.md.tmpl" > "$PROJECT_ROOT/roles/README.md"
 echo "wrote roles/README.md"
 
 # §6 AMENDMENT (2026-07-26, rows 1357/1365/1366/1367 -- design/FABLE-AUTOHARN-UMBRELLA-CLI-
-# SPEC.md's scaffold clause executes): this used to write TEN separate per-verb shim files
-# (SHIM_VERBS_ALL, bootstrap/shim-verbs.sh) -- one operator surface everywhere, not just this
-# repo's own root, was the maintainer's stated purpose of the root-shim-pruning precondition
-# (row 1357: "it's just a precondition"; row 1365: "was descoped and is wrong" applied to
-# worlds too). A world now gets ONE dispatcher, `./autoharn`, routing `autoharn <verb>
-# [args...]` to the exact same `bootstrap/templates/<verb>.tmpl` + PICKUP_DEPLOYMENT env each
-# retired per-verb shim used -- consolidation of ten files into one, not a semantics change: the
-# verb roster (SHIM_VERBS_ALL, still the one list every scaffold-writing script sources) and the
-# exec target per verb are unchanged. No libexec/ for worlds -- a world's verbs already resolve
-# straight to bootstrap/templates/*.tmpl in the exec-root checkout, so the dispatcher below is
-# the one home for that routing instead of it being copy-pasted ten times. Unknown verb: a
-# teaching refusal listing the roster (never a bare shell "not found"). `--help`/no-args: the
-# roster generated from the SAME table the dispatch/refusal paths read, never re-derived,
-# writes nothing and touches no boundary. Existing pre-migration worlds keep their ten shim
-# files untouched (runs-are-linear; --force on this scaffold does not retroactively collapse an
-# existing world's shims into a dispatcher -- see this script's own idempotent-force comments).
-_verb_desc() {
-    case "$1" in
-        led) echo "write to or read from the append-only governance ledger (decisions, work items, obligations, principals, ...)" ;;
-        judge) echo "compare the SQL and ASP polarities against the ledger and report AGREE/DIVERGE/QUARANTINED" ;;
-        pickup) echo "resume-context read: hydrate an orchestrator from the ledger instead of session replay" ;;
-        audit) echo "run the standing audit surface against this world's own boundary" ;;
-        distance-to-clean) echo "one-line-per-section debt count against this world's own hygiene bars" ;;
-        verify-commission) echo "verify a SIGNED commission against this world's own GPG keyring (Rung 2, design/MAINT-GPG-TRUST-LAYER.md)" ;;
-        verify-chain) echo "reconcile the row-hash chain and the refusal_seq completeness oracle (Rung 3, design/MAINT-GPG-TRUST-LAYER.md)" ;;
-        attest-doc) echo "record or check this world's own ADR-0017 A:B:C fresh-context doc-legibility attestations" ;;
-        asof-export) echo "export a point-in-time snapshot of the ledger" ;;
-        doctor) echo "is this world set up right? one witnessed PASS/FAIL/SKIP report, read-only" ;;
-        *) echo "(no one-line description on file for this verb)" ;;
-    esac
-}
-DISPATCH_TABLE=""
-for verb in $SHIM_VERBS_ALL; do
-    # Command substitution strips ITS OWN trailing newline -- concatenating printf('...\n')
-    # output straight into DISPATCH_TABLE loses every line separator and glues all ten verb
-    # lines into one (caught live: a scratch scaffold's `./autoharn --help` printed a single
-    # run-on "led ... judge ... pickup ..." line, no separators). Fixed by appending a LITERAL
-    # newline in the shell source itself (never inside a command substitution), which sh does
-    # not strip.
-    VERB_LINE="$(printf '%s\t%s' "$verb" "$(_verb_desc "$verb")")"
-    if [ -z "$DISPATCH_TABLE" ]; then
-        DISPATCH_TABLE="$VERB_LINE"
-    else
-        DISPATCH_TABLE="$DISPATCH_TABLE
-$VERB_LINE"
-    fi
-done
-echo "-- ./autoharn (this world's ONE dispatcher, no per-verb shims -- design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment): routes to autoharn's live templates, same as the ten shims it replaces --"
-cat > "$PROJECT_ROOT/autoharn" <<DISPATCHEREOF
-#!/bin/sh
-# autoharn -- this world's ONE operator-surface dispatcher (design/FABLE-AUTOHARN-UMBRELLA-CLI-
-# SPEC.md §6 amendment, ledger rows 1357/1365/1366/1367). Routes \`autoharn <verb> [args...]\`
-# to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with THIS world's own deployment.json
-# (PICKUP_DEPLOYMENT) -- byte-identical routing/env to what each retired per-verb shim did,
-# consolidated into one file. No libexec/ here: a world's verbs already resolve straight to
-# bootstrap/templates/*.tmpl in the exec-root checkout named above.
-set -eu
-
-HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-
-_dispatch_table() {
-    cat <<'DISPATCHVERBS'
-$DISPATCH_TABLE
-DISPATCHVERBS
-}
-
-_print_help() {
-    echo "usage: autoharn <verb> [args...]"
-    echo
-    echo "Each verb below is a thin dispatch to $EXEC_ROOT/bootstrap/templates/<verb>.tmpl with"
-    echo "this world's own deployment.json -- semantics, refusal texts and exit codes are"
-    echo "unchanged from the per-verb shims this dispatcher replaces."
-    echo
-    echo "verbs:"
-    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}'
-    echo
-    echo "For a verb's own full usage, run 'autoharn <verb> --help'."
-}
-
-if [ \$# -eq 0 ] || [ "\$1" = "--help" ] || [ "\$1" = "-h" ] || [ "\$1" = "help" ]; then
-    _print_help
-    exit 0
-fi
-
-VERB="\$1"; shift
-
-if ! _dispatch_table | cut -f1 | grep -qx "\$VERB"; then
-    echo "autoharn: REFUSED -- unrecognized verb '\$VERB'." >&2
-    echo >&2
-    echo "Known verbs:" >&2
-    _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", \$1, \$2}' >&2
-    echo >&2
-    echo "Run 'autoharn --help' for the full roster. Nothing was touched." >&2
-    exit 2
-fi
-
-exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/"\$VERB".tmpl "\$@"
-DISPATCHEREOF
-chmod +x "$PROJECT_ROOT/autoharn"
-echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $SHIM_VERBS_ALL)"
+# SPEC.md's scaffold clause executes) + CLASS FIX (2026-07-28, autoharn3 row 101, "the world-
+# dispatcher generation ... derives its verb table from the bootstrap/templates/*.tmpl directory
+# glob"): a world gets ONE dispatcher, `./autoharn`, routing `autoharn <verb> [args...]` to the
+# matching `bootstrap/templates/<verb>.tmpl` + PICKUP_DEPLOYMENT env -- the roster is no longer a
+# hand-maintained list (SHIM_VERBS_ALL/_verb_desc, both retired from this call site) but is
+# derived, every run, from the templates directory itself by _write_world_dispatcher() (defined
+# near this script's own top, alongside its full closure statement and the NON_VERB_TEMPLATES
+# exclusion list) -- the SAME function --refresh-dispatcher calls below. Unknown verb: a teaching
+# refusal listing the roster (never a bare shell "not found"). `--help`/no-args: the roster
+# generated from the SAME table the dispatch/refusal paths read, never re-derived, writes
+# nothing and touches no boundary. Existing pre-migration worlds keep their ten shim files
+# untouched (runs-are-linear at birth; --refresh-dispatcher is the explicit, opt-in exception
+# for a world's OWN wiring file, ledger row 101 item 4 -- never automatic, never silent).
+echo "-- ./autoharn (this world's ONE dispatcher, no per-verb shims -- design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6 amendment, verb roster CLASS-FIXED autoharn3 row 101): routes to autoharn's live templates --"
+_write_world_dispatcher
 
 # deploy-feature-manifest (ledger row 1274/1322): principal_set, applied through the just-written
 # `led` shim (--new-world mode only -- refused earlier, before any act, for classic mode). A
