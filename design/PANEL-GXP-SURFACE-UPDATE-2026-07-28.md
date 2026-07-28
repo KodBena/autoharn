@@ -5,8 +5,17 @@ The ADR-0017 legibility loop has NOT yet run on this text -- pending, same treat
 2026-07-26 original received; until then this is the surveyor's as-delivered original.
 Removal condition: the loop's attestation record supersedes this exemption. -->
 
-**Provenance:** produced by the commissioned delta surveyor (Opus, 2026-07-28), the
-maintainer-requested UPDATE of PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md. Filed
+**What this document is, in one line:** a re-survey of every capability an operator or
+end user of this system reaches, written two days after a first survey and reporting
+what changed — read the "What this is" paragraph below the vocabulary block for the
+full framing.
+
+**Provenance:** produced by the commissioned delta surveyor (Opus — an Anthropic
+Claude model tier, 2026-07-28), the maintainer-requested UPDATE of
+[PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md).
+(The header comment's "brief COMMISSION-PANEL-GXP-SURFACE-UPDATE.md" names the
+commissioning prompt — an untracked session file, per this project's standing rule
+against committing session ephemera, not a file in this tree.) Filed
 verbatim by the coordinator; a parallel independent fresh-eyes survey (same day, no
 sight of either document) is filed separately when it lands. The text below now carries
 LEGIBILITY REPAIRS from an ADR-0017 pre-review pass (2026-07-28) — a "Vocabulary and
@@ -28,18 +37,39 @@ precedent.
   born world is never patched in place — a later delta reaches a world only by being
   folded into the *next* world's birth chain, never applied to an existing one.
 - **SoD** — segregation of duties (one actor may not both author and countersign the
-  same record). **RLS** — Postgres row-level security. **SPA** — single-page application
-  (the panel's frontend). **HMAC** — the keyed hash the kernel attaches to a write to
-  bind it to the session/agent pair that made it; a tamper-evidence stamp, not an
-  authentication credential (no party outside the kernel verifies it as identity proof).
-  **SSE** — server-sent events, a server-push protocol; this system has none. **CORS** —
-  cross-origin resource sharing, the browser policy that blocks a page from one origin
-  fetching another origin's API without an explicit response header. **SSOT** — single
-  source of truth. **GUC** — a PostgreSQL "Grand Unified Configuration" session variable,
-  the mechanism the boundary service uses to carry a resolved identity into a request's
-  DB session. **NRC** — the U.S. Nuclear Regulatory Commission; "NRC-grade" names an
-  assurance register this project's own ratified bar borrows as a comparison, not an NRC
+  same record).
+- **RLS** — Postgres row-level security.
+- **SPA** — single-page application (the panel's frontend).
+- **HMAC** — the keyed hash the kernel attaches to a write to bind it to the
+  session/agent pair that made it; a tamper-evidence stamp, not an authentication
+  credential (no party outside the kernel verifies it as identity proof).
+- **SSE** — server-sent events, a server-push protocol; none existed at survey time
+  (a route was specced later the same week).
+- **CORS** — cross-origin resource sharing, the browser policy that blocks a page from
+  one origin fetching another origin's API without an explicit response header.
+- **SSOT** — single source of truth. **GUC** — a PostgreSQL session configuration
+  variable, the mechanism the boundary service uses to carry a resolved identity into
+  a request's DB session.
+- **NRC** — the U.S. Nuclear Regulatory Commission; "NRC-grade" names an assurance
+  register this project's own ratified bar borrows as a comparison, not an NRC
   compliance claim.
+- **Ledger** — the append-only Postgres record of every accepted write and journaled
+  refusal; **kernel** — the Postgres schema, functions, and constraints (built by the
+  birth chain) that enforce the ledger's rules; **principal** — the ledger's unit of
+  acting identity (a human, a model, a sub-agent, or a tool), tracked in the kernel's
+  own registry; **entitlement** — the s60 check that an act's principal holds a role
+  binding covering the act AND an authority chain reaching the world's founding
+  principal.
+- **Two "resolution" vocabularies, distinct layers:** the identity conduit's
+  three-case resolution (`minted`/`vendor`/`anonymous`, §1.3) is the SERVICE-layer
+  parse of a request's identity headers; `principal_actor_resolution`
+  (`explicit`/`declared-default`, §1.4) is the KERNEL's per-row record of how the
+  acting principal was determined. The first feeds the second; they are not the same
+  vocabulary.
+- **Chasing a bare "row N"** — a bare ledger row number resolves with
+  `./autoharn led show N` against the world under discussion (autoharn3 unless
+  another world is named). A citation like "GLOSSARY:575" means line 575 of
+  GLOSSARY.md, the document's file:line style applied to a root file.
 - **GLOSSARY.md**, **README.md**, **ORCH-CAPABILITIES.md** — this repository's root-level
   term dictionary, top-level readme, and operator capability ledger. Named bare at
   several points below, they resolve to [GLOSSARY.md](../GLOSSARY.md),
@@ -61,7 +91,7 @@ precedent.
 
 ---
 
-**Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"`. Branch on the body's `disposition` field, never on the status code alone; the living contract home is serving/README.md's refusal-taxonomy section.
+**Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"` (a *tie group* is a set of response rows that are byte-identical, so no cursor can distinguish them; the server serves such a group atomically, and one larger than the advertised bound refuses instead). Branch on the body's `disposition` field, never on the status code alone; the living contract home is [serving/README.md](../serving/README.md)'s refusal-taxonomy section.
 
 ---
 

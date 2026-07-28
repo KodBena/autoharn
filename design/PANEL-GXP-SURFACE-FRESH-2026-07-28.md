@@ -1,18 +1,23 @@
 <!-- doc-attest-exempt: as-delivered survey record, filed verbatim 2026-07-28 (commission
 row 168 part b, brief COMMISSION-PANEL-GXP-SURFACE-FRESH.md; the INDEPENDENT fresh-eyes
 variant -- its independence clause forbade it both prior survey documents, and it states
-compliance in its own preamble. Opus exception maintainer-granted by the request itself).
+compliance in its own preamble. Opus exception -- to the project's Sonnet-default authoring policy -- maintainer-granted by the request itself).
 ADR-0017 legibility loop NOT yet run; pending, same as its siblings. Removal condition:
 the loop's attestation record supersedes this exemption. -->
 
 **Provenance:** produced by the commissioned fresh-eyes surveyor (Opus, 2026-07-28), the
 anchoring-free second variant the maintainer requested alongside the delta survey
-(PANEL-GXP-SURFACE-UPDATE-2026-07-28.md). The two are designed to be read against each
+([PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](PANEL-GXP-SURFACE-UPDATE-2026-07-28.md)). The two are designed to be read against each
 other: this one derives the surface from primary sources alone. The text below now
-carries LEGIBILITY REPAIRS from an ADR-0017 pre-review pass (2026-07-28) — a "Vocabulary
-and citation conventions" block added below, plus a small number of ADR citations turned
-into resolving links; no factual claim, verdict, witness-class tag, quoted output, or
-table value was altered, following the same-day PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md
+carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop (2026-07-28: pre-review pass,
+then blind-round-1 repairs) — a "Vocabulary and citation conventions" block, resolving
+links, and bracketed editorial notes; no factual claim, verdict, or table value was
+altered, with two disclosed exceptions from blind round 1: an authoring-residue line
+("I have what I need. Composing the report."), the COORDINATOR'S OWN extraction
+artifact and never the surveyor's prose, was deleted; and the witness-class list
+gained a bracketed editorial note naming the UNEXERCISED class §5 uses but the
+original list omitted, following the same-day
+[PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md)
 precedent.
 
 **Vocabulary and citation conventions (added for the zero-context reader):**
@@ -42,8 +47,9 @@ precedent.
   of the same ledger data, to independently re-derive the same views and check the two
   agree.
 - **C1–C29** — the numbered clauses of [ADR-0019's appendix](../law/adr/0019-appendix-ui-proscriptions.md)
-  (UI proscriptions); each one cited below is glossed in a parenthetical at its first use
-  in §2.0.
+  (UI proscriptions); the clauses this document actually cites carry a parenthetical
+  gloss at first use (most in §2.0/§2.1; C29's is in §2.2); the rest of C1-C28 are
+  cited only as the range and are not individually glossed here.
 - **ADR-NNNN** — an Architecture Decision Record under `law/adr/`; specific numbered ADRs
   named in prose below are linked at their first occurrence, with one exception: bare
   "ADR-0019" is left unlinked throughout, because this document's own finding C14 (§4.C)
@@ -56,14 +62,22 @@ precedent.
   [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) respectively, wherever named bare below.
 - Plain code-formatted paths (`serving/boundary_service.py:2242-2244`) resolve from this
   repository's root, matching the sibling kickstart document's own convention.
+- **Kernel** — this project's append-only decision-ledger engine (the Postgres schema,
+  functions, and refusal logic built from `kernel/lineage/`), NOT an operating-system
+  kernel; **the boundary service** — the one HTTP layer over it (`serving/`, one
+  process, port 8433 here), fully described in §1.3 below; **psql** — PostgreSQL's
+  command-line client, so "direct psql" means a verb talks to the database itself,
+  bypassing the boundary; **actor / principal** — the same entity (the ledger's unit
+  of acting identity); "principal" is the noun the identity views use, "actor" the
+  ledger column; **world / deployment** — one world (a born ledger instance) is served
+  as one deployment under the boundary's `/d/{name}/` multiplex.
+- Citations of the form "panel `BACKLOG.md`, entry N" are POSITIONAL into a mutable
+  file in the sibling repository — they index that file as it stood at survey time
+  (2026-07-28) and may dangle after it is reordered; retained verbatim as surveyed.
 
 ---
 
-**Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"`. Branch on the body's `disposition` field, never on the status code alone; the living contract home is serving/README.md's refusal-taxonomy section.
-
----
-
-I have what I need. Composing the report.
+**Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"`. Branch on the body's `disposition` field, never on the status code alone; the living contract home is [serving/README.md](../serving/README.md)'s refusal-taxonomy section.
 
 ---
 
@@ -73,7 +87,7 @@ I have what I need. Composing the report.
 
 **Boundaries respected:** no writes to either repo; no ledger row written; the boundary service on 8433 was never started, stopped, restarted, or reconfigured; no refusal was probed and no verb was fed deliberately bad input — every refusal text below is read from source or from `--help`. `judge`, `audit --retain`, and `doctor` were **not run**: `judge` banks a DerivationRecord pair *into the repo tree* (a write), and `doctor`/`audit` were held back as outside the explicitly enumerated permission. Their surfaces below are DOC-SOURCED.
 
-**Witness classes:** WITNESSED (observed output shown) · DOC-SOURCED (file:line or command-output + quote) · GAP · UNVERIFIED (with blocker).
+**Witness classes:** WITNESSED (observed output shown) · DOC-SOURCED (file:line or command-output + quote) · GAP (the absence itself is the claim) · UNVERIFIED (with blocker) *[editorial addition, repair pass: the closure statement in §5 also uses UNEXERCISED (a surface deliberately not invoked, with the blocker stated) — a fifth class the original list omitted]*.
 
 One framing note the whole document is built on: **21 CFR Part 11 and EU Annex 11 are reference frames here, never adopted requirements.** The project's own ratified bar is "NRC-grade product, best-effort process." Where §2 says "an enterprise GxP user needs to reach X," that is a statement about what a user needs to *see*, not a compliance claim. Autoharn's own prior Part 11 mapping (`vestigial_documentation/design/FABLE-21CFR11-STANDING-ASSESSMENT.md`, 453 lines, verdicts `WITNESSED-BY-DESIGN`/`PARTIAL`/`ABSENT`/`BUREAUCRACY-CLASS`) exists and is *vestigial*, i.e. history — I cite it as a frame, not as current standing.
 
