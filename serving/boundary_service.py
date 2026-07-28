@@ -1865,6 +1865,14 @@ _DEFAULT_JUDGE_DERIVATIONS_ROOT = (
 # here ONCE (ADR-0012 P1); if a future differential module adds a sixth family this tuple is the
 # one place to extend.
 #
+# TWO DISCLOSED LIMITS (round-2 re-review MINORs, autoharn3 row 369): (1) a derivation
+# under a subtree NOT in the tuple above falls back to domain='ledger' -- a GUESS, honest
+# only while the family universe stays the closed five; extending the tuple is mandatory
+# with any sixth family, or the guess becomes round-1's confident-mislabel reborn. (2) an
+# exact-mtime tie between two distinct files resolves by filesystem enumeration order --
+# undisclosed-nondeterminism accepted because a tie now requires two distinct files
+# sharing an mtime (the one-pass scan removed round 1's guaranteed duplicate case).
+#
 # FIX ROUND (focused re-review CRITICAL, reviewer witnessed over real HTTP: a contemporaneity-
 # stored DIVERGE_DEFECT reported as domain 'ledger'): the FIRST cut of this scan iterated a
 # `{domain: root}` dict and called `root.rglob("derivation.json")` PER DOMAIN -- since the bare
