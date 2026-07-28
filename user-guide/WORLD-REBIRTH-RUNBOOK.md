@@ -40,6 +40,23 @@ You should see per-class counts and then, loudly:
 `MANIFEST IS UNREVIEWED ... ingest refuses it wholesale`. That refusal is correct — it is
 the maintainer's veto surface. Extraction is pure SELECTs; it needs no running boundary.
 
+**Step 1b — sweep for never-graded process rules (added 2026-07-28, after a witnessed
+drop).** The extract's durable-decision carry-forward, and the compaction hook that
+re-asserts standing decisions into rebuilt contexts, both read ONLY rows graded
+`durable` — a maintainer ruling ledgered as an ungraded `decision` is structurally
+invisible to both, and one real pattern (the +A:B:C pre-review rule, autoharn2 rows
+1455–1504 family) silently dropped at the autoharn3 rebirth exactly this way
+(autoharn3 rows 209/210 are the re-grade and the finding). Before the maintainer
+reviews the manifest, run this against the OLD world and eyeball every hit — anything
+that binds future process gets re-ledgered `--grade durable` in the old world so the
+extract carries it:
+
+    psql -h <db host> -U <you> -d <db> -c "
+      SELECT id, left(statement,160) FROM <oldworld>.ledger
+      WHERE kind='decision' AND decision_grade IS NULL
+        AND statement ~* '(ruling|standing|pattern|from now on|always|never|every)'
+      ORDER BY id"
+
 ## Step 2 — **MAINTAINER**: review and countersign the manifest
 
 The maintainer reads the manifest (the `carry-verbatim` statements are the part worth
