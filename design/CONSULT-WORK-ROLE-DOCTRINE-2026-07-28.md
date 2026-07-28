@@ -133,7 +133,36 @@ and was corrected in the blind-round-1 repair — the corrected entry is the
   mechanisms, reconstructed here from how the terms are used below (no separate
   file defines them): Tier 1 = candidate kernel refusals; Tier 2 = views/visibility
   surfaces; Tier 3 = deliberately left as convention, never gated. The bucketing is
-  the sealed appendix's vocabulary, adopted by reference in Phase 2.
+  the sealed appendix's vocabulary, adopted by reference in Phase 2. Because the
+  sealed appendix itself is untracked, its cited items are restated here so
+  "sealed Tier N item M" resolves in-document: **sealed Tier 1** proposed three
+  kernel refusals — item 1: the closer of a work item must be its
+  claimant-of-record (cross-identity closes go claim-first); item 2: a close's
+  `row:` witness citation must be evidence-shaped, not merely existing; item 3: a
+  review must regard the in-force successor of a superseded close. **Sealed
+  Tier 2**: a served per-item role-census view instead of any refusal on performer
+  identity. **Sealed Tier 3**: never force opener≠closer, never forbid
+  self-review, don't yet mandate `review_detail` rows. "The sealed wording" of the
+  witness-shape item said "per resolution kind" — the phrasing Phase 2 corrects to
+  per close SHAPE.
+- **RCA** — Root Cause Analysis: the after-the-fact investigation of why a defect
+  or failure happened; "post-hoc RCA" below names it as a consumer of role records
+  ("who was accountable when this shipped").
+- **experience4 / the three worlds** — the census reads three live deployments
+  ("worlds"): `autoharn2` (the richest, now-retired record), `autoharn3` (this
+  project's own), and `experience4` (a sibling front-end project's world, where
+  the fix-gate specimen lives). "autoharn2 row 1265"-style citations name the
+  world the row number belongs to.
+- **A caution on "§"** — the census document has its own §-numbered sections (its
+  "§4" is its enforcement map); "the census's §4" below means THAT document's
+  section, while a bare "§4" in the consultant's prose means doctrine item 4 as
+  defined above.
+- **"Grade-the-brief"** — ADR-0014's discipline that a second opinion's
+  commissioning brief is itself graded for independence (did it lead the witness?)
+  before the opinion is weighed.
+- **W1 / A1–A3 / E1–E2 / V1** — the correction labels Phase 2 uses (W = wrong,
+  A = addition, E = edit, V = view note); they are defined where the full Phase-2
+  text appears, under "Original first delivery" at the bottom of this file.
 - **"The coordinator" / "the commissioner"** — the same party: the orchestrating
   session (the project's primary AI collaborator) that authored the doctrine draft,
   commissioned this consult, and recalled it after the seal failure. "The
