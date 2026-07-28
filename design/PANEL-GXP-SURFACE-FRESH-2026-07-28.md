@@ -8,7 +8,54 @@ the loop's attestation record supersedes this exemption. -->
 **Provenance:** produced by the commissioned fresh-eyes surveyor (Opus, 2026-07-28), the
 anchoring-free second variant the maintainer requested alongside the delta survey
 (PANEL-GXP-SURFACE-UPDATE-2026-07-28.md). The two are designed to be read against each
-other: this one derives the surface from primary sources alone.
+other: this one derives the surface from primary sources alone. The text below now
+carries LEGIBILITY REPAIRS from an ADR-0017 pre-review pass (2026-07-28) — a "Vocabulary
+and citation conventions" block added below, plus a small number of ADR citations turned
+into resolving links; no factual claim, verdict, witness-class tag, quoted output, or
+table value was altered, following the same-day PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md
+precedent.
+
+**Vocabulary and citation conventions (added for the zero-context reader):**
+- **GxP** — the family of "Good x Practice" life-science regulations (GMP manufacturing,
+  GLP laboratory, GCP clinical, …) whose computerized-systems expectations frame §2. Used
+  as a reference frame only, never a compliance claim (stated explicitly in this
+  document's own framing note above).
+- **ALCOA+** — the data-integrity acronym behind §2's expectation column: attributable,
+  legible, contemporaneous, original, accurate, plus complete, consistent, enduring,
+  available.
+- **sNN** (s43, s58, s60, …) — the Nth numbered kernel migration delta, one file each
+  under `kernel/lineage/`; a world's Postgres schema is built by applying them in order
+  at birth (its **birth chain**).
+- **SoD** — segregation of duties (one actor may not both author and countersign the
+  same record). **HMAC** — the keyed hash the kernel attaches to a write to bind it to
+  the session/agent pair that made it; a tamper-evidence stamp, not an authentication
+  credential. **CORS** — cross-origin resource sharing, the browser policy that blocks a
+  page from one origin fetching another origin's API without an explicit response
+  header. **SSE** — server-sent events, a server-push protocol; this system has none.
+  **SSOT** — single source of truth. **TUI** — text user interface (`tools/setup_tui`,
+  the scaffolding wizard). **GUC** — a PostgreSQL "Grand Unified Configuration" session
+  variable, the mechanism the boundary service uses to carry a resolved identity into a
+  request's DB session. **NRC** — the U.S. Nuclear Regulatory Commission; "NRC-grade"
+  names an assurance register this project's own ratified bar borrows as a comparison,
+  not an NRC compliance claim.
+- **clingo** — the Answer Set Programming solver `judge` runs alongside a direct SQL read
+  of the same ledger data, to independently re-derive the same views and check the two
+  agree.
+- **C1–C29** — the numbered clauses of [ADR-0019's appendix](../law/adr/0019-appendix-ui-proscriptions.md)
+  (UI proscriptions); each one cited below is glossed in a parenthetical at its first use
+  in §2.0.
+- **ADR-NNNN** — an Architecture Decision Record under `law/adr/`; specific numbered ADRs
+  named in prose below are linked at their first occurrence, with one exception: bare
+  "ADR-0019" is left unlinked throughout, because this document's own finding C14 (§4.C)
+  reports that two files in this repository currently share that number and which one a
+  bare citation means is an open, unresolved ambiguity — resolving it here would assert a
+  fact this pre-review did not verify.
+- **GLOSSARY.md**, **README.md**, **ORCH-CAPABILITIES.md** — this repository's root-level
+  term dictionary, top-level readme, and operator capability ledger, resolving to
+  [GLOSSARY.md](../GLOSSARY.md), [README.md](../README.md), and
+  [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md) respectively, wherever named bare below.
+- Plain code-formatted paths (`serving/boundary_service.py:2242-2244`) resolve from this
+  repository's root, matching the sibling kickstart document's own convention.
 
 ---
 
@@ -210,7 +257,7 @@ These are not background — they are constraints on the deliverable, and three 
 - **ADR-0019 Rule 4 — data topology is the default information architecture.** *"an entity gets one home surface; a dependent (foreign-keyed) entity is created and edited within its parent's context, master-detail, never as a sibling flat list; an association renders as a selection over the entities it joins, never as free text; a derived projection gets a read surface and no editor; storage artifacts (junction mechanics, hash chains, lineage columns) are owed no surface at all."*
 - **ADR-0019-appendix C1–C29**, four enforcement tiers, Synopsis = required reading. The ones that bite a ledger panel hardest: **C6** (loading/error/empty/genuine-zero/no-data never collapsed — *"A dashboard showing `0` when it means 'feed down' is a defect at the severity of showing wrong data"*), **C7** (as-of time + distinct stale state), **C5** (success only from a durable ack), **C10** (irreversible action guarded), **C27** (auto-refresh yields to interaction), **C13** (typed semantic elements, never layout inside a string), **C18** (no colour-only meaning).
 
-And one more, which governs whether the panel is allowed to *reformat* a ledger row at all — **ADR-0020**: *"Any operation that migrates, schematizes, summarizes, or re-renders authored content carries a cold-read meaning-preservation witness… **re-rendering content into a new presentation vocabulary**"* is explicitly in scope. A panel that renders a statement truncated, badged, or summarized is performing a transformation under this ADR.
+And one more, which governs whether the panel is allowed to *reformat* a ledger row at all — **[ADR-0020](../law/adr/0020-meaning-preservation-witness.md)**: *"Any operation that migrates, schematizes, summarizes, or re-renders authored content carries a cold-read meaning-preservation witness… **re-rendering content into a new presentation vocabulary**"* is explicitly in scope. A panel that renders a statement truncated, badged, or summarized is performing a transformation under this ADR.
 
 ### 2.1 The map
 
@@ -224,7 +271,7 @@ And one more, which governs whether the panel is allowed to *reformat* a ledger 
 | `reservations_outstanding` | Honest concern-tracking (an `attest_with_reservations` discharges the gate but the concern persists) | A standing worklist; the point of the view is that it *survives* discharge | **No surface reads it** — CLI or panel. Its own glossary entry says the pre-s34 alternative *"rewarded fabricating a clean `attest` to satisfy the gate rather than recording an honest concern"* |
 | `led principal *` (14 sub-verbs), `/standing/principals`, `principal_relations` / `_role_bindings` / `_keys` / `_competences` | **Access control, authority checks, identity uniqueness** (§11.10(d)(g), §11.100 frames) | Master-detail under ADR-0019 Rule 4: principal is the entity; competences, role bindings, key bindings, relations are dependents edited *in its context* — never four sibling flat lists (this exact mistake is Rule 4's own minting specimen) | Four separate flag-heavy verbs with no read-back verb at all; the four dependent views are unreachable from any surface |
 | s61 signature machinery (`attest-possession`, `bind-key`, `--signature-witness`, `signed_commissions`) | **Electronic signatures**; signature/record linking (§11.50/§11.70 frames) | Manifestation: signer + time + meaning, rendered together; verification status computed, never asserted | `attest-possession` requires hand-producing a detached GPG signature over a canonical statement string (`led.tmpl:342-355`). `signed_commissions` is **not in `VIEW_REGISTRY`** — no HTTP client can read it |
-| `row_hash` chain, `verify-chain`, `chain_high_water`, s43 refusal-completeness oracle | **Tamper evidence** — "discern invalid or altered records" | A verification *badge* whose state is computed on demand, with the six-value exit vocabulary preserved (`INTACT`/`BROKEN`/`TAIL-DELETION-SUSPECT`/`WITNESS-BEHIND-LEDGER`/`CANNOT-VERIFY`/`REFUSAL-ORACLE-FORGERY-SUSPECT`) | `verify-chain` is direct-psql. A panel cannot run it. **And ADR-0019 Rule 4 says hash chains are "storage artifacts… owed no surface at all"** — so the honest exposure is the *verdict*, never the hashes. Also note ADR-0015 Rule 4: a degraded run *"says so in its verdict"* — `CANNOT-VERIFY` must never render as green |
+| `row_hash` chain, `verify-chain`, `chain_high_water`, s43 refusal-completeness oracle | **Tamper evidence** — "discern invalid or altered records" | A verification *badge* whose state is computed on demand, with the six-value exit vocabulary preserved (`INTACT`/`BROKEN`/`TAIL-DELETION-SUSPECT`/`WITNESS-BEHIND-LEDGER`/`CANNOT-VERIFY`/`REFUSAL-ORACLE-FORGERY-SUSPECT`) | `verify-chain` is direct-psql. A panel cannot run it. **And ADR-0019 Rule 4 says hash chains are "storage artifacts… owed no surface at all"** — so the honest exposure is the *verdict*, never the hashes. Also note [ADR-0015](../law/adr/0015-verification-substrate-discipline.md) Rule 4: a degraded run *"says so in its verdict"* — `CANNOT-VERIFY` must never render as green |
 | Missives (`missive list`/`dispose`, 6 views, `courier`) | **Inter-world correspondence**; contemporaneous receipt and disposition | An inbox: undisposed / stale / open threads / delivery audit, with the four-value disposition vocabulary as the only write | **There is no `led missive send` verb.** The generic write path carries no `missive_*` flags (verified against `cmd_generic`'s payload keys). Authoring a `missive_sent` requires hand-writing a 10-key JSON envelope and `led --json ledger <file>`. Four of six missive views are read by nothing |
 | `judge` verdicts + DerivationRecords | Independent verification; ALCOA+ **accurate** | The four-verdict vocabulary rendered as-is, with the two `output_hash` values shown as the evidence of AGREE | `judge` is psql+clingo and **banks files into the repo**, so a read-only panel cannot invoke it. `JUDGE-READING.md:37-45` also marks `DIVERGE_BY_DESIGN` **UNWITNESSED as a live outcome** — a panel that renders four equal chips implies more than is true |
 | `audit` contemporaneity verdicts | ALCOA+ **contemporaneous** — the weakest link, admitted | The four verdicts (`CONTEMPORANEOUS`/`BATCHED_DECLARED`/`LATE_DECLARED`/`BACKFILL_SUSPECT`) | `ORCH-CAPABILITIES.md:1502-1514`: *"A permit gates whether you may write; nothing yet records WHEN the recorded act actually happened relative to the row… **treat every ledger `ts` as INSERT time, not event time.**"* A panel that renders `ts` as an event time is asserting something the system disclaims |
@@ -241,7 +288,7 @@ Every write must go through autoharn's own refusal-enforcing surface. Concretely
 
 Three constraints on how a write is offered:
 
-1. **Advertise the ceiling before the request, from the gate's own SSOT.** ADR-0012 P2-extended and ADR-0016 Rule 3 are unambiguous: *"Refusal is the sanctioned failure only when it is a refusal the client could predict."* The provenance is a maintainer ruling that a correct typed refusal against an unadvertised limit is *"a SYSTEM-level failure."* For this panel that means: same-actor-countersign, the flag-order asymmetry, the four-value disposition vocabulary, `limit ≤ 1000`, and the payload bound must all be visible *before* submit — sourced from `/kinds`, `/meta`, and the kernel constraints, never hand-copied.
+1. **Advertise the ceiling before the request, from the gate's own SSOT.** [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P2-extended and [ADR-0016](../law/adr/0016-the-service-contract-is-an-enforcement-surface.md) Rule 3 are unambiguous: *"Refusal is the sanctioned failure only when it is a refusal the client could predict."* The provenance is a maintainer ruling that a correct typed refusal against an unadvertised limit is *"a SYSTEM-level failure."* For this panel that means: same-actor-countersign, the flag-order asymmetry, the four-value disposition vocabulary, `limit ≤ 1000`, and the payload bound must all be visible *before* submit — sourced from `/kinds`, `/meta`, and the kernel constraints, never hand-copied.
 2. **Attribution is never a free-text field.** `USER-WALKTHROUGH.md:12-15`: entries are *"attributed to the connecting role… **never a self-declared name**."* An "acting as" control selects a *registered principal* (`LED_ACTOR`), and the panel must show which one is live (C29: a mode that changes what the same input does carries a persistent indicator).
 3. **C5 + C10 + C4 compose here.** No optimistic success (the ledger confirms, then the view shows it); an irreversible act — supersession, revocation, `missive dispose`, `principal revoke` — is confirmed or undoable; and a configuration commit validates the whole document and writes atomically.
 
@@ -261,7 +308,7 @@ The **legibility indictment** (`law/adr/0017:22-34`), which is what "audit-trail
 And the **anti-ceremony ruling** (`ORCH-CAPABILITIES.md:310-315`) — the failure mode a panel most easily reproduces:
 > *"the ceremony this script guarded (typed confirmation, provenance line) was witnessed producing exactly the **cargo-cult paperwork a high-assurance project must not impose on a non-expert operator** ("I was told to run a delta ... until I realized it does nothing at all")."*
 
-Plus one procedural rule that a panel will trigger, and should be built expecting: **ADR-0014's external recurrence trigger** (`:485-492`) — *"A second defect report from an operator or ratifier against a surface already reported done fires a mandatory fresh-context adversarial review of that surface's architecture — mechanically, on the count, never by anyone's judgment that the reports 'feel' related."*
+Plus one procedural rule that a panel will trigger, and should be built expecting: **[ADR-0014](../law/adr/0014-executor-second-opinion.md)'s external recurrence trigger** (`:485-492`) — *"A second defect report from an operator or ratifier against a surface already reported done fires a mandatory fresh-context adversarial review of that surface's architecture — mechanically, on the count, never by anyone's judgment that the reports 'feel' related."*
 
 ---
 
@@ -380,7 +427,7 @@ Gaps are stated as gaps. Shape hints are one line, no more.
 2. `VIEW_REGISTRY` was counted directly out of `serving/boundary_service.py` (25) and set-differenced against every `CREATE VIEW` in `kernel/lineage/*.sql`, producing gap A2's 15 names mechanically rather than by inspection.
 3. `serving/README.md`'s endpoint table was checked against the routes the CLI client and the panel actually call; the residue is gap A5.
 
-**Axes deliberately not covered, named per ADR-0000's closure form:**
+**Axes deliberately not covered, named per [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md)'s closure form:**
 
 - **Kernel closed vocabularies are under-enumerated.** I have the entry-kind count (30 members as of s58), the four missive dispositions, the four `judge` verdicts, the four `audit` verdicts, the two `write_verdict` dispositions, the four principal relation kinds, and the eleven `work` sub-verbs — but I did **not** exhaustively enumerate every CHECK-constrained vocabulary across s15–s68, nor every kernel `RAISE` teach-text. A background survey of exactly this was commissioned and had not returned when this report closed. **UNVERIFIED**, blocker: incomplete parallel survey; the source of record is `kernel/lineage/*.sql`.
 - **s61 signature machinery is documented at the surface level only** — the verbs, the `--signature-witness` flag, the `signed_commissions` view's non-registration. The record shape a signature produces and the exact verification predicate are **UNVERIFIED**; source of record is `kernel/lineage/s61-signature-symmetry-and-key-binding.sql`.

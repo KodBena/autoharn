@@ -8,7 +8,56 @@ Removal condition: the loop's attestation record supersedes this exemption. -->
 **Provenance:** produced by the commissioned delta surveyor (Opus, 2026-07-28), the
 maintainer-requested UPDATE of PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md. Filed
 verbatim by the coordinator; a parallel independent fresh-eyes survey (same day, no
-sight of either document) is filed separately when it lands.
+sight of either document) is filed separately when it lands. The text below now carries
+LEGIBILITY REPAIRS from an ADR-0017 pre-review pass (2026-07-28) — a "Vocabulary and
+citation conventions" block added below, plus a small number of ADR citations turned
+into resolving links; no factual claim, verdict, witness-class tag, quoted output, or
+table value was altered, following the same-day PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md
+precedent.
+
+**Vocabulary and citation conventions (added for the zero-context reader):**
+- **GxP** — the family of "Good x Practice" life-science regulations (GMP manufacturing,
+  GLP laboratory, GCP clinical, …) whose computerized-systems expectations frame §2. Used
+  here as a reference frame only, never a compliance claim (the document says so
+  explicitly in §2's opening line).
+- **sNN** (s43, s58, s61, …) — the Nth numbered kernel migration delta, one file each
+  under `kernel/lineage/`; a world's Postgres schema is built by applying them in order
+  at birth. The **birth chain** is the exact, ordered sequence of these deltas a given
+  world's scaffold actually applies (read from `bootstrap/new-project.sh`'s
+  `LINEAGE_CHAIN` variable). **Runs-are-linear** is this project's standing rule that a
+  born world is never patched in place — a later delta reaches a world only by being
+  folded into the *next* world's birth chain, never applied to an existing one.
+- **SoD** — segregation of duties (one actor may not both author and countersign the
+  same record). **RLS** — Postgres row-level security. **SPA** — single-page application
+  (the panel's frontend). **HMAC** — the keyed hash the kernel attaches to a write to
+  bind it to the session/agent pair that made it; a tamper-evidence stamp, not an
+  authentication credential (no party outside the kernel verifies it as identity proof).
+  **SSE** — server-sent events, a server-push protocol; this system has none. **CORS** —
+  cross-origin resource sharing, the browser policy that blocks a page from one origin
+  fetching another origin's API without an explicit response header. **SSOT** — single
+  source of truth. **GUC** — a PostgreSQL "Grand Unified Configuration" session variable,
+  the mechanism the boundary service uses to carry a resolved identity into a request's
+  DB session. **NRC** — the U.S. Nuclear Regulatory Commission; "NRC-grade" names an
+  assurance register this project's own ratified bar borrows as a comparison, not an NRC
+  compliance claim.
+- **GLOSSARY.md**, **README.md**, **ORCH-CAPABILITIES.md** — this repository's root-level
+  term dictionary, top-level readme, and operator capability ledger. Named bare at
+  several points below, they resolve to [GLOSSARY.md](../GLOSSARY.md),
+  [README.md](../README.md), and [ORCH-CAPABILITIES.md](../ORCH-CAPABILITIES.md)
+  respectively.
+- **ASP** — Answer Set Programming, the declarative deduction engine (`clingo`) that
+  `judge` runs alongside a direct SQL read of the same ledger data; `judge`'s verdicts
+  (`AGREE`/`DIVERGE_BY_DESIGN`/`DIVERGE_DEFECT`/`QUARANTINED`) report whether the two
+  independently-derived outputs agree.
+- **ADR-NNNN** — an Architecture Decision Record under `law/adr/`; specific numbered ADRs
+  named in prose below are linked at their first occurrence.
+- Plain code-formatted paths (`serving/boundary_service.py:2242-2244`) resolve from this
+  repository's root, matching the sibling kickstart document's own convention.
+- **Witness classes** (carried from the prior doc, restated for a reader who opens this
+  document alone): **WITNESSED** — the surveyor ran the command/probe and shows the
+  observed output; **DOC-SOURCED** — quoted from a named file at a cited location, not
+  executed; **GAP** — the absence itself is the claim; **UNVERIFIED** — asserted by
+  neither method, with the concrete blocker stated.
 
 ---
 
@@ -185,7 +234,7 @@ The prior doc covered s15–s61. **Six new deltas, all in the birth chain, none 
   - `refusal_attempted_kind_disposition ∈ {extracted, absent, not_a_string, over_bound}`
   - `refusal_attempted_actor_disposition ∈ {resolved_explicit, resolved_session_default, unresolvable}`
 
-  Written under the 2026-07-27 twin amendments (ADR-0008: NULL is not a vocabulary member; ADR-0012 P11: an absence carries a typed, constraint-coupled reason). `compute_row_hash` now covers **101 columns**.
+  Written under the 2026-07-27 twin amendments ([ADR-0008](../law/adr/0008-classification-discipline.md): NULL is not a vocabulary member; [ADR-0012](../law/adr/0012-compositional-and-structural-hygiene.md) P11: an absence carries a typed, constraint-coupled reason). `compute_row_hash` now covers **101 columns**.
 
 **Access control, corrected from the prior doc.** Its §1.5 closed with "s60/s61/s62 are not in the birth chain … a fresh `--new-world` scaffold today ends at s57." **That is resolved.** WITNESSED by direct read of `bootstrap/new-project.sh:778`: `LINEAGE_CHAIN` runs `s15 → … → s68`, naming s58 through s68 explicitly. The stale user-guide paragraph the prior surveyor cited faithfully has been corrected in place, with the correction dated and preserved rather than rewritten (`user-guide/USER-ACCESS-CONTROL-GUIDE.md:32-53`) — though its replacement claim ("births through s63") is now itself one head behind.
 
@@ -226,7 +275,7 @@ Structure carried forward from the prior doc's §2 so the two read side by side.
 | **Audit-trail REVIEW** (the panel's reason to exist) | `review_gap`, `work_review_gap`, `review_verdicts`, `reservations_outstanding`, `countersign_obligation`, `question_status`, `distance-to-clean` | Queue-shaped, not table-shaped. | **CHANGED:** `distance-to-clean` now prints `TOTAL debt: 1` while `led work list` returns **30 open items**. Both are correct — `distance-to-clean` counts only *open AND claimed* (DOC-SOURCED, `legacy-distance-to-clean.tmpl:321-322`, `WHERE state='open' AND claimant IS NOT NULL`) — but the label reads "work-items" and the headline reads "TOTAL debt". A panel that renders either number as "outstanding work" will mislead. Render both, labelled. |
 | **Access control / SoD** | s15 author-may-not-countersign; s17/s21/s55 independence; **s60/s62/s64 entitlement, now IN the birth chain**; RLS recipes | Show *why* a countersign button is disabled rather than letting the user hit the refusal. **NEW: the s60/s62/s64 refusal texts each name a concrete remedy** ("have your DELEGATOR run, on your behalf: `./autoharn led principal relate …`") — those remedies are exactly the copy a disabled-with-reason tooltip should carry. | Unchanged, and still the core trap: the refusal is discoverable only by triggering it, and triggering it writes a permanent row. |
 | **Electronic signature** | s61 signature kinds; `attest-possession` → `bind-key`; `verify-commission`; `verify-chain --head`; `attest-tags` | A ceremony surface. | Unchanged, and still the least approachable surface. `keys/README.md` (WITNESSED) reports `## Current state: AWAITING-KEY`. |
-| **Inter-world correspondence** (**NEW ROW**) | s58/s59 substrate; `courier` verb + `courier.toml`; `led missive list|dispose`; six served views; `missive_provenance` xrow citations | Sent / received / undisposed / stale / open-threads, thread-shaped with the disposition ceremony inline. Show the **courier's last-run time** prominently — the spec's own limit 1 is that an unrun courier is an unread mailbox, and nothing can close that from the addressee side. | **Nothing renders any of it.** The maintainer's own punch list, item 6, verbatim: "No missives view." |
+| **Inter-world correspondence** (**NEW ROW**) | s58/s59 substrate; `courier` verb + `courier.toml`; `led missive list|dispose`; six served views; `missive_provenance` xrow citations (the `xrow:<world>:<id>:<hash>` format a missive uses to cite a specific row in its origin world) | Sent / received / undisposed / stale / open-threads, thread-shaped with the disposition ceremony inline. Show the **courier's last-run time** prominently — the spec's own limit 1 is that an unrun courier is an unread mailbox, and nothing can close that from the addressee side. | **Nothing renders any of it.** The maintainer's own punch list, item 6, verbatim: "No missives view." |
 | **Human-readable rendering** | `asof-export`, `led show`, GLOSSARY | Every closed vocabulary needs a rendered label + tooltip. | **CHANGED, and worse: GLOSSARY.md defines 66 terms and none of them are `missive`, `courier`, `dispatch`, `entitlement`, or (missive-)`disposition`** (WITNESSED by grep). And `disposition` is now an **undisambiguated collision**: the write-verdict sense (`accepted`/`refused`, GLOSSARY:575) versus the missive sense (`consumed`/`declined`/`superseded-unread`/`escalated`). Two different closed vocabularies, one word, neither defined as such. |
 
 **The write-path rule, restated once and unchanged.** Every write the panel offers goes through `POST /d/{d}/write/<surface>` and never around it. The panel already complies.
@@ -402,7 +451,7 @@ Refusals-that-teach and operator docs are surface; these are stated as gaps, not
 
 **How I know the enumeration is complete, and where that knowledge stops.**
 - **The verb roster is structurally complete.** `./autoharn --help` is generated from the dispatcher's own dispatch table (`autoharn:42-58`), which the `seen-red/umbrella-cli-dispatch-parity` fixture greps directly against `ls libexec/autoharn/`. Cross-checked by hand: 13 table rows, 13 libexec files, plus `service` handled in-dispatcher at `autoharn:110-116`. They match.
-- **The world roster is now structurally complete too, and by a stronger mechanism than before.** `bootstrap/new-project.sh:162-170` states its own ADR-0000 Rule 2(a) closure: the universe is exactly `bootstrap/templates/*.tmpl` minus the nine enumerated exclusions, and a template without an `# autoharn-verb-desc:` header refuses generation. Computed: 11. "Shipping the template IS shipping the verb."
+- **The world roster is now structurally complete too, and by a stronger mechanism than before.** `bootstrap/new-project.sh:162-170` states its own [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Rule 2(a) closure: the universe is exactly `bootstrap/templates/*.tmpl` minus the nine enumerated exclusions, and a template without an `# autoharn-verb-desc:` header refuses generation. Computed: 11. "Shipping the template IS shipping the verb."
 - **The boundary route list** came from every `@app.get`/`@app.post`/`add_api_route` call site in the single file that defines routes; the view allowlist from the single `VIEW_REGISTRY` dict that gates them, checked before the kernel is touched.
 - **The kind vocabulary** is the kernel's own CHECK at head. I traced the *last* re-issue rather than assuming the last delta: `grep -l ledger_kind_check kernel/lineage/*.sql` returns s57, s58, s60, s61, s65 only, and only s61 carries an `ADD CONSTRAINT`. 33 members, unchanged since the prior doc.
 - **The birth chain** was read directly from `LINEAGE_CHAIN` (`bootstrap/new-project.sh:778`) rather than from any doc that describes it — which is how the prior doc's open item 4 got its (faithful but stale) answer.
