@@ -332,6 +332,14 @@ REGISTRY: dict[str, str] = {
     # discipline continues to hold there, just no longer under this repo's seen-red/ registry.
     "bounds-vocabulary-drift":         "seen-red/bounds-vocabulary-drift/run_fixtures.py",  # row 1514 item 2
     "service-restart":                "seen-red/service-restart/run_fixtures.py",  # design/FABLE-SERVICE-DRAIN-RESTART-SPEC.md, row 1553
+    # work item birth-standing-steps-scaffold (row 270, design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md
+    # §3/§7): bootstrap/new-project.sh's two new birth acts (courier principal registration,
+    # kernel.world_identity seed) plus bootstrap/templates/doctor.tmpl's two new PASS/FAIL/SKIP
+    # checks -- both polarities against a real --new-world scratch birth (RED via the pre-fix
+    # new-project.sh extracted at the merge-base commit, GREEN via the current tree), plus a real
+    # courier pull against the freshly-birthed world's own registered courier principal (the
+    # row-122 class, witnessed closed).
+    "birth-standing-steps-scaffold":  "seen-red/birth-standing-steps-scaffold/run_fixtures.py",
 }
 
 def _red_evidence_name(d: str) -> str | None:

@@ -1,0 +1,168 @@
+seen-red/birth-standing-steps-scaffold — banked BOTH-POLARITY evidence (fixture-census)
+
+Work item birth-standing-steps-scaffold (ledger row 270; design/
+PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md §3/§7). Two operator-remembered birth steps that used to
+require a by-hand fix after the fact (autoharn3 row 122's courier-registration fix; the autoharn3
+cutover's by-hand `kernel.world_identity` INSERT) are now real birth acts inside
+`bootstrap/new-project.sh`'s own --new-world sequence, with matching PASS/FAIL/SKIP checks added
+to `bootstrap/templates/doctor.tmpl`.
+
+FIX-ROUND NOTE (reviewer-refuted finding on commit 1eaee52, this same worktree): a fresh-context
+review found that the FIRST cut of the `courier principal registered` FAIL teach-text named
+`./autoharn led register-principal courier tool ...` as the fix -- but on the class of world most
+likely to show this FAIL (freshly-birthed or interrupted, no boundary configured yet), THAT verb
+itself refuses (`serving/boundary_cli_client.py`'s `load_served_config` refuses loudly whenever
+`deployment.json` lacks `boundary_url`/`boundary_deployment`), and its own suggested fallback
+(`./legacy/led`) is a retired teaching-refusal stub that just re-refuses pointing back at the same
+dead end. The reviewer reproduced this verbatim. The teach-text's PRIMARY fix is now the raw,
+owner-connection `kernel.registration_write` call -- byte-identical in shape and purpose text to
+the one `bootstrap/new-project.sh`'s own s58 courier birth act makes -- which needs no boundary at
+all; the served CLI path is named second, as the alternative once a boundary is configured. The
+fixture below now EXECUTES both fix commands (extracted verbatim from doctor's own live output,
+never re-typed) and witnesses each check flip FAIL -> PASS, closing the gap between "the teach-
+text contains a command-shaped string" and "the command actually works."
+
+Both polarities below are from a LIVE run of `seen-red/birth-standing-steps-scaffold/
+run_fixtures.py` against the real toy Postgres db (192.168.122.1) — a real
+`bootstrap/new-project.sh --new-world` birth (twice: once at the pre-fix merge-base commit,
+once at the current tree), a real `./autoharn doctor` run against each, two real EXECUTED fix
+commands (extracted from doctor's own output) against the broken RED world, a real
+`serving.boundary_service` instance, and a real `libexec/autoharn/courier` pull. Nothing stubbed
+at the Python-object level. Both scratch worlds and their tempdirs were torn down cleanly after
+this run (0 FAIL); left standing on any future failure.
+
+RED (bootstrap/new-project.sh extracted live via `git show 74d8b2d:bootstrap/new-project.sh` —
+74d8b2d is the merge-base commit this work item's fix landed on top of — into a sibling file
+under this checkout's own `bootstrap/` so its relative AUTOHARN_ROOT/TEMPLATES resolution stays
+correct; deleted immediately after use, never committed. The CURRENT `bootstrap/templates/
+doctor.tmpl` is what runs against the resulting world -- only new-project.sh's own body differs
+between RED and GREEN, confirming the two new doctor checks correctly FAIL against a genuinely
+pre-fix-shaped world):
+
+  RED birth: pre-fix new-project.sh --new-world exits 0 (the world births fine; it is simply
+    missing the two acts this work item adds)
+  RED birth transcript: no courier registration line, no world_identity seed line (confirms this
+    is the true pre-fix shape, not an accidental no-op)
+
+  RED doctor output (world bshredw):
+    ### doctor -- is this world set up right?
+        (/tmp/birth-standing-steps-fixture-rszevn1g/bshredw)
+
+    deployment.json                  PASS parsed (.../bshredw/deployment.json)
+    database reachable               PASS 192.168.122.1/toy (SELECT 1 ok)
+    schema + kern schema exist       PASS 'bshredw' and 'bshredw_kernel' both present
+    lineage high-water/epoch         PASS chain_high_water.max_id=12, migration_epoch.epoch=0
+    principals registered            PASS 4 row(s) in bshredw_kernel.principal
+    courier principal registered     FAIL no 'courier' principal in bshredw_kernel.principal --
+      every missive receipt this world pulls needs this identity to record arrivals as (design/
+      FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix (owner connection -- works with no boundary
+      configured, the same kernel.registration_write call this world's own birth act makes): psql
+      -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "SELECT * FROM bshredw_kernel.
+      registration_write(jsonb_build_object('name','courier','agent_class','tool','purpose',
+      'Records cross-world missive arrivals pulled over the boundary service -- and can write
+      nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified
+      row 1157). Never a deciding identity.','statement','principal ''courier'' registered (class
+      tool) -- doctor teach-text recovery, registrar: author','actor',(SELECT id FROM
+      bshredw_kernel.principal WHERE name = 'author')));" -- or, once this world's deployment.json
+      carries boundary_url and boundary_deployment (a served boundary), the equivalent served
+      path: ./autoharn led register-principal courier tool --purpose "Records cross-world missive
+      arrivals pulled over the boundary service -- and can write nothing else (kernel-scoped:
+      validate_missive_courier_scope, s58; consult §4.3, Q3 ratified row 1157). Never a deciding
+      identity."
+    world_identity populated         FAIL bshredw_kernel.world_identity has no row -- every
+      missive write (send/receive/dispose) will refuse loudly until this is populated (design/
+      FABLE-MISSIVES-KERNEL-SPEC.md §2.1). Fix (owner connection -- the granted role
+      'bshredw_rw' holds no INSERT here by design, s58 §2.1's own grants): psql -h
+      192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "INSERT INTO bshredw_kernel.world_identity
+      (world_name) VALUES ('<this-world's-own-name>');"
+    ./autoharn led answers a read query FAIL boundary_url absent from deployment.json (expected
+      -- this run passes no --boundary-url; unrelated to this work item's own two checks)
+    boundary URL                     SKIP not configured (expected, same reason)
+
+    TOTAL: 3 FAIL, 5 PASS, 1 SKIP
+
+  RED doctor: overall exit 1 (at least one FAIL) -- PASS
+  RED doctor: 'courier principal registered' FAILs -- PASS
+  RED doctor: courier FAIL teach-text names the owner-connection registration_write fix (works
+    with no boundary configured) -- PASS
+  RED doctor: courier FAIL teach-text ALSO names the served CLI path as the boundary-configured
+    alternative -- PASS
+  RED doctor: courier fix command extractable from the teach-text (never re-typed) -- PASS
+
+  running courier's EXTRACTED fix command (verbatim from the teach-text above, not re-typed):
+    psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "SELECT * FROM bshredw_kernel.
+    registration_write(jsonb_build_object('name','courier','agent_class','tool','purpose',
+    'Records cross-world missive arrivals pulled over the boundary service -- and can write
+    nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified
+    row 1157). Never a deciding identity.','statement','principal ''courier'' registered (class
+    tool) -- doctor teach-text recovery, registrar: author','actor',(SELECT id FROM
+    bshredw_kernel.principal WHERE name = 'author')));"
+  stdout:
+     disposition | row_id | refusal_id | sqlstate | message
+    -------------+--------+------------+----------+---------
+     accepted    |     13 |            |          |
+    (1 row)
+
+  RED fix EXECUTED: courier registration_write call exits 0 and accepts -- PASS
+  RED fix WITNESSED: 'courier principal registered' flips FAIL -> PASS -- PASS
+
+  RED doctor: 'world_identity populated' FAILs -- PASS
+  RED doctor: world_identity FAIL teach-text names the owner-INSERT fix -- PASS
+  RED doctor: world_identity fix command extractable from the teach-text (never re-typed) -- PASS
+
+  running world_identity's EXTRACTED fix command (verbatim from the teach-text above, the one
+  placeholder <this-world's-own-name> filled in exactly as the printed instruction says to):
+    psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "INSERT INTO bshredw_kernel.world_identity
+    (world_name) VALUES ('bshredw');"
+  stdout:
+    INSERT 0 1
+
+  RED fix EXECUTED: world_identity owner INSERT exits 0 -- PASS
+  RED fix WITNESSED: 'world_identity populated' flips FAIL -> PASS -- PASS
+
+GREEN (the current, fixed bootstrap/new-project.sh, this checkout's working tree, a SECOND
+freshly-birthed scratch world so RED's already-healed WORLD_RED above is never reused):
+
+  GREEN birth: current new-project.sh --new-world exits 0 -- PASS
+  GREEN birth transcript: courier registration line present
+    "   (courier) registered through the boundary ceremony (class tool, registrar author, s58)"
+  GREEN birth transcript: world_identity seed line present
+    "   world_identity seeded: world_name = 'bshgrnw' (DB bshgrnw_kernel.world_identity)"
+
+  GREEN doctor output (world bshgrnw):
+    ### doctor -- is this world set up right?
+        (/tmp/birth-standing-steps-fixture-rszevn1g/bshgrnw)
+
+    deployment.json                  PASS parsed (.../bshgrnw/deployment.json)
+    database reachable               PASS 192.168.122.1/toy (SELECT 1 ok)
+    schema + kern schema exist       PASS 'bshgrnw' and 'bshgrnw_kernel' both present
+    lineage high-water/epoch         PASS chain_high_water.max_id=13, migration_epoch.epoch=0
+    principals registered            PASS 5 row(s) in bshgrnw_kernel.principal
+    courier principal registered     PASS registered (bshgrnw_kernel.principal)
+    world_identity populated         PASS world_name='bshgrnw'
+    ./autoharn led answers a read query FAIL boundary_url absent from deployment.json (expected,
+      same unrelated reason as the RED leg -- this run passes no --boundary-url)
+    boundary URL                     SKIP not configured (expected, same reason)
+
+    TOTAL: 1 FAIL, 7 PASS, 1 SKIP
+
+  GREEN doctor: 'courier principal registered' PASSes -- PASS
+  GREEN doctor: 'world_identity populated' PASSes -- PASS
+
+GREEN (a real courier pull against the birth-registered courier principal -- the row-122 class,
+witnessed closed): the GREEN world (bshgrnw) is served by a real `serving.boundary_service`
+instance; `libexec/autoharn/courier` is pointed at it plus a real (stdlib http.server, not
+stubbed) mock counterpart ("bshcpartw") serving one well-formed outbound missive addressed to
+bshgrnw:
+
+    courier: bshcpartw: pulled=1 new=1 recorded=[14] dedup-raced=0
+
+  courier pull setup: real boundary_service comes up for the birthed world -- PASS
+  courier pull setup: mock counterpart HTTP server comes up -- PASS
+  courier pull: exits 0 -- PASS
+  courier pull: a missive_received row landed, authored by the birth-registered 'courier'
+    principal (SELECT count(*) FROM ledger JOIN principal ON ... WHERE kind='missive_received'
+    AND principal.name='courier' AND missive_author_world='bshcpartw' -> count=1) -- PASS
+
+Full run: `birth-standing-steps-scaffold: all cases behaved as expected.` (exit 0). Both scratch
+worlds (bshredw, bshgrnw) and their tempdir dropped after this run.

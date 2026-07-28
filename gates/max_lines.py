@@ -527,9 +527,11 @@ BASELINE: dict[str, int] = {
     # bumped 440 -> 441 (s69 build, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, row 201):
     # one new registry line, seen-red/s69-role-coherence-refusals -- the identical
     # registration-driven shape as every prior bump above.
-    # bumped 441 -> 442 (boundary-sse-events build, design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md,
-    # ledger row 169): the one new registry entry this build adds ("boundary-sse-events").
-    "gates/fixture_census.py":                     442,
+    # union-merged at the SSE + birth-steps merge (row 334): both concurrent builds
+    # added one REGISTRY entry each (boundary-sse-events, row 169; birth-standing-steps-
+    # scaffold, row 270); ceiling set to the post-merge actual (450), the same
+    # additive-census-row class as every prior bump above.
+    "gates/fixture_census.py":                     450,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -654,11 +656,10 @@ BASELINE: dict[str, int] = {
     # this gate's own BASELINE growing to carry the fixture_census.py bump (440 -> 441) this same
     # commit makes, re-measured after writing -- the same self-referential fixpoint as every
     # prior bump.
-    # bumped 777 -> 782 (boundary-sse-events build, design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md,
-    # ledger row 169): this gate's own BASELINE growing to carry the fixture_census.py bump
-    # (441 -> 442) this same commit makes, re-measured after writing -- the same
-    # self-referential fixpoint as every prior bump.
-    "gates/max_lines.py":                          783,
+    # union-merged at the SSE + birth-steps merge (row 334): both parents' self-
+    # referential bumps (782 / 783) collapse to this file's own post-merge actual,
+    # re-measured after writing -- the same fixpoint as every prior bump.
+    "gates/max_lines.py":                          784,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
