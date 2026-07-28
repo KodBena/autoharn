@@ -1,3 +1,11 @@
+<!-- doc-attest-exempt: record-currency-s58-s69 batch (work item record-currency-s58-s69,
+     autoharn3 ledger row 280, 2026-07-28) -- adds the missive/courier/entitlement/boundary
+     vocabulary section plus the disposition disambiguation the 2026-07-28 GxP surveys named
+     as gaps (design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md §4.4; design/
+     PANEL-GXP-SURFACE-FRESH-2026-07-28.md C13). No A:B:C loop claimed for this touch; the
+     coordinator schedules those. Removal condition: strike this marker and run the real
+     two-round A:B:C loop next time this file is touched for content. -->
+
 # Glossary — autoharn's coined vocabulary
 
 This is autoharn's glossary: definitions for every word this project uses with a meaning you
@@ -572,7 +580,9 @@ exercised by any world's actual birth.
 <a id="typed-verdict"></a>
 ### typed verdict
 The `kernel.write_verdict` composite type every [write boundary](#write-boundary) function
-returns: `disposition` (`'accepted'` or `'refused'`, a two-member closed vocabulary),
+returns: [`disposition`](#disposition-write-verdict) (`'accepted'` or `'refused'`, a
+two-member closed vocabulary — see that entry for its own heading and its cross-reference to
+the unrelated missive-sense `disposition`),
 `row_id` (the accepted row's id, else `NULL`), `refusal_id` (the committed
 [`write_refused`](#write-boundary) row's id, else `NULL`), `sqlstate`, and `message` (the
 refusal's teach-text). A refusal is delivered as ordinary return data, not an aborted
@@ -678,6 +688,220 @@ and enforced in [`gates/fixture_census.py`](gates/fixture_census.py) (its own he
 uncommitted proof is not a proof). The row-1503 item's other leg, the missing
 [`seen-red/s45-standing-lifecycle/run_fixtures.py`](seen-red/s45-standing-lifecycle/run_fixtures.py)
 census leg, is tracked on that work item, not restated here.
+
+## Missive, courier, entitlement, and boundary vocabulary (added 2026-07-28)
+
+The terms below entered the vocabulary with s58–s69 (missives, entitlement, signatures,
+delegation conditions, role coherence) and the same-era boundary/panel surveys
+(`design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md`, `design/PANEL-GXP-SURFACE-FRESH-2026-07-28.md`)
+that named their absence here as a gap against this file's own
+[Stand-Alone Principle](#stand-alone-principle) — none defined before this section. Filed as
+work item `record-currency-s58-s69` (autoharn3 ledger row 280).
+
+<a id="missive"></a>
+### missive
+A typed, hash-chained ledger row recording one leg of cross-[world](#world) communication —
+the wire envelope itself IS the row shape, never opaque payload prose. Three kinds in the
+closed ledger-kind vocabulary carry it: `missive_sent` (author-side: this world addressed a
+missive to that world), `missive_received` (addressee-side: bytes arrived — written ONLY by
+the [`courier`](#courier) principal), and `missive_disposed` (addressee-side lifecycle close,
+`regards`-ing the receipt row). Ten `missive_`-prefixed nullable columns carry the envelope
+directly: `missive_protocol`, `missive_author_world`, `missive_addressee_world`,
+`missive_thread` (`<minting_world>/<slug>`), `missive_seq`, `missive_act` (a closed
+five-member vocabulary — assertion/request/response/acknowledgment/withdrawal), `missive_
+responds_to`, `missive_provenance` (an `xrow:<world>:<id>:<row_hash>` cross-world citation
+token — the addressee-side reference to the authoritative author-side `missive_sent` row,
+minted by the `missive_outbound` view at serve time since a row cannot cite its own hash),
+`missive_cites`, and
+[`missive_disposition`](#disposition-missive) (see that entry — the MISSIVE sense of
+"disposition", distinct from and cross-referencing the unrelated
+[write-verdict sense](#disposition-write-verdict)). `led missive list` reads
+`GET /views/missive_undisposed` (one line per undisposed receipt: id, author world, thread,
+seq, act, truncated statement); `led missive dispose <receipt-row-id> <disposition>
+[statement...]` wraps `kernel.missive_dispose` (s58 §2.7), writing the `missive_disposed` row
+plus its acknowledgment `missive_sent` row in one guarded ceremony. Six served views read the
+substrate (outbound, receipts, undisposed, stale, delivery audit, open threads) — as of the
+2026-07-28 panel survey, nothing in the panel renders any of them (the maintainer's own
+punch-list item 6: "No missives view"). Source:
+[`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §2.2–2.3;
+[`kernel/lineage/s58-missive-substrate.sql`](kernel/lineage/s58-missive-substrate.sql);
+[`kernel/lineage/s59-missive-views.sql`](kernel/lineage/s59-missive-views.sql).
+
+<a id="world-identity"></a>
+### `world_identity`
+`kernel.world_identity`: a one-row kernel table (`world_name`, matching
+`^[a-z0-9-]{1,64}$`) recording "which world am I" — the deployment name the
+[missive](#missive) substrate stamps into every `missive_sent`/`missive_received` row.
+Written once at a world's birth, SELECT-only for the granted role thereafter; an empty table
+refuses every missive write loudly rather than guessing a name (fail-safe). **Honest limit:**
+populating this row at birth is presently an unscripted, hand-run operator step
+(`bootstrap/new-project.sh` deliberately leaves it empty) — a disclosed, not a closed, gap.
+Source: [`kernel/lineage/s58-missive-substrate.sql`](kernel/lineage/s58-missive-substrate.sql);
+[`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §1.
+
+<a id="courier"></a>
+### `courier`
+The operator verb `./autoharn courier` ([`libexec/autoharn/courier`](libexec/autoharn/courier)): scripted,
+receiver-pull mail collection for the [missive](#missive) substrate. Per counterpart world
+configured in `courier.toml` (repo root, beside `boundary-multiplex.toml`) it reads this
+world's own `missive_receipts` high-water cursor, GETs the counterpart's outbound feed past
+that cursor, and POSTs each new envelope as a local `missive_received` row through this
+world's OWN boundary — it never writes to a foreign boundary, never writes a non-receipt
+kind, never dispositions or acknowledges on its own initiative. `courier.toml` also names
+`self` (must equal this world's own [`world_identity`](#world-identity)) and `authn`
+(must be `"single-operator"`, the one supported value — anything else refused at load).
+**Honest limit, named by the spec itself:** an unrun courier is an unread mailbox —
+[`pickup`](#led-and-pickup) surfaces staleness (the courier's last-run time) but cannot close
+the gap from the addressee side; that is why a panel rendering "inter-world correspondence"
+should show last-run time prominently ([design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2).
+Source: [`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §5;
+[`libexec/autoharn/courier`](libexec/autoharn/courier).
+
+<a id="dispatch"></a>
+### `dispatch`
+The operator verb `./autoharn dispatch` ([`libexec/autoharn/dispatch`](libexec/autoharn/dispatch)): the identity-minting
+verb for a sub-agent commission — mints a delegate [principal](#principal) (s40 registration
+machinery), writes a `dispatched-by` edge carrying the s64 delegation-condition vocabulary
+(redelegation depth, mandatory countersign, expiry, scope), emits the identity-header stamp
+material the child session's writes carry, and retires the principal at the commission's
+close. Unrelated to the [missive](#missive) substrate — worth naming as a plausible confusion
+pair (both are "one world/session addressing another"), but the two vocabularies never
+overlap: missive lifecycle has no "dispatch" verb of its own, and `dispatch` never writes a
+missive kind. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md) §3; [`libexec/autoharn/dispatch`](libexec/autoharn/dispatch).
+
+<a id="minted-delegate"></a>
+### minted delegate
+The [principal](#principal) [`dispatch`](#dispatch) mints for one child session — retired
+when that session's commission closes. Named for the FIRST case of the **identity conduit**
+(this entry's own coinage for the served boundary's write-attribution mechanism, the header
+channel every write request carries its actor claim through): a closed three-case resolution
+run on every boundary HTTP request — **minted** (a `dispatch`ed sub-agent's stamp present,
+header `x-autoharn-minted-principal` — this case governs when both are present), **vendor**
+(an interactive operator session's own vendor stamp — `x-autoharn-vendor-
+session|agent|ts|hmac|invocation` — with no minted principal), or **anonymous** (neither).
+`grace`/`enforce` (a deployment property, read from `/health`'s `authn_mode`) governs whether
+an anonymous write is accepted or 403-refused. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md)
+§2–3; [design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2 (header names,
+`IdentityHeaderInvalid`/`AnonymousWriteRefused` refusal codes).
+
+<a id="entitlement"></a>
+### entitlement (s60 conjuncts)
+A kernel-enforced access-control gate on ledger act classes (s60,
+[`kernel/lineage/s60-entitlement-enforcement.sql`](kernel/lineage/s60-entitlement-enforcement.sql)):
+a "factored acceptance predicate" with exactly two conjuncts an actor must both satisfy for a
+given `entitlement_act_class`. **(a) Role conjunct:** the actor holds an in-force role binding
+the world's configured role name for that act class (`entitlement_class_configured`, read via
+view `entitlement_class_roles`) — refusal remedy (verbatim): *"a principal who ALREADY holds
+the '%' role … binds it to you: `./led principal bind-role <your-principal-name> '%'`"*.
+**(b) Authority conjunct**, for authority-bearing acts (principal registration, role binding,
+standing lifecycle, allocation/milestone closure/supersession, gate-edge supersession, and —
+per the s62 amendment — delegation acts themselves): the actor's own authority chain must
+reach the world's **genesis** principal (s60's own term for the world's first-ever registered
+[principal](#principal) — the one identity every delegation chain must trace back to,
+[s-history.md](s-history.md)'s own s60 entry) via transitive in-force
+`acts-for` relations. **s62 closed a self-service bypass** the original s60 remedy text
+inadvertently taught (asserting yourself a fresh `acts-for` edge to satisfy conjunct (b)); the
+corrected remedy (verbatim, `kernel/lineage/s62-delegation-lifecycle-gating.sql`): *"this is
+NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf:
+`./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-
+chain-connected-to-genesis>`"*. A panel disabling a write should render these remedy texts
+directly, per [design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2's own instruction. Source:
+[design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md](design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md) §1;
+[`kernel/lineage/s62-delegation-lifecycle-gating.sql`](kernel/lineage/s62-delegation-lifecycle-gating.sql).
+
+<a id="disposition-write-verdict"></a>
+### disposition (write-verdict sense)
+The `kernel.write_verdict` composite type's own `disposition` field (s43,
+[write boundary](#write-boundary)): a two-member closed vocabulary, `'accepted'` or
+`'refused'`, naming the outcome of one write attempt through the boundary. See
+[typed verdict](#typed-verdict) for the composite type this field belongs to. **Not the same
+vocabulary as** [`missive_disposition`](#disposition-missive) below — same English word,
+two unrelated closed vocabularies in two unrelated specs, disambiguated here per the
+2026-07-28 GxP survey's own finding ([design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2:
+"`disposition` is now an undisambiguated collision").
+
+<a id="disposition-missive"></a>
+### disposition (missive sense)
+`missive_disposition`: a closed FOUR-member vocabulary — `consumed`, `declined`,
+`superseded-unread`, `escalated` — describing how the addressee resolved one received
+[missive](#missive). Lives on the `missive_disposed` event row and, typed, on the returning
+`acknowledgment` [missive act](#missive). Written via `led missive dispose`. **Not the same
+vocabulary as** [the write-verdict `disposition`](#disposition-write-verdict) above (see that
+entry for the disambiguation this survey demanded). Source:
+[`design/FABLE-MISSIVES-KERNEL-SPEC.md`](design/FABLE-MISSIVES-KERNEL-SPEC.md) §2.3.
+
+<a id="claimant-of-record"></a>
+### claimant-of-record
+The single principal whose `work_claimed` row is the LATEST in-force one for a work-item slug
+(`work_item_current.claimant`'s own resolution, `DISTINCT ON … ORDER BY id DESC`) — never the
+opener, never a historical claimant. **Closer-is-claimant-of-record** (s69 §1,
+[`kernel/lineage/s69-role-coherence-refusals.sql`](kernel/lineage/s69-role-coherence-refusals.sql)):
+a `work_closed` row's actor must equal the slug's claimant-of-record, including the
+claimant-IS-NULL case — an unclaimed close is refused as an ENTAILMENT of this rule, not a
+separate CLI-only check (closing the run-5 forensics specimen: "two work items were closed
+with no claim ever landing, unflagged"). Bound to the CURRENT holder only (s69's own §0
+governing principle: a claim must stay defeatable and reclaimable, so a later claim always
+composes transparently — the reclaimer simply becomes the new claimant-of-record). s69 adds
+two sibling role-coherence refusals the same delta ships: a `row:<id>` **witness-ref** on a
+`work_closed`/`work_violation_disposition` row must now be kind `review`/`finding`, or an
+in-force `work_opened` row of a CHILD of the closing slug (the planning-close carve-in) —
+closing the autoharn2 row-1265 specimen where a bare `work_claimed` row was accepted as if it
+were a review; and a `review`'s `regards` target must carry no in-force superseder, the
+refusal naming the successor id rather than making the caller re-derive it (the "experience4
+431/435" specimen). All three are pure refusal-widenings — no new column, kind, or view.
+Source: [design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md](design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md); [s-history.md](s-history.md)'s own s69 entry.
+
+<a id="page-tie"></a>
+### `_page_tie` / `after_tie` / soft floor
+The served boundary's pagination-tiebreak contract for a non-unique-key registry view
+([`serving/boundary_service.py`](serving/boundary_service.py)): every served row carries a `_page_tie` field —
+`md5(the_view_row::text)`, a per-row content tiebreaker — and a client resumes past a
+repeated key value by resupplying it as the `after_tie` query parameter (empty, or exactly 32
+lowercase hex characters, else a 422). Because a byte-identical content group can straddle a
+page boundary, `limit` becomes a **soft floor**, not a hard ceiling, for these views: a page
+may legitimately carry MORE rows than requested so the whole tie group is served atomically,
+rather than silently splitting a group and dropping a sibling row across the cursor boundary.
+See [`tie_group_too_large`](#tie-group-too-large) for the bound on how far the soft floor may
+stretch. Source: [`serving/boundary_service.py`](serving/boundary_service.py) (composite tie cursor, `/meta`'s advertised
+`max_tie_group_extra_rows`).
+
+<a id="tie-group-too-large"></a>
+### `tie_group_too_large`
+The typed refusal a paginated read returns when the byte-identical row group straddling a page
+boundary exceeds `MAX_TIE_GROUP_EXTRA_ROWS` (the same bound `/meta`'s
+`max_tie_group_extra_rows` advertises — see [`_page_tie`/soft floor](#page-tie)). Delivered as
+HTTP 409, the **409-shared-status rule**: 409 in this served boundary is reserved for
+boundary-understood business-rule refusals and is shared across disposition kinds —
+`tie_group_too_large` and `capability_absent` both return it, branch-on-disposition-never-
+status being the general rule a client must follow ([`serving/README.md`](serving/README.md)'s own documented
+211cbda errata). 500 stays reserved solely for `unclassified_failure`. Source:
+[`serving/boundary_service.py`](serving/boundary_service.py).
+
+<a id="include-superseded"></a>
+### `include_superseded` / `is_current`
+`include_superseded`: a strictly-typed, opt-in query parameter (empty/true/false only, else
+422) on `GET /d/{deployment}/rows/current`. Omitted (the default), the route is byte-identical
+to its pre-existing behavior, reading `ledger_current`. Set `true`, the route instead reads
+the raw `ledger` table (every row ever written, superseded included) and adds a per-row
+`is_current` boolean column — computed via the EXACT SAME correlated-subquery predicate
+`ledger_current`'s own view definition uses (`NOT EXISTS (SELECT 1 FROM ledger s WHERE
+s.supersedes = l.id)`), never a second, boundary-invented notion of "current". Answers the
+GxP gap [design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md) §2 named under "Consistent": no
+superseded-inclusive raw read existed on any served surface before this (work item
+`rows-bulk-superseded-read`, row 154). Source: [`serving/boundary_service.py`](serving/boundary_service.py).
+
+<a id="sse"></a>
+### SSE (server-sent events)
+A proposed new served route, `GET /d/{deployment}/events` (`text/event-stream`), sending
+head-advancement-only signals (`event: head`, `{"head_id": n}`) via a shared per-deployment
+polling watcher, with `Last-Event-ID`/`?after_head` resume, keepalives, and its own
+`sse_saturated` typed refusal bounding concurrent SSE clients separately from the ordinary
+inflight-admission gate. **Status: spec-only as of this writing — mark "building", not
+shipped.** The spec is maintainer-ratified in advance (ledger row 169), but no `/events`
+route, `EventSourceResponse`, or `StreamingResponse` exists in `serving/boundary_service.py`
+today; update this entry to "shipped" only once that route is observed live, not merely
+merged. Answers the maintainer's punch-list item 7. Source:
+[`design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md`](design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md).
 
 <!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
      doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated

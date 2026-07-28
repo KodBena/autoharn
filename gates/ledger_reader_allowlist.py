@@ -70,24 +70,23 @@ CHAIN = [
     "s43-typed-verdict-write-boundary.sql",
     "s45-standing-lifecycle.sql",
     "s44-model-identity-attestation.sql",
-    "s46-credited-views.sql",
-    "s47-claim-on-closed-refusal.sql",
-    "s48-review-witness-existence.sql",
-    "s49-journaler-overflow-guard.sql",
+    "s46-credited-views.sql", "s47-claim-on-closed-refusal.sql",
+    "s48-review-witness-existence.sql", "s49-journaler-overflow-guard.sql",
     "s50-defeat-input-raw-domain.sql",
     "s51-artifact-store.sql",
     "s52-artifact-witness-check.sql",
     "s53-belief-substrate.sql",
     "s54-belief-views.sql",
-    "s55-dispatch-grain-independence.sql",
-    "s56-reservation-residue.sql",
+    "s55-dispatch-grain-independence.sql", "s56-reservation-residue.sql",
     "s57-obligation-revocation-event.sql",
-    "s58-missive-substrate.sql",
-    "s59-missive-views.sql",
-    "s60-entitlement-enforcement.sql",
-    "s61-signature-symmetry-and-key-binding.sql",
+    "s58-missive-substrate.sql", "s59-missive-views.sql",
+    "s60-entitlement-enforcement.sql", "s61-signature-symmetry-and-key-binding.sql",
     "s62-delegation-lifecycle-gating.sql",
+    "s63-supersession-body-restoration.sql", "s64-principal-stamps-delegation-conditions.sql",
+    "s65-refusal-attempted-kind.sql", "s66-forged-stamp-journal-totality.sql",
+    "s67-refusal-digest-bound.sql", "s68-typed-absence-dispositions.sql", "s69-role-coherence-refusals.sql",
 ]
+# record-currency-s58-s69 (ledger row 237 hazard 2, autoharn3): CHAIN stopped at s62 though the lineage head moved to s69; the hazard note's claim ("s63-s69 add no new raw readers") is VERIFIED here (all seven files read in full, every re-issued/added function or view traced), not restated. ALL SEVEN classify clean, NO new ALLOWLIST entry -- s63/s65/s66/s67/s68 only re-issue already-standing objects (validate_supersession_target; compute_row_hash; the two column-complete views; the `:"kern".`-namespaced journal_write_refusal/ledger_write/set_stamp, outside this gate's `:"schema".` universe); s64's four new functions read only principal_relations/ledger_current; s69 widens validate_review/validate_review_witness_existence/validate_supersession_target by one branch each (reason text below) plus a ledger_current-factored claimant read. Full narrative: s-history.md's own s60-s69 entries.
 # s60 (kernel/lineage/s60-entitlement-enforcement.sql, design/FABLE-ENTITLEMENT-ENFORCEMENT-
 # SPEC.md §1) extends this SAME gate's scratch CHAIN and ships THREE declared raw-`ledger`
 # readers, each with a load-bearing reason named in the kernel file's own Element 5/7 headers:
@@ -310,7 +309,7 @@ ALLOWLIST: dict[str, str] = {
                             "current-truth-typed, ledger_current exclusively.",
     "zz_set_row_hash": "row-hash chain writer (s26) — every row must chain, superseded or not.",
     "validate_enacts": "write-boundary BEFORE INSERT trigger — cannot read a view excluding the inserting row.",
-    "validate_review": "write-boundary BEFORE INSERT trigger — same reason.",
+    "validate_review": "write-boundary BEFORE INSERT trigger — same reason. Widened s69 (role-coherence §3): an additional raw `ledger` read checks the `regards` target carries no in-force superseder, same row-addressed reasoning.",
     "validate_amends": "write-boundary BEFORE INSERT trigger — same reason.",
     "validate_answers": "write-boundary BEFORE INSERT trigger — same reason.",
     "validate_work_item": "write-boundary BEFORE INSERT trigger; its identity checks (slug ever opened, "
@@ -362,7 +361,7 @@ ALLOWLIST: dict[str, str] = {
                                     "on a verified signature (s61)? -- same history-typed "
                                     "reasoning as validate_review, plus a read of the (current-"
                                     "truth-factored, ledger_current-only) signed_commissions view "
-                                    "for the symmetry check itself.",
+                                    "for the symmetry check itself. RESTORED s63 (an s61 authoring accident had silently deleted four branches; same read, no new reason); s69 rider is teach-text-only (`./led` -> `./autoharn led`), no read touched.",
     "validate_principal_binding": "write-boundary BEFORE INSERT trigger (s41 D-3, widened s61 "
                                   "item 3): the self-edge/human-only-subject checks read "
                                   "kernel.principal only (no raw ledger); s61 adds a row-"
@@ -422,7 +421,8 @@ ALLOWLIST: dict[str, str] = {
                                          "review-witness field (work_review_ref) of a "
                                          "work_closed/work_violation_disposition row -- "
                                          "row-addressed forensics (does this id exist at all), "
-                                         "same history-typed reasoning as validate_review.",
+                                         "same history-typed reasoning as validate_review. "
+                                         "Widened s69 (role-coherence §2): a target-KIND check on top (kind IN 'review'/'finding', OR an in-force child work_opened row -- the planning-close carve-in, via an additional `ledger_current lc` join, no new raw `ledger` leg of its own).",
     "validate_belief_evidence": "write-boundary BEFORE INSERT trigger (s53 §3.2): existence "
                                 "check per row:<id> token in belief_universe/belief_witness -- "
                                 "the s48 idiom, reused verbatim one field over.",
