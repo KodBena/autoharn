@@ -1,5 +1,5 @@
-<!-- doc-attest-exempt: as-delivered survey record, filed verbatim 2026-07-28 (commission
-row 152 part 3 + brief COMMISSION-PANEL-GXP-SURFACE-UPDATE.md, both maintainer seeds
+<!-- doc-attest-exempt: as-delivered survey record, filed verbatim 2026-07-28 (commission -- granting an exception to the project's Sonnet-default authoring
+policy -- row 152 part 3 + brief COMMISSION-PANEL-GXP-SURFACE-UPDATE.md, both maintainer seeds
 verbatim inside the brief; Opus exception maintainer-granted by the request itself).
 The ADR-0017 legibility loop has NOT yet run on this text -- pending, same treatment the
 2026-07-26 original received; until then this is the surveyor's as-delivered original.
@@ -10,7 +10,7 @@ end user of this system reaches, written two days after a first survey and repor
 what changed — read the "What this is" paragraph below the vocabulary block for the
 full framing.
 
-**Provenance:** produced by the commissioned delta surveyor (Opus — an Anthropic
+**Provenance:** produced by the commissioned delta surveyor (a separate, context-free instance; "the coordinator" below is the distinct orchestrating session that commissioned and filed this) (Opus — an Anthropic
 Claude model tier, 2026-07-28), the maintainer-requested UPDATE of
 [PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md).
 (The header comment's "brief COMMISSION-PANEL-GXP-SURFACE-UPDATE.md" names the
@@ -95,7 +95,17 @@ precedent.
   152 part 3"** — the third numbered item of the commission recorded at ledger row
   152; "the request itself" in the header comment is that same row's quoted
   maintainer text. **"Hard boundary"** (§0) — the commission's touch-nothing-live
-  constraints, quoted in §0 itself. s64's "five delegation-condition columns" are
+  constraints, quoted in §0 itself. **`call_next`** — the web framework's
+  request-forwarding step; **`_psql`** — the service's internal Postgres-execution
+  helper (both §1.3 implementation names, quoted as surveyed). **"This rebase"**
+  in §2's quoted `--recent` disclaimer means the CLI-onto-boundary rebase (the
+  led/pickup family's move to HTTP), NOT §1.1's courier rebase — two different
+  rebases, disambiguated here because the quoted teach-text cannot be edited.
+  **`minted`** — the deployment itself issued the acting identity for a
+  commissioned sub-agent; **`vendor`** — the harness vendor's own session stamp
+  vouches for it; two of the identity conduit's three cases. **Courier** names
+  BOTH the CLI verb that pulls missives and the kernel-side principal that records
+  arrivals — the same one-word-two-vocabularies shape §2 flags for 'disposition'. s64's "five delegation-condition columns" are
   enumerated in §1.6.
 - **Witness classes** (carried from the prior doc, restated for a reader who opens this
   document alone): **WITNESSED** — the surveyor ran the command/probe and shows the

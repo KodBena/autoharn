@@ -47,6 +47,13 @@ precedent.
   of the same ledger data, to independently re-derive the same views and check the two
   agree; `judge`'s closed verdict vocabulary is `AGREE` / `DIVERGE_BY_DESIGN` /
   `DIVERGE_DEFECT` / `QUARANTINED` (only the first two appear in this document's prose).
+- **`SPEC.md` / `BACKLOG.md` / `AUTOHARN_BACKFLOW.md`** — files of the LIVE
+  panel checkout (§3.2, `/home/bork/w/vdc/2/autoharn-panel`), not the §3.1
+  submodule; `FABLE-MISSIVES-KERNEL-SPEC.md` and `JUDGE-READING.md` and
+  `s-history.md` live in THIS repository (design/ and root respectively).
+  **`LED_ACTOR`** — the environment variable `led` reads for its acting
+  identity. **"Served" vs "legacy"** templates (§1.1's table) — a served
+  template talks to the HTTP boundary; a legacy template talks direct psql.
 - **The coordinator** — the orchestrating session that commissioned this survey and
   filed it; the surveyor is a separate, context-free instance. **Missive** — a message
   one world sends another through the kernel's typed substrate (sent/received/disposed
@@ -58,6 +65,12 @@ precedent.
   second lettered part of the commission recorded at ledger row 168.
   **`COMMISSION-PANEL-GXP-SURFACE-FRESH.md`** — the commissioning prompt, an
   untracked session file per this project's ephemera rule, not in this tree.
+- **A `C<N>` COLLISION WARNING (added at round 3):** this document uses `C<N>`
+  for TWO unrelated numbering axes — the ADR-0019-appendix clauses below
+  (C1–C29, cited in §2.0–§2.2) and this document's OWN gap-table row ids in §4.C
+  (C1–C15, alongside §4.A's A-rows and §4.B's B-rows). The numbers overlap;
+  resolve by section: a bare C-cite inside §2 is an ADR clause, inside §4/§5 it
+  is a gap-table row.
 - **C1–C29** — the numbered clauses of [ADR-0019's appendix](../law/adr/0019-appendix-ui-proscriptions.md)
   (UI proscriptions); the clauses this document actually cites carry a parenthetical
   gloss at first use (most in §2.0/§2.1; C29's is in §2.2); the rest of C1-C28 are
