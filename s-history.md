@@ -1,3 +1,10 @@
+<!-- doc-attest-exempt: record-currency-s58-s69 batch (work item record-currency-s58-s69,
+     autoharn3 ledger row 280, 2026-07-28) -- extends the per-delta synopsis through s68/s69
+     (the staleness the fresh survey's C11 named: design/PANEL-GXP-SURFACE-FRESH-2026-07-28.md,
+     "the lineage head is s68" while this file's heading read "s60-s67"). No A:B:C loop
+     claimed for this touch; the coordinator schedules those. Removal condition: strike this
+     marker and run the real two-round A:B:C loop next time this file is touched for content. -->
+
 # s-history.md — what "s" means and what each `sNN` kernel delta did
 
 This document answers two questions a reader of [`kernel/lineage/`](kernel/lineage/) hits
@@ -270,7 +277,7 @@ header for the full account.)*
   missive substrate above: six new views (outbound, receipts, undisposed, stale, delivery audit,
   open threads).
 
-### `s60` – `s67`: entitlement, signatures, delegation, and journal totality
+### `s60` – `s69`: entitlement, signatures, delegation, journal totality, and role coherence
 
 - **[`s60-entitlement-enforcement.sql`](kernel/lineage/s60-entitlement-enforcement.sql)** —
   adds the kernel's first true authorization layer: an `entitlement_act_class` column and a new
@@ -327,6 +334,58 @@ header for the full account.)*
   `computed`) — the SAME structural idiom `s44`'s `attest_expected`/`attest_verdict` coupling
   already established, one column pair over. A digest's absence is now always a typed,
   table-caught fact, never an inference from a comment.
+- **[`s68-typed-absence-dispositions.sql`](kernel/lineage/s68-typed-absence-dispositions.sql)**
+  — third of the s65/s67/s68 family, closing the gap s67's own §2 amendment disclosed rather
+  than absorbed (maintainer ruling at s67's merge-hold, ledger rows 1541/1542, verbatim "As for
+  the NUL sentinel, that shoulde be fixed"): the two remaining implicit-NULL columns on a
+  `write_refused` row — `refusal_attempted_kind` (why was the attempted `kind` token not
+  extracted: absent, not a string, or over the 256-byte bound?) and `refusal_attempted_actor`
+  (did the attempted actor resolve from the payload's own claim, the session's standing-default
+  fallback, or neither?) — each gain a typed, closed-vocabulary `_disposition` sibling column
+  (four members and three members respectively), table-coupled so the NULL and its reason can
+  never drift apart. `journal_write_refusal` is re-issued so one branch sets both a column and
+  its disposition together (one writer, one home); `compute_row_hash` grows to 101 columns.
+  Not class-ratified fail-safe (it re-issues existing function bodies via `CREATE OR REPLACE`,
+  not a letter-2(a) pure addition), though its effect is: every refusal that journaled a value
+  before still journals the same value, now additionally typed. Ships under the maintainer's
+  own explicit ratification cited above, the same posture s43/s49/s65/s66/s67 shipped under.
+- **[`s69-role-coherence-refusals.sql`](kernel/lineage/s69-role-coherence-refusals.sql)** —
+  Fable-authored, maintainer-ratified (autoharn3 ledger row 201) mechanization of three
+  role-coherence gaps `design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md` §4 found enforced only
+  as convention, plus one semantics-neutral teach-text rider; adds NO new columns, kinds, or
+  views — four trigger-function re-issues, each gaining exactly one refusal branch (or, for the
+  rider, a pure spelling fix):
+  - **§1 closer-is-claimant-of-record** (`validate_work_item_close`): a `work_closed` row's
+    actor must equal the slug's CURRENT claimant (`work_item_current.claimant`, the same
+    latest-`work_claimed`-row resolution the view already computes) — including the
+    claimant-IS-NULL case, so an unclaimed close is now refused at the kernel rather than
+    merely discouraged CLI-side (the run-5 forensics specimen: "two work items were closed with
+    no claim ever landing, unflagged"). Bound to the LATEST in-force claimant only, per the
+    spec's own governing §0 principle — a claim must stay defeatable and reclaimable, so a
+    later claim always composes transparently with this rule, never a historical claimant and
+    never the opener.
+  - **§2 witness-ref shape per close shape** (`validate_review_witness_existence`): a
+    `row:<id>` witness citation on a `work_closed`/`work_violation_disposition` row is accepted
+    only when the cited row's `kind` is `review`/`finding`, or is an in-force `work_opened` row
+    of a CHILD of the closing slug (the planning-close carve-in) — closing the autoharn2
+    row-1265 specimen, where a bare `work_claimed` row was accepted as if it were a review.
+  - **§3 review-regards-in-force** (`validate_review`): a `kind='review'` row's `regards`
+    target must carry no in-force superseder; the refusal names the successor id the kernel
+    already computed rather than making the caller re-derive it (the "experience4 431/435"
+    specimen, witnessed live twice). Reviews of in-force rows, including an s56
+    reservation-discharge review, are untouched.
+  - **Rider** (`validate_supersession_target`): a pure teach-text spelling fix, `./led` →
+    `./autoharn led` (the umbrella-CLI migration retired the bare per-verb shims this text
+    still named) — no behavioral change, ratified separately as row 201 item 5 since a
+    spelling fix is not itself a new refusal and so does not ride the class-ratified lane.
+  A strengthened-tier fresh review cleared this build with two non-blocking findings on the
+  record rather than folded in silently: the chain-of-supersessions teach-text names the direct,
+  not the terminal, successor (MODERATE, a future teaching-quality pass); Element 3's
+  `search_path` widening is now disclosed in-file (MINOR, ledger row 253). The Idris model is
+  refreshed in step with the chain on its own cadence, not necessarily same-commit with a kernel
+  delta — see [`design/Autoharn.idr`](design/Autoharn.idr)'s own AS-OF/LAGGING banner for current
+  standing rather than trusting a number hand-copied here (this document's own "Staying current"
+  warning, below, applies to that banner too).
 
 ## Birth-selection: does choosing scaffold capabilities prune this chain?
 
@@ -342,7 +401,7 @@ options shape only the surrounding birth ACTS, never which `sNN` deltas a new
   `--pin`) is orthogonal to this boolean — none of them appears in its computation.
 - When `FULL_LINEAGE` is 1, the script's own `LINEAGE_CHAIN` variable is set to ONE fixed
   string ([`bootstrap/new-project.sh`](bootstrap/new-project.sh):506) enumerating `s15` through
-  the current head (`s67` as of this writing) — the identical list regardless of which
+  the current head (`s69` as of this writing) — the identical list regardless of which
   `--new-world` name, `--profile tracker` name, or any feature checkbox was chosen. There is no
   conditional branch inside that assignment keyed on any user-selected option.
 - Precision added 2026-07-27 (content-review finding): `LINEAGE_CHAIN` is the hand-authored
