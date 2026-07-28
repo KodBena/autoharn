@@ -497,7 +497,7 @@ from boundary_models import (  # noqa: E402
 # row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
 # the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
 # caught missing.
-BOUNDARY_SERVICE_VERSION = "1.5.0"
+BOUNDARY_SERVICE_VERSION = "1.6.0"
 # Bumped to 1.5.0 (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
 # boundary-sse-events, ledger row 169): ONE new route SHAPE, `GET /d/{deployment}/events`
 # (text/event-stream, head-advancement-only) -- a genuinely new route shape, the same (a)/(b)/
@@ -508,6 +508,17 @@ BOUNDARY_SERVICE_VERSION = "1.5.0"
 # (WIRE_PROTOCOL_VERSION) is UNCHANGED -- an additive /meta field, and an entirely-opt-in new
 # route an existing client never calls, does not make an existing client misparse anything
 # (boundary_models.py's own protocol_version bump rule, verbatim).
+# Bumped to 1.6.0 (work item boundary-capability-manifest, ledger row 173): NO new route -- this
+# is the additive-field-alone case the 1.4.0(b)/1.5.0 notes above both name as ordinarily NOT
+# earning a bump, but this one is a genuine new documented capability on an existing route's
+# response contract (the SAME reasoning `include_superseded` earned 1.4.0 for): `GET
+# /d/{deployment}/health` gains FOUR new `CapabilityManifest` fields (s58_missives/
+# s60_entitlement/s61_signatures/s64_delegation, extending the manifest past its s45 stopping
+# point) and ONE new top-level field (`identity_enforcement`, row 318's promised field --
+# surfaces the deployment's effective grace/enforce posture, previously undetectable remotely,
+# UPDATE survey erratum). `protocol_version`/`WIRE_PROTOCOL_VERSION` stays UNCHANGED -- every new
+# field is additive; an existing client that ignores an unknown `HealthResponse` key does not
+# misparse (the same rule `max_sse_clients`/`sse_poll_interval_secs` were held to one version ago).
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -879,7 +890,123 @@ VIEW_REGISTRY: dict[str, tuple[str, str, bool]] = {
     "work_violation_history": ("slug", "slug", False),
     "work_bookkeeping_closes": ("close_id", "id", True),
     "countersigned_in_force": ("id", "id", True),
+    # A SEVENTH additive registry growth (work item boundary-role-census-view, ledger row 203):
+    # the APPROVED role-census read -- see `_role_census_sql`'s own docstring immediately below
+    # for the full shape. slug-keyed, UNIQUE (one row per work item, the SAME natural key
+    # work_item_current already uses one entry above) -- deliberately NOT a new pagination shape.
+    "work_role_census": ("slug", "slug", True),
 }
+
+# NO KERNEL CHANGE (row 203's own instruction, honored): `work_role_census` names no stored
+# relation kernel/lineage ever creates -- the served role (`GRANT USAGE ON SCHEMA` only,
+# kernel/lineage/s15-schema.sql) holds no `CREATE` privilege on `:"schema"` to mint one at
+# runtime either (verified by reading that GRANT list, not assumed), so a genuine `CREATE VIEW`
+# object is not an option here without a privilege change this row's own scope does not license.
+# This is therefore a SERVING-SIDE view in the literal sense: its SELECT text lives here, in
+# Python, authored by this layer rather than a kernel/lineage delta -- composed ENTIRELY from
+# relations the served role already holds SELECT on (`ledger`, `review_detail`, both granted at
+# s15), the same raw-table-read posture `rows_asof`/`rows_current?include_superseded=true`
+# already use one route over. `_view_from_clause` below is the ONE seam that lets
+# `views_view`'s shared pagination/capability-gate code treat this exactly like a stored view
+# (wrapped as a derived table, `(<select>) AS work_role_census`) without touching a single byte
+# of the twenty-two PRE-EXISTING VIEW_REGISTRY members' own code path (every one of them still
+# resolves `FROM {cfg.schema}.{view}` literally, unchanged).
+_ROLE_CENSUS_DERIVED_VIEWS: frozenset[str] = frozenset({"work_role_census"})
+
+
+def _role_census_sql(schema: str) -> str:
+    """The role-census SELECT (work item boundary-role-census-view, row 203; doctrine:
+    user-guide/recipes/IDENTITY-AND-AUTHORITY.md's "Work-unit role assignment" section). One row
+    per work item (`opened` is the driving CTE, LEFT JOINed against the rest -- an item with no
+    claim/close/review yet still gets a row, matching `work_item_current`'s own LEFT JOIN shape
+    one view over): opener (the `work_opened` row's own actor), EVERY claim in claim order as a
+    `claimants` JSON array (each entry flagged `is_reclaim_by_distinct_actor` -- the doctrine's
+    own words: "that claim-over-a-live-claim by a distinct actor IS the handoff's entire record"),
+    the claimant-of-record (the LATEST claim, the same `DISTINCT ON ... ORDER BY id DESC`
+    resolution `work_item_current` already uses), the closer (if closed), and every REVIEWER
+    whose review `regards` a row carrying this item's `work_slug` (covers close-attestation
+    review AND the decomposition-review doctrine item -- both `work_closed` and `work_opened`
+    rows carry `work_slug`), each with its KERNEL-COMPUTED `discharge_grade`
+    (`review_detail.discharge_grade`, s34: "computed by the kernel ... never writer-asserted" --
+    this view reads it, never derives a second, boundary-invented grade of its own, ADR-0012 P2).
+
+    Named consumers (row 203's own instruction, stated once here rather than only in the ledger
+    claim): `./pickup`-time hydration ("who owns what right now") and post-hoc RCA ("who was
+    accountable when this shipped") -- IDENTITY-AND-AUTHORITY.md's own words, verbatim, for why
+    this view exists at all (the named-consumer test).
+
+    SCOPE, HONESTLY NAMED: a reviewer's `regards` is resolved ONE HOP (the review's own row,
+    never walked through a chain of supersessions to some earlier antecedent) -- the same
+    resolution depth `review_stamp_distinctness`/`work_review_gap` already commit to one view
+    over; a review that regards a SUPERSEDED close/open row for this slug still surfaces here
+    (append-only history, not filtered to only the in-force row), which is the correct behavior
+    for a POST-HOC RCA consumer (row 203's own second named use) even though a "who currently
+    owns this" reading would want the in-force-only subset -- `pickup` hydration's own caller
+    filters for currency the same way it already does for `work_item_current`'s `state` column."""
+    return (
+        "WITH opened AS ("
+        "  SELECT id AS opened_id, work_slug AS slug, actor AS opener, ts AS opened_ts"
+        f" FROM {schema}.ledger WHERE kind = 'work_opened'"
+        "), claims_ordered AS ("
+        "  SELECT id AS claimed_id, work_slug AS slug, actor AS claimant, ts AS claimed_ts,"
+        "         lag(actor) OVER (PARTITION BY work_slug ORDER BY id) AS prev_claimant"
+        f" FROM {schema}.ledger WHERE kind = 'work_claimed'"
+        "), claims AS ("
+        "  SELECT slug,"
+        "         jsonb_agg(jsonb_build_object("
+        "           'claimed_id', claimed_id, 'claimant', claimant, 'claimed_ts', claimed_ts,"
+        "           'is_reclaim_by_distinct_actor',"
+        "           (prev_claimant IS NOT NULL AND prev_claimant IS DISTINCT FROM claimant)"
+        "         ) ORDER BY claimed_id) AS claimants,"
+        "         bool_or(prev_claimant IS NOT NULL AND prev_claimant IS DISTINCT FROM claimant)"
+        "           AS any_reclaim_by_distinct_actor"
+        "  FROM claims_ordered GROUP BY slug"
+        "), claimant_of_record AS ("
+        "  SELECT DISTINCT ON (work_slug) work_slug AS slug, actor AS claimant_of_record,"
+        "         id AS claimant_of_record_claimed_id"
+        f" FROM {schema}.ledger WHERE kind = 'work_claimed'"
+        "  ORDER BY work_slug, id DESC"
+        "), closed AS ("
+        "  SELECT DISTINCT ON (work_slug) work_slug AS slug, id AS closed_id, actor AS closer,"
+        "         ts AS closed_ts"
+        f" FROM {schema}.ledger WHERE kind = 'work_closed'"
+        "  ORDER BY work_slug, id DESC"
+        "), reviewers AS ("
+        "  SELECT wl.work_slug AS slug,"
+        "         jsonb_agg(jsonb_build_object("
+        "           'review_id', r.id, 'reviewer', r.actor, 'regards', r.regards,"
+        "           'verdict', d.verdict, 'independence', d.independence,"
+        "           'discharge_grade', d.discharge_grade, 'ts', r.ts"
+        "         ) ORDER BY r.id) AS reviewers"
+        f" FROM {schema}.ledger r"
+        f" JOIN {schema}.review_detail d ON d.ledger_id = r.id"
+        f" JOIN {schema}.ledger wl ON wl.id = r.regards AND wl.work_slug IS NOT NULL"
+        "  WHERE r.kind = 'review'"
+        "  GROUP BY wl.work_slug"
+        ") "
+        "SELECT o.slug, o.opener, o.opened_id, o.opened_ts,"
+        "       coalesce(c.claimants, '[]'::jsonb) AS claimants,"
+        "       cor.claimant_of_record, cor.claimant_of_record_claimed_id,"
+        "       cl.closer, cl.closed_id, cl.closed_ts,"
+        "       coalesce(c.any_reclaim_by_distinct_actor, false) AS any_reclaim_by_distinct_actor,"
+        "       coalesce(rv.reviewers, '[]'::jsonb) AS reviewers "
+        "FROM opened o "
+        "LEFT JOIN claims c ON c.slug = o.slug "
+        "LEFT JOIN claimant_of_record cor ON cor.slug = o.slug "
+        "LEFT JOIN closed cl ON cl.slug = o.slug "
+        "LEFT JOIN reviewers rv ON rv.slug = o.slug"
+    )
+
+
+def _view_from_clause(cfg: BoundaryConfig, view: str) -> str:
+    """The ONE seam `views_view` resolves its FROM target through -- returns the literal,
+    byte-identical `{schema}.{view}` for every PRE-EXISTING VIEW_REGISTRY member (unchanged code
+    path), or a parenthesized derived table aliased as `{view}` for a `_ROLE_CENSUS_DERIVED_VIEWS`
+    member (currently the one, `work_role_census`) -- so the SAME shared pagination/tiebreaker
+    code below never needs to know which kind of relation it is querying."""
+    if view in _ROLE_CENSUS_DERIVED_VIEWS:
+        return f"({_role_census_sql(cfg.schema)}) AS {view}"
+    return f"{cfg.schema}.{view}"
 
 # The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
 # built from this dict, never re-typed per route. `obligation_revoke` (design/FABLE-LEGACY-LED-
@@ -1791,8 +1918,17 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
         f"AND con.conname = 'principal_binding_active_kind_shape' "
         f"AND pg_get_constraintdef(con.oid) LIKE '%principal_standing_declared%'));",
     ))
+    # Row 173: extend the manifest past s45 (object-existence detection, the SAME
+    # migrate-detect-drift discipline as every fact above -- see CapabilityManifest's own field
+    # docstrings in boundary_models.py for why THESE four and not every intervening delta).
+    s58_missives = _regclass_exists(cfg, f"{cfg.schema}.missive_open_threads")
+    s60_entitlement = _column_exists(cfg, cfg.schema, "ledger", "entitlement_act_class")
+    s61_signatures = _regclass_exists(cfg, f"{cfg.schema}.signed_commissions")
+    s64_delegation = _column_exists(cfg, cfg.schema, "ledger", "delegation_redelegate_depth")
     return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43,
-                               credited_view=credited, s45_standing_lifecycle=s45)
+                               credited_view=credited, s45_standing_lifecycle=s45,
+                               s58_missives=s58_missives, s60_entitlement=s60_entitlement,
+                               s61_signatures=s61_signatures, s64_delegation=s64_delegation)
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
@@ -2850,6 +2986,11 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             world=cfg.schema,
             service_principal=service_principal_name(cfg),
             capabilities=capability_manifest(cfg),
+            # Row 173/row 318: the SAME module-global `_identity_enforcement_posture`
+            # `configure_identity_enforcement` set once at startup from the multiplex TOML, and
+            # the anonymous-write refusal (rung a, above) reads at request time -- one value, two
+            # readers, never a second copy that could drift.
+            identity_enforcement=_identity_enforcement_posture,
         )
 
     @app.get("/d/{deployment}/rows/current")
@@ -3139,26 +3280,44 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if entry is None:
             return unknown_view(view)
         key_col, key_kind, key_unique = entry
-        if not _regclass_exists(cfg, f"{cfg.schema}.{view}"):
-            return capability_absent(
-                f"view:{view}",
-                f"This world carries no {cfg.schema}.{view} object -- GET /views/{view} is "
-                f"refused rather than served from a relation this world's kernel does not "
-                f"have (object-existence detection, this service's own migrate-detect-drift "
-                f"discipline).")
-        # The COLUMN-shape check, one level finer than the object-existence check just above:
-        # `work_item_violations`/`work_review_gap`'s own key columns (target_id/slug) arrived at
-        # later lineage deltas (s37/s29) than the views' own NAMES did -- a pre-that-delta world
-        # carries a same-named view without the key column this route's pagination needs, which
-        # would otherwise reach the SELECT below as a bare `column ... does not exist` error (a
-        # genuinely typed, but needlessly coarse, `unclassified_failure` -- see `_column_exists`'s
-        # own docstring, live-witnessed against this repo's own pre-s37 `autoharn1` world).
-        if not _column_exists(cfg, cfg.schema, view, key_col):
-            return capability_absent(
-                f"view:{view}:{key_col}",
-                f"This world's {cfg.schema}.{view} object exists but carries no {key_col!r} "
-                f"column -- this world's applied kernel lineage predates the delta that added "
-                f"it (column-shape detection, one level finer than object existence).")
+        if view in _ROLE_CENSUS_DERIVED_VIEWS:
+            # `work_role_census` names no stored relation (`_view_from_clause`'s own docstring) --
+            # object/column existence checks against `{schema}.{view}` would themselves 404 on a
+            # relation that was never supposed to exist. Gate on the underlying capability its
+            # OWN body depends on instead: `work_item_current` (s22_work), the same object this
+            # view's `opened`/`claims`/`closed` CTEs all key off (kernel/lineage/
+            # s22-work-item-ledger.sql). `review_detail` predates s22 (s15, the base schema) so it
+            # is never the gating fact.
+            if not _regclass_exists(cfg, f"{cfg.schema}.work_item_current"):
+                return capability_absent(
+                    f"view:{view}:s22_work",
+                    f"GET /views/{view} derives from this world's work-item ledger kinds "
+                    f"(work_opened/work_claimed/work_closed) -- this world carries no "
+                    f"{cfg.schema}.work_item_current object, so its lineage predates s22 "
+                    f"(kernel/lineage/s22-work-item-ledger.sql) and this read is refused rather "
+                    f"than served against a capability this world's kernel does not have.")
+        else:
+            if not _regclass_exists(cfg, f"{cfg.schema}.{view}"):
+                return capability_absent(
+                    f"view:{view}",
+                    f"This world carries no {cfg.schema}.{view} object -- GET /views/{view} is "
+                    f"refused rather than served from a relation this world's kernel does not "
+                    f"have (object-existence detection, this service's own migrate-detect-drift "
+                    f"discipline).")
+            # The COLUMN-shape check, one level finer than the object-existence check just above:
+            # `work_item_violations`/`work_review_gap`'s own key columns (target_id/slug) arrived
+            # at later lineage deltas (s37/s29) than the views' own NAMES did -- a pre-that-delta
+            # world carries a same-named view without the key column this route's pagination
+            # needs, which would otherwise reach the SELECT below as a bare `column ... does not
+            # exist` error (a genuinely typed, but needlessly coarse, `unclassified_failure` --
+            # see `_column_exists`'s own docstring, live-witnessed against this repo's own
+            # pre-s37 `autoharn1` world).
+            if not _column_exists(cfg, cfg.schema, view, key_col):
+                return capability_absent(
+                    f"view:{view}:{key_col}",
+                    f"This world's {cfg.schema}.{view} object exists but carries no {key_col!r} "
+                    f"column -- this world's applied kernel lineage predates the delta that "
+                    f"added it (column-shape detection, one level finer than object existence).")
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
@@ -3214,7 +3373,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             rows = _query_json(
                 cfg,
                 f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
-                f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > :'after_slug' "
+                f"(SELECT * FROM {_view_from_clause(cfg, view)} WHERE {key_col} > :'after_slug' "
                 f"ORDER BY {key_col} LIMIT {limit}) t;",
                 extra_v={"after_slug": after_slug},
             )
