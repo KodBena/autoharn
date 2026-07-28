@@ -21,6 +21,23 @@ their own explicit write target:
              from the ambient environment). Refuses WHOLESALE — no partial run — if the manifest
              lacks the reviewed marker.
 
+STANDING-FORCE SURVIVAL CLASSES (added 2026-07-28, work item extract-standing-force-classes,
+per design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md -- the matrix the maintainer commissioned
+after ADR-0000's "the class as first named is presumed too narrow" direction proved right
+again): classes 1.13-1.19 carry every IN-FORCE (unsuperseded) principal-family side-table row
+this tool previously ignored structurally, not merely deprioritized -- principal_suspended,
+principal_revoked, principal_standing_declared, principal_relation_asserted,
+principal_role_bound, principal_key_bound, principal_competence_granted. The matrix's #1-ranked
+hazard is the reason this exists: a REVOKED principal's revocation not crossing the phoenix
+means the successor world could functionally re-admit a revoked actor with no structural block.
+Class 1.20 carries entitlement_class_configured (no principal referent -- see its own
+docstring for why it defaults to drop-with-reason, not carry-reopened, despite being a genuine
+standing-force class). Class 1.21 carries ungraded `resource:` statement-grammar rows (the
+matrix's #2-ranked hazard: a `forbidden:`-tier deontic MUST-NOT, silently grade-filtered out of
+1.2 whenever it isn't `--grade durable`). These items carry a `"principal_fields"` dict
+(subject/object NAMES, never dust-world-local ids -- the successor's own roster is what
+`led principal <verb>` resolves against at ingest) in place of 1.1's `actor_attribution` shape.
+
 MANIFEST SHAPE (JSONL — one JSON object per line, per the consult §2.3's "provenance block plus
 per-item records", chosen over a single nested JSON document so the file is greppable,
 line-diffable, and appendable — the reviewed marker is literally appended by the reviewer, no
@@ -77,6 +94,36 @@ at all as of this kernel lineage; all of this is stated in the provenance block'
   1.10 commissions                 never-class      kind='commission' — count+ids only
   1.12 refusals/violations/snags   never-class      kind IN (write_refused, snag,
                                                      work_violation_disposition) — count+ids only
+  1.13 principal suspensions       carry-reopened   in-force kind='principal_suspended' —
+                                                     `led principal suspend` (added 2026-07-28,
+                                                     see STANDING-FORCE SURVIVAL CLASSES above)
+  1.14 principal revocations       carry-reopened   in-force kind='principal_revoked' —
+                                                     `led principal revoke` — matrix's #1-ranked
+                                                     hazard, this is the delta that closes it
+  1.15 principal standing decls    carry-reopened   in-force kind='principal_standing_declared'
+                                                     — `led principal declare-standing`
+  1.16 principal relations         carry-reopened   in-force kind='principal_relation_asserted'
+                                                     — `led principal relate`
+  1.17 principal role bindings     carry-reopened   in-force kind='principal_role_bound' —
+                                                     `led principal bind-role`
+  1.18 principal key bindings      carry-reopened   in-force kind='principal_key_bound' —
+                                                     `led principal bind-key`; CANNOT complete
+                                                     without a fresh possession ceremony in the
+                                                     SUCCESSOR world (s61 item 3) — see the
+                                                     class's own docstring
+  1.19 principal competences       carry-reopened   in-force kind='principal_competence_granted'
+                                                     — `led principal grant-competence`
+  1.20 entitlement class config    drop-with-reason kind='entitlement_class_configured' — NO
+                                                     `led` verb writes this kind (only the birth
+                                                     sequence's own direct kernel.ledger_write
+                                                     call does); extracted for visibility, never
+                                                     auto-ingested — see the class's own docstring
+  1.21 resource: deontic tiers     carry-verbatim   ungraded kind='decision' rows whose statement
+                                                     starts 'resource:' — matrix's #2-ranked
+                                                     hazard, the eight statement grammars' one
+                                                     genuine standing MUST-NOT (the TIER field);
+                                                     the other seven grammars stay out of scope
+                                                     (see CLASSES_OUT_OF_SCOPE 1.8, corrected below)
 
 Read-only throughout: every query is a SELECT; ingest's own writes go through `led`, never a
 direct psycopg INSERT (ADR-0012 P1: one write path, the kernel's own s43 boundary/legacy INSERT,
@@ -118,10 +165,25 @@ DROP_KINDS = ("review",)
 CLASSES_OUT_OF_SCOPE = {
     "1.3": "procedures are a subclass of 1.2 (standing decisions) with no distinct kernel "
            "representation; carried under class 1.2, not separately queried",
-    "1.6": "resources registry has no distinct ledger `kind` — resource rows are ordinary "
-           "kind=decision rows, already covered by class 1.2's query",
-    "1.8": "estimates/actuals have no ledger `kind` in this kernel lineage (ledger_kind_check "
-           "carries no 'estimate' member) — nothing to SELECT; CITE-ONLY is moot here",
+    "1.6": "resources registry has no distinct ledger `kind` — resource rows ride ordinary "
+           "kind=decision rows. GRADED resource: rows are already covered by class 1.2's "
+           "query; UNGRADED ones were silently dropped by 1.2's s36+ grade filter until this "
+           "build — class 1.21_resource_tier_ungraded now extracts them separately (design/"
+           "PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md sections 2/4, ranking #2). Corrected "
+           "2026-07-28: the prior wording here ('already covered by 1.2's query') was "
+           "imprecise in exactly the way that matrix names — true only of the GRADED subset.",
+    "1.8": "estimate:/actual:/taxon:/interface:/outcome:/review:/review-done: rows have no "
+           "DISTINCT ledger `kind` (ledger_kind_check carries no member for any of them) — "
+           "but, corrected 2026-07-28 per design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md "
+           "sections 2/4: they DO ride bare kind='decision' rows (led.tmpl's eight statement "
+           "grammars, all written through cmd_generic), so they ARE nominally in scope of "
+           "1.2's query and are silently GRADE-FILTERED out of it when ungraded, not "
+           "kind-absent from it as the prior wording here ('nothing to SELECT') implied. Of "
+           "the eight, only resource:'s TIER field carries a standing MUST-NOT (see 1.6, "
+           "class 1.21) — the other seven stay genuinely out of scope here, named rather "
+           "than silently dropped, because none carries a comparable standing-force hazard "
+           "(matrix ranking #8: diagnostic-grade by maintainer ruling, lowest blast radius "
+           "of the structural gaps this survey found).",
     "1.9": "domain artifacts (the git tree) are not ledger rows at all — crosses with the "
            "repository per consult §1.9, out of this tool's scope by construction",
     "1.11": "apparatus/settings/secrets are not ledger rows — settings are scaffold-time "
@@ -431,6 +493,232 @@ def extract_drop_and_never(dep) -> list[dict]:
     return items
 
 
+def _principal_id_to_name(dep) -> dict[str, str]:
+    """id (as the raw csv string _rows() yields) -> name, THIS world's own roster. The one home
+    for this lookup — extract_principal_lifecycle's own name-resolution below, and nowhere
+    else, so a future second caller derives from here rather than re-issuing the SELECT
+    (ADR-0012 P1)."""
+    r = _psql_tuples(dep, f"SELECT id, name FROM {dep.kern}.principal;")
+    return {pid: name for pid, name in _rows(r)}
+
+
+# 1.13-1.19: every kind the s40/s41/s45 principal-identity-events family defines, EXCEPT
+# principal_registered (already class 1.1) and the historical-record verification markers
+# (commission_signature_verified/principal_key_possession_verified — one-time facts, not
+# standing-force per the matrix's own §1 table).
+_PRINCIPAL_LIFECYCLE_KINDS = {
+    "principal_suspended": "1.13_principal_suspended",
+    "principal_revoked": "1.14_principal_revoked",
+    "principal_standing_declared": "1.15_principal_standing_declared",
+    "principal_relation_asserted": "1.16_principal_relation_asserted",
+    "principal_role_bound": "1.17_principal_role_bound",
+    "principal_key_bound": "1.18_principal_key_bound",
+    "principal_competence_granted": "1.19_principal_competence_granted",
+}
+_S41_ONLY_KINDS = ("principal_relation_asserted", "principal_role_bound",
+                   "principal_key_bound", "principal_competence_granted")
+
+
+def extract_principal_lifecycle(dep) -> list[dict]:
+    """1.13-1.19 — the kernel side-tables design/PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md's §3/§4
+    name as STRUCTURALLY IGNORED by every extract_all() class that predates this build:
+    principal suspensions/revocations/standing-declarations/relations/role-bindings/
+    key-bindings/competence-grants. Every one is carry-reopened (RE-ENACT — a fresh typed act
+    through `led principal <verb>`, never a raw INSERT, ADR-0012 P2 — "re-write through the
+    kernel's own verbs" per the commissioning work item). Matrix ranking #1: a REVOKED
+    principal's revocation not crossing is the single highest-consequence gap the matrix names,
+    because the successor could otherwise functionally re-admit a revoked actor with no
+    structural block at all.
+
+    IN-FORCE, uniformly across all seven kinds (one filter, not seven hand-derived ones —
+    ADR-0012 P1, "derive don't duplicate" applied to the kernel's OWN governing-row logic):
+    `ledger_current` (s31 supersession-filtered) already excludes every SUPERSEDED row; the one
+    remaining case a bare kind filter would over-carry is a LIFT/UNBIND/RELEASE row — itself
+    unsuperseded, same kind, but `principal_binding_active = false` (s41/s45's identity/value-
+    split retraction idiom: a superseding same-kind row restates identity and flips active to
+    false, rather than a second retraction shape). `principal_binding_active IS NOT FALSE` keeps
+    TRUE and NULL (a pre-s41 kernel, where the column and the concept do not exist yet and
+    ledger_current's own filtering is already sufficient on its own) and drops only an explicit
+    FALSE — one filter, version-safe by construction, never branched per kernel vintage.
+    `principal_revoked` never carries this column at all (s45's own CHECK forbids it —
+    terminal-by-type, no un-revoke path exists, kernel/lineage/s45-standing-lifecycle.sql
+    Element 1's "principal_revoked is DELIBERATELY ABSENT"): the same filter is a costless
+    no-op pass-through for it (always NULL there), so it shares this exact code path rather than
+    a bespoke one.
+
+    PRINCIPAL NAMES, NEVER DUST-WORLD IDS: `principal_subject`/`principal_object` are this
+    world's OWN internal ids, meaningless in a successor with its own fresh `kernel.principal`
+    rows. Every id is resolved to its NAME here, at extraction, against THIS world's roster —
+    the manifest carries names (`principal_fields`), and ingestion resolves those names against
+    the SUCCESSOR's roster via `led principal <verb>`'s own lookup, which already refuses
+    loudly, by name, when a referent is not registered there (no second name-existence check is
+    invented in this file — one authority, the kernel verb itself, ADR-0012 P1). A subject/
+    object id that fails to resolve even in the SOURCE world's own roster is a dust-world data-
+    integrity problem, not a silent-skip candidate, so it is refused loudly here, not carried
+    as a guess.
+
+    Column availability is probed ONCE per call (s40 adds principal_subject/principal_db_role;
+    s41 adds principal_binding_active plus the four binding-family columns): a kernel missing a
+    needed column gets an honest UNAVAILABLE class-summary for exactly the kinds it cannot
+    carry, never a silent empty result indistinguishable from "nothing to carry" (the same
+    UNAVAILABLE idiom extract_open_work/extract_open_questions already use above)."""
+    if not _column_exists(dep, "ledger", "principal_subject"):
+        return [{"record": "class-summary", "class": label, "disposition": "drop-with-reason",
+                  "count": 0,
+                  "reason": "UNAVAILABLE: this world's kernel predates s40 (kernel/lineage/"
+                            "s40-principal-identity-events.sql) — no principal_subject column "
+                            "exists to extract from."}
+                for label in _PRINCIPAL_LIFECYCLE_KINDS.values()]
+
+    has_binding_active = _column_exists(dep, "ledger", "principal_binding_active")
+    has_s41_cols = _column_exists(dep, "ledger", "principal_object")
+    names = _principal_id_to_name(dep)
+    active_clause = " AND principal_binding_active IS NOT FALSE" if has_binding_active else ""
+
+    items: list[dict] = []
+    for kind, label in _PRINCIPAL_LIFECYCLE_KINDS.items():
+        if kind in _S41_ONLY_KINDS and not has_s41_cols:
+            items.append({"record": "class-summary", "class": label,
+                          "disposition": "drop-with-reason", "count": 0,
+                          "reason": "UNAVAILABLE: this world's kernel predates s41 (kernel/"
+                                    "lineage/s41-principal-bindings-and-relations.sql) — the "
+                                    "columns this kind needs do not exist."})
+            continue
+        r = _psql_tuples(dep, f"""
+            SELECT id, statement, principal_subject, principal_object, principal_relation,
+                   principal_role_name, principal_key_fingerprint,
+                   principal_competence_activity, principal_competence_band,
+                   principal_competence_basis, principal_db_role
+            FROM {dep.schema}.ledger_current
+            WHERE kind = '{kind}'{active_clause}
+            ORDER BY id;
+        """)
+        for (rid, statement, subj_id, obj_id, relation, role_name, fingerprint,
+             activity, band, basis, db_role) in _rows(r):
+            subj_name = names.get(subj_id) if subj_id else None
+            if subj_id and subj_name is None:
+                print(f"extract-context: REFUSED — {kind} row {rid} names principal_subject "
+                      f"id {subj_id!r}, which is not in {dep.name}'s own principal roster.",
+                      file=sys.stderr)
+                sys.exit(2)
+            obj_name = names.get(obj_id) if obj_id else None
+            if obj_id and obj_name is None:
+                print(f"extract-context: REFUSED — {kind} row {rid} names principal_object "
+                      f"id {obj_id!r}, which is not in {dep.name}'s own principal roster.",
+                      file=sys.stderr)
+                sys.exit(2)
+            fields: dict[str, str | None] = {"subject_name": subj_name}
+            if kind == "principal_standing_declared":
+                fields["db_role"] = db_role
+            elif kind == "principal_relation_asserted":
+                fields["relation"], fields["object_name"] = relation, obj_name
+            elif kind == "principal_role_bound":
+                fields["role_name"] = role_name
+            elif kind == "principal_key_bound":
+                fields["fingerprint"] = fingerprint
+            elif kind == "principal_competence_granted":
+                fields["activity"], fields["band"], fields["basis"] = activity, band, basis
+            items.append({
+                "record": "item", "class": label, "disposition": "carry-reopened",
+                "dust_row_ids": [int(rid)], "row_kind": kind, "statement": statement,
+                "principal_fields": fields, "refs": f"{dep.name}:row:{rid}", "reason": None,
+            })
+    return items
+
+
+def extract_entitlement_class_config(dep) -> list[dict]:
+    """1.20 entitlement_class_configured (kernel/lineage/s60-entitlement-enforcement.sql) —
+    governs which organizational ROLE NAME an act class requires. NOT principal-referring (the
+    role field is a role-name STRING, not a principal id), so this class carries none of
+    1.13-1.19's referent-existence risk.
+
+    Governing-row semantics reuse the kernel's OWN `entitlement_class_roles` view (s60 Element
+    4) directly, rather than re-deriving its max(id)-per-act_class WHERE-logic a second time in
+    Python (ADR-0012 P1: one authority, not a second hand-copy) — that view has no `active`
+    column and no `supersedes` concept for this kind at all (v1 supports fresh-assert and
+    rotation only, mirroring `kernel.principal_role`'s own pre-s45 shape).
+
+    DEFAULT DISPOSITION IS drop-with-reason, NOT carry-reopened, unlike every other class in
+    this file that re-enacts a typed act: as of this kernel lineage, NO `led` verb writes
+    entitlement_class_configured at all — only bootstrap/new-project.sh's own birth-sequence
+    step 6 does, via a direct `kernel.ledger_write(...)` call in a psql DO block, for the five
+    default act classes. This tool refuses to invent a new CLI verb outside its commissioned
+    scope (extending extract_context.py, not led.tmpl's write surface) and refuses even harder
+    to raw-INSERT around the kernel's own write boundary (ADR-0012 P2). The row is still
+    EXTRACTED — so a maintainer reviewing the manifest SEES that the source world reconfigured
+    an act class's required role away from birth's default — but ingestion cannot re-enact it
+    automatically; the existing drop-with-reason path (cmd_ingest, unmodified by this class)
+    reports it, never silently. Named here as a residual gap the commission surfaced, not
+    routed around: a future `led principal configure-entitlement` verb would close it."""
+    if not _relation_exists(dep, dep.schema, "entitlement_class_roles"):
+        return [{"record": "class-summary", "class": "1.20_entitlement_class_configured",
+                  "disposition": "drop-with-reason", "count": 0,
+                  "reason": "UNAVAILABLE: this world's kernel predates s60 (kernel/lineage/"
+                            "s60-entitlement-enforcement.sql) — entitlement_class_roles does "
+                            "not exist."}]
+    r = _psql_tuples(dep, f"""
+        SELECT lc.id, lc.statement, ecr.act_class, ecr.role_name
+        FROM {dep.schema}.entitlement_class_roles ecr
+        JOIN {dep.schema}.ledger_current lc ON lc.id = ecr.row_id
+        ORDER BY lc.id;
+    """)
+    items = []
+    for rid, statement, act_class, role_name in _rows(r):
+        items.append({
+            "record": "item", "class": "1.20_entitlement_class_configured",
+            "disposition": "drop-with-reason", "dust_row_ids": [int(rid)],
+            "row_kind": "entitlement_class_configured", "statement": statement,
+            "principal_fields": {"act_class": act_class, "role_name": role_name},
+            "refs": f"{dep.name}:row:{rid}",
+            "reason": "no `led` verb writes entitlement_class_configured (see this function's "
+                      "own docstring) — re-configure by hand through the kernel's own "
+                      "ledger_write RPC if the successor's default act-class/role map "
+                      "genuinely needs to differ from birth's, or file a work item for a "
+                      "`led principal configure-entitlement` verb; never raw-INSERT.",
+        })
+    return items
+
+
+def extract_resource_tier_ungraded(dep) -> list[dict]:
+    """1.21 — every statement-grammar row rides bare kind='decision' (led.tmpl:1462-1470's eight
+    grammars — resource:/estimate:/actual:/taxon:/interface:/outcome:/review:/review-done:), so
+    extract_standing_decisions' s36+ branch (`WHERE decision_grade IS NOT NULL`) silently drops
+    every one of them that is not individually `--grade durable` — design/
+    PHOENIX-SURVIVAL-UNIVERSE-2026-07-28.md's own §2 finding, not previously named anywhere in
+    this file (see CLASSES_OUT_OF_SCOPE 1.6/1.8, corrected by this same build). Of the eight,
+    only `resource:`'s TIER field carries a genuine standing MUST-NOT (`forbidden:`/`mandated:`
+    — a deontic constraint on future tool/backend use) — matrix ranking #2. The other seven
+    (estimate:/actual:/taxon:/interface:/outcome:/review:/review-done:) are named here, not
+    silently excluded: estimate:/actual:/outcome: are diagnostic-only by standing maintainer
+    ruling (100% diagnostic, never policy — matrix ranking #8, lowest blast radius of every
+    structural gap the matrix found); taxon:/interface: are classificatory conventions, not
+    MUST-NOTs; review:/review-done: are already class 1.7_track_record's own CITE-ONLY default.
+    None of the seven carries the same revocation-shaped hazard resource:'s forbidden tier
+    does, so this class is deliberately resource:-only — a future study naming a genuine
+    standing-force need in one of the other seven routes through this same mechanism (a new
+    class, named and filed), never a silent widening of this one.
+
+    Pre-s36 kernels are UNTOUCHED by this function (returns nothing): extract_standing_decisions'
+    own PRE-S36 FALLBACK already carries every unsuperseded kind=decision row — including any
+    resource: rows — unconditionally, with no grade filter to leak through in the first place;
+    running this function there too would double-carry the same dust rows under two class
+    labels."""
+    if not _relation_exists(dep, dep.schema, "standing_decisions"):
+        return []
+    r = _psql_tuples(dep, f"SELECT id, statement FROM {dep.schema}.ledger_current "
+                          f"WHERE kind = 'decision' AND decision_grade IS NULL "
+                          f"AND statement ILIKE 'resource:%' ORDER BY id;")
+    items = []
+    for rid, statement in _rows(r):
+        items.append({
+            "record": "item", "class": "1.21_resource_tier_ungraded",
+            "disposition": "carry-verbatim", "dust_row_ids": [int(rid)], "row_kind": "decision",
+            "grade": None, "statement": statement, "refs": f"{dep.name}:row:{rid}",
+            "reason": None,
+        })
+    return items
+
+
 def extract_all(dep) -> list[dict]:
     items: list[dict] = []
     items += extract_principals(dep)
@@ -438,6 +726,9 @@ def extract_all(dep) -> list[dict]:
     items += extract_open_work(dep)
     items += extract_open_questions(dep)
     items += extract_drop_and_never(dep)
+    items += extract_principal_lifecycle(dep)
+    items += extract_entitlement_class_config(dep)
+    items += extract_resource_tier_ungraded(dep)
     return items
 
 
@@ -630,6 +921,61 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         elif cls == "1.5_open_questions":
             statement = f"{marker} {item['statement']}"
             r = _run_led(led, ["--refs", refs, "question", statement],
+                        actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r))
+
+        elif cls in ("1.13_principal_suspended", "1.14_principal_revoked"):
+            # suspend/revoke are the ONLY two principal verbs that take a free-text reason (row
+            # 1173's own grammar: "suspend/revoke... fold any non-flag remainder into a
+            # free-text reason") -- so, and only for these two classes, the marker/provenance
+            # convention every other carry-* class already uses fits verbatim.
+            verb = "suspend" if cls == "1.13_principal_suspended" else "revoke"
+            name = item["principal_fields"]["subject_name"]
+            r = _run_led(led, ["principal", verb, name, f"{marker} {item['statement']}"],
+                        actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, subject=name))
+
+        elif cls == "1.15_principal_standing_declared":
+            pf = item["principal_fields"]
+            r = _run_led(led, ["principal", "declare-standing", pf["subject_name"],
+                               "--db-role", pf["db_role"]], actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+
+        elif cls == "1.16_principal_relation_asserted":
+            pf = item["principal_fields"]
+            r = _run_led(led, ["principal", "relate", pf["subject_name"], pf["relation"],
+                               pf["object_name"]], actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+
+        elif cls == "1.17_principal_role_bound":
+            pf = item["principal_fields"]
+            r = _run_led(led, ["principal", "bind-role", pf["subject_name"],
+                               "--role", pf["role_name"]], actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+
+        elif cls == "1.18_principal_key_bound":
+            pf = item["principal_fields"]
+            # NEVER fabricate --possession-ref (s61 item 3): a fresh key bind needs a LIVE
+            # proof-of-possession ceremony run against the SUCCESSOR world's own committed
+            # keys/ (`led principal attest-possession`), which this tool cannot perform on the
+            # operator's behalf -- there is no signature to forge one from. Attempted without
+            # it deliberately, so `led`'s OWN teach-text (missing --possession-ref) is what
+            # lands in this outcome's reason -- never invented, never silently skipped.
+            r = _run_led(led, ["principal", "bind-key", pf["subject_name"],
+                               "--fingerprint", pf["fingerprint"]],
+                        actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+
+        elif cls == "1.19_principal_competence_granted":
+            pf = item["principal_fields"]
+            r = _run_led(led, ["principal", "grant-competence", pf["subject_name"],
+                               "--activity", pf["activity"], "--band", pf["band"],
+                               "--basis", pf["basis"]], actor=args.actor, cwd=project_root)
+            outcomes.append(_generic_outcome(cls, disp, r, **pf))
+
+        elif cls == "1.21_resource_tier_ungraded":
+            statement = f"{marker} {item['statement']}"
+            r = _run_led(led, ["--refs", refs, "decision", statement],
                         actor=args.actor, cwd=project_root)
             outcomes.append(_generic_outcome(cls, disp, r))
 
