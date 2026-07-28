@@ -59,6 +59,41 @@ a kernel view; every byte it writes passes through an s43 boundary function.
 - **Not a cache.** Every request re-detects capabilities and re-reads/re-writes through the
   kernel fresh — no caching anywhere in this module (spec §5).
 
+## Two trust roots — which verbs ride the boundary and which deliberately do not
+
+(Maintainer-ratified 2026-07-28, autoharn3 ledger row 219, closing the fresh
+surface-survey's finding that the verb-to-data-path split existed only as archaeology:
+design/PANEL-GXP-SURFACE-FRESH-2026-07-28.md §1.1. This section states it as design.)
+
+The one-sanctioned-interface ruling governs CLIENTS: any program — a panel, a courier
+counterpart, `led`, a future GUI — that reads or writes the ledger goes through this
+service, because refusal enforcement must have exactly one home. It was never meant to
+route the system's OWN second opinions about itself through the thing they check. Two
+groups, each deliberate:
+
+- **Boundary clients** (HTTP, this service, no direct psql): `led`, `courier`,
+  `dispatch`, and — since the 2026-07-28 root repoint (ledger row 220) — the root
+  editions of `pickup`, `distance-to-clean`, `asof-export`, same as every scaffolded
+  world already ran. `./legacy/` keeps the direct originals as the operator recovery
+  path for when this service is down, unchanged in capability.
+- **Independent instruments** (direct psql or no DB at all, DELIBERATELY outside this
+  service): `verify-chain` — a tamper-evidence auditor that routes through the
+  component it audits would trust the very thing a compromise would subvert; `judge` —
+  the kernel's independent semantic verifier (clingo + differential + banks derivation
+  records into the repo tree; a job, not a request, and the same second-trust-root
+  argument); `audit` — its evidentiary input is local session logs this service does
+  not and must not serve; `doctor` — must be able to diagnose "the boundary is down"
+  from outside the boundary; `migrate` — admin DDL, exactly what `capability_absent`
+  exists to never serve.
+
+What a panel needs from the second group is not the instruments but their RESULTS:
+work item `boundary-verdict-read-surface` (row 221) serves the latest banked verdicts
+(chain, judge, doctor) as boundary reads labeled as this service's own last-known
+attestation with freshness visible — never a substitute for running the independent
+instrument, and never conflated with it. Moving any group-two verb INTO the boundary
+is a maintainer decision against the trust-root argument above, not a consistency
+cleanup.
+
 ## Multiplexing (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ratified — ledger
 decision row 1631)
 
