@@ -1857,71 +1857,84 @@ _DEFAULT_JUDGE_DERIVATIONS_ROOT = (
     Path(os.environ["AUTOHARN_JUDGE_DERIVATIONS_ROOT"])
     if os.environ.get("AUTOHARN_JUDGE_DERIVATIONS_ROOT")
     else _REPO_ROOT / "engine" / "docs" / "ledger-marriage" / "derivations")
-# The five differential families' own RETENTION roots (engine/ledger_differential.py,
-# engine/contemp_differential.py, engine/ordering_differential.py,
-# engine/preamble_differential.py, engine/review_gap_differential.py) -- named here ONCE so a
-# scan need not re-derive them; if a future differential module adds a sixth family this dict is
-# the one place to extend (ADR-0012 P1).
-_JUDGE_DERIVATION_DOMAINS: dict[str, Path] = {
-    "ledger": _DEFAULT_JUDGE_DERIVATIONS_ROOT,
-    "contemporaneity": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "contemporaneity",
-    "ordering-violations": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "ordering-violations",
-    "preamble-ordering": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "preamble-ordering",
-    "review-gap-audit": _DEFAULT_JUDGE_DERIVATIONS_ROOT / "review-gap-audit",
-}
+# The FOUR sibling differential families' own RETENTION roots nest INSIDE the bare `ledger`
+# root as subdirectories (engine/contemp_differential.py, engine/ordering_differential.py,
+# engine/preamble_differential.py, engine/review_gap_differential.py all set their own
+# `RETENTION = <bare-root> / "<subtree-name>"`; engine/ledger_differential.py's own `RETENTION`
+# IS the bare root) -- they are NOT sibling directories of the bare root, they are UNDER it. Named
+# here ONCE (ADR-0012 P1); if a future differential module adds a sixth family this tuple is the
+# one place to extend.
+#
+# FIX ROUND (focused re-review CRITICAL, reviewer witnessed over real HTTP: a contemporaneity-
+# stored DIVERGE_DEFECT reported as domain 'ledger'): the FIRST cut of this scan iterated a
+# `{domain: root}` dict and called `root.rglob("derivation.json")` PER DOMAIN -- since the bare
+# root physically CONTAINS the four subtrees, the 'ledger' domain's own scan re-discovered every
+# file already reachable through its true subtree, and (dict order + a strict `>` mtime
+# tiebreak) whichever domain's scan reached a given file'S mtime FIRST won the attribution --
+# 'ledger' iterates first, so it always won ties against the correct subtree domain for any file
+# genuinely stored under one, regardless of which subtree it actually lived in. Domain must be a
+# structural fact about WHERE THE FILE IS, never a side effect of scan order -- fixed by scanning
+# the bare root EXACTLY ONCE and deriving each file's domain from its own path relative to that
+# root (the file's first path component if it names one of the four known subtrees, else
+# 'ledger' -- a file directly under the bare root, or under a `<target>/<ts>_<hash>/` pair that
+# is not one of the four named subtrees, is genuinely `ledger_differential.py`'s own domain).
+_JUDGE_DERIVATION_SUBTREES: tuple[str, ...] = (
+    "contemporaneity", "ordering-violations", "preamble-ordering", "review-gap-audit",
+)
 _judge_derivations_root: Path = _DEFAULT_JUDGE_DERIVATIONS_ROOT
 
 
 def configure_judge_derivations_root(path: Path) -> None:
     """Construction-time-defense-in-depth (the SAME pattern `configure_identity_enforcement`
-    above already uses): overrides `_JUDGE_DERIVATION_DOMAINS`' own roots wholesale, redirected
-    under ONE new parent -- the fixture's own seam for witnessing BOTH polarities (a scratch dir
-    with a planted `derivation.json`; an empty scratch dir with none) without touching this
-    checkout's own real, accumulating derivation bank. Never called in ordinary operation (`main`
-    below leaves the default in place unless a future CLI flag is added -- none is, this build:
-    the real bank IS the real bank in production)."""
-    global _judge_derivations_root, _JUDGE_DERIVATION_DOMAINS
+    above already uses): overrides `_judge_derivations_root` wholesale -- the fixture's own seam
+    for witnessing BOTH polarities (a scratch dir with a planted `derivation.json`; an empty
+    scratch dir with none) without touching this checkout's own real, accumulating derivation
+    bank. Never called in ordinary operation (`main` below leaves the default in place unless a
+    future CLI flag is added -- none is, this build: the real bank IS the real bank in
+    production)."""
+    global _judge_derivations_root
     _judge_derivations_root = path
-    _JUDGE_DERIVATION_DOMAINS = {
-        "ledger": path,
-        "contemporaneity": path / "contemporaneity",
-        "ordering-violations": path / "ordering-violations",
-        "preamble-ordering": path / "preamble-ordering",
-        "review-gap-audit": path / "review-gap-audit",
-    }
 
 
 def _latest_judge_derivation() -> dict[str, Any] | None:
-    """Scans every `derivation.json` under every `_JUDGE_DERIVATION_DOMAINS` root (recursively --
-    each domain nests one more `<target>/<ts>_<hash>/derivation.json` level, `engine/
-    ledger_differential.py`'s own `_run_unique_dir` docstring), returns the one with the LATEST
-    file mtime (never the lexicographically-last path -- a `--retain` run's own directory name
-    embeds ITS run timestamp, not necessarily this scan's notion of "most recent on disk", though
-    in practice the two agree; mtime is the honest, direct fact). Returns `None` if no
-    `derivation.json` exists anywhere under any domain -- read-only, no error on an absent/empty
-    tree (a fresh checkout that has never run `judge --retain` is the ordinary case, not a
-    defect). A malformed `derivation.json` (unparseable JSON, or missing an expected key) is
-    SKIPPED, not raised -- this route degrades to the next-most-recent valid record, or to `None`,
-    rather than 500ing the whole read surface over one corrupt retained artifact; ADR-0002's
-    loudness is still honored server-side (the server's own log records which files were
-    skipped, `_log_infra_failure`'s own house channel is not it -- see the route's own body)."""
+    """Scans every `derivation.json` under `_judge_derivations_root` (recursively, ONE pass --
+    the bare root already contains every one of the four sibling subtrees, `_JUDGE_DERIVATION_
+    SUBTREES`'s own leading comment), returns the one with the LATEST file mtime (never the
+    lexicographically-last path -- a `--retain` run's own directory name embeds ITS run
+    timestamp, not necessarily this scan's notion of "most recent on disk", though in practice
+    the two agree; mtime is the honest, direct fact). DOMAIN ATTRIBUTION is derived from the
+    matched file's own path, relative to the root -- its first path component if that names one
+    of the four known subtrees, else 'ledger' -- NEVER from which domain's scan iteration
+    happened to reach it first (the fix-round CRITICAL this docstring's leading comment names).
+    Returns `None` if no `derivation.json` exists anywhere under the root -- read-only, no error
+    on an absent/empty tree (a fresh checkout that has never run `judge --retain` is the ordinary
+    case for the LIBRARY's own bare CLI, though NOT for this repo's own `./autoharn judge`
+    wrapper -- see `NoBankedArtifact`'s own teach-text, corrected in the same fix round, for why
+    that distinction matters). A malformed `derivation.json` (unparseable JSON, or missing an
+    expected key) is SKIPPED, not raised -- this route degrades to the next-most-recent valid
+    record, or to `None`, rather than 500ing the whole read surface over one corrupt retained
+    artifact; ADR-0002's loudness is still honored server-side (the server's own log records
+    which files were skipped, `_log_infra_failure`'s own house channel is not it -- see the
+    route's own body)."""
+    root = _judge_derivations_root
+    if not root.is_dir():
+        return None
     best: tuple[float, str, dict[str, Any]] | None = None  # (mtime, domain, parsed)
     skipped: list[str] = []
-    for domain, root in _JUDGE_DERIVATION_DOMAINS.items():
-        if not root.is_dir():
-            continue
-        for path in root.rglob("derivation.json"):
-            try:
-                mtime = path.stat().st_mtime
-                parsed = json.loads(path.read_text(encoding="utf-8"))
-                if not isinstance(parsed, dict) or "target" not in parsed or "verdict" not in parsed:
-                    skipped.append(str(path))
-                    continue
-            except (OSError, ValueError):
+    for path in root.rglob("derivation.json"):
+        try:
+            mtime = path.stat().st_mtime
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(parsed, dict) or "target" not in parsed or "verdict" not in parsed:
                 skipped.append(str(path))
                 continue
-            if best is None or mtime > best[0]:
-                best = (mtime, domain, parsed)
+        except (OSError, ValueError):
+            skipped.append(str(path))
+            continue
+        rel_parts = path.relative_to(root).parts
+        domain = rel_parts[0] if rel_parts and rel_parts[0] in _JUDGE_DERIVATION_SUBTREES else "ledger"
+        if best is None or mtime > best[0]:
+            best = (mtime, domain, parsed)
     if skipped:
         print(f"boundary_service: _latest_judge_derivation skipped {len(skipped)} unreadable/"
               f"malformed derivation.json path(s): {skipped}", file=sys.stderr)
@@ -3653,10 +3666,15 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         this route only reads what one of THOSE THREE has already written to disk, if anything.
 
         Investigated, not assumed (`boundary_models.py`'s own module-level note above has the
-        full account): `judge` genuinely banks (`--retain`, opportunistic); `verify-chain` and
-        `doctor` bank NOTHING today (both templates read in full, no write-to-disk found in
-        either) -- so those two classes always resolve to `NoBankedArtifact` in THIS build, an
-        honest, disclosed fact, not a bug in this route.
+        full account): `judge` genuinely banks -- the LIBRARY (`engine/ledger_differential.py`'s
+        bare CLI) treats `--retain` as opt-in, but THIS REPO'S OWN operator verb
+        (`bootstrap/templates/judge.tmpl`, its own header, verbatim: "the ordinary run: retain
+        DerivationRecords") hardcodes `--retain` -- for `./autoharn judge`, retention IS the
+        ordinary run, not an opportunistic extra (fix-round MODERATE, corrected from this
+        route's own first-cut teach-text, which had it backwards). `verify-chain` and `doctor`
+        bank NOTHING today (both templates read in full, no write-to-disk found in either) -- so
+        those two classes always resolve to `NoBankedArtifact` in THIS build, an honest,
+        disclosed fact, not a bug in this route.
 
         Deployment validation only (`_resolve_deployment`, the same discriminator gate every
         other route enforces) -- the payload itself does NOT vary by `{deployment}`
@@ -3671,11 +3689,18 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             judge_field = BankedJudgeVerdict(**judge_derivation)
         else:
             judge_field = NoBankedArtifact(
-                would_produce="./autoharn judge --retain [target...]",
+                # `--retain` omitted deliberately (fix-round MODERATE): for THIS repo's own
+                # operator verb, bootstrap/templates/judge.tmpl hardcodes --retain and calls
+                # that its "ordinary run" (that file's own header, verbatim) -- the flag is
+                # redundant to name here, and naming it would (falsely) suggest an ordinary
+                # `./autoharn judge` invocation needs an extra flag to bank anything.
+                would_produce="./autoharn judge [target...]",
                 message="no derivation.json found under engine/docs/ledger-marriage/derivations/ "
-                        "(or its five differential-family subtrees) -- judge only banks under "
-                        "its own --retain flag, opportunistically, never on an ordinary run; "
-                        "this checkout has not retained one yet.")
+                        "(or its four differential-family subtrees) -- this repo's own "
+                        "./autoharn judge retains a DerivationRecord on every ordinary run "
+                        "(bootstrap/templates/judge.tmpl hardcodes --retain), so this checkout "
+                        "simply has not run judge at all yet, not merely run it without "
+                        "retention.")
         # verify-chain and doctor bank NOTHING in this codebase as it stands (confirmed by
         # reading both templates in full, module-level note above) -- always the typed absence,
         # honestly, never a live re-run to manufacture a "present" answer this route does not

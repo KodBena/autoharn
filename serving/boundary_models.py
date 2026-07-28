@@ -466,8 +466,12 @@ class ArtifactWriteIntFields(BaseModel):
 # could mistake for something the writer chose per-response) -- ADR-0012 P1, one label, not one
 # phrasing per class. See `serving/boundary_service.py`'s `attestation()` route and
 # `_latest_judge_derivation`'s own docstring for WHERE each class's banked artifact lives today
-# (investigated, not assumed): judge genuinely banks (`--retain`, opportunistic, NOT automatic on
-# every run); verify-chain and doctor bank NOTHING in this codebase as it stands -- confirmed by
+# (investigated, not assumed): judge genuinely banks -- the LIBRARY's bare CLI
+# (`engine/ledger_differential.py`) treats `--retain` as opt-in, but THIS REPO'S OWN operator
+# verb (`bootstrap/templates/judge.tmpl`) hardcodes it and calls that its "ordinary run" (that
+# file's own header, verbatim) -- fix-round MODERATE, corrected from this module's own first-cut
+# text, which had it backwards; verify-chain and doctor bank NOTHING in this codebase as it
+# stands -- confirmed by
 # reading `bootstrap/templates/verify-chain.tmpl`/`doctor.tmpl` in full for any write to disk,
 # finding none. Their own PRESENT shapes are modeled below anyway (forward-compatible if a future
 # build adds banking for either) but are UNEXERCISED in this build's own witness plan, named
@@ -489,17 +493,23 @@ class NoBankedArtifact(BaseModel):
 
 
 class BankedJudgeVerdict(BaseModel):
-    """`./judge`'s own banked derivation record (`engine/ledger_differential.py`'s `retain()`,
-    invoked only under its own `--retain` flag -- opportunistic, not automatic on every run).
-    `verdict` is the closed AGREE/DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED vocabulary that
-    module's own docstring names. `asp_input_hash`/`sql_input_hash` are reported SEPARATELY,
-    honestly (that module's own `DerivationRecord` docstring: the two producers hash DIFFERENT
-    true inputs -- edb-text vs live-db rows -- so a single collapsed "input hash" would assert a
-    shared artifact that does not exist). `domain` names which of the five differential families
-    this checkout retains under `engine/docs/ledger-marriage/derivations/` the record came from
-    (the bare `ledger` tree, or one of `contemporaneity`/`ordering-violations`/`preamble-ordering`/
-    `review-gap-audit`'s own nested subtrees) -- disclosed so a caller is never left guessing
-    which judge family produced this verdict."""
+    """`./judge`'s own banked derivation record (`engine/ledger_differential.py`'s `retain()`).
+    The LIBRARY function itself only banks under its own `--retain` flag -- but THIS REPO'S OWN
+    operator verb, `bootstrap/templates/judge.tmpl`, hardcodes that flag and calls the result its
+    "ordinary run" (that file's own header, verbatim) -- fix-round MODERATE correction, this
+    class's own docstring had it backwards on first cut. `verdict` is the closed AGREE/
+    DIVERGE_BY_DESIGN/DIVERGE_DEFECT/QUARANTINED vocabulary that module's own docstring names.
+    `asp_input_hash`/`sql_input_hash` are reported SEPARATELY, honestly (that module's own
+    `DerivationRecord` docstring: the two producers hash DIFFERENT true inputs -- edb-text vs
+    live-db rows -- so a single collapsed "input hash" would assert a shared artifact that does
+    not exist). `domain` names WHERE under `engine/docs/ledger-marriage/derivations/` the record
+    was found -- the bare `ledger` root itself, or one of the FOUR sibling subtrees nested inside
+    it (`contemporaneity`/`ordering-violations`/`preamble-ordering`/`review-gap-audit`) --
+    derived from the matched file's OWN path (fix-round CRITICAL correction: `serving/
+    boundary_service.py`'s `_latest_judge_derivation` used to derive this from scan-iteration
+    order over a domain dict instead, which is a `ledger`-biased answer whenever the SAME nested
+    file is reachable through more than one scan -- see that function's own docstring for the
+    live-witnessed specimen)."""
 
     banked: bool = True
     label: str = _ATTESTATION_LABEL
