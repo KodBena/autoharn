@@ -71,3 +71,85 @@ Full GREEN transcript (same commit, same live toy db):
   [ok] burst_n=24 expected_per_dep_limit=12 deployment_saturated=12 statuses={503}
 
   ALL WR CHECKS OK
+
+3. LEDGER ROWS 153/154 (2026-07-28, work items view-registry-decomposition-views /
+   rows-bulk-superseded-read): the sixth VIEW_REGISTRY growth (work_edge_blocks_close,
+   discharging_attest, work_violation_history, work_bookkeeping_closes, countersigned_in_force)
+   plus GET /rows/current's new include_superseded opt-in. RED witnessed by stashing
+   serving/boundary_service.py back to its pre-this-build committed state (git stash push --
+   serving/boundary_service.py) while keeping THIS FILE'S OWN sibling fixture edits (the new
+   birth_fixture_rows acts + WR6), then re-running (env -u PGOPTIONS python3 seen-red/
+   boundary-read-surface/run_fixtures.py -- the env -u strips the session stamp hook's own
+   PGOPTIONS, bound to this repo's autoharn3 deployment, which cannot validate against a scratch
+   world's own kernel.stamp_secret):
+
+     FAILURES: ['wr6b-include-superseded-true-marks-both-legibly',
+                'wr6c-strict-parse-refusal-1', 'wr6c-strict-parse-refusal-TRUE',
+                'wr6c-strict-parse-refusal-yes']
+
+   wr6b failed with `superseded_row=None` (the pre-fix route has no `include_superseded` param at
+   all, so the query string is silently ignored and the superseded row never appears -- exactly
+   the structural exclusion the commission's own text names). wr6c's three legs each failed with
+   `status=200` (the illegal spellings "1"/"TRUE"/"yes" were silently accepted as no-ops, never
+   the typed 422 the fix adds). wr6a and wr6a' (explicit `include_superseded=false`) already
+   passed pre-fix -- expected, since the default path is untouched by construction; their GREEN
+   status pre-fix is not evidence of anything, only the ABSENCE of a false positive.
+
+   The five new VIEW_REGISTRY members are NOT exercised by WR1 at all pre-fix (they are simply
+   absent from `sorted(boundary_service.VIEW_REGISTRY)`, so the loop never reaches them) -- this
+   is the RED state for Part 1 by construction (`VIEW_REGISTRY.get(view)` returns `None` for an
+   unregistered name, and `views_view` refuses every such name with the SAME typed 404 WR2
+   already banks evidence for), verified by reading `views_view`'s own dispatch rather than a
+   second banked transcript.
+
+   A PRE-EXISTING, UNRELATED HAZARD FOUND IN REACH while re-running the (stashed-back) baseline
+   fixture unmodified: `CHAIN_FULL` (this file) stopped at s57, one delta short of s58/s59
+   (design/FABLE-MISSIVES-KERNEL-SPEC.md's six missive_* views, already VIEW_REGISTRY members
+   under an EARLIER, unrelated build) -- WR1's per-view loop 500'd reaching any missive_* member,
+   even on the untouched baseline:
+
+     RuntimeError: psql failed:  ERROR:  relation "wrfx<pid>.missive_delivery_audit" does not
+     exist
+
+   Fixed in reach (CLAUDE.md's engineering-responsibility rule -- this exact constant and this
+   exact loop were already being touched by this build's own additions): `CHAIN_FULL` extended
+   through s59. NOT carried further to the true s68 lineage head -- witnessed live that s61
+   (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md) adds a `key_binding_possession_ref`
+   requirement this fixture's own possession-proof-free `principal_key_bound` birth act cannot
+   satisfy without an unrelated signature ceremony:
+
+     Ledger policy: a FRESH principal_key_bound row (principal_binding_active=true) must name a
+     key_binding_possession_ref (s61, ...) -- this write supplies none.
+
+   `bootstrap/migrate_core.py`'s `_current_head_and_missing` detects the lineage head PER WORLD
+   (never against a hardcoded repo-wide constant), so stopping at s59 keeps WR4's served-vs-
+   actual comparison internally honest -- confirmed by re-running WR4 GREEN below, not assumed.
+
+   Full GREEN transcript (same commit -- serving/boundary_service.py restored, seen-red/
+   boundary-read-surface/run_fixtures.py unchanged from the RED run above -- same live toy db,
+   scratch world wrfx2969552, 44/44 checks ok, 0 FAIL):
+
+     == scaffolding classic world wrfx2969552 (chain ends s59-missive-views.sql) ==
+     == WR1: per-view row-set equality, served vs direct ==
+     [ok] wr1-view-work_edge_blocks_close: status=200 served_n=1 direct_n=1 row_sets_equal=True
+     [ok] wr1-view-discharging_attest: status=200 served_n=1 direct_n=1 row_sets_equal=True
+     [ok] wr1-view-work_violation_history: status=200 served_n=1 direct_n=1 row_sets_equal=True
+     [ok] wr1-view-work_bookkeeping_closes: status=200 served_n=1 direct_n=1 row_sets_equal=True
+     [ok] wr1-view-countersigned_in_force: status=200 served_n=1 direct_n=1 row_sets_equal=True
+     [every other VIEW_REGISTRY member OK too, 30/30 views total, row_sets_equal=True per view]
+     == WR2: unknown view name -> typed 404 ==
+     [ok] wr2-unknown-view-typed-404: status=404 disposition=unknown_view, known=30 views
+          (alphabetical list includes all five new members plus the pre-existing 25)
+     == WR6: GET /rows/current -- include_superseded opt-in, default unchanged ==
+     [ok] wr6a-default-byte-identical-no-marking-field: status=200 served_n=27 direct_n=27
+          row_sets_equal=True superseded_id=12 present=False no_is_current_field=True
+     [ok] wr6a-explicit-false-identical-to-omitted: status=200 row_sets_equal_to_omitted=True
+     [ok] wr6b-include-superseded-true-marks-both-legibly: status=200 superseded_row.id=12
+          (kind=work_opened, is_current=False) superseding_row.id=14 (kind=note, supersedes=12,
+          is_current=True) ground_truth_superseded_current='false' marking_matches_ground_truth=
+          True
+     [ok] wr6c-strict-parse-refusal-1/-TRUE/-yes: status=422 each, detail='include_superseded
+          must be exactly "true" or "false" (or omitted, the default "false") -- strictly
+          parsed, never coerced from another spelling; got <value>'
+
+     ALL WR CHECKS OK (exit 0)

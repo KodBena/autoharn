@@ -482,7 +482,21 @@ from boundary_models import (  # noqa: E402
 # genuinely new route SHAPE, not a VIEW_REGISTRY-style registry growth (see `KindsResponse`'s own
 # docstring in boundary_models.py for why this earns a dedicated route rather than a `/meta`
 # field or a VIEW_REGISTRY entry).
-BOUNDARY_SERVICE_VERSION = "1.3.0"
+# Bumped AGAIN to 1.4.0 (ledger rows 153/154, experience4 panel requests, missive receipt row
+# 149): TWO changes, one of each already-established kind, not a third new kind. (a) FIVE new
+# VIEW_REGISTRY members (work_edge_blocks_close, discharging_attest, work_violation_history,
+# work_bookkeeping_closes, countersigned_in_force) -- registry-only growth, which per the note
+# just above this version deliberately does NOT track; named here only for completeness of this
+# comment's own history, the version arithmetic below does not count it. (b) `GET
+# /d/{deployment}/rows/current` gains ONE new, strictly-typed, opt-in query parameter,
+# `include_superseded` -- the DEFAULT-omitted response is BYTE-IDENTICAL to 1.3.0 (same query,
+# same shape, no new field), so this is not a route-table growth of the (a)/(b)/(kinds) kind
+# above either; it earns the bump anyway because it is a genuine, new, documented capability on
+# an EXISTING route's response contract (a caller who opts in sees a new `is_current` field per
+# row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
+# the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
+# caught missing.
+BOUNDARY_SERVICE_VERSION = "1.4.0"
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -561,6 +575,99 @@ BOUNDARY_SERVICE_VERSION = "1.3.0"
 #   principal_role_bindings.row_id   -- s41 D-5 (bind-role/release-role)
 #   principal_keys.row_id            -- s41 D-5 (bind-key/revoke-key)
 #   principal_competences.row_id     -- s41 D-5 (grant-competence/withdraw-competence)
+# A SIXTH additive registry growth (ledger rows 153/154, work item view-registry-decomposition-
+# views; experience4 panel requests, missive receipt row 149 verbatim: the panel names SEVEN
+# views for an obligation-tree derivation and a commission-decomposition rendering). Two of the
+# seven are DELIBERATELY EXCLUDED here, not silently -- both genuinely exist in the s15..s68
+# lineage (verified by reading their CREATE VIEW below), but NEITHER carries any column this
+# registry's two established pagination shapes (an "id"-shaped bigint or a "slug"-shaped text
+# NATURAL KEY, per this dict's own leading comment) can safely key on, and inventing a third
+# shape is exactly what the amendment spec and this registry's own closed-enumeration posture
+# forbid:
+#   work_edge_obligation   -- EXCLUDED. kernel/lineage/s32-edge-views-single-home.sql's own
+#                             SELECT projects only (from_slug, to_slug) -- the ledger row id each
+#                             arm joins against (`lc.id`) is consulted for the in-force filter
+#                             but never SELECTed, so no row-identifying column survives the
+#                             UNION ALL at all. Worse than the "disclosed non-unique slug"
+#                             precedent above (work_item_violations.slug, model_defeated_rows.
+#                             attest_id): from_slug is a graph ADJACENCY column, so a real work
+#                             tree can hang many out-edges off one from_slug -- keyset-paginating
+#                             on it (`WHERE from_slug > cursor`) would silently drop every
+#                             remaining edge sharing a from_slug the moment any ONE of them is
+#                             served past the cursor, on every page boundary that happens to
+#                             land inside a repeated value, not merely at a rare tie (ADR-0002:
+#                             a silent, class-shaped data loss the existing "disclosed non-
+#                             unique" precedent does not carry, so it is not authorized by that
+#                             precedent). No column here is a value a client can safely resume
+#                             from without a machine-checkable gap.
+#   work_item_descendants  -- EXCLUDED. kernel/lineage/s28-work-parent-edge.sql's own SELECT
+#                             projects (ancestor_slug, descendant_slug, depth) -- a recursive
+#                             transitive closure, so NEITHER slug column is unique (one
+#                             descendant has one row per ancestor above it in the tree, and vice
+#                             versa) and neither is a graph-adjacency column in the SAME
+#                             non-keyset-safe shape as work_edge_obligation's from_slug above.
+#                             Same disposition, same reason: no column here is a safe keyset
+#                             cursor.
+# Both are real, queryable relations today -- this exclusion is a registry-membership gap, not a
+# claim the views are broken or unused; `work_item_strict_blockers()` (the SQL function, kernel-
+# side) already walks `work_edge_obligation` for the obligation-tree computation this commission
+# was asked to serve, and a future spec MAY mint the two-arg keyset shape (`ORDER BY from_slug,
+# <ledger-id tiebreaker> WHERE (from_slug, id) > (cursor_slug, cursor_id)`) these views would
+# need -- that is new pagination-shape design, a Fable-authored spec's job (CLAUDE.md
+# ORCHESTRATION), not a registry entry authored in passing here. The remaining FIVE views serve
+# safely under the two existing shapes, verified per-view below (CREATE VIEW cited, key column
+# uniqueness checked against the SAME "disclosed non-unique is fine, no-column-at-all is not"
+# discriminator):
+#   work_edge_blocks_close.edge_row_id     -- kernel/lineage/s32-edge-views-single-home.sql. The
+#                                             work_depends_on row's own ledger id, SELECTed
+#                                             directly (unlike work_edge_obligation one view
+#                                             over) -- id-shaped, unique per row (one
+#                                             blocks-close edge is one work_depends_on row).
+#   discharging_attest.regards_id          -- kernel/lineage/s32-edge-views-single-home.sql,
+#                                             widened in place by kernel/lineage/
+#                                             s56-reservation-residue.sql (verdict IN ('attest',
+#                                             'attest_with_reservations'), column list
+#                                             UNCHANGED). regards_id is id-shaped but NOT unique
+#                                             (more than one actor can attest the same row) --
+#                                             the SAME disclosed-non-unique shape model_defeated_
+#                                             rows.attest_id above already registers safely (a
+#                                             cursor value is never silently unsafe merely for
+#                                             repeating; the residual gap it carries -- a page
+#                                             boundary landing inside a repeated value -- is the
+#                                             SAME one every id-shaped entry in this registry
+#                                             already lives with, precedent above).
+#   work_violation_history.slug            -- kernel/lineage/s37-violation-disposition.sql,
+#                                             re-issued by kernel/lineage/s39-blocks-start.sql
+#                                             (adds the blocks_start_cycle arm, unchanged column
+#                                             list: violation, slug, detail, target_id,
+#                                             disposition_id, disposition_resolution,
+#                                             disposition_basis, disposition_witness,
+#                                             disposition_in_force, target_in_force,
+#                                             target_retraction_id). slug is text, NOT unique
+#                                             (a slug can carry more than one violation class) --
+#                                             the identical precedent work_item_violations.slug
+#                                             above already registers (same view family, same
+#                                             column, one reader-shape over: work_item_violations
+#                                             narrows to open debt, work_violation_history is the
+#                                             declared raw/history reader, unfiltered).
+#   work_bookkeeping_closes.close_id       -- kernel/lineage/s38-bookkeeping-close.sql. close_id
+#                                             is the work_closed row's own ledger id, SELECTed
+#                                             directly -- id-shaped, unique per row (one
+#                                             bookkeeping close is one work_closed row).
+#   countersigned_in_force.id              -- present since kernel/lineage/
+#                                             s20-obligation-grants-and-view-refresh.sql, latest
+#                                             re-issue kernel/lineage/
+#                                             s68-typed-absence-dispositions.sql (the +2-column
+#                                             s68 append, ledger row 153's own build touching
+#                                             this same lineage delta). SAME full ledger-row
+#                                             column shape as ledger_current (id, ts, session,
+#                                             kind, ... every ledger column) further filtered to
+#                                             rows an in-force discharging_attest regards -- id
+#                                             is the ledger row's own bigint id, unique per row,
+#                                             the identical shape /rows/current already serves
+#                                             (this view exposes NO column /rows/current does
+#                                             not already serve; the boundary's read posture is
+#                                             unchanged by adding it).
 VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "question_status": ("question_id", "id"),
     "review_gap": ("id", "id"),
@@ -599,6 +706,14 @@ VIEW_REGISTRY: dict[str, tuple[str, str]] = {
     "missive_stale": ("id", "id"),
     "missive_delivery_audit": ("id", "id"),
     "missive_open_threads": ("missive_thread", "slug"),
+    # A SIXTH additive registry growth (ledger rows 153/154) -- see this dict's own leading
+    # comment for the full per-view key-column derivation and the two named exclusions
+    # (work_edge_obligation, work_item_descendants).
+    "work_edge_blocks_close": ("edge_row_id", "id"),
+    "discharging_attest": ("regards_id", "id"),
+    "work_violation_history": ("slug", "slug"),
+    "work_bookkeeping_closes": ("close_id", "id"),
+    "countersigned_in_force": ("id", "id"),
 }
 
 # The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
@@ -1638,6 +1753,29 @@ def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
     return None
 
 
+def _strict_bool_flag(name: str, value: str) -> tuple[bool, JSONResponse | None]:
+    """Ledger row 154 (bulk superseded read): the ONE strict-boolean query-flag parser, named
+    once (ADR-0012 P1) for `include_superseded` and any future opt-in flag on this shape. FastAPI's
+    own `bool` query-param coercion is NOT used here on purpose -- it accepts a wide, undisclosed
+    spelling set ("1"/"yes"/"on"/"True"/...), which is exactly the silent-default risk the
+    commission's own text forbids ("anything but the exact typed values is the boundary's
+    existing 422 shape, never a silent default"). The closed, exact vocabulary is `""` (the
+    parameter omitted -- the pre-existing, unchanged default) and the two literal spellings
+    `"true"`/`"false"`; anything else is a typed 422 naming the closed vocabulary, never a guess.
+    Returns `(flag_value, None)` on a legal spelling, or `(False, <422 JSONResponse>)` on an
+    illegal one (the caller returns the response and never reaches the flag_value)."""
+    if value == "":
+        return False, None
+    if value == "true":
+        return True, None
+    if value == "false":
+        return False, None
+    return False, JSONResponse(status_code=422, content={
+        "detail": f"{name} must be exactly \"true\" or \"false\" (or omitted, the default "
+                  f"\"false\") -- strictly parsed, never coerced from another spelling; "
+                  f"got {value!r}"})
+
+
 def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
     """A11 item 2: the leading existence check `GET /rows/{id}/history` shares with its sibling
     `GET /rows/{id}` -- named ONCE (ADR-0012 P1) so a nonexistent in-domain id gets the IDENTICAL
@@ -2230,7 +2368,8 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         )
 
     @app.get("/d/{deployment}/rows/current")
-    def rows_current(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
+    def rows_current(deployment: str, after_id: int = 0, limit: int = 100,
+                      include_superseded: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
@@ -2242,11 +2381,40 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         oor = _out_of_range_id("after_id", after_id)
         if oor is not None:
             return oor
+        # Ledger row 154 (rows-bulk-superseded-read): ONE new, opt-in, strictly-typed query
+        # param -- default omitted/"" behavior is BYTE-IDENTICAL to pre-this-build (same
+        # `ledger_current` query below, unchanged), never silently widened. `_strict_bool_flag`
+        # is the ONE parser for this closed true/false/omitted vocabulary (ADR-0012 P1); an
+        # illegal spelling 422s here, before any query runs.
+        want_superseded, bad_flag = _strict_bool_flag("include_superseded", include_superseded)
+        if bad_flag is not None:
+            return bad_flag
+        if not want_superseded:
+            rows = _query_json(
+                cfg,
+                f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
+                f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
+                f"ORDER BY id LIMIT {limit}) t;",
+            )
+            return JSONResponse(content=rows)
+        # `include_superseded=true`: reads the RAW `ledger` table (record semantics, every row
+        # ever written, current or superseded -- the same raw-table read `rows_asof` below
+        # already uses one route over) rather than the `ledger_current` view, so a superseded
+        # row is no longer structurally excluded. Superseded-ness is made legible PER ROW via
+        # `is_current` -- derived from the EXACT predicate `ledger_current`'s own view
+        # definition already commits to (`NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes
+        # = l.id)`), the SAME correlated-subquery shape `rows_asof` and kernel/lineage's own
+        # `countersigned_in_force`/`ledger_current` views already use -- never a new, boundary-
+        # invented notion of "current" (ADR-0012 P2: the boundary derives, it does not author a
+        # second truth). A panel toggling current-vs-superseded reads this one field; no second
+        # query is needed to tell the two apart.
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
-            f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
-            f"ORDER BY id LIMIT {limit}) t;",
+            f"(SELECT l.*, NOT EXISTS (SELECT 1 FROM {cfg.schema}.ledger s "
+            f"WHERE s.supersedes = l.id) AS is_current "
+            f"FROM {cfg.schema}.ledger l WHERE l.id > {after_id} "
+            f"ORDER BY l.id LIMIT {limit}) t;",
         )
         return JSONResponse(content=rows)
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""seen-red/boundary-read-surface/run_fixtures.py -- WR1-WR5, design/
+"""seen-red/boundary-read-surface/run_fixtures.py -- WR1-WR6, design/
 FABLE-BOUNDARY-READ-SURFACE-SPEC.md §"Witnesses" (ratified ledger decision row 1652, amending
-design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ledger row 1631). Real infra, no mocks:
-a CLASSIC-scaffolded world through the full kernel/lineage chain (s15..s50, so every one of
-`VIEW_REGISTRY`'s eleven views is a genuinely present relation, not merely a capability_absent
-leg -- WR1's "per view, not umbrella" bar needs a world where every view actually exists), a real
+design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ledger row 1631); WR6 added under ledger
+rows 153/154 (view-registry-decomposition-views / rows-bulk-superseded-read). Real infra, no
+mocks: a CLASSIC-scaffolded world through the full kernel/lineage chain (s15..s59 -- CHAIN_FULL's
+own comment below has the full history of the pre-existing s58/s59 gap this build closed, and
+why s59 rather than the true s68 lineage head), so every one of `VIEW_REGISTRY`'s members is a
+genuinely present relation, not merely a capability_absent leg --
+WR1's "per view, not umbrella" bar needs a world where every view actually exists), a real
 `serving.boundary_service` uvicorn subprocess bound to loopback.
 
 REUSE, NOT RE-DERIVATION (ADR-0012 P1): every scaffolding helper below (`scaffold_classic`,
@@ -84,12 +87,29 @@ CHAIN_B = bs_fixtures.CHAIN_B
 PGHOST, PGDB = bs_fixtures.PGHOST, bs_fixtures.PGDB
 check = bs_fixtures.check
 
-# The full kernel/lineage chain through s57 -- every VIEW_REGISTRY member is a genuinely present
+# The full kernel/lineage chain through s59 -- every VIEW_REGISTRY member is a genuinely present
 # relation on this chain (s44 model_attestations, s46 credited_current/model_defeated_rows, s36
 # standing_decisions -- none of which CHAIN_B alone, s43-headed, carries; s56's
-# reservations_outstanding/review_verdicts are the two newest members, closing-batch build ledger
-# rows 1176/1178 -- s57 carries no view of its own but is included so this fixture's world
-# genuinely sits at the current lineage head, matching WR4's meta.lineage_head expectation).
+# reservations_outstanding/review_verdicts are two more; s59's SIX missive_* views are the newest
+# before this build's own five). PRE-EXISTING HAZARD FOUND AND FIXED IN REACH (CLAUDE.md's
+# engineering-responsibility rule -- this exact CHAIN_FULL constant and this exact WR1 loop are
+# already being touched by this build's own birth_fixture_rows/WR6 additions): this constant used
+# to stop at s57, one short of s58/s59 (design/FABLE-MISSIVES-KERNEL-SPEC.md, ledger row 1263) --
+# the missive_* views had been added to VIEW_REGISTRY under that spec WITHOUT ever extending this
+# fixture's own chain, so WR1's per-view loop 500'd (a bare `relation ... does not exist`, not a
+# typed refusal) the moment it reached any missive_* member, on the UNMODIFIED baseline, before
+# this build's own five-view addition ever ran -- witnessed live (both files stashed back to
+# HEAD, re-run, same failure) rather than assumed. STOPPED at s59, not carried further to the
+# true s68 lineage head, on the SAME no-retroactive-sweep grounds ADR-0000's Neutral clause
+# names: s61 (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md) adds a `key_binding_possession_ref`
+# requirement to `principal_key_bound` this fixture's own possession-proof-free birth cannot
+# satisfy without a whole signature ceremony unrelated to this commission's own two work items --
+# witnessed live too (chain extended to s68, SAME birth ceremony, refused: "must name a
+# key_binding_possession_ref"). `_current_head_and_missing` detects the lineage head PER WORLD
+# (bootstrap/migrate_core.py), not against a hardcoded repo-wide constant, so WR4's served-vs-
+# actual comparison stays internally consistent at s59 -- stopping here does not make WR4 dishonest,
+# it just means this fixture's own world is not (and was never, even at s57) claiming to be the
+# repo's bleeding-edge head, only a genuinely self-consistent one.
 CHAIN_FULL = CHAIN_B + [
     "s44-model-identity-attestation.sql", "s45-standing-lifecycle.sql",
     "s46-credited-views.sql", "s47-claim-on-closed-refusal.sql",
@@ -98,6 +118,7 @@ CHAIN_FULL = CHAIN_B + [
     "s52-artifact-witness-check.sql", "s53-belief-substrate.sql",
     "s54-belief-views.sql", "s55-dispatch-grain-independence.sql",
     "s56-reservation-residue.sql", "s57-obligation-revocation-event.sql",
+    "s58-missive-substrate.sql", "s59-missive-views.sql",
 ]
 
 
@@ -161,7 +182,7 @@ def direct_view_rows(world: str, view: str) -> list:
     return json.loads(out)
 
 
-def birth_fixture_rows(base: str, world: str, author: int) -> None:
+def birth_fixture_rows(base: str, world: str, author: int) -> dict[str, int]:
     """Populates every VIEW_REGISTRY member with at least one row, through the boundary's OWN
     write routes (never a raw INSERT -- this fixture is itself a served-boundary consumer).
     `credited_current`/`model_defeated_rows` are DELIBERATELY LEFT EMPTY (both sides of WR1's
@@ -169,7 +190,12 @@ def birth_fixture_rows(base: str, world: str, author: int) -> None:
     populating a genuine `model_defeated_rows` member needs a `principal_competence_granted`
     row with `principal_binding_active` in force, whose exact trigger-derived shape is s41/s45
     machinery well outside this amendment's own scope to re-derive here; named rather than
-    silently assumed."""
+    silently assumed.
+
+    Returns a small dict of row ids the WR6 (ledger row 154) witnesses below need: the
+    `superseded_row_id` this function already retracts in place while populating
+    work_item_violations (the SAME act, not a second one minted for WR6's own sake -- ADR-0012
+    P1) and the `superseding_row_id` that retracted it."""
     def w(payload: dict) -> dict:
         status, body = bs_fixtures.http_post(f"{base}/write/ledger", payload)
         if status != 200 or body.get("disposition") != "accepted":
@@ -229,8 +255,8 @@ def birth_fixture_rows(base: str, world: str, author: int) -> None:
                 "work_slug": viol_slug, "work_title": "WR fixture violation"})
     w({"kind": "work_claimed", "statement": "WR fixture violation claim", "actor": author,
        "work_slug": viol_slug})
-    w({"kind": "note", "statement": "WR fixture retracting the opening act", "actor": author,
-       "supersedes": opened["row_id"]})
+    retraction = w({"kind": "note", "statement": "WR fixture retracting the opening act",
+                    "actor": author, "supersedes": opened["row_id"]})
 
     # work_review_gap: a work item closed with work_review_disposition='deferred', undischarged.
     wr_slug = f"wrfx-deferred-{RUN_SUFFIX}"
@@ -283,6 +309,40 @@ def birth_fixture_rows(base: str, world: str, author: int) -> None:
        "principal_competence_band": "wrfx-band", "principal_competence_basis": "wrfx-basis",
        "principal_binding_active": True})
 
+    # work_edge_blocks_close/work_violation_history/work_bookkeeping_closes/discharging_attest/
+    # countersigned_in_force (ledger rows 153/154, the sixth VIEW_REGISTRY growth -- see that
+    # dict's own comment in serving/boundary_service.py). Four of the five new members are
+    # already populated for FREE by acts birthed above, named here rather than silently assumed
+    # (ADR-0000's closure-statement discipline): discharging_attest/countersigned_in_force by
+    # the review_stamp_distinctness 'attest' write on `note` above (kind=review, verdict=attest,
+    # regards=note -- exactly discharging_attest's own predicate, and `note` itself is the row
+    # countersigned_in_force then serves); work_violation_history by the SAME orphaned_by_
+    # retraction act that already populates work_item_violations above (one raw_violations CTE
+    # feeds both readers). work_bookkeeping_closes is the one genuinely NEW act: a work item
+    # opened then closed with work_review_disposition='bookkeeping' and a commit-shaped
+    # work_review_ref (kernel/lineage/s38-bookkeeping-close.sql's own CHECK shape,
+    # ^commit:[0-9a-f]{7,40}$).
+    bk_slug = f"wrfx-bookkeeping-{RUN_SUFFIX}"
+    w({"kind": "work_opened", "statement": "WR fixture bookkeeping open", "actor": author,
+       "work_slug": bk_slug, "work_title": "WR fixture bookkeeping"})
+    w({"kind": "work_closed", "statement": "WR fixture bookkeeping close", "actor": author,
+       "work_slug": bk_slug, "work_resolution": "shipped", "work_witness": "wrfx witness text",
+       "work_review_disposition": "bookkeeping", "work_review_ref": "commit:" + "a" * 7})
+
+    # work_edge_blocks_close: a work_depends_on row with edge_type='blocks-close' -- the one
+    # member of the five with no free ride off an act above (every prior work_depends_on-shaped
+    # act in this file is a plain dependency, not this edge_type).
+    bc_dependent = f"wrfx-bc-dependent-{RUN_SUFFIX}"
+    bc_antecedent = f"wrfx-bc-antecedent-{RUN_SUFFIX}"
+    w({"kind": "work_opened", "statement": "WR fixture blocks-close antecedent", "actor": author,
+       "work_slug": bc_antecedent, "work_title": "WR fixture blocks-close antecedent"})
+    w({"kind": "work_opened", "statement": "WR fixture blocks-close dependent", "actor": author,
+       "work_slug": bc_dependent, "work_title": "WR fixture blocks-close dependent"})
+    w({"kind": "work_depends_on", "statement": "WR fixture blocks-close edge", "actor": author,
+       "work_slug": bc_dependent, "work_depends_on": bc_antecedent, "edge_type": "blocks-close"})
+
+    return {"superseded_row_id": opened["row_id"], "superseding_row_id": retraction["row_id"]}
+
 
 def main() -> int:
     failures: list[str] = []
@@ -307,7 +367,7 @@ def main() -> int:
 
         ts_before = bs_fixtures.psql_tuples("SELECT now()::text;")
         time.sleep(0.05)
-        birth_fixture_rows(base, world, author)
+        birth_ids = birth_fixture_rows(base, world, author)
         time.sleep(0.05)
         ts_mid = bs_fixtures.psql_tuples("SELECT now()::text;")
         time.sleep(0.05)
@@ -447,6 +507,81 @@ def main() -> int:
               f"deployment_saturated={len(dep_saturated)} (expected >= {expected_excess}) "
               f"statuses={sorted({r[1] for r in results})}",
               failures)
+
+        # ==================== WR6: bulk superseded read (ledger row 154) ========================
+        print("== WR6: GET /rows/current -- include_superseded opt-in, default unchanged ==")
+        superseded_id = birth_ids["superseded_row_id"]
+        superseding_id = birth_ids["superseding_row_id"]
+
+        # WR6a: the DEFAULT (param omitted) is byte-identical to the pre-this-build response --
+        # compared against a fresh direct read of `ledger_current` (the SAME ground-truth
+        # comparison WR1 already uses one route over), and the superseded row must be ABSENT
+        # (ledger_current's own structural exclusion, unchanged) with no `is_current` field
+        # anywhere in the response (the byte-identical-shape half of the claim, not just the
+        # row-set half).
+        status_a, served_a = bs_fixtures.http_get(f"{base}/rows/current?limit=1000")
+        direct_current = direct_view_rows(world, "ledger_current")
+        served_ids_a = {r["id"] for r in served_a} if isinstance(served_a, list) else set()
+        no_is_current_field = (isinstance(served_a, list)
+                                and all("is_current" not in r for r in served_a))
+        check("wr6a-default-byte-identical-no-marking-field",
+              status_a == 200 and isinstance(served_a, list)
+              and row_set_equal(served_a, direct_current)
+              and superseded_id not in served_ids_a
+              and no_is_current_field,
+              f"status={status_a} served_n={len(served_a) if isinstance(served_a, list) else '?'} "
+              f"direct_n={len(direct_current)} row_sets_equal="
+              f"{row_set_equal(served_a, direct_current) if isinstance(served_a, list) else '?'} "
+              f"superseded_id={superseded_id} present={superseded_id in served_ids_a} "
+              f"no_is_current_field={no_is_current_field}",
+              failures)
+
+        # WR6a': explicit include_superseded=false is the SAME default -- not merely "omitted"
+        # takes the fast path while a typed "false" takes some other path (the parser's own
+        # closed vocabulary treats both identically, per _strict_bool_flag's own docstring).
+        status_a2, served_a2 = bs_fixtures.http_get(f"{base}/rows/current?limit=1000&include_superseded=false")
+        check("wr6a-explicit-false-identical-to-omitted",
+              status_a2 == 200 and isinstance(served_a2, list) and row_set_equal(served_a2, served_a),
+              f"status={status_a2} row_sets_equal_to_omitted="
+              f"{row_set_equal(served_a2, served_a) if isinstance(served_a2, list) else '?'}",
+              failures)
+
+        # WR6b: include_superseded=true -- the superseded row is now PRESENT, marked
+        # is_current=false; the row that superseded it (never itself superseded) is present,
+        # marked is_current=true; every row's marking agrees with a ground-truth EXISTS query
+        # (the SAME predicate the served route computes, checked independently here rather than
+        # trusting the served value against itself).
+        status_b, served_b = bs_fixtures.http_get(f"{base}/rows/current?limit=1000&include_superseded=true")
+        by_id = {r["id"]: r for r in served_b} if isinstance(served_b, list) else {}
+        superseded_row = by_id.get(superseded_id)
+        superseding_row = by_id.get(superseding_id)
+        ground_truth_superseded_current = bs_fixtures.psql_tuples(
+            f"SET ROLE {world}_rw; SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM {world}.ledger s "
+            f"WHERE s.supersedes = {superseded_id}) THEN 'true' ELSE 'false' END;")
+        marking_matches_ground_truth = (
+            superseded_row is not None
+            and str(superseded_row.get("is_current")).lower()
+            == ground_truth_superseded_current.lower())
+        check("wr6b-include-superseded-true-marks-both-legibly",
+              status_b == 200 and superseded_row is not None and superseding_row is not None
+              and superseded_row.get("is_current") is False
+              and superseding_row.get("is_current") is True
+              and marking_matches_ground_truth,
+              f"status={status_b} superseded_row={superseded_row} superseding_row={superseding_row} "
+              f"ground_truth_superseded_current={ground_truth_superseded_current!r} "
+              f"marking_matches_ground_truth={marking_matches_ground_truth}",
+              failures)
+
+        # WR6c: the strict-parse refusal -- anything but "true"/"false"/omitted is a typed 422,
+        # never a silent default (commission text, verbatim). Two illegal spellings a LENIENT
+        # bool-query-param coercion would happily accept ("1", "TRUE") both refuse here.
+        for illegal in ("1", "TRUE", "yes"):
+            status_c, body_c = bs_fixtures.http_get(
+                f"{base}/rows/current?include_superseded={illegal}")
+            check(f"wr6c-strict-parse-refusal-{illegal}",
+                  status_c == 422 and isinstance(body_c, dict) and "detail" in body_c
+                  and "include_superseded" in body_c["detail"],
+                  f"status={status_c} body={body_c}", failures)
 
     finally:
         for p in procs:
