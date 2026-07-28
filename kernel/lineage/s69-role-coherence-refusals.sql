@@ -321,7 +321,13 @@ COMMENT ON FUNCTION :"schema".validate_review_witness_existence() IS
 -- re-issue: s21 (kernel/lineage/s21-session-aware-distinctness.sql) (its only prior definition --
 -- confirmed, grepped, before authoring this delta: no s22..s68 file re-issues this function). The
 -- three pre-existing branches (must-name-regards, must-resolve-earlier, no-self-countersign) are
--- BYTE-IDENTICAL below; ONE new block appended after them.
+-- BYTE-IDENTICAL below; ONE new block appended after them. DISCLOSED DEVIATION beyond the body
+-- (fresh-context review finding, autoharn3 row 253): this re-issue's SET search_path is
+-- ':schema, :kern, pg_temp' where s21's was ':schema, pg_temp' -- widened to match every other
+-- s69 element's uniform preamble; functionally inert (no unqualified kern-schema reference
+-- exists in this body; existing name resolution unchanged, reviewer-verified), stated here so
+-- the byte-identical claim above is honest about its scope: the BRANCHES are byte-identical,
+-- the function preamble is not.
 -- prior-body-sha256: 54bccb60fc6a8b92a26c01171f466e1528186e92a77b85f0a651cfe140223d6d (s21-session-aware-distinctness.sql)
 -- ============================================================================================
 CREATE OR REPLACE FUNCTION :"schema".validate_review() RETURNS trigger LANGUAGE plpgsql
