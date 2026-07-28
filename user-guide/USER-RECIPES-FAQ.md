@@ -1470,11 +1470,14 @@ strict close).
 Fable-authored 2026-07-28 under work item work-role-doctrine-faq (autoharn3 row 170,
 maintainer-commissioned row 168c: current practice "hap-hazard", taxonomy possibly too
 coarse, careful treatment wanted). Every empirical claim cites the filed census
-design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall; no live A:B:C loop
-has run on this section yet and this marker does not claim one did. The maintainer has
-not yet ratified the SHOULD-clauses below — until he has, they are the coordinator's
-reasoned proposal, binding nobody. Removal condition: strike when a real A:B:C
-attestation covers this section and the maintainer has dispositioned the proposals. -->
+design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md rather than recall. A second-Fable
+ADR-0018 consult reviewed this section same-day with web prior art
+(design/CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md, incl. its disclosed deviation) and
+its corrections are applied below; that is a consult, not an A:B:C legibility loop,
+and this marker claims only what ran. The maintainer has not yet ratified the
+SHOULD-clauses or the three candidate deltas — until he has, they are reasoned
+proposals, binding nobody. Removal condition: strike when a real A:B:C attestation
+covers this section and the maintainer has dispositioned the proposals. -->
 
 ## Work-unit role assignment: who opens, claims, closes, and reviews
 
@@ -1501,7 +1504,13 @@ claimed items in autoharn2 are a visible backlog, not a defect, *provided* each 
 item carries its visible current rationale (the standing rule from the 2026-07-23
 directive: executable-now, blocked-on-named-thing, awaiting-maintainer, or closed with
 reason — an item sitting open with no stated why is itself a defect). The opener's one
-obligation is that rationale, written into the opening statement.
+gated obligation is that rationale, written into the opening statement. A second
+obligation is convention, not gate (added on the 2026-07-28 consult's finding): an
+item intended to be claimed carries a definition-of-done a zero-context closer could
+adjudicate against (ADR-0017 applied to item text), and its dependencies as typed
+edges (`blocks-start`/`blocks-close`) rather than prose — the close-attestation and
+regards-the-successor rules below have nothing to bite on without it. Change-control
+practice puts acceptance criteria in the change request, not in the closer's head.
 
 **Must the principal that opened the item also close it?** No — and forcing that would
 invert the real accountability. Closure is the *owner's* attestation that the work is
@@ -1515,14 +1524,20 @@ claimant (evidence §4, from the live trigger bodies). A close by a different pr
 than the claimant is representable and silent. Until that changes, treat closer ≠
 claimant as a handoff that must be made visible: the incoming owner claims first
 (multiple claims are legal by design; `work_item_current` resolves last-claim-wins),
-then closes as themselves. A silent cross-identity close is exactly the "haphazard"
-shape this section exists to retire.
+then closes as themselves. That claim-over-a-live-claim by a distinct actor IS the
+handoff's entire record — no new ledger kind is needed (the 2026-07-28 consult
+demoted its own instinct for one on the named-consumer test), but the same shape is
+also what a claim-steal would look like, so the role-census view below is what makes
+the two distinguishable by inspection. A silent cross-identity close is exactly the
+"haphazard" shape this section exists to retire.
 
 **Who claims — the orchestrator, or the agent actually doing the work?** The identity
 that will *perform* claims. Here is where the census says our practice, not our
 schema, is too coarse: the principal registry already carries the finer identities
-(`author`, `reviewer`, subagent-class delegates, and since s64 the `dispatch mint`
-verb that mints a delegate principal against a commission row), yet every claim ever
+(`author`, `reviewer`, subagent-class delegates, and the repo's own `autoharn
+dispatch` verb — design/FABLE-DISPATCH-MECHANICS-SPEC.md; s64 supplies the kernel
+side, the delegation-condition columns and the scoped chain walk, while the mint verb
+itself is repo-local and not yet scaffolded into fresh worlds), yet every claim ever
 recorded was `author`'s. When a commissioned builder executes, the honest record is a
 claim by the minted delegate (or at minimum an opening/claiming statement naming the
 dispatch), so that "who actually did this" is a query, not an archaeology exercise
@@ -1551,7 +1566,10 @@ Four rules, each with its specimen or refusal already in the record:
    author's own stop-gate discipline, not by any mechanism; the s48 witness-existence
    trigger checks that a cited row exists, not that it is the right row or even
    review-shaped (evidence §3 specimen 1 is a witness-ref pointing at a
-   `work_claimed` row, accepted silently).
+   `work_claimed` row, accepted silently). This rule is the third candidate delta,
+   not merely convention (the 2026-07-28 consult's finding — the section's own worked
+   negative specimen was the one failure it declined to mechanize): refuse a `review`
+   whose `regards` row has an unsuperseded successor, teaching "cite the successor."
 4. **The refusing reviewer is the preferred re-reviewer.** The verifier who rejected
    is the one who knows what the rejection meant — the same reason regulated practice
    routes a CAPA's verification back to the QA identity that raised the
@@ -1569,10 +1587,52 @@ three narrower gaps, two mechanical and one habitual: (a) closer-is-claimant is
 enforced nowhere; (b) the s48 witness-ref check verifies existence but not shape, so
 a claim row can silently stand as a "review witness"; (c) `review_detail` — the only
 place independence and grade are recorded — has zero adoption outside experience4.
-(a) and (b) are candidate fail-safe kernel deltas (they only ADD refusals; the
-class-ratification of 2026-07-09 would cover both) — proposed here, not decided; the
-maintainer's disposition governs. (c) is not a delta at all: it is this section,
-applied.
+(a) and (b) are candidate fail-safe kernel deltas, joined by (d)
+review-regards-in-force (fix-gate rule 3's mechanization, added on the 2026-07-28
+consult's finding) — all three only ADD refusals; the class-ratification of
+2026-07-09 covers them — proposed here, not decided; the maintainer's disposition
+governs. Delta (b) ships ONLY in the per-close-shape enumeration the planning
+subsection below states; its flat "review/finding only" form would refuse honest
+planning closes and must not ship. (c) is not a delta at all: it is this section,
+applied — and the role-census view that serves it has its consumers named:
+`./pickup`-time hydration ("who owns what right now") and post-hoc RCA ("who was
+accountable when this shipped"); a view "for visibility" alone would fail the
+named-consumer test this project applies to its own proposals first.
+
+**Planning, restructuring, and decomposition — the doctrine one level up** (added
+2026-07-28, consult-reviewed). A decomposition is itself authored content: the child
+items, edges, and acceptance criteria a planner writes can be wrong the way code can,
+so every rule above recurses onto it. The planner never countersigns their own
+decomposition above `self-review` (the stamp-distinctness refusal already covers the
+mechanized part); the reviewer who countersigned the original plan is the preferred
+reviewer of its restructuring; and plan-before-build is already mechanizable today as
+the two-gate composition documented under "Review discipline" (`blocks-start` edges
+plus `decomposition_review`). Three specifics:
+
+1. **Composite parents: the shape-owner claims at decomposition time.** A composite
+   parent is often never *performed*, only structured — so "accountability rides the
+   claim" reads as: the decomposer claims the parent when decomposing, and the claim
+   records "I own this tree's shape," not "I will perform it." Its eventual close is
+   then ordinary under the closer-is-claimant rule — no trigger carve-out needed,
+   and deliberately none proposed: a bookkeeping exemption in the refusal itself
+   would reopen the hole the delta closes.
+2. **Self-re-scoping is self-review in disguise.** The live hazard of restructuring
+   is the performer narrowing an item's scope at close time until "done" becomes
+   reachable — the closure-statement failure ADR-0000's 2026-07-02 amendment names
+   ("the class gets named at exactly the scope of the fix already built"), operating
+   at work-item grain. Doctrine: a superseding open or cascade that moves a claimed
+   item's finish line gets the same verification posture as a close, and never
+   solely by the identity whose finish line it moves. Convention-plus-visibility
+   today, stated honestly per ADR-0011 Rule 1: a refusal would need a decidable
+   discriminator between self-serving narrowing and legitimate coordinator
+   restructuring, and none exists yet.
+3. **A planning item's witness is its decomposition — stated decidably.** For `row:`
+   witness citations, the legal shapes are `review`/`finding` rows generally, PLUS
+   `work_opened` rows of children where the closing slug has in-force parent edges
+   to them; `bookkeeping` closes cite `commit:<sha>`, which the s48 `row:` check
+   never touches, so they are unaffected by construction. (The earlier "per
+   resolution kind" phrasing was not decidable — `work_resolution` has no "planning"
+   member — and was corrected by the consult before anyone built it.)
 
 ## Classifying audit/diagnostic findings
 
