@@ -375,29 +375,60 @@ def get_all_rows(base: str, path: str, cursor: str = "after_id", limit: int = 10
     'slug' (for `after_slug`), overridden per-path by `_ID_FIELD_OVERRIDE`/`_SLUG_FIELD_OVERRIDE`
     below for the handful of views/routes keyed on a differently-named column (never guessed;
     both dicts are this module's own disclosed duplication of `VIEW_REGISTRY`'s key-column
-    choices, see their own comment)."""
+    choices, see their own comment).
+
+    ROUND-3 FIX (ledger rows 153/154, coordinator's THIRD fresh-context re-review of the
+    VIEW_REGISTRY-pagination stack): this function is the boundary's OTHER half of its own
+    contract -- `serving/boundary_service.py`'s `views_view` route serves a non-unique-key
+    view's response with an extra per-row field, `_page_tie`, and expects the caller to
+    resupply the LAST served row's own `_page_tie` value as a NEW `after_tie` query param on
+    the next page request (the composite `(key_col, _page_tie)` keyset `_nonunique_tie_group_
+    sql` walks). This function was never updated for that contract when rounds 1-2 shipped it
+    server-side -- `after_tie` defaults to `""` on the server, and `""` sorts below every real
+    md5 digest, so every "next page" request this function issued kept re-supplying the SAME
+    already-served key group, live-witnessed by the reviewer as a genuine infinite loop against
+    `review_gap` at `limit=1` (this repo's OWN `led.tmpl`/`pickup.tmpl` walk that view for
+    real). `after_tie_value` below is `None` until a response actually carries `_page_tie` at
+    least once; while it stays `None`, `after_tie` is NEVER added to the request params at all
+    -- a unique-key view's own walk (whose responses never carry `_page_tie`) is BYTE-IDENTICAL
+    to this function's pre-round-3 behavior, witnessed with a real request-log capture showing
+    no `after_tie` param on any request for such a view."""
     rows: list[dict] = []
     if cursor == "after_id":
         id_field = _ID_FIELD_OVERRIDE.get(path.rsplit("/", 1)[-1], "id")
         after_id = 0
+        after_tie_value: str | None = None
         while True:
-            page = get_json(base, path, {"after_id": after_id, "limit": limit})
+            params: dict[str, Any] = {"after_id": after_id, "limit": limit}
+            if after_tie_value is not None:
+                params["after_tie"] = after_tie_value
+            page = get_json(base, path, params)
             if not isinstance(page, list) or not page:
                 break
             rows.extend(page)
-            after_id = page[-1][id_field]
+            last = page[-1]
+            after_id = last[id_field]
+            if "_page_tie" in last:
+                after_tie_value = last["_page_tie"]
             if len(page) < limit:
                 break
         return rows
     if cursor == "after_slug":
         slug_field = _SLUG_FIELD_OVERRIDE.get(path.rsplit("/", 1)[-1], "slug")
         after_slug = ""
+        after_tie_value = None
         while True:
-            page = get_json(base, path, {"after_slug": after_slug, "limit": limit})
+            params = {"after_slug": after_slug, "limit": limit}
+            if after_tie_value is not None:
+                params["after_tie"] = after_tie_value
+            page = get_json(base, path, params)
             if not isinstance(page, list) or not page:
                 break
             rows.extend(page)
-            after_slug = page[-1][slug_field]
+            last = page[-1]
+            after_slug = last[slug_field]
+            if "_page_tie" in last:
+                after_tie_value = last["_page_tie"]
             if len(page) < limit:
                 break
         return rows
@@ -440,6 +471,26 @@ _ID_FIELD_OVERRIDE: dict[str, str] = {
     # defaulted to 'id', a KeyError on the FIRST page (neither view carries a bare 'id' column).
     "reservations_outstanding": "review_id",
     "review_verdicts": "review_id",
+    # Round-3 fix (ledger rows 153/154, coordinator's third fresh-context re-review): the SAME
+    # latent KeyError class, found by applying the identical check to EVERY VIEW_REGISTRY member
+    # rather than only the two the reviewer named (this stack's own established discipline --
+    # ADR-0000 Rule 2(a), "check the universe outward"). Two are this build's own new views
+    # (ledger row 153's view-registry-decomposition-views work item): discharging_attest keys
+    # on regards_id, work_bookkeeping_closes on close_id, work_edge_blocks_close on
+    # edge_row_id -- none is the default 'id'. FOUR MORE are PRE-EXISTING, predating this build
+    # entirely (kernel/lineage/s41-principal-bindings-and-relations.sql's own D-5 views, legacy-
+    # led-retirement inventory pass, ledger row 1149): principal_relations/principal_role_
+    # bindings/principal_keys/principal_competences all key on row_id, and NONE had an entry
+    # here despite VIEW_REGISTRY carrying them keyed that way since their own registration --
+    # a caller pulling any of the four through get_all_rows(cursor="after_id") would KeyError
+    # on page 1, exactly the same defect class, simply never previously audited for.
+    "discharging_attest": "regards_id",
+    "work_bookkeeping_closes": "close_id",
+    "work_edge_blocks_close": "edge_row_id",
+    "principal_relations": "row_id",
+    "principal_role_bindings": "row_id",
+    "principal_keys": "row_id",
+    "principal_competences": "row_id",
 }
 
 

@@ -482,22 +482,150 @@ from boundary_models import (  # noqa: E402
 # genuinely new route SHAPE, not a VIEW_REGISTRY-style registry growth (see `KindsResponse`'s own
 # docstring in boundary_models.py for why this earns a dedicated route rather than a `/meta`
 # field or a VIEW_REGISTRY entry).
-BOUNDARY_SERVICE_VERSION = "1.3.0"
+# Bumped AGAIN to 1.4.0 (ledger rows 153/154, experience4 panel requests, missive receipt row
+# 149): TWO changes, one of each already-established kind, not a third new kind. (a) FIVE new
+# VIEW_REGISTRY members (work_edge_blocks_close, discharging_attest, work_violation_history,
+# work_bookkeeping_closes, countersigned_in_force) -- registry-only growth, which per the note
+# just above this version deliberately does NOT track; named here only for completeness of this
+# comment's own history, the version arithmetic below does not count it. (b) `GET
+# /d/{deployment}/rows/current` gains ONE new, strictly-typed, opt-in query parameter,
+# `include_superseded` -- the DEFAULT-omitted response is BYTE-IDENTICAL to 1.3.0 (same query,
+# same shape, no new field), so this is not a route-table growth of the (a)/(b)/(kinds) kind
+# above either; it earns the bump anyway because it is a genuine, new, documented capability on
+# an EXISTING route's response contract (a caller who opts in sees a new `is_current` field per
+# row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
+# the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
+# caught missing.
+BOUNDARY_SERVICE_VERSION = "1.4.0"
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
-# the amendment spec. Each entry names (a) the view/table's own natural ordering KEY COLUMN and
+# the amendment spec. Each entry names (a) the view/table's own natural ordering KEY COLUMN,
 # (b) that column's KIND -- "id" (a bigint, ledger-row-shaped column; paginated exactly like
 # `/rows/current`'s own `after_id`/`limit`) or "slug" (a text natural key; paginated exactly like
-# `/work/items`'s own `after_slug`/`limit` keyset, A11's discipline). No THIRD pagination shape is
-# invented here -- every entry reuses one of the two shapes this service already established
-# (ADR-0012 P1). Key-column choice, per entry, named once here rather than re-derived per
-# request:
-#   question_status.question_id           -- kernel/lineage/s31 (q.id, a ledger row id, aliased)
-#   review_gap.id                         -- kernel/lineage/s15+ (l.id, a ledger row id)
-#   review_stamp_distinctness.review_id   -- kernel/lineage/s17+ (r.id, a ledger row id, aliased)
-#   standing_decisions.id                 -- kernel/lineage/s36 (a ledger row id)
-#   countersign_obligation.scope          -- kernel/lineage/s15 (a TABLE, PRIMARY KEY scope, text)
+# `/work/items`'s own `after_slug`/`limit` keyset, A11's discipline) -- and, as of the ledger
+# rows 153/154 fix round below, (c) whether that key column is UNIQUE per row. No THIRD
+# PAGINATION SHAPE is invented here -- every entry still reuses one of the two shapes this
+# service already established (ADR-0012 P1); the fix round adds a per-shape TIEBREAKER, not a
+# third shape.
+#
+# THE FIX ROUND (ledger rows 153/154, coordinator fresh-context review of commit 6a104c0,
+# CRITICAL finding). `WHERE key_col > cursor ORDER BY key_col LIMIT` -- this registry's own
+# pagination predicate since the v1 amendment -- SILENTLY DROPS rows whenever a NON-unique key
+# value straddles a page boundary: once any one row carrying value V is served, every row NOT
+# YET served that ALSO carries V is permanently unreachable (`key_col > V` excludes them all).
+# Live-reproduced (limit=1 keyset walk, paginated total < direct total) on BOTH commit 6a104c0's
+# new non-unique members (discharging_attest: two attests regarding one row; work_violation_
+# history: two violation kinds on one slug) AND on re-audit of the pre-existing registry
+# (ADR-0000 Rule 2(a)'s "presumption inverted: check the universe outward" -- the reviewer named
+# work_item_violations.slug/model_defeated_rows.attest_id as sharing the identical route code
+# and defect; auditing every OTHER member the same way found TWO MORE genuine instances,
+# review_gap.id and work_review_gap.slug, both empirically reproduced with a constructed
+# duplicate-key fixture -- see seen-red/boundary-read-surface/red.txt's fix-round section for
+# the four reproductions' actual output). A SEVENTH member, missive_stale.id, is marked non-
+# unique on STRUCTURAL grounds only (its own JOIN can fan out one original send across more than
+# one matching reply) -- not empirically reproduced, named honestly rather than silently
+# assumed either way (its own dict-entry comment below has the reasoning and the residual).
+#
+# THE FIX: a per-row CONTENT tiebreaker, applied ONLY to non-unique-key views, keyed on
+# `(key_col, md5(the_view_row::text))` instead of `key_col` alone -- `md5(row::text)` needs no
+# per-view special-casing (it works identically for any view's column set, so it does not
+# re-derive each view's own hidden identity, ADR-0012 P1/P7) and is a genuine per-row VALUE (not
+# a recomputed ordinal/position -- A11's "cursor is a value" honesty, extended one column). The
+# served response for a NON-unique view gains one field per row, `_page_tie` (the tiebreaker
+# value the client resupplies as the new `after_tie` query param to walk past a repeated key
+# value without ever silently skipping a sibling row); the served response for a UNIQUE-key view
+# is BYTE-IDENTICAL to pre-fix-round (ties never occur on a genuinely unique key, so the old,
+# untouched code path is kept verbatim rather than routed through the new machinery at all --
+# witnessed with a literal pre/post diff on work_item_current, seen-red/boundary-read-surface/
+# red.txt). `after_tie` is strictly typed (empty, or exactly 32 lowercase hex chars -- an md5
+# digest's own shape) and refused, typed 422, on a unique-key view (meaningless there, never
+# silently ignored -- A10's own lesson, extended a third time) or on a malformed value (never
+# guessed at).
+#
+# ROUND 2 (coordinator's second fresh-context re-review of 6a104c0+15b2f78): round 1's own text
+# here called the byte-identical-row case "unreached by every reproduction on file" -- WRONG,
+# live-corrected. The reviewer constructed it with an ORDINARY write sequence (the same
+# reviewer attesting the same regarded row twice; nothing in the kernel refuses a repeat
+# attest), witnessed `discharging_attest` emit two rows identical including `_page_tie`, and
+# watched a `limit=1` walk silently drop one forever (`> cursor` excludes BOTH twins once one
+# is served, since they compare equal). REACHABLE UNDER ORDINARY USE, not dormant -- the class
+# is now closed for real, not merely disclosed. `_nonunique_tie_group_sql`'s own docstring has
+# the full analysis (including why a third `row_number()` ordinal was evaluated and REJECTED as
+# unsound under a mid-walk append, and the mid-walk-append case worked through in full); the
+# short version: a byte-identical CONTENT GROUP is now served ATOMICALLY, never split across a
+# page, so there is no per-row discriminator to manufacture at all -- `limit` becomes a soft
+# floor for a non-unique-key view (a page may carry more rows than requested, by exactly the
+# straddling group's own size), bounded by `MAX_TIE_GROUP_EXTRA_ROWS` against a pathologically
+# large duplicate-content group (a typed `tie_group_too_large` refusal, never an unbounded
+# response). Witnessed (seen-red/boundary-read-surface/red.txt's own round-2 section): the
+# reviewer's exact double-attest reproduction (paginated_total == direct_total == 2, BOTH rows
+# served, multiset-equal); a three-identical-rows case; the mid-walk-append case itself (walk
+# page 1, append a byte-identical twin, walk the remainder -- no drop, the twin joins whichever
+# page reaches that group's boundary); the full 54-check round-1 suite still green; a
+# unique-key view still byte-identical (no ordinal/tie leakage of any kind).
+#
+# A cheap, NON-blocking, PRE-EXISTING observation folded in from this same review round: an
+# unbound/unrecognized query parameter is silently dropped SERVICE-WIDE by this file's own
+# FastAPI routing (e.g. `after_tie` supplied on `/rows/current`, a route that never declares
+# it, or any unknown param on any route here) -- ordinary FastAPI/Starlette behavior, not
+# specific to this fix, and not addressed here (service-wide param strictness is its own,
+# separate commission; named so it is not silently unnoticed, per the SAME "surface a hazard
+# you see, don't silently pass it" reflex this whole fix round is an instance of).
+#
+# ROUND 3 (coordinator's THIRD fresh-context re-review). ONE CRITICAL, the other half of this
+# whole stack's own contract: `serving/boundary_cli_client.py`'s `get_all_rows` -- the ACTUAL,
+# PRODUCTION walker `bootstrap/templates/led.tmpl`/`pickup.tmpl` use, as opposed to this
+# fixture family's own test-only walker -- was never taught the `after_tie` contract rounds 1-2
+# minted server-side. Since `after_tie` defaults to `""` server-side and any real md5 digest
+# sorts strictly greater than `""`, every "next page" request this production client issued
+# kept re-supplying the SAME already-served key group forever -- live-witnessed by the reviewer
+# as a genuine infinite loop against `review_gap` (a view `led.tmpl` genuinely walks) at
+# `limit=1`. Fixed in `get_all_rows` itself (see its own docstring); rounds 1-2's SQL design was
+# correct and UNREACHED by its one real consumer until this round. Two client-visible contract
+# changes land alongside it, both DISCLOSED here rather than left implicit: (a)
+# `tie_group_too_large` (`_tie_group_too_large`, above) now answers HTTP 409, not 500 -- this
+# file's own convention reserves 500 for `unclassified_failure` alone, and this refusal is a
+# boundary-understood business rule, not an unclassifiable psql failure; (b) `GET /meta` gains
+# a fourth fact, `max_tie_group_extra_rows` (`MetaResponse`'s own amendment note,
+# boundary_models.py), the `MAX_TIE_GROUP_EXTRA_ROWS` bound made visible so a caller can plan
+# around a `tie_group_too_large` refusal rather than discover the bound only by hitting it
+# (ADR-0016: an advertised limit is part of the contract).
+#
+# A SIBLING HAZARD in the SAME table, fixed in the SAME pass (boundary_cli_client.py's own
+# `_ID_FIELD_OVERRIDE`/`_SLUG_FIELD_OVERRIDE`, its own disclosed duplication of this registry's
+# key-column choices): `discharging_attest` and `work_bookkeeping_closes` (this build's own new
+# views) had no override entry for their non-'id' key columns, so a `get_all_rows(cursor=
+# "after_id")` caller would KeyError on page 1 -- the reviewer's own named instances. Auditing
+# EVERY registry member the same way (this stack's own by-now-standing discipline) found the
+# identical, PRE-EXISTING gap on `work_edge_blocks_close` (this build's own third new view) and
+# on FOUR views predating this build entirely -- `principal_relations`/`principal_role_
+# bindings`/`principal_keys`/`principal_competences` (kernel/lineage/s41's own D-5 views,
+# registered in this dict since the legacy-led-retirement inventory pass, ledger row 1149) --
+# none of which ever had an override entry despite all four keying on `row_id`, not `id`. Fixed
+# in the same commit; see `boundary_cli_client.py`'s own `_ID_FIELD_OVERRIDE` comment for the
+# full accounting.
+#
+# Key-column choice, per entry, named once here rather than re-derived per request:
+#   question_status.question_id           -- kernel/lineage/s31 (q.id, a ledger row id, aliased).
+#                                             UNIQUE (plain WHERE over ledger_current, q.id is the
+#                                             view's own FROM-clause primary key, no join fan-out).
+#   review_gap.id                         -- kernel/lineage/s15+ (l.id, a ledger row id). NOT
+#                                             UNIQUE -- fix-round finding: `JOIN countersign_
+#                                             obligation o ON o.obliges_actor = l.actor` fans out
+#                                             one undischarged row `l` across EVERY obligation
+#                                             scope currently obliging that row's own actor; an
+#                                             actor obliged under two scopes at once (ordinary,
+#                                             not a misconfiguration) produces two review_gap rows
+#                                             sharing the SAME id. Empirically reproduced (fix
+#                                             round's own uniqueness probe: id=29 served twice).
+#   review_stamp_distinctness.review_id   -- kernel/lineage/s17+ (r.id, a ledger row id, aliased).
+#                                             UNIQUE (JOIN g ON g.id = r.regards is an equality
+#                                             join to exactly one ledger row, g.id being a PK).
+#   standing_decisions.id                 -- kernel/lineage/s36 (a ledger row id). UNIQUE (plain
+#                                             WHERE over ledger_current, no join).
+#   countersign_obligation.scope          -- kernel/lineage/s15 (a TABLE, PRIMARY KEY scope, text).
+#                                             UNIQUE (a literal database primary key).
 #   work_item_violations.slug              -- kernel/lineage/s22+ (work_slug, text). NOT
 #                                             target_id (added only at s37) -- live-witnessed
 #                                             against this repo's own pre-s37 `autoharn1` world
@@ -507,18 +635,28 @@ BOUNDARY_SERVICE_VERSION = "1.3.0"
 #                                             slug FROM work_item_violations` reads fine, because
 #                                             that query never needed target_id at all. slug is
 #                                             the column present on every lineage shape this view
-#                                             has ever had; the SAME "cursor is a value, not a
-#                                             position" honesty A11 states for slug-keyed routes
-#                                             applies here too (not unique per row -- a slug can
-#                                             carry more than one violation class).
-#   work_review_gap.slug                  -- kernel/lineage/s29+ (work_slug, text)
-#   model_attestations.row_id             -- kernel/lineage/s44 (lc.id, a ledger row id, aliased)
+#                                             has ever had. NOT UNIQUE per row -- a slug can carry
+#                                             more than one violation class; the fix-round's
+#                                             composite tiebreaker is what actually closes the
+#                                             pagination-loss gap this was previously (wrongly)
+#                                             described as merely "living with."
+#   work_review_gap.slug                  -- kernel/lineage/s29+ (work_slug, text). NOT UNIQUE --
+#                                             fix-round finding, empirically reproduced (a single
+#                                             slug carrying two distinct deferred violation-
+#                                             disposition targets serves both correctly with the
+#                                             tiebreaker; without it, one silently vanished).
+#   model_attestations.row_id             -- kernel/lineage/s44 (lc.id, a ledger row id, aliased).
+#                                             UNIQUE (plain WHERE over ledger_current, no join).
 #   model_defeated_rows.attest_id         -- kernel/lineage/s46+/s50 (a.id, a ledger row id,
-#                                             aliased -- same disclosed non-uniqueness as
-#                                             work_item_violations above: one attestation can
-#                                             match more than one competence grant)
+#                                             aliased). NOT UNIQUE -- one attestation can match
+#                                             more than one competence grant; SAME fix as above,
+#                                             witnessed on a constructed-duplicate fixture leg
+#                                             (fix round; the pre-fix-round comment here called
+#                                             this "living with" the gap, which the reviewer
+#                                             correctly read as contradicted by the CRITICAL
+#                                             finding -- the tiebreaker is the actual closure).
 #   credited_current.id                   -- kernel/lineage/s46 (a ledger row id, byte-identical
-#                                             column shape to ledger_current)
+#                                             column shape to ledger_current). UNIQUE.
 #   work_item_current.slug                -- kernel/lineage/s22+ (work_slug, text -- the SAME view
 #                                             GET /work/items already serves; listed here too
 #                                             because the amendment spec's own v1 allowlist names
@@ -561,44 +699,175 @@ BOUNDARY_SERVICE_VERSION = "1.3.0"
 #   principal_role_bindings.row_id   -- s41 D-5 (bind-role/release-role)
 #   principal_keys.row_id            -- s41 D-5 (bind-key/revoke-key)
 #   principal_competences.row_id     -- s41 D-5 (grant-competence/withdraw-competence)
-VIEW_REGISTRY: dict[str, tuple[str, str]] = {
-    "question_status": ("question_id", "id"),
-    "review_gap": ("id", "id"),
-    "review_stamp_distinctness": ("review_id", "id"),
-    "standing_decisions": ("id", "id"),
-    "countersign_obligation": ("scope", "slug"),
-    "work_item_violations": ("slug", "slug"),
-    "work_review_gap": ("slug", "slug"),
-    "model_attestations": ("row_id", "id"),
-    "model_defeated_rows": ("attest_id", "id"),
-    "credited_current": ("id", "id"),
-    "work_item_current": ("slug", "slug"),
+# A SIXTH additive registry growth (ledger rows 153/154, work item view-registry-decomposition-
+# views; experience4 panel requests, missive receipt row 149 verbatim: the panel names SEVEN
+# views for an obligation-tree derivation and a commission-decomposition rendering). Two of the
+# seven are DELIBERATELY EXCLUDED here, not silently -- both genuinely exist in the s15..s68
+# lineage (verified by reading their CREATE VIEW below), but NEITHER carries any column this
+# registry's two established pagination shapes (an "id"-shaped bigint or a "slug"-shaped text
+# NATURAL KEY, per this dict's own leading comment) can safely key on, and inventing a third
+# shape is exactly what the amendment spec and this registry's own closed-enumeration posture
+# forbid:
+#   work_edge_obligation   -- EXCLUDED. kernel/lineage/s32-edge-views-single-home.sql's own
+#                             SELECT projects only (from_slug, to_slug) -- the ledger row id each
+#                             arm joins against (`lc.id`) is consulted for the in-force filter
+#                             but never SELECTed, so no row-identifying column survives the
+#                             UNION ALL at all. Worse than the "disclosed non-unique slug"
+#                             precedent above (work_item_violations.slug, model_defeated_rows.
+#                             attest_id): from_slug is a graph ADJACENCY column, so a real work
+#                             tree can hang many out-edges off one from_slug -- keyset-paginating
+#                             on it (`WHERE from_slug > cursor`) would silently drop every
+#                             remaining edge sharing a from_slug the moment any ONE of them is
+#                             served past the cursor, on every page boundary that happens to
+#                             land inside a repeated value, not merely at a rare tie (ADR-0002:
+#                             a silent, class-shaped data loss the existing "disclosed non-
+#                             unique" precedent does not carry, so it is not authorized by that
+#                             precedent). No column here is a value a client can safely resume
+#                             from without a machine-checkable gap.
+#   work_item_descendants  -- EXCLUDED. kernel/lineage/s28-work-parent-edge.sql's own SELECT
+#                             projects (ancestor_slug, descendant_slug, depth) -- a recursive
+#                             transitive closure, so NEITHER slug column is unique (one
+#                             descendant has one row per ancestor above it in the tree, and vice
+#                             versa) and neither is a graph-adjacency column in the SAME
+#                             non-keyset-safe shape as work_edge_obligation's from_slug above.
+#                             Same disposition, same reason: no column here is a safe keyset
+#                             cursor.
+# Both are real, queryable relations today -- this exclusion is a registry-membership gap, not a
+# claim the views are broken or unused; `work_item_strict_blockers()` (the SQL function, kernel-
+# side) already walks `work_edge_obligation` for the obligation-tree computation this commission
+# was asked to serve, and a future spec MAY mint the two-arg keyset shape (`ORDER BY from_slug,
+# <ledger-id tiebreaker> WHERE (from_slug, id) > (cursor_slug, cursor_id)`) these views would
+# need -- that is new pagination-shape design, a Fable-authored spec's job (CLAUDE.md
+# ORCHESTRATION), not a registry entry authored in passing here. The remaining FIVE views serve
+# safely under the two existing shapes, verified per-view below (CREATE VIEW cited, key column
+# uniqueness checked against the SAME "disclosed non-unique is fine, no-column-at-all is not"
+# discriminator):
+#   work_edge_blocks_close.edge_row_id     -- kernel/lineage/s32-edge-views-single-home.sql. The
+#                                             work_depends_on row's own ledger id, SELECTed
+#                                             directly (unlike work_edge_obligation one view
+#                                             over) -- id-shaped, unique per row (one
+#                                             blocks-close edge is one work_depends_on row).
+#   discharging_attest.regards_id          -- kernel/lineage/s32-edge-views-single-home.sql,
+#                                             widened in place by kernel/lineage/
+#                                             s56-reservation-residue.sql (verdict IN ('attest',
+#                                             'attest_with_reservations'), column list
+#                                             UNCHANGED). regards_id is id-shaped but NOT UNIQUE
+#                                             (more than one actor can attest the same row) --
+#                                             CRITICAL FINDING, fix round (ledger rows 153/154,
+#                                             coordinator fresh-context review): live-reproduced
+#                                             silently dropping the second attest at a limit=1
+#                                             page boundary before the composite-tiebreaker fix
+#                                             above; the pre-fix-round text here called this
+#                                             "safe because it matches a precedent" -- WRONG, the
+#                                             precedent (model_defeated_rows.attest_id) carried
+#                                             the identical live bug, not a tolerated residual.
+#                                             Fixed by the (key_col, md5(row::text)) composite
+#                                             keyset (see this dict's own leading comment); GREEN
+#                                             witnessed on the reviewer's own reproduction (two
+#                                             attests regarding one row, limit=1, paginated total
+#                                             == direct total), red.txt.
+#   work_violation_history.slug            -- kernel/lineage/s37-violation-disposition.sql,
+#                                             re-issued by kernel/lineage/s39-blocks-start.sql
+#                                             (adds the blocks_start_cycle arm, unchanged column
+#                                             list: violation, slug, detail, target_id,
+#                                             disposition_id, disposition_resolution,
+#                                             disposition_basis, disposition_witness,
+#                                             disposition_in_force, target_in_force,
+#                                             target_retraction_id). slug is text, NOT UNIQUE (a
+#                                             slug can carry more than one violation class) --
+#                                             CRITICAL FINDING, fix round, SAME as
+#                                             discharging_attest immediately above (this view's
+#                                             own precedent citation, work_item_violations.slug,
+#                                             carried the identical live bug too -- both now fixed
+#                                             by the same composite-tiebreaker mechanism, not
+#                                             merely both "sharing a residual").
+#   work_bookkeeping_closes.close_id       -- kernel/lineage/s38-bookkeeping-close.sql. close_id
+#                                             is the work_closed row's own ledger id, SELECTed
+#                                             directly -- id-shaped, unique per row (one
+#                                             bookkeeping close is one work_closed row).
+#   countersigned_in_force.id              -- present since kernel/lineage/
+#                                             s20-obligation-grants-and-view-refresh.sql, latest
+#                                             re-issue kernel/lineage/
+#                                             s68-typed-absence-dispositions.sql (the +2-column
+#                                             s68 append -- refusal_attempted_kind_disposition,
+#                                             refusal_attempted_actor_disposition -- ledger row
+#                                             153's own build touching this same lineage delta).
+#                                             SAME full ledger-row column shape as ledger_current
+#                                             (id, ts, session, kind, ... every ledger column)
+#                                             further filtered to rows an in-force discharging_
+#                                             attest regards -- id is the ledger row's own bigint
+#                                             id, unique per row, the identical shape /rows/
+#                                             current already serves (this view exposes NO column
+#                                             /rows/current does not already serve; the
+#                                             boundary's read posture is unchanged by adding it).
+#                                             MODERATE DISCLOSURE (fix round, ledger rows
+#                                             153/154, coordinator fresh-context review): the
+#                                             MAIN boundary-read-surface fixture's own world stops
+#                                             at s59 (a separate, DOCUMENTED, s61-possession-ref
+#                                             blocker -- see that fixture's own CHAIN_FULL
+#                                             comment), so its WR1 GREEN validates this view's
+#                                             pre-s68 (s67-headed, two columns short) shape, NOT
+#                                             the true, current s68 shape the row-153 build
+#                                             actually shipped. A SEPARATE, minimal, s68-headed
+#                                             scratch world (WR7 in that same fixture file) that
+#                                             skips the ONE act (principal_key_bound) the s61
+#                                             blocker requires exercises the true s68 shape
+#                                             instead -- confirming both new columns are present
+#                                             and the row set still matches a direct read at s68.
+VIEW_REGISTRY: dict[str, tuple[str, str, bool]] = {
+    "question_status": ("question_id", "id", True),
+    "review_gap": ("id", "id", False),
+    "review_stamp_distinctness": ("review_id", "id", True),
+    "standing_decisions": ("id", "id", True),
+    "countersign_obligation": ("scope", "slug", True),
+    "work_item_violations": ("slug", "slug", False),
+    "work_review_gap": ("slug", "slug", False),
+    "model_attestations": ("row_id", "id", True),
+    "model_defeated_rows": ("attest_id", "id", False),
+    "credited_current": ("id", "id", True),
+    "work_item_current": ("slug", "slug", True),
     # design/FABLE-RESERVATION-RESIDUE-SPEC.md section 3 (kernel/lineage/s56-reservation-
     # residue.sql): both new views key on review_id (bigint) -- id-shaped pagination, the same
     # shape review_stamp_distinctness already uses one row over.
-    "reservations_outstanding": ("review_id", "id"),
-    "review_verdicts": ("review_id", "id"),
+    "reservations_outstanding": ("review_id", "id", True),
+    "review_verdicts": ("review_id", "id", True),
     # legacy-led-retirement phase 1B (ledger row 1149) -- see this dict's own leading comment.
-    "work_edge_parent": ("child_slug", "slug"),
-    "work_startable": ("slug", "slug"),
+    "work_edge_parent": ("child_slug", "slug", True),
+    "work_startable": ("slug", "slug", True),
     # legacy-led-retirement inventory pass (ledger row 1149) -- see this dict's own leading
     # comment, fourth registry growth.
-    "principal_relations": ("row_id", "id"),
-    "principal_role_bindings": ("row_id", "id"),
-    "principal_keys": ("row_id", "id"),
-    "principal_competences": ("row_id", "id"),
+    "principal_relations": ("row_id", "id", True),
+    "principal_role_bindings": ("row_id", "id", True),
+    "principal_keys": ("row_id", "id", True),
+    "principal_competences": ("row_id", "id", True),
     # design/FABLE-MISSIVES-KERNEL-SPEC.md §3 (kernel/lineage/s59-missive-views.sql, ledger row
     # 1263) -- a FIFTH additive registry growth, same closed-registry mechanism, no new route, no
     # BOUNDARY_SERVICE_VERSION bump. Five of the six views key on id (bigint, id-shaped
     # pagination, the same shape reservations_outstanding/review_verdicts already use);
     # missive_open_threads keys on missive_thread (slug-shaped, the work_startable/
     # work_edge_parent precedent).
-    "missive_outbound": ("id", "id"),
-    "missive_receipts": ("id", "id"),
-    "missive_undisposed": ("id", "id"),
-    "missive_stale": ("id", "id"),
-    "missive_delivery_audit": ("id", "id"),
-    "missive_open_threads": ("missive_thread", "slug"),
+    "missive_outbound": ("id", "id", True),
+    "missive_receipts": ("id", "id", True),
+    "missive_undisposed": ("id", "id", True),
+    # missive_stale.id: CONSERVATIVELY marked non-unique (fix round, ledger rows 153/154) -- its
+    # own JOIN matches a `missive_undisposed` row against EVERY `missive_received` row citing it
+    # as `missive_responds_to` (a reply-count, not an equality-to-one-row join); nothing in the
+    # kernel schema forecloses two replies citing the same original, so `id` (the ORIGINAL
+    # send's id, repeated once per matching reply) can repeat. Not empirically reproduced (this
+    # fix round's own uniqueness probe could not clear the s58 missive-world-identity birth
+    # ceremony in the time available -- see the fix-round report), so this is a STRUCTURAL
+    # classification, not a witnessed one; named honestly rather than silently assumed safe.
+    "missive_stale": ("id", "id", False),
+    "missive_delivery_audit": ("id", "id", True),
+    "missive_open_threads": ("missive_thread", "slug", True),
+    # A SIXTH additive registry growth (ledger rows 153/154) -- see this dict's own leading
+    # comment for the full per-view key-column derivation and the two named exclusions
+    # (work_edge_obligation, work_item_descendants).
+    "work_edge_blocks_close": ("edge_row_id", "id", True),
+    "discharging_attest": ("regards_id", "id", False),
+    "work_violation_history": ("slug", "slug", False),
+    "work_bookkeeping_closes": ("close_id", "id", True),
+    "countersigned_in_force": ("id", "id", True),
 }
 
 # The s43 boundary functions, named ONCE (ADR-0012 P1) -- the write-route table (spec §4) is
@@ -686,6 +955,19 @@ BODY_READ_TIMEOUT_S = 30
 # A5.2 reuses this SAME constant to bound integer-typed WRITE-payload fields too (the id-domain
 # class, completed from path/query onto the write body).
 MAX_ID = 2**63 - 1
+
+# Round-2 fix (ledger rows 153/154, coordinator's second fresh-context re-review of 6a104c0+
+# 15b2f78): a byte-identical-content tie group (see `views_view`'s non-unique-key branch and
+# VIEW_REGISTRY's own leading comment for the full reasoning) is served ATOMICALLY -- never
+# split across a page -- which means a page can legitimately carry more rows than `limit` asked
+# for, by however many extra members the tie group at the page boundary happens to have. This
+# is the ONE named exception to the transport-level `1 <= limit <= 1000` bound every other route
+# in this file enforces. MAX_TIE_GROUP_EXTRA_ROWS bounds how far that exception is allowed to
+# stretch: if the group truly has more members than this, the boundary refuses the page loudly
+# (ADR-0002) rather than serve an unboundedly large response -- a pathologically large content-
+# identical group (an actor writing the same duplicate act thousands of times) is a real,
+# if unlikely, denial-of-service shape a keyset route must not absorb silently.
+MAX_TIE_GROUP_EXTRA_ROWS = 1000
 
 # A9: the concurrency admission bound (ADR-0012 P1: one named constant, not a per-handler
 # literal). Deliberately UNDER the ASGI threadpool's own default concurrency (anyio's 40 tokens
@@ -1638,6 +1920,160 @@ def _out_of_range_id(name: str, value: int) -> JSONResponse | None:
     return None
 
 
+def _strict_bool_flag(name: str, value: str) -> tuple[bool, JSONResponse | None]:
+    """Ledger row 154 (bulk superseded read): the ONE strict-boolean query-flag parser, named
+    once (ADR-0012 P1) for `include_superseded` and any future opt-in flag on this shape. FastAPI's
+    own `bool` query-param coercion is NOT used here on purpose -- it accepts a wide, undisclosed
+    spelling set ("1"/"yes"/"on"/"True"/...), which is exactly the silent-default risk the
+    commission's own text forbids ("anything but the exact typed values is the boundary's
+    existing 422 shape, never a silent default"). The closed, exact vocabulary is `""` (the
+    parameter omitted -- the pre-existing, unchanged default) and the two literal spellings
+    `"true"`/`"false"`; anything else is a typed 422 naming the closed vocabulary, never a guess.
+    Returns `(flag_value, None)` on a legal spelling, or `(False, <422 JSONResponse>)` on an
+    illegal one (the caller returns the response and never reaches the flag_value)."""
+    if value == "":
+        return False, None
+    if value == "true":
+        return True, None
+    if value == "false":
+        return False, None
+    return False, JSONResponse(status_code=422, content={
+        "detail": f"{name} must be exactly \"true\" or \"false\" (or omitted, the default "
+                  f"\"false\") -- strictly parsed, never coerced from another spelling; "
+                  f"got {value!r}"})
+
+
+_PAGE_TIE_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _composite_cursor_tie_format_failure(name: str, value: str) -> JSONResponse | None:
+    """Ledger rows 153/154 fix round (CRITICAL finding, coordinator fresh-context review of
+    commit 6a104c0): `after_tie`'s own closed shape, checked BEFORE it ever crosses into a query
+    -- the composite-keyset counterpart of `_query_string_representability_failure`/
+    `_out_of_range_id` (ADR-0012 P1, same discipline, one param over). The legal domain is exact:
+    the empty string (no tiebreaker supplied -- the default, walk-from-the-start-of-this-key-
+    value posture) or exactly 32 lowercase hex characters (an md5 digest's own shape, the ONLY
+    shape `_page_tie` -- this route's own per-row tiebreaker field -- ever takes). Anything else
+    is a typed 422 naming the closed vocabulary; a malformed composite cursor is refused the SAME
+    way every other malformed cursor on this route already is, never guessed at or silently
+    truncated to fit. Returns the 422 `JSONResponse` on a violation, else `None`."""
+    if value == "" or _PAGE_TIE_RE.fullmatch(value):
+        return None
+    return JSONResponse(status_code=422, content={
+        "detail": f"{name} must be exactly 32 lowercase hex characters (an md5 digest's own "
+                  f"shape -- the tiebreaker this route's own `_page_tie` response field carries) "
+                  f"or omitted; got {value!r}"})
+
+
+def _nonunique_tie_group_sql(schema: str, view: str, key_col: str, cursor_key_sql: str,
+                              limit: int) -> str:
+    """Round-2 fix (ledger rows 153/154, coordinator's second fresh-context re-review of
+    6a104c0+15b2f78). The reviewer constructed the round-1 fix's own disclosed residual LIVE:
+    two rows byte-identical in EVERY column (same `key_col` AND same `_page_tie`, since
+    `_page_tie` is derived from the row's own full content) are genuinely indistinguishable --
+    no per-row discriminator exists in the view's own output, and NONE can be manufactured
+    stably. A THIRD cursor component (a `row_number() OVER (PARTITION BY key_col, _page_tie
+    ORDER BY <a constant>)` ordinal, the reviewer's own first candidate to evaluate) was
+    considered and REJECTED here: Postgres does not guarantee a stable row-to-ordinal
+    assignment across SEPARATE query executions when the ORDER BY carries no real ordering
+    key (only a same-execution guarantee) -- a byte-identical twin ARRIVING between two page
+    requests (the ledger is append-only; nothing refuses a second identical write) can grow the
+    group's membership between the query that computed page N's cursor and the query that
+    computes page N+1, and the ordinal each physical row receives is then free to reshuffle: a
+    row NOT YET served can be assigned an ordinal at or below the already-passed cursor
+    position, which the `WHERE ordinal > cursor_ordinal` predicate then EXCLUDES FOREVER -- a
+    silent, permanent drop, worked through by hand across every possible reshuffle in this
+    fix's own commit message. The ordinal candidate is UNSOUND under the exact mid-walk-append
+    case the coordinator asked to be reasoned through; it is not used.
+
+    THE ACTUAL FIX needs no per-row discriminator at all: a byte-identical CONTENT GROUP
+    (every row sharing this key_col value AND this exact `_page_tie`) is served ATOMICALLY --
+    NEVER split across a page. `page` is the raw `LIMIT`-bounded fetch; `cutoff` is the last
+    row `page` actually contains; the outer SELECT then serves every row in `filtered` up to
+    AND INCLUDING the full `cutoff` group, not merely whatever fraction of it `LIMIT` happened
+    to cut off mid-group -- so a page never ends inside a tie group, and there is no notion of
+    "some group members served, some not" for an ordinal to ever have to break a tie within.
+    This makes `limit` a SOFT floor for a non-unique-key view (a page MAY carry more rows than
+    requested, by exactly the size of its own boundary group) -- disclosed here and in
+    VIEW_REGISTRY's own comment, and bounded by `MAX_TIE_GROUP_EXTRA_ROWS` (`_tie_group_too_
+    large`'s own docstring) against a pathologically large duplicate-content group.
+
+    THE MID-WALK-APPEND CASE, worked through explicitly (this is what round-3 review will
+    attack first, per the coordinator's own framing, so it is worked through here in full
+    rather than asserted): a NEW byte-identical twin can only ever land in ONE of two temporal
+    relationships to a client's in-flight walk, cut along the SAME (key_col, _page_tie) pair
+    every page boundary is drawn on:
+      (a) It arrives for a group the cursor has NOT YET REACHED (the client has not yet
+          requested the page whose boundary would include that group). When that page IS
+          requested, the query re-evaluates `filtered`/`page`/`cutoff` FRESH, sees the NOW-
+          LARGER group, and serves the WHOLE group -- old member(s) and the new twin together,
+          atomically, in that one page. No drop; the twin is served exactly once, alongside its
+          siblings, on the FIRST request that reaches that group's boundary.
+      (b) It arrives for a group the cursor has ALREADY PASSED (the client's own `after_tie`/
+          `after_id`/`after_slug` cursor is already strictly greater than that group's own
+          (key_col, _page_tie) pair). This twin is EXCLUDED from the remainder of THIS walk --
+          but this is NOT a new hazard this fix introduces: it is the IDENTICAL, already-
+          disclosed residual A11 already names for `/work/items`' own `after_slug` keyset ("a
+          row inserted BEHIND an in-flight cursor is not visible to THAT walk -- no snapshot-
+          free scheme over a non-append-monotonic key can promise otherwise -- it simply joins
+          the NEXT walk"), extended here from "a row with a new key value" to "a row with a
+          value tying an already-passed key". EVERY keyset-paginated route in this file --
+          unique-key or not -- already carries this exact class of residual; this fix neither
+          creates it nor makes it worse for the non-unique case.
+    There is NO third case: a group's own (key_col, _page_tie) pair is a fixed coordinate on
+    the SAME total order every page's WHERE/ORDER BY already walks, so "the cursor is mid-way
+    through consuming this exact group, with some members served and some not" cannot occur --
+    the atomic-extension design is exactly what forecloses that state from ever existing, which
+    is why no per-row ordinal is needed to break a tie WITHIN it. The class is CLOSED for the
+    append-before-reaching case (a), and the residual for the append-behind-cursor case (b) is
+    the SAME pre-existing, already-disclosed one every other view already lives with -- not a
+    new, silently-introduced gap.
+
+    `cursor_key_sql` is a caller-validated SQL fragment (a checked-int literal for an id-shaped
+    key, or a bound `:'after_slug'` placeholder for a slug-shaped key) -- never unvalidated
+    caller text. `limit` is the ALREADY-validated `1 <= limit <= 1000` value; the group
+    extension is deliberately NOT included in that same bound (see MAX_TIE_GROUP_EXTRA_ROWS'
+    own docstring for the separate, wider bound that governs it instead)."""
+    return (
+        f"WITH candidate AS ("
+        f"  SELECT v.*, md5(v::text) AS _page_tie FROM {schema}.{view} v"
+        f"), filtered AS ("
+        f"  SELECT * FROM candidate "
+        f"  WHERE ({key_col}, _page_tie) > ({cursor_key_sql}, :'after_tie')"
+        f"), page AS ("
+        f"  SELECT * FROM filtered ORDER BY {key_col}, _page_tie LIMIT {limit}"
+        f"), cutoff AS ("
+        f"  SELECT {key_col} AS ck, _page_tie AS ct FROM page "
+        f"  ORDER BY {key_col} DESC, _page_tie DESC LIMIT 1"
+        f") "
+        f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}, t._page_tie), '[]'::jsonb) "
+        f"FROM filtered t, cutoff c "
+        f"WHERE (t.{key_col}, t._page_tie) <= (c.ck, c.ct);"
+    )
+
+
+def _tie_group_too_large(view: str, extra: int) -> JSONResponse:
+    """Round-2 fix (ledger rows 153/154): the loud refusal `views_view`'s non-unique-key branch
+    returns instead of serving an unboundedly large page when the byte-identical content group
+    at the page boundary has more members than `MAX_TIE_GROUP_EXTRA_ROWS` can atomically extend
+    past. Typed, named disposition (the same shape `capability_absent`/`unknown_view` already
+    establish). Round-3 fix (coordinator's third fresh-context re-review): status 409, not 500
+    -- this file's own convention reserves 500 for `unclassified_failure` (a psql-level failure
+    this boundary genuinely cannot classify further); this refusal is the OPPOSITE, a boundary-
+    ENFORCED business rule the boundary understands completely and names precisely, the same
+    shape every other typed 4xx refusal in this file already is. 409 (Conflict) is
+    `boundary_cli_client.py`'s own `_READ_REFUSAL_STATUSES` set already recognizes as a read-side
+    boundary refusal, so no client-side change was needed for this half of the fix."""
+    return JSONResponse(status_code=409, content={
+        "disposition": "tie_group_too_large",
+        "view": view,
+        "message": f"GET /views/{view}: the byte-identical row group at this page's own "
+                   f"boundary has {extra} more member(s) than this boundary's own "
+                   f"MAX_TIE_GROUP_EXTRA_ROWS={MAX_TIE_GROUP_EXTRA_ROWS} bound -- refused rather "
+                   f"than served as one unboundedly large page (ADR-0002); this is a real, if "
+                   f"unlikely, denial-of-service shape a keyset route must not absorb silently."})
+
+
 def _row_not_found(cfg: BoundaryConfig, row_id: int) -> JSONResponse | None:
     """A11 item 2: the leading existence check `GET /rows/{id}/history` shares with its sibling
     `GET /rows/{id}` -- named ONCE (ADR-0012 P1) so a nonexistent in-domain id gets the IDENTICAL
@@ -2230,7 +2666,8 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         )
 
     @app.get("/d/{deployment}/rows/current")
-    def rows_current(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
+    def rows_current(deployment: str, after_id: int = 0, limit: int = 100,
+                      include_superseded: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
@@ -2242,11 +2679,40 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         oor = _out_of_range_id("after_id", after_id)
         if oor is not None:
             return oor
+        # Ledger row 154 (rows-bulk-superseded-read): ONE new, opt-in, strictly-typed query
+        # param -- default omitted/"" behavior is BYTE-IDENTICAL to pre-this-build (same
+        # `ledger_current` query below, unchanged), never silently widened. `_strict_bool_flag`
+        # is the ONE parser for this closed true/false/omitted vocabulary (ADR-0012 P1); an
+        # illegal spelling 422s here, before any query runs.
+        want_superseded, bad_flag = _strict_bool_flag("include_superseded", include_superseded)
+        if bad_flag is not None:
+            return bad_flag
+        if not want_superseded:
+            rows = _query_json(
+                cfg,
+                f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
+                f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
+                f"ORDER BY id LIMIT {limit}) t;",
+            )
+            return JSONResponse(content=rows)
+        # `include_superseded=true`: reads the RAW `ledger` table (record semantics, every row
+        # ever written, current or superseded -- the same raw-table read `rows_asof` below
+        # already uses one route over) rather than the `ledger_current` view, so a superseded
+        # row is no longer structurally excluded. Superseded-ness is made legible PER ROW via
+        # `is_current` -- derived from the EXACT predicate `ledger_current`'s own view
+        # definition already commits to (`NOT EXISTS (SELECT 1 FROM ledger s WHERE s.supersedes
+        # = l.id)`), the SAME correlated-subquery shape `rows_asof` and kernel/lineage's own
+        # `countersigned_in_force`/`ledger_current` views already use -- never a new, boundary-
+        # invented notion of "current" (ADR-0012 P2: the boundary derives, it does not author a
+        # second truth). A panel toggling current-vs-superseded reads this one field; no second
+        # query is needed to tell the two apart.
         rows = _query_json(
             cfg,
             f"SELECT coalesce(jsonb_agg(t ORDER BY t.id), '[]'::jsonb) FROM "
-            f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
-            f"ORDER BY id LIMIT {limit}) t;",
+            f"(SELECT l.*, NOT EXISTS (SELECT 1 FROM {cfg.schema}.ledger s "
+            f"WHERE s.supersedes = l.id) AS is_current "
+            f"FROM {cfg.schema}.ledger l WHERE l.id > {after_id} "
+            f"ORDER BY l.id LIMIT {limit}) t;",
         )
         return JSONResponse(content=rows)
 
@@ -2474,7 +2940,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
 
     @app.get("/d/{deployment}/views/{view}")
     def views_view(deployment: str, view: str, after_id: int = 0, after_slug: str = "",
-                    limit: int = 100) -> Response:
+                    after_tie: str = "", limit: int = 100) -> Response:
         # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 1: the derived-read carrier.
         # `{view}` is checked against the CLOSED, spec-enumerated VIEW_REGISTRY before this
         # deployment's own kernel is ever touched -- an unknown view name is refused (404)
@@ -2485,7 +2951,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         entry = VIEW_REGISTRY.get(view)
         if entry is None:
             return unknown_view(view)
-        key_col, key_kind = entry
+        key_col, key_kind, key_unique = entry
         if not _regclass_exists(cfg, f"{cfg.schema}.{view}"):
             return capability_absent(
                 f"view:{view}",
@@ -2509,10 +2975,77 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if limit < 1 or limit > 1000:
             return JSONResponse(status_code=422, content={
                 "detail": "limit must be between 1 and 1000 (transport-level bound, ADR-0002)"})
+
+        if key_unique:
+            # UNIQUE-key view: BYTE-IDENTICAL to this route's pre-fix-round behavior (ledger
+            # rows 153/154's own leading VIEW_REGISTRY comment has the full reasoning) -- ties
+            # never occur on a genuinely unique key, so this is the OLD code path, untouched,
+            # not routed through the new tiebreaker machinery at all. `after_tie` is meaningless
+            # here and is never silently ignored (A10's own lesson, extended a third time).
+            if after_tie:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_tie is not accepted on GET /views/{view} -- this view's "
+                              f"key ({view}.{key_col}) is unique per row, so no tiebreaker is "
+                              f"ever needed; got after_tie={after_tie!r}"})
+            if key_kind == "id":
+                # The id-keyed pagination shape (A2.6/A4.2/A5.4): the SAME shape /rows/current
+                # already uses, applied to this view's own key column. A supplied after_slug on
+                # an id-keyed view is never silently ignored (A10's own lesson, applied a third
+                # time).
+                if after_slug:
+                    return JSONResponse(status_code=422, content={
+                        "detail": f"after_slug is not accepted on GET /views/{view} -- this view "
+                                  f"pages on after_id (an id-shaped key, {view}.{key_col}); got "
+                                  f"after_slug={after_slug!r}"})
+                oor = _out_of_range_id("after_id", after_id)
+                if oor is not None:
+                    return oor
+                rows = _query_json(
+                    cfg,
+                    f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
+                    f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
+                    f"ORDER BY {key_col} LIMIT {limit}) t;",
+                )
+                return JSONResponse(content=rows)
+            # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
+            # view's own text key column. A supplied after_id on a slug-keyed view is never
+            # silently ignored either (A11 item 1's own precedent).
+            if after_id:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_id is not accepted on GET /views/{view} -- this view pages "
+                              f"on after_slug (a text-shaped key, {view}.{key_col}); got "
+                              f"after_id={after_id}, resupply as after_slug=<last-served-value> "
+                              f"instead"})
+            after_slug_bytes = len(after_slug.encode("utf-8"))
+            if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
+                              f"{after_slug_bytes} bytes"})
+            repr_oor = _query_string_representability_failure("after_slug", after_slug)
+            if repr_oor is not None:
+                return repr_oor
+            rows = _query_json(
+                cfg,
+                f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
+                f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > :'after_slug' "
+                f"ORDER BY {key_col} LIMIT {limit}) t;",
+                extra_v={"after_slug": after_slug},
+            )
+            return JSONResponse(content=rows)
+
+        # NON-UNIQUE key: the round-2 atomic-tie-group keyset (ledger rows 153/154 -- round 1's
+        # CRITICAL finding fixed the plain-non-unique-key case; round 2's CRITICAL-adjacent
+        # finding closed the byte-identical-row residual round 1 left open. See VIEW_REGISTRY's
+        # own leading comment and `_nonunique_tie_group_sql`'s own docstring for the full
+        # reasoning, including the mid-walk-append analysis and why a THIRD ordinal cursor
+        # component is NOT used.). `_page_tie` is `md5(the row::text)`, carried through to the
+        # served output as an extra field every non-unique-key view's response now legibly
+        # carries -- the client-visible cursor contract change the fix round discloses, never
+        # silent.
+        tie_fmt_err = _composite_cursor_tie_format_failure("after_tie", after_tie)
+        if tie_fmt_err is not None:
+            return tie_fmt_err
         if key_kind == "id":
-            # The id-keyed pagination shape (A2.6/A4.2/A5.4): the SAME shape /rows/current
-            # already uses, applied to this view's own key column. A supplied after_slug on an
-            # id-keyed view is never silently ignored (A10's own lesson, applied a third time).
             if after_slug:
                 return JSONResponse(status_code=422, content={
                     "detail": f"after_slug is not accepted on GET /views/{view} -- this view "
@@ -2523,35 +3056,38 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 return oor
             rows = _query_json(
                 cfg,
-                f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
-                f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
-                f"ORDER BY {key_col} LIMIT {limit}) t;",
+                _nonunique_tie_group_sql(cfg.schema, view, key_col, str(after_id), limit),
+                extra_v={"after_tie": after_tie},
             )
-            return JSONResponse(content=rows)
-        # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
-        # view's own text key column. A supplied after_id on a slug-keyed view is never silently
-        # ignored either (A11 item 1's own precedent).
-        if after_id:
-            return JSONResponse(status_code=422, content={
-                "detail": f"after_id is not accepted on GET /views/{view} -- this view pages on "
-                          f"after_slug (a text-shaped key, {view}.{key_col}); got "
-                          f"after_id={after_id}, resupply as after_slug=<last-served-value> "
-                          f"instead"})
-        after_slug_bytes = len(after_slug.encode("utf-8"))
-        if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
-            return JSONResponse(status_code=422, content={
-                "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
-                          f"{after_slug_bytes} bytes"})
-        repr_oor = _query_string_representability_failure("after_slug", after_slug)
-        if repr_oor is not None:
-            return repr_oor
-        rows = _query_json(
-            cfg,
-            f"SELECT coalesce(jsonb_agg(t ORDER BY t.{key_col}), '[]'::jsonb) FROM "
-            f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > :'after_slug' "
-            f"ORDER BY {key_col} LIMIT {limit}) t;",
-            extra_v={"after_slug": after_slug},
-        )
+        else:
+            # key_kind == "slug", non-unique.
+            if after_id:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_id is not accepted on GET /views/{view} -- this view pages "
+                              f"on after_slug (a text-shaped key, {view}.{key_col}); got "
+                              f"after_id={after_id}, resupply as after_slug=<last-served-value> "
+                              f"instead"})
+            after_slug_bytes = len(after_slug.encode("utf-8"))
+            if after_slug_bytes > MAX_AFTER_SLUG_BYTES:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"after_slug must be at most {MAX_AFTER_SLUG_BYTES} bytes; got "
+                              f"{after_slug_bytes} bytes"})
+            repr_oor = _query_string_representability_failure("after_slug", after_slug)
+            if repr_oor is not None:
+                return repr_oor
+            rows = _query_json(
+                cfg,
+                _nonunique_tie_group_sql(cfg.schema, view, key_col, ":'after_slug'", limit),
+                extra_v={"after_slug": after_slug, "after_tie": after_tie},
+            )
+        # MAX_TIE_GROUP_EXTRA_ROWS' own bound: a page legitimately exceeds `limit` ONLY by the
+        # size of the byte-identical group straddling its own boundary (never for any other
+        # reason -- `_nonunique_tie_group_sql`'s own docstring proves this). If that extension
+        # is itself pathologically large, refuse loudly rather than serve it.
+        if isinstance(rows, list) and len(rows) > limit:
+            extra = len(rows) - limit
+            if extra > MAX_TIE_GROUP_EXTRA_ROWS:
+                return _tie_group_too_large(view, extra)
         return JSONResponse(content=rows)
 
     @app.get("/d/{deployment}/rows/asof/{ts}")
@@ -2617,6 +3153,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             known_views=sorted(VIEW_REGISTRY),
             lineage_head=_lineage_head(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
+            max_tie_group_extra_rows=MAX_TIE_GROUP_EXTRA_ROWS,
         )
 
     @app.get("/d/{deployment}/kinds", response_model=KindsResponse)
