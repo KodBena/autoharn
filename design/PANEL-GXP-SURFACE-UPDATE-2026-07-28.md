@@ -12,6 +12,10 @@ sight of either document) is filed separately when it lands.
 
 ---
 
+**Erratum (2026-07-28, post-filing — the pagination class fix):** this survey's refusal-taxonomy claims ('409 `capability_absent`') were true when surveyed and are no longer a 1:1 mapping — `GET /views/{view}` can now also answer 409 with `disposition: "tie_group_too_large"`. Branch on the body's `disposition` field, never on the status code alone; the living contract home is serving/README.md's refusal-taxonomy section.
+
+---
+
 # PANEL-GXP-SURFACE UPDATE — autoharn's user-facing surface, second survey (2026-07-28)
 
 **What this is.** The commissioned update to `design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md` (the "prior doc"). Same objective: enumerate every capability an operator or end user reaches, organized as it needs to be *accessed* under enterprise GxP expectations for this domain. Read beside the prior doc — every section marks what still stands, what moved, and what is new.

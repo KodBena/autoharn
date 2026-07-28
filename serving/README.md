@@ -383,6 +383,16 @@ names the refusal's meaning ("typed", "never a silent fallback") but not its HTT
 JSON envelope; 409 + this shape is the smallest honest choice made here. Flagged for the
 Fable/maintainer orchestrator to confirm or override.
 
+**409 IS NOT ONE DISPOSITION (contract change, 2026-07-28, the pagination class fix —
+round-4 review finding):** `GET /d/{d}/views/{view}` can now also answer 409 with
+`{"disposition": "tie_group_too_large", ...}` (a byte-identical-content group larger than
+`/meta`'s advertised `max_tie_group_extra_rows` refuses rather than serving an unbounded
+page). A client that branches on bare `status == 409` and assumes `capability_absent` will
+misclassify that refusal — the exact bug this change fixed in four in-repo consumers.
+**Branch on the body's `disposition` field, never on the status code alone.** This rule is
+general: statuses may be shared across dispositions; the disposition vocabulary is the
+contract.
+
 **Write verdicts** (`/write/*`) cross **byte-verbatim** as the kernel's own
 `write_verdict` JSON, HTTP 200 whether `accepted` or `refused` — a kernel refusal is a
 first-class domain result carrying kernel-authored teach-text, never a transport error.
