@@ -66,6 +66,16 @@ anonymous-authority-bearing-write refusal's own posture. Same whole-file validat
 same before-the-socket-binds discipline, same import-the-vocabulary-don't-duplicate-it
 relationship this module already has with `boundary_diagnostic_log.LEVELS` for `log_level`.
 
+SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4, work item
+boundary-sse-events, ledger row 169): two new OPTIONAL top-level keys, same whole-file
+validation pass, same before-the-socket-binds discipline. `sse_poll_interval_secs` -- how often
+the shared per-deployment head-watcher polls `max(id)` (a positive number of seconds; the spec
+names 2 as the default). `max_sse_clients` -- the SEPARATE, hub-wide bound on concurrently open
+`GET /d/{deployment}/events` connections (the spec's own words: "NEVER the 24-slot inflight
+gate"; a positive integer, the spec names 16 as the default). Both are process-wide (one hub,
+not per-deployment -- the spec's own "per hub" phrasing for `MAX_SSE_CLIENTS`), exactly like
+`log_level`/`identity_enforcement` above.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -98,11 +108,14 @@ _DEPLOYMENT_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 # `pgschema`/`pgkern` join the spec's own three-key example.
 _REQUIRED_ENTRY_KEYS: frozenset[str] = frozenset({"pghost", "pgdatabase", "pguser", "pgschema", "pgkern"})
 
-# The ONLY three top-level keys this file recognizes, as of the dispatch-mechanics spec's
-# `identity_enforcement` addition -- named ONCE (ADR-0012 P1), consulted by
+# The ONLY top-level keys this file recognizes, as of the SSE-events spec's `sse_poll_interval_secs`/
+# `max_sse_clients` addition -- named ONCE (ADR-0012 P1), consulted by
 # `load_multiplex_config`'s own unknown-top-level-key check below rather than an inline literal
 # `{"deployments"}` set.
-_TOP_LEVEL_KEYS: frozenset[str] = frozenset({"deployments", "log_level", "identity_enforcement"})
+_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
+    "deployments", "log_level", "identity_enforcement",
+    "sse_poll_interval_secs", "max_sse_clients",
+})
 
 # IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c,
 # "rung (a)"): the anonymous-write refusal's own posture, a two-member closed vocabulary --
@@ -114,6 +127,18 @@ _TOP_LEVEL_KEYS: frozenset[str] = frozenset({"deployments", "log_level", "identi
 # `boundary_diagnostic_log.LEVELS`.
 IDENTITY_ENFORCEMENT_POSTURES: frozenset[str] = frozenset({"grace", "enforce"})
 DEFAULT_IDENTITY_ENFORCEMENT = "grace"
+
+# SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4): defaults named ONCE
+# (ADR-0012 P1) -- serving/boundary_service.py imports these rather than carrying a second
+# literal copy, the same relationship this module already has with `IDENTITY_ENFORCEMENT_
+# POSTURES`/`DEFAULT_IDENTITY_ENFORCEMENT` above.
+DEFAULT_SSE_POLL_INTERVAL_SECS = 2.0
+DEFAULT_MAX_SSE_CLIENTS = 16
+# Sanity ceilings, not operational tuning advice -- a value outside these is almost certainly a
+# typo (a poll interval of days, or a client cap in the millions), refused loudly at load time
+# rather than silently accepted and only discovered as a surprise in production (ADR-0002).
+_MAX_SSE_POLL_INTERVAL_SECS = 3600.0
+_MAX_SSE_CLIENTS_CEILING = 100_000
 
 
 class MultiplexConfigError(Exception):
@@ -136,7 +161,7 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     that also needs the resolved log level (`serving/boundary_service.py`'s own `main()`) calls
     `load_multiplex_config_with_log_level` instead, rather than this file growing a second,
     diverging validation path."""
-    deployments, _log_level, _identity_enforcement = _load_and_validate(path)
+    deployments, _log_level, _identity_enforcement, _poll, _max_clients = _load_and_validate(path)
     return deployments
 
 
@@ -149,9 +174,10 @@ def load_multiplex_config_with_log_level(
     returning the resolved `log_level` (already validated against
     `boundary_diagnostic_log.LEVELS`, defaulted to `boundary_diagnostic_log.DEFAULT_LEVEL` when
     the TOML omits the key entirely). Kept byte-for-byte backward compatible (discards the
-    dispatch-mechanics spec's `identity_enforcement` half) for every EXISTING caller; a caller
-    that also needs that posture calls `load_multiplex_config_with_diagnostics` instead."""
-    deployments, log_level, _identity_enforcement = _load_and_validate(path)
+    dispatch-mechanics spec's `identity_enforcement` half, and the SSE spec's two tunables) for
+    every EXISTING caller; a caller that needs more calls `load_multiplex_config_with_diagnostics`
+    or `load_multiplex_config_with_sse` instead."""
+    deployments, log_level, _identity_enforcement, _poll, _max_clients = _load_and_validate(path)
     return deployments, log_level
 
 
@@ -162,20 +188,35 @@ def load_multiplex_config_with_diagnostics(
     pass as the two loaders above (never a second, independent parse of the same file), also
     returning the resolved `identity_enforcement` posture (already validated against
     `IDENTITY_ENFORCEMENT_POSTURES`, defaulted to `DEFAULT_IDENTITY_ENFORCEMENT` -- "grace" --
-    when the TOML omits the key entirely). `serving/boundary_service.py`'s `main()` calls this
-    one (superseding its prior call to `load_multiplex_config_with_log_level`, which stays for
-    any other caller that has not yet been touched by this build)."""
+    when the TOML omits the key entirely). Kept byte-for-byte backward compatible (discards the
+    SSE spec's two tunables) for every EXISTING caller; `serving/boundary_service.py`'s `main()`
+    now calls `load_multiplex_config_with_sse` instead (superseding its prior call to this
+    function), which also needs those."""
+    deployments, log_level, identity_enforcement, _poll, _max_clients = _load_and_validate(path)
+    return deployments, log_level, identity_enforcement
+
+
+def load_multiplex_config_with_sse(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int]:
+    """design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md's own entry point -- SAME single validation pass
+    as the loaders above (never a second, independent parse of the same file), also returning the
+    resolved `sse_poll_interval_secs`/`max_sse_clients` (already validated, defaulted to
+    `DEFAULT_SSE_POLL_INTERVAL_SECS`/`DEFAULT_MAX_SSE_CLIENTS` when the TOML omits either key
+    entirely). `serving/boundary_service.py`'s `main()` calls this one now (superseding its prior
+    call to `load_multiplex_config_with_diagnostics`)."""
     return _load_and_validate(path)
 
 
 def _load_and_validate(
     path: str | Path,
-) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str]:
-    """The ONE home (ADR-0012 P1) both public loaders above route through -- every validation
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int]:
+    """The ONE home (ADR-0012 P1) every public loader above routes through -- every validation
     axis (unknown top-level key, missing/unknown/malformed `deployments` entry, an
-    unrecognized `log_level` value) runs in this SAME whole-file pass, before either public
-    function returns anything, matching spec §3's "the WHOLE file validates before the socket
-    binds" applied to the new key exactly as it already applies to every existing one."""
+    unrecognized `log_level`/`identity_enforcement`/`sse_poll_interval_secs`/`max_sse_clients`
+    value) runs in this SAME whole-file pass, before any public function returns anything,
+    matching spec §3's "the WHOLE file validates before the socket binds" applied to each new
+    key exactly as it already applies to every existing one."""
     p = Path(path)
     if not p.is_file():
         raise MultiplexConfigError(
@@ -217,6 +258,33 @@ def _load_and_validate(
             f"(design/FABLE-DISPATCH-MECHANICS-SPEC.md §3 -- unknown values refuse loudly, "
             f"before the socket ever binds; omit the key entirely for the default, "
             f"{DEFAULT_IDENTITY_ENFORCEMENT!r}).")
+
+    # SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4): same whole-file
+    # validation pass, same before-the-socket-binds discipline as log_level/identity_enforcement
+    # immediately above. `bool` is excluded explicitly (Python's `bool` is an `int` subclass --
+    # `True`/`False` would otherwise silently pass an `isinstance(..., int)` check as 1/0).
+    sse_poll_interval_secs = raw.get("sse_poll_interval_secs", DEFAULT_SSE_POLL_INTERVAL_SECS)
+    if (isinstance(sse_poll_interval_secs, bool)
+            or not isinstance(sse_poll_interval_secs, (int, float))
+            or not (0 < sse_poll_interval_secs <= _MAX_SSE_POLL_INTERVAL_SECS)):
+        raise MultiplexConfigError(
+            f"boundary-multiplex config at {p}: 'sse_poll_interval_secs' = "
+            f"{sse_poll_interval_secs!r} is not a number in (0, {_MAX_SSE_POLL_INTERVAL_SECS}] "
+            f"(design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 1 -- unknown/out-of-domain "
+            f"values refuse loudly, before the socket ever binds; omit the key entirely for "
+            f"the default, {DEFAULT_SSE_POLL_INTERVAL_SECS!r}).")
+    sse_poll_interval_secs = float(sse_poll_interval_secs)
+
+    max_sse_clients = raw.get("max_sse_clients", DEFAULT_MAX_SSE_CLIENTS)
+    if (isinstance(max_sse_clients, bool)
+            or not isinstance(max_sse_clients, int)
+            or not (1 <= max_sse_clients <= _MAX_SSE_CLIENTS_CEILING)):
+        raise MultiplexConfigError(
+            f"boundary-multiplex config at {p}: 'max_sse_clients' = {max_sse_clients!r} is not "
+            f"an integer in [1, {_MAX_SSE_CLIENTS_CEILING}] (design/"
+            f"FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 4 -- unknown/out-of-domain values "
+            f"refuse loudly, before the socket ever binds; omit the key entirely for the "
+            f"default, {DEFAULT_MAX_SSE_CLIENTS!r}).")
 
     if "deployments" not in raw:
         raise MultiplexConfigError(
@@ -264,4 +332,4 @@ def _load_and_validate(
         result[name] = deployment_record.DeploymentRecord(
             db=entry["pgdatabase"], host=entry["pghost"], schema=entry["pgschema"],
             kern=entry["pgkern"], role=entry["pguser"], name=name)
-    return result, log_level, identity_enforcement
+    return result, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients

@@ -527,7 +527,9 @@ BASELINE: dict[str, int] = {
     # bumped 440 -> 441 (s69 build, design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, row 201):
     # one new registry line, seen-red/s69-role-coherence-refusals -- the identical
     # registration-driven shape as every prior bump above.
-    "gates/fixture_census.py":                     441,
+    # bumped 441 -> 442 (boundary-sse-events build, design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md,
+    # ledger row 169): the one new registry entry this build adds ("boundary-sse-events").
+    "gates/fixture_census.py":                     442,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -652,7 +654,11 @@ BASELINE: dict[str, int] = {
     # this gate's own BASELINE growing to carry the fixture_census.py bump (440 -> 441) this same
     # commit makes, re-measured after writing -- the same self-referential fixpoint as every
     # prior bump.
-    "gates/max_lines.py":                          777,
+    # bumped 777 -> 782 (boundary-sse-events build, design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md,
+    # ledger row 169): this gate's own BASELINE growing to carry the fixture_census.py bump
+    # (441 -> 442) this same commit makes, re-measured after writing -- the same
+    # self-referential fixpoint as every prior bump.
+    "gates/max_lines.py":                          783,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

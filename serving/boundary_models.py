@@ -261,6 +261,21 @@ class AnonymousWriteRefused(BaseModel):
                                       "deployment's identity_enforcement posture is 'enforce'")
 
 
+class SseSaturated(BaseModel):
+    """design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 4: `GET /d/{deployment}/events` refuses
+    a NEW connection once `max_sse_clients` (a hub-wide bound, config-overridable in
+    boundary-multiplex.toml, default 16 -- deliberately its OWN bound, NEVER the 24-slot
+    `MAX_INFLIGHT_KERNEL_CALLS` admission gate that would starve ordinary API traffic if a
+    handful of long-lived panels occupied it) concurrent SSE connections are already open. This
+    is a connection-admission refusal, checked ONCE at connect time (never mid-stream -- an
+    already-admitted subscriber is never later evicted to make room); ordinary, expected,
+    caller-actionable (retry with backoff), never a server-side anomaly."""
+
+    disposition: str = "sse_saturated"
+    max_clients: int = Field(description="max_sse_clients -- the named bound this connection was refused against")
+    message: str = Field(description="teach-text: names the bound and that retry-with-backoff is the correct caller response")
+
+
 class MintedActorConflict(BaseModel):
     """design/FABLE-DISPATCH-MECHANICS-SPEC.md §2 ("declared, never silent"), fresh-context
     review CRITICAL (ledger row 1525): a write payload carrying an EXPLICIT `actor` value that
@@ -303,6 +318,8 @@ class MetaResponse(BaseModel):
     protocol_version: str = Field(default=WIRE_PROTOCOL_VERSION, description="see HealthResponse.protocol_version -- the same wire-shape contract, repeated here so a client that only calls /meta still gets the handshake fact")
     authn_mode: str = Field(default=AUTHN_MODE, description="see HealthResponse.authn_mode")
     max_tie_group_extra_rows: int = Field(description="serving/boundary_service.py's own MAX_TIE_GROUP_EXTRA_ROWS -- the bound on how far a non-unique-key view's atomic tie-group page extension may stretch past the requested `limit` before GET /views/{view} refuses with a typed tie_group_too_large (409) rather than serve an unbounded page")
+    max_sse_clients: int = Field(description="design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 4: the hub-wide bound on concurrently open GET /d/{deployment}/events connections (its own bound, never MAX_INFLIGHT_KERNEL_CALLS) -- an advertised limit is part of the contract (ADR-0016), same discipline as max_tie_group_extra_rows above. ADDITIVE field, no protocol_version bump (an existing client that ignores an unknown MetaResponse key does not misparse).")
+    sse_poll_interval_secs: float = Field(description="design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 1: how often the shared per-deployment head-watcher polls max(id) -- config-overridable, advertised so a client can size its own reconnect/backoff expectations rather than guess. ADDITIVE field, no protocol_version bump.")
 
 
 class KindsResponse(BaseModel):

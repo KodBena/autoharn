@@ -221,6 +221,9 @@ EXPECTED_ROUTES = {
     ("POST", "/d/{deployment}/write/missive_dispose"),
     # Ledger row 1480 (this commission): the valid-kinds teaching restoration's own new route.
     ("GET", "/d/{deployment}/kinds"),
+    # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md (work item boundary-sse-events, ledger row 169):
+    # the head-advancement-only SSE push signal's own new route.
+    ("GET", "/d/{deployment}/events"),
 }
 
 
