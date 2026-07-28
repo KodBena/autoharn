@@ -141,6 +141,28 @@ CHAIN_S68 = CHAIN_FULL + [
 ]
 
 
+def write_scratch_multiplex_config_enforce(tmpdir: Path, world: str) -> Path:
+    """WR13 (row 173): the SAME single-deployment TOML shape `write_scratch_multiplex_config`
+    (imported from the boundary-service sibling) writes, plus the ONE additional top-level key
+    `identity_enforcement = "enforce"` -- a separate helper rather than parameterizing the
+    shared one (that function is the boundary-service suite's OWN home, reused unchanged by
+    every other suite; adding an enforce-only knob there for one caller here would be exactly
+    the "second, drifting copy" ADR-0012 P1 warns against in the other direction -- this local
+    helper is the smaller, more honest duplication of the ONE line that differs, matching this
+    file's own `birth_via_boundary_full`'s stated precedent for the identical tradeoff)."""
+    path = tmpdir / f"{world}-boundary-multiplex-enforce.toml"
+    path.write_text(
+        f'identity_enforcement = "enforce"\n'
+        f'[deployments.{world}]\n'
+        f'pghost = "{PGHOST}"\n'
+        f'pgdatabase = "{PGDB}"\n'
+        f'pguser = "{world}_rw"\n'
+        f'pgschema = "{world}"\n'
+        f'pgkern = "{world}_kernel"\n',
+        encoding="utf-8")
+    return path
+
+
 def birth_via_boundary_full(world: str) -> tuple[int, int]:
     """`seen-red/boundary-service/run_fixtures.py`'s own `birth_via_boundary` targets CHAIN_B
     (s43-headed) -- its `principal_standing_declared` payloads carry no `principal_binding_active`
@@ -1070,6 +1092,64 @@ def main() -> int:
         else:
             check("wr7-countersigned-in-force-true-s68-shape", False,
                   "UNEXERCISED: WR7's own s68-headed world never became healthy", failures)
+
+        # ==================== WR13 (row 173, boundary-capability-manifest): the extended
+        # CapabilityManifest + identity_enforcement posture, BOTH POLARITIES ====================
+        # ABSENT polarity: WORLD (this file's own main `world`, CHAIN_FULL -- through s59, one
+        # short of s60/s61/s64) already proves s58_missives True (s59's own missive_open_threads
+        # ships on this chain) while s60_entitlement/s61_signatures/s64_delegation read False --
+        # a genuinely mixed manifest, not a vacuous all-True or all-False reading.
+        print("== WR13: capability manifest (s58/s60/s61/s64) + identity_enforcement posture ==")
+        status_h1, health1 = bs_fixtures.http_get(f"{base}/health")
+        caps1 = health1.get("capabilities", {}) if isinstance(health1, dict) else {}
+        check("wr13-capability-manifest-absent-polarity-on-chain-full",
+              status_h1 == 200 and caps1.get("s58_missives") is True
+              and caps1.get("s60_entitlement") is False
+              and caps1.get("s61_signatures") is False
+              and caps1.get("s64_delegation") is False,
+              f"status={status_h1} capabilities={caps1}", failures)
+        check("wr13-identity-enforcement-default-grace",
+              status_h1 == 200 and health1.get("identity_enforcement") == "grace",
+              f"status={status_h1} identity_enforcement={health1.get('identity_enforcement')!r} "
+              f"(scratch multiplex config never sets the key -- DEFAULT_IDENTITY_ENFORCEMENT "
+              f"applies)", failures)
+
+        # PRESENT polarity: WR7's own world (CHAIN_S68 -- through s68, so s60/s61/s64 ALL
+        # applied) reused here rather than re-birthed -- ADR-0012 P1, the same world already
+        # proved healthy above. A SECOND server process against the SAME schema, config-only
+        # different (identity_enforcement="enforce"), proves the posture is read from config,
+        # never from schema shape.
+        if up7:
+            cfg_path7_enforce = write_scratch_multiplex_config_enforce(wdir7.parent, world7)
+            proc7b, port7b = bs_fixtures.start_server(cfg_path7_enforce)
+            procs.append(proc7b)
+            base7b = f"http://127.0.0.1:{port7b}/d/{world7}"
+            up7b = bs_fixtures.wait_health(base7b)
+            status_h2, health2 = bs_fixtures.http_get(f"{base7b}/health") if up7b else (0, {})
+            caps2 = health2.get("capabilities", {}) if isinstance(health2, dict) else {}
+            check("wr13-capability-manifest-present-polarity-on-chain-s68",
+                  up7b and status_h2 == 200 and caps2.get("s58_missives") is True
+                  and caps2.get("s60_entitlement") is True
+                  and caps2.get("s61_signatures") is True
+                  and caps2.get("s64_delegation") is True,
+                  f"up7b={up7b} status={status_h2} capabilities={caps2}", failures)
+            check("wr13-identity-enforcement-enforce-when-configured",
+                  up7b and status_h2 == 200 and health2.get("identity_enforcement") == "enforce",
+                  f"up7b={up7b} status={status_h2} "
+                  f"identity_enforcement={health2.get('identity_enforcement')!r} (this deployment's "
+                  f"own multiplex TOML carries identity_enforcement = \"enforce\")", failures)
+            # The 2026-07-27-dated panel missive's own known consumer, named in this commission
+            # verbatim: capabilities.s43_boundary must stay byte-unchanged by this additive build.
+            check("wr13-known-consumer-s43-boundary-byte-unchanged",
+                  up7b and status_h2 == 200 and caps2.get("s43_boundary") is True,
+                  f"up7b={up7b} status={status_h2} s43_boundary={caps2.get('s43_boundary')}",
+                  failures)
+        else:
+            for name in ("wr13-capability-manifest-present-polarity-on-chain-s68",
+                         "wr13-identity-enforcement-enforce-when-configured",
+                         "wr13-known-consumer-s43-boundary-byte-unchanged"):
+                check(name, False, "UNEXERCISED: WR7's own s68-headed world never became healthy",
+                      failures)
 
     finally:
         for p in procs:

@@ -497,7 +497,7 @@ from boundary_models import (  # noqa: E402
 # row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
 # the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
 # caught missing.
-BOUNDARY_SERVICE_VERSION = "1.5.0"
+BOUNDARY_SERVICE_VERSION = "1.6.0"
 # Bumped to 1.5.0 (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
 # boundary-sse-events, ledger row 169): ONE new route SHAPE, `GET /d/{deployment}/events`
 # (text/event-stream, head-advancement-only) -- a genuinely new route shape, the same (a)/(b)/
@@ -508,6 +508,17 @@ BOUNDARY_SERVICE_VERSION = "1.5.0"
 # (WIRE_PROTOCOL_VERSION) is UNCHANGED -- an additive /meta field, and an entirely-opt-in new
 # route an existing client never calls, does not make an existing client misparse anything
 # (boundary_models.py's own protocol_version bump rule, verbatim).
+# Bumped to 1.6.0 (work item boundary-capability-manifest, ledger row 173): NO new route -- this
+# is the additive-field-alone case the 1.4.0(b)/1.5.0 notes above both name as ordinarily NOT
+# earning a bump, but this one is a genuine new documented capability on an existing route's
+# response contract (the SAME reasoning `include_superseded` earned 1.4.0 for): `GET
+# /d/{deployment}/health` gains FOUR new `CapabilityManifest` fields (s58_missives/
+# s60_entitlement/s61_signatures/s64_delegation, extending the manifest past its s45 stopping
+# point) and ONE new top-level field (`identity_enforcement`, row 318's promised field --
+# surfaces the deployment's effective grace/enforce posture, previously undetectable remotely,
+# UPDATE survey erratum). `protocol_version`/`WIRE_PROTOCOL_VERSION` stays UNCHANGED -- every new
+# field is additive; an existing client that ignores an unknown `HealthResponse` key does not
+# misparse (the same rule `max_sse_clients`/`sse_poll_interval_secs` were held to one version ago).
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -1791,8 +1802,17 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
         f"AND con.conname = 'principal_binding_active_kind_shape' "
         f"AND pg_get_constraintdef(con.oid) LIKE '%principal_standing_declared%'));",
     ))
+    # Row 173: extend the manifest past s45 (object-existence detection, the SAME
+    # migrate-detect-drift discipline as every fact above -- see CapabilityManifest's own field
+    # docstrings in boundary_models.py for why THESE four and not every intervening delta).
+    s58_missives = _regclass_exists(cfg, f"{cfg.schema}.missive_open_threads")
+    s60_entitlement = _column_exists(cfg, cfg.schema, "ledger", "entitlement_act_class")
+    s61_signatures = _regclass_exists(cfg, f"{cfg.schema}.signed_commissions")
+    s64_delegation = _column_exists(cfg, cfg.schema, "ledger", "delegation_redelegate_depth")
     return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43,
-                               credited_view=credited, s45_standing_lifecycle=s45)
+                               credited_view=credited, s45_standing_lifecycle=s45,
+                               s58_missives=s58_missives, s60_entitlement=s60_entitlement,
+                               s61_signatures=s61_signatures, s64_delegation=s64_delegation)
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
@@ -2850,6 +2870,11 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             world=cfg.schema,
             service_principal=service_principal_name(cfg),
             capabilities=capability_manifest(cfg),
+            # Row 173/row 318: the SAME module-global `_identity_enforcement_posture`
+            # `configure_identity_enforcement` set once at startup from the multiplex TOML, and
+            # the anonymous-write refusal (rung a, above) reads at request time -- one value, two
+            # readers, never a second copy that could drift.
+            identity_enforcement=_identity_enforcement_posture,
         )
 
     @app.get("/d/{deployment}/rows/current")

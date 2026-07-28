@@ -74,6 +74,17 @@ class CapabilityManifest(BaseModel):
     s43_boundary: bool = Field(description="the four SECURITY DEFINER write-verdict functions present (kernel/lineage/s43-typed-verdict-write-boundary.sql): kernel.ledger_write")
     credited_view: bool = Field(description="the s44 credited-reading view present (unbuilt as of this service's authoring -- spec §7): credited_current")
     s45_standing_lifecycle: bool = Field(description="s45's widened principal_binding_active_kind_shape CHECK present (kernel/lineage/s45-standing-lifecycle.sql) -- the SAME single fact bootstrap/templates/legacy-led.tmpl's own has_s45_standing_lifecycle() probes; a served `led principal declare-standing|undeclare-standing|suspend|lift-suspension|revoke` payload includes principal_binding_active iff this is true (legacy-led-retirement inventory pass, ledger row 1149)")
+    # Row 173 (boundary-capability-manifest): the manifest stopped at s45 -- this world's
+    # currently-applicable lineage runs well past it (up to s69 at authoring). Extended with the
+    # SAME object-existence discipline as every field above (never a version literal), picking out
+    # the capabilities a served CLIENT plausibly branches behavior on -- not every column-widening
+    # refinement s62/s63/s65-s68 landed (those are internal refusal-journaling/hash-coverage
+    # hardening with no externally-actionable surface of their own, the same class of delta this
+    # manifest has never carried a flag for at s46-s57 either).
+    s58_missives: bool = Field(description="the missive substrate's own derived read surface present (kernel/lineage/s59-missive-views.sql): schema.missive_open_threads. Object existence, not the base s58 substrate tables directly -- a world that ran s58 but not yet s59 would be a half-applied lineage state this service does not otherwise need to distinguish.")
+    s60_entitlement: bool = Field(description="s60's entitlement-enforcement column present (kernel/lineage/s60-entitlement-enforcement.sql): schema.ledger.entitlement_act_class. Column-shape detection (this view NAME predates s60; the column does not), same discipline `_column_exists` already applies to work_item_violations/work_review_gap in VIEW_REGISTRY.")
+    s61_signatures: bool = Field(description="s61's signature-symmetry/key-binding read surface present (kernel/lineage/s61-signature-symmetry-and-key-binding.sql): schema.signed_commissions.")
+    s64_delegation: bool = Field(description="s64's delegation-condition column present (kernel/lineage/s64-principal-stamps-delegation-conditions.sql): schema.ledger.delegation_redelegate_depth -- the kernel-side half of design/FABLE-DISPATCH-MECHANICS-SPEC.md's `dispatch mint` delegation grain; a client can detect whether a minted-delegate write carries delegation conditions this world's kernel actually enforces.")
 
 
 class HealthResponse(BaseModel):
@@ -93,6 +104,24 @@ class HealthResponse(BaseModel):
         description="the trust-tier this deployment answers under (spec §3's named-empty-slot "
                     "discipline: v1's only value is 'single-operator' -- nothing here designs or "
                     "forecloses a future multi-principal trust tier, it is simply not built yet).")
+    identity_enforcement: str = Field(
+        # No module-level default (unlike authn_mode, a fixed process-wide constant): this value
+        # varies PER DEPLOYMENT (grace/enforce, operator-configured), so `health()` below always
+        # supplies it explicitly from the live `_identity_enforcement_posture` -- a default here
+        # importing boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT would also reopen an
+        # import cycle (boundary_multiplex_config -> boundary_diagnostic_log -> boundary_models),
+        # witnessed live at import time, not merely theorized.
+        description="row 173/row 318's promised field, ADDITIVE: this deployment's EFFECTIVE "
+                    "identity_enforcement posture ('grace' or 'enforce', design/"
+                    "FABLE-DISPATCH-MECHANICS-SPEC.md §3), read from the SAME multiplex-TOML-"
+                    "configured value the write path enforces against (_identity_enforcement_"
+                    "posture, set once at startup) -- never a second, drifting copy. Distinct from "
+                    "authn_mode (above): authn_mode names the AUTHENTICATION TIER this build "
+                    "supports at all ('single-operator', v1's only value, unchanged by config); "
+                    "identity_enforcement names whether THIS deployment currently REFUSES an "
+                    "authority-bearing write that arrives with no identity header, a config choice "
+                    "an operator flips per deployment -- a client could not previously detect this "
+                    "remotely (UPDATE survey erratum, ledger row 318's own finding).")
 
 
 class CapabilityAbsent(BaseModel):
