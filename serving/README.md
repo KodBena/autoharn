@@ -163,15 +163,18 @@ once (pydantic already ships in that venv for other consumers).
 Parts A+B of the legacy-led-retirement spec, the missives spec, and ledger row 1480 — fixed; the
 route table itself IS the enumeration, spec §9/A2.1)
 
-This service carries **exactly twenty routes** — the thirteen GETs and seven POSTs below — and
-**nothing else**. (This count corrects a stale "fourteen routes" claim this section carried:
+This service carries **exactly twenty-one routes** — the fourteen GETs and seven POSTs below —
+and **nothing else**. (This count corrects a stale "fourteen routes" claim this section carried:
 that number named the read-surface amendment's own closure and was never bumped for the three
 routes design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A+B added — `/write/obligation_revoke`,
 `/artifacts/{hash}`, `/artifacts/{hash}/stat`, `/artifacts` — or for `/write/missive_dispose`
 [design/FABLE-MISSIVES-KERNEL-SPEC.md] — a real, pre-existing doc/fixture drift, found and fixed
 here in passing per CLAUDE.md's engineering-responsibility rule while adding this same table's
 twentieth row, `/kinds`, ledger row 1480; `seen-red/boundary-service/run_fixtures.py`'s own W12
-`EXPECTED_ROUTES` set carried the identical drift and is fixed alongside this table.)
+`EXPECTED_ROUTES` set carried the identical drift and is fixed alongside this table. Bumped again
+to twenty-one for this table's twenty-first row, `/events` — design/
+FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, work item boundary-sse-events, ledger row 169 — see the
+dedicated "SSE push signal" section below the table.)
 FastAPI's own self-documentation surface is **disabled, not merely
 unenumerated**: `docs_url=None, redoc_url=None, openapi_url=None` (A2.1), so `/docs`, `/redoc`,
 `/openapi.json`, and `/docs/oauth2-redirect` do not exist on this service at all — there is no
@@ -193,6 +196,7 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 | GET | `/kinds` | `ledger_kind_check`'s live vocabulary (ledger row 1480: restores, on this served transport, the legacy direct-psql `led`'s dropped valid-kinds TEACHING on a kind refusal — see `KindsResponse`'s own docstring in `boundary_models.py` and `_kind_vocabulary`'s own in `boundary_service.py` for the exact query, SSOT'd off the live constraint, never a hardcoded copy) | none (this constraint has carried its exact name since s15 — this repo's first lineage delta with a `ledger` table at all — so every deployment this service could serve carries it) |
 | GET | `/artifacts/{hash}` | one stored artifact's raw bytes, by content-addressed SHA-256 hash | `s51-artifact-store` |
 | GET | `/artifacts/{hash}/stat` | one stored artifact's metadata (size, media type, custody) without its bytes | `s51-artifact-store` |
+| GET | `/events` | `text/event-stream` — a HEAD-ADVANCEMENT-ONLY push signal (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, ledger row 169): `event: head`/`{"head_id": <n>}` when this deployment's ledger head grows, never row content; see the dedicated section below | none (its own `MAX_SSE_CLIENTS` admission bound applies at connect time — never the `s43-boundary`/`s51-artifact-store`-style capability gates, and never the 24-slot inflight kernel-call gate) |
 | POST | `/write/ledger` | `kernel.ledger_write` | `s43-boundary` |
 | POST | `/write/review` | `kernel.review_write` | `s43-boundary` |
 | POST | `/write/registration` | `kernel.registration_write` | `s43-boundary` |
@@ -215,6 +219,52 @@ THIS SERVICE ACCEPTS FOR DISPATCH; a request the router itself never dispatches 
 any of this service's own refusal machinery to hold to that discipline. Revisit only if a real
 consumer demonstrates harm from the untyped shape (spec A3.3's own carve-out) — not pre-emptively
 typed, per ADR-0004 (no work ahead of a demonstrated need).
+
+## SSE push signal (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item boundary-sse-events, ledger row 169)
+
+`GET /d/{deployment}/events` is a SIGNAL, not a data channel: the stream carries head advancement
+ONLY — one `event: head` / `data: {"head_id": <n>}` per observed advance of this deployment's
+ledger head (`max(id)`), never row content. A client that learns the head moved fetches rows
+through the existing read routes, with every one of their own bounds/pagination/refusal
+discipline intact. Mechanics:
+
+- **One shared watcher per deployment** (`_SseHub`, `serving/boundary_service.py`), started
+  lazily on the first subscriber and stopped the instant the last one disconnects — polls
+  `max(id)` at `sse_poll_interval_secs` (default 2, config-overridable via the two new
+  `boundary-multiplex.toml` top-level keys below). No kernel change, no LISTEN/NOTIFY trigger
+  (a named, deliberately unbuilt slot for a future lineage delta).
+- **Resume**: `Last-Event-ID` (the standard SSE reconnect header, checked first) or
+  `?after_head=` — on connect the server immediately emits the current head if it exceeds that
+  value, so a reconnecting client never misses an advance and never needs event replay (heads
+  are monotone).
+- **Keepalive**: a `: keepalive` comment line every 15s (`SSE_KEEPALIVE_INTERVAL_S`, fixed, not
+  config-overridable) so intermediaries do not reap an idle connection.
+- **Its own admission bound, `max_sse_clients`** (default 16, config-overridable, HUB-WIDE —
+  summed across every deployment's subscribers, never per-deployment): SSE connections are
+  long-lived and must NOT occupy the 24-slot `MAX_INFLIGHT_KERNEL_CALLS` gate (a handful of
+  long-lived panel connections would otherwise starve the ordinary API) — checked once, at
+  connect time, never mid-stream. Beyond the bound: HTTP 503, typed `sse_saturated`
+  (`{"disposition": "sse_saturated", "max_clients": <n>, "message": ...}`). `/meta` advertises
+  both `max_sse_clients` and `sse_poll_interval_secs` (ADR-0016: an advertised limit is
+  contract).
+- **Restart interplay, stated honestly**: `autoharn service restart` SIGTERMs the hub; every open
+  SSE connection dies with it — correct behavior, since the resume contract above makes
+  reconnection lossless. Nothing in the restart path is touched by this spec.
+- **Per-deployment isolation**: a subscriber to `/d/A/events` learns nothing about deployment B —
+  the watcher and head are per-deployment, same as every other route under the multiplex.
+
+Two new OPTIONAL `boundary-multiplex.toml` top-level keys (whole-file validated, same
+before-the-socket-binds discipline as `log_level`/`identity_enforcement`): `sse_poll_interval_secs`
+(a positive number of seconds, default 2) and `max_sse_clients` (a positive integer, default 16).
+
+This route's own connection NEVER touches `MAX_INFLIGHT_KERNEL_CALLS`/
+`MAX_INFLIGHT_PER_DEPLOYMENT` — the only `_psql` call in its lifetime is the shared watcher's own
+periodic poll (through the SAME admission gates every other kernel read uses; a transient
+saturation there just skips a poll cycle, never refuses the connection).
+
+Not built here, named honestly: LISTEN/NOTIFY push (a future lineage delta); production CORS
+(unowned by this spec, restated); the panel's own client-side `EventSource` consumption (theirs
+— this repository's own CLI tools never call this route).
 
 ## Bounds (A2.2, A2.6, A2.7, A3.1, A4.1, A4.2, A5.1–A5.4, A11 — one disclosed discipline, every ingress)
 

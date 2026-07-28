@@ -214,6 +214,7 @@ REGISTRY: dict[str, str] = {
     "deep-walk-recursion-guard":       "seen-red/deep-walk-recursion-guard/run_fixtures.py",
     "boundary-multiplex":              "seen-red/boundary-multiplex/run_fixtures.py",
     "boundary-read-surface":           "seen-red/boundary-read-surface/run_fixtures.py",
+    "boundary-sse-events":             "seen-red/boundary-sse-events/run_fixtures.py",
     "boundary-cli-rebase":             "seen-red/boundary-cli-rebase/run_fixtures.py",
     "otel-attest":                     "seen-red/otel-attest/run_fixtures.py",
     "otel-watch":                      "seen-red/otel-watch/run_fixtures.py",

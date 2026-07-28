@@ -1,0 +1,43 @@
+seen-red/boundary-sse-events/red.txt -- RED capture, banked per gates/fixture_census.py's own
+"a gate never seen red is a claim" discipline (ADR-0011).
+
+Captured by running seen-red/boundary-sse-events/run_fixtures.py against the tree BEFORE this
+build's own changes to serving/boundary_service.py, serving/boundary_multiplex_config.py, and
+serving/boundary_models.py (a `git stash` of exactly those three files, the fixture itself and
+gates/fixture_census.py's own registry entry left in place -- the fixture's own code is
+identical to its GREEN form; only the production code it exercises reverts).
+
+Command: env -u PGOPTIONS python3 seen-red/boundary-sse-events/run_fixtures.py
+
+Observed (verbatim tail):
+
+Traceback (most recent call last):
+  File ".../seen-red/boundary-sse-events/run_fixtures.py", line 456, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File ".../seen-red/boundary-sse-events/run_fixtures.py", line 229, in main
+    raise RuntimeError(f"server never became healthy: {tail[-2000:]}")
+RuntimeError: server never became healthy: boundary_service: REFUSED at start-up (config) --
+boundary-multiplex config at /tmp/sse-fixtures-fbbbup98/sse-boundary-multiplex.toml has unknown
+top-level key(s) ['max_sse_clients', 'sse_poll_interval_secs'] -- the only recognized top-level
+keys are ['deployments', 'identity_enforcement', 'log_level'] (spec §3, extended by design/
+FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md §2's 'log_level'). Refused before the socket ever
+binds.
+
+Exit code: 1
+
+WHY THIS IS THE RIGHT RED (not an accidental/unrelated failure): the pre-build
+`boundary_multiplex_config.py` has no `sse_poll_interval_secs`/`max_sse_clients` top-level keys
+at all (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md's own two new tunables), and pre-build
+`boundary_service.py` has no `GET /d/{deployment}/events` route -- the fixture's own scratch
+TOML (written by this fixture's `write_scratch_multiplex_config_two`) necessarily carries both
+new keys, so the pre-build service refuses the WHOLE config before the socket ever binds (the
+multiplex spec's own "whole file validates before the socket binds" discipline, extended
+correctly to the two new keys even on the code that predates them -- an unrecognized key refuses
+loudly, never silently ignored). This is exactly the class of RED the SSE build closes: after
+the build, the SAME fixture, unchanged, passes every one of its ten witness legs (S1-S10, plus
+the existing-routes-byte-identical and /meta-advertisement legs) GREEN.
+
+GREEN confirmation (same fixture, post-build tree, same command): exit code 0, "17 failure(s)"
+counter reads "0 failure(s)" -- see the build's own commit message / report for the full
+per-leg WITNESSED table.

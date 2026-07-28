@@ -388,7 +388,7 @@ from typing import Any
 import uvicorn
 import uvicorn.config
 from fastapi import Depends, FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 # Path setup, NOT lazy imports (both `sys.path.insert` calls execute at module import time,
 # unconditionally, before either import below runs -- the gate that actually arbitrates this,
@@ -455,6 +455,7 @@ from boundary_models import (  # noqa: E402
     RegistrationWriteIntFields,
     ReviewWriteIntFields,
     ServerSaturated,
+    SseSaturated,
     UnclassifiedFailure,
     UnknownDeployment,
     UnknownView,
@@ -496,7 +497,17 @@ from boundary_models import (  # noqa: E402
 # row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
 # the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
 # caught missing.
-BOUNDARY_SERVICE_VERSION = "1.4.0"
+BOUNDARY_SERVICE_VERSION = "1.5.0"
+# Bumped to 1.5.0 (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
+# boundary-sse-events, ledger row 169): ONE new route SHAPE, `GET /d/{deployment}/events`
+# (text/event-stream, head-advancement-only) -- a genuinely new route shape, the same (a)/(b)/
+# (kinds) kind of growth the notes above already earn a bump for, not a registry-only growth.
+# `/meta` also gains two new, strictly additive fields (`max_sse_clients`/
+# `sse_poll_interval_secs`) -- additive alone would not need the bump (the 1.4.0(b) note above),
+# but the new route already does. `HealthResponse`/`MetaResponse`'s own `protocol_version`
+# (WIRE_PROTOCOL_VERSION) is UNCHANGED -- an additive /meta field, and an entirely-opt-in new
+# route an existing client never calls, does not make an existing client misparse anything
+# (boundary_models.py's own protocol_version bump rule, verbatim).
 
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's mechanism item 1: the CLOSED, spec-enumerated
 # view allowlist `GET /d/{deployment}/views/{view}` serves -- the v1 membership named verbatim in
@@ -1010,6 +1021,8 @@ HISTORY_DEFAULT_LIMIT = 1000
 # A11 item 1: `/work/items`' cursor domain bound. ADR-0012 P1: named ONCE, not an inline literal
 # at the one call site that checks it -- now in serving/bounds.py (see its own docstring for the
 # full rationale).
+
+
 
 # ================================================================================================
 # IDENTITY CONDUIT (design/FABLE-DISPATCH-MECHANICS-SPEC.md, ledger rows 1463/1467/1468/1471) --
@@ -2478,6 +2491,168 @@ async def _bounded_artifact_body(request: Request) -> bytes:
         ) from e
 
 
+# ================================================================================================
+# SSE PUSH SIGNAL (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
+# boundary-sse-events, ledger row 169). `GET /d/{deployment}/events` -- a HEAD-ADVANCEMENT-ONLY
+# signal (spec §1: "when a deployment's ledger head grows, subscribers receive one event `event:
+# head` with data `{"head_id": <n>}`. No row content ever crosses the stream"). See the spec's
+# own §1-§4 for the full mechanics; this section and the `/events` route below (inside
+# `create_app`) implement them.
+# ================================================================================================
+
+SSE_KEEPALIVE_INTERVAL_S = 15.0
+"""Spec §1 item 3: a `: keepalive` comment line, emitted at least this often on every open SSE
+stream, so an intermediary proxy does not reap an idle connection. NOT config-overridable (the
+spec names only the poll interval and the client cap, below, as operator tunables) -- this is a
+protocol-hygiene constant every stream needs identically, not an operational bound an operator
+would ever have reason to widen."""
+
+# The two SSE tunables (spec §1 items 1/4), DEFAULT-set from boundary_multiplex_config's own
+# defaults, overridden once at startup (`main()`) via the `configure_*` functions below --
+# construction-time-defense-in-depth, the SAME pattern `configure_identity_enforcement`/
+# `boundary_diagnostic_log.configure_level` already establish: the TOML value is already
+# validated whole-file by boundary_multiplex_config.py before either function here ever runs.
+_sse_poll_interval_secs: float = boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS
+_max_sse_clients: int = boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS
+
+
+def configure_sse_poll_interval(v: float) -> None:
+    global _sse_poll_interval_secs
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+        raise ValueError(
+            f"boundary_service: REFUSED -- configure_sse_poll_interval({v!r}) must be a "
+            f"positive number.")
+    _sse_poll_interval_secs = float(v)
+
+
+def configure_max_sse_clients(v: int) -> None:
+    global _max_sse_clients
+    if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+        raise ValueError(
+            f"boundary_service: REFUSED -- configure_max_sse_clients({v!r}) must be a positive "
+            f"integer.")
+    _max_sse_clients = v
+
+
+def _sse_query_head(cfg: "BoundaryConfig") -> int:
+    """The ONE query the shared watcher (and a connecting subscriber's own immediate catch-up
+    check) runs: this deployment's ledger head (`max(id)`, 0 on an empty ledger -- `coalesce`
+    matches every other read route's own empty-result convention in this file). Runs through
+    `_psql`/`_query_json` exactly like every other kernel read here -- the SAME admission gates
+    (global + per-deployment) apply to this call, so a saturated deployment simply skips a poll
+    cycle (caught by the caller) rather than being exempted from the bound the rest of this
+    service already lives under."""
+    return int(_query_json(cfg, f"SELECT to_jsonb(coalesce(max(id), 0)) FROM {cfg.schema}.ledger;"))
+
+
+# The exceptions `_sse_query_head` can surface through `_psql`/`_query_json` -- every caller of
+# `_sse_query_head` catches exactly this tuple (ADR-0012 P1: named once, not re-derived per call
+# site) and treats each as "this poll attempt did not succeed", never a stream-ending failure --
+# the watcher/connect path simply tries again next cycle (`KernelCallSaturated`/
+# `DeploymentCallSaturated`: ordinary load, expected to clear; `PsqlInfraFailure`/
+# `PsqlUnclassifiedFailure`: the SAME transient-infra postures every other read route in this
+# service already answers with a typed refusal for, here absorbed rather than surfaced because an
+# SSE watcher has no single request to answer -- it just tries again). Named AFTER the four
+# classes themselves (this section sits below `PsqlInfraFailure`/`KernelCallSaturated`/
+# `DeploymentCallSaturated`/`BoundaryConfig`/`_psql`/`_query_json` in this file precisely so this
+# tuple can reference the real classes rather than string-matching class names).
+_SSE_POLL_EXCEPTIONS = (
+    KernelCallSaturated, DeploymentCallSaturated, PsqlInfraFailure, PsqlUnclassifiedFailure,
+)
+
+
+class _SseHub:
+    """One instance PER DEPLOYMENT (built once, in `create_app`, alongside that deployment's own
+    `BoundaryConfig` -- never re-derived per request). Owns the lazy-start/stop watcher task and
+    the live subscriber set for that deployment's `/events` route.
+
+    LIFECYCLE (spec §1 item 1, "one shared watcher per deployment, started lazily on first
+    subscriber, stopped when the last unsubscribes"): `connect()` adds the caller's queue to
+    `subscribers` and starts `_watch_loop` as an asyncio task IFF one is not already running;
+    `disconnect()` removes the queue and, if `subscribers` is now empty, cancels the watcher task
+    and clears the reference -- so a deployment with zero live subscribers holds no running task
+    at all (witnessed via `app.state.sse_hubs`, see seen-red/boundary-sse-events/run_fixtures.py's
+    own in-process leak witness). `self.lock` (an `asyncio.Lock`, this hub is only ever touched
+    from the single uvicorn event loop thread, matching every other asyncio-native piece of this
+    service) serializes the subscribe/unsubscribe/start/stop transitions against each other and
+    against the watcher's own tail check, so two near-simultaneous connects never start two
+    watcher tasks and a connect racing a would-be-final disconnect never leaves a watcher running
+    with zero subscribers or a hole with subscribers and no watcher."""
+
+    def __init__(self, cfg: "BoundaryConfig") -> None:
+        self.cfg = cfg
+        self.subscribers: set[asyncio.Queue] = set()
+        self.watcher_task: asyncio.Task | None = None
+        self.last_head: int = 0
+        self.lock = asyncio.Lock()
+
+    async def connect(self, queue: "asyncio.Queue[int]") -> int:
+        """Registers `queue` as a live subscriber, starting the watcher lazily if this is the
+        first one, then runs ONE immediate, synchronous poll (spec §1 item 2: "on connect the
+        server immediately emits the current head if it exceeds [the caller's Last-Event-ID]") --
+        this cannot simply trust `self.last_head` as already fresh, because the watcher task just
+        started (or has been sleeping between poll cycles) may not have observed a very recent
+        write yet. A transient poll failure here degrades to the last KNOWN head rather than
+        failing the connection -- `/events` never surfaces a `_psql`-layer failure as anything
+        other than "no new information yet"; a genuinely down kernel is still visible via every
+        OTHER route's own typed `infra_failure`. Returns the (possibly just-updated) head this
+        deployment is known to be at."""
+        async with self.lock:
+            self.subscribers.add(queue)
+            if self.watcher_task is None or self.watcher_task.done():
+                self.watcher_task = asyncio.create_task(self._watch_loop())
+        try:
+            head = await asyncio.to_thread(_sse_query_head, self.cfg)
+        except _SSE_POLL_EXCEPTIONS:
+            head = self.last_head
+        if head > self.last_head:
+            self.last_head = head
+        return self.last_head
+
+    async def disconnect(self, queue: "asyncio.Queue[int]") -> None:
+        """Spec §1 item 1's other half: stops the watcher the instant the LAST subscriber
+        leaves (never lingering, never leaking a task with nothing to serve)."""
+        async with self.lock:
+            self.subscribers.discard(queue)
+            if not self.subscribers and self.watcher_task is not None:
+                self.watcher_task.cancel()
+                self.watcher_task = None
+
+    async def _watch_loop(self) -> None:
+        """The ONE shared poller for this deployment (spec §1 item 1) -- sleeps
+        `_sse_poll_interval_secs`, polls once, and (on a genuine head advance) pushes the new
+        head onto every live subscriber's own queue; a transient poll failure (see
+        `_SSE_POLL_EXCEPTIONS` above) is silently absorbed and retried next cycle, never raised
+        past this loop (there is no single request here to answer with a typed refusal). Runs
+        until `disconnect()` cancels it (the last-unsubscribe stop) -- `asyncio.CancelledError`
+        is the ordinary, expected exit, not an error."""
+        try:
+            while True:
+                await asyncio.sleep(_sse_poll_interval_secs)
+                try:
+                    head = await asyncio.to_thread(_sse_query_head, self.cfg)
+                except _SSE_POLL_EXCEPTIONS:
+                    continue
+                if head > self.last_head:
+                    async with self.lock:
+                        self.last_head = head
+                        subs = list(self.subscribers)
+                    for q in subs:
+                        q.put_nowait(head)
+        except asyncio.CancelledError:
+            pass
+
+
+def sse_saturated(max_clients: int, message: str) -> JSONResponse:
+    """Spec §1 item 4: the one typed shape `GET /d/{deployment}/events` returns when
+    `max_sse_clients` concurrent SSE connections are already open on this hub -- HTTP 503,
+    naming the bound, distinct from `server_saturated`/`deployment_saturated` (this axis is never
+    the 24-slot inflight admission gate -- an SSE connection never occupies that gate at all)."""
+    body = SseSaturated(max_clients=max_clients, message=message)
+    boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
+    return JSONResponse(status_code=503, content=body.model_dump())
+
+
 def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
     """Multiplex spec §2: ONE app serves every deployment in `configs`, discriminated by the
     leading `/d/{deployment}` path segment on every route -- no unprefixed routes survive (the
@@ -2502,6 +2677,18 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+
+    # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 1: one `_SseHub` PER DEPLOYMENT, built
+    # once here (never re-derived per request) -- a plain closure variable, the SAME shape
+    # `configs` itself already is, rather than a module-level global (which would collide across
+    # the multiple `create_app` calls this file's own fixture bank already makes in one process,
+    # e.g. W12's in-process route-table assertion). Also stashed on `app.state` -- Starlette's
+    # own place for exactly this kind of app-scoped bookkeeping -- so an in-process witness (no
+    # live HTTP needed) can drive `hub.connect`/`hub.disconnect` directly and observe
+    # `hub.watcher_task` transition to `None` after the last unsubscribe (seen-red/
+    # boundary-sse-events/run_fixtures.py's own leak witness).
+    sse_hubs: dict[str, _SseHub] = {name: _SseHub(cfg) for name, cfg in configs.items()}
+    app.state.sse_hubs = sse_hubs
 
     @app.middleware("http")
     async def _diagnostic_logging_middleware(request: Request, call_next):
@@ -3154,6 +3341,8 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             lineage_head=_lineage_head(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
             max_tie_group_extra_rows=MAX_TIE_GROUP_EXTRA_ROWS,
+            max_sse_clients=_max_sse_clients,
+            sse_poll_interval_secs=_sse_poll_interval_secs,
         )
 
     @app.get("/d/{deployment}/kinds", response_model=KindsResponse)
@@ -3175,6 +3364,94 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             kinds=_kind_vocabulary(cfg),
             boundary_version=BOUNDARY_SERVICE_VERSION,
         )
+
+    @app.get("/d/{deployment}/events")
+    async def events(deployment: str, request: Request, after_head: int = 0) -> Response:
+        """design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md: `GET /d/{deployment}/events`,
+        `text/event-stream` -- a HEAD-ADVANCEMENT-ONLY push signal (spec §1), never a second
+        data/pagination contract (spec §2: "no row payloads ... no kernel trigger"). `async def`,
+        the ONE exception to this file's plain-`def` read-route convention -- this route never
+        calls `_psql` itself (only the shared `_SseHub`'s own watcher does, briefly, per poll
+        cycle) and must stay on the event loop for its whole open-ended lifetime, so there is no
+        blocking-subprocess-on-the-threadpool hazard A3.1's plain-`def` rule exists to avoid.
+
+        RESUME (spec §1 item 2): `Last-Event-ID` (the standard SSE reconnect header) takes
+        precedence over the `?after_head=` query parameter when both are present -- a
+        reconnecting browser `EventSource` sets the header automatically from the last event ID
+        it saw, which is the more authoritative signal of the two when a caller supplies both.
+
+        ADMISSION (spec §1 item 4): checked HERE, at connect time, against `_max_sse_clients` --
+        this deployment's OWN `cfg`/`_psql`-gated admission (`MAX_INFLIGHT_KERNEL_CALLS`/
+        `MAX_INFLIGHT_PER_DEPLOYMENT`) is NEVER consulted for this route's own connection (spec
+        §1 item 4, verbatim: "must NOT occupy the 24-slot inflight admission gate"); the ONLY
+        `_psql` call this connection's own lifetime touches is `_SseHub.connect`'s one immediate
+        catch-up poll, which DOES pass through those gates like any other kernel read (see
+        `_sse_query_head`'s own docstring) -- a saturated deployment there degrades to "no new
+        information yet", never refuses the SSE connection itself.
+
+        RESTART (spec §1 item 5, stated here per the spec's own instruction "say so in the
+        route's own docstring so nobody 'improves' it into a drain exception"): `autoharn service
+        restart` SIGTERMs this process; every open SSE connection, this one included, dies with
+        it -- deliberately. This route adds NOTHING to the restart path. The client's own resume
+        contract (above) makes reconnection lossless, so there is no drain/grace exception to
+        add here, and none should be."""
+        cfg, err = _resolve_deployment(configs, deployment)
+        if err is not None:
+            return err
+        last_event_id = request.headers.get("last-event-id")
+        if last_event_id is not None:
+            try:
+                resume_from = int(last_event_id)
+            except ValueError:
+                return JSONResponse(status_code=422, content={
+                    "detail": f"Last-Event-ID must be an integer head id; got {last_event_id!r}"})
+        else:
+            resume_from = after_head
+        oor = _out_of_range_id("after_head (or Last-Event-ID)", resume_from)
+        if oor is not None:
+            return oor
+        # Spec §1 item 4: THIS hub-wide bound, counted across every subscriber of every
+        # deployment on this process (the spec's own "per hub" phrasing) -- never the 24-slot
+        # `MAX_INFLIGHT_KERNEL_CALLS` gate every OTHER route lives under. Total across
+        # `sse_hubs` (a plain sum over each hub's own live subscriber count -- no separate
+        # counter to keep in sync, ADR-0012 P1) rather than per-deployment, matching the spec's
+        # own wording exactly.
+        total_subscribers = sum(len(h.subscribers) for h in sse_hubs.values())
+        if total_subscribers >= _max_sse_clients:
+            return sse_saturated(
+                _max_sse_clients,
+                f"this hub already has MAX_SSE_CLIENTS={_max_sse_clients} concurrent SSE "
+                f"connections open (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 4 -- its "
+                f"own bound, never the inflight kernel-call gate) -- refused immediately rather "
+                f"than queued. Retry after a short backoff.")
+        hub = sse_hubs[cfg.name]
+
+        async def _stream():
+            queue: asyncio.Queue[int] = asyncio.Queue()
+            known_head = await hub.connect(queue)
+            last_sent = resume_from
+            try:
+                if known_head > last_sent:
+                    yield f"event: head\ndata: {json.dumps({'head_id': known_head})}\n\n"
+                    last_sent = known_head
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        new_head = await asyncio.wait_for(
+                            queue.get(), timeout=SSE_KEEPALIVE_INTERVAL_S)
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+                        continue
+                    if new_head > last_sent:
+                        yield f"event: head\ndata: {json.dumps({'head_id': new_head})}\n\n"
+                        last_sent = new_head
+            finally:
+                await hub.disconnect(queue)
+
+        return StreamingResponse(
+            _stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     def make_write_route(surface: str, fn: str):
         # A3.1: plain `def`, not `async def` -- FastAPI/Starlette dispatches a plain `def` path
@@ -3555,7 +3832,8 @@ def main(argv: list[str] | None = None) -> int:
     # keys anywhere, a missing required key, or zero deployments each refuse loudly BY NAME,
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
-        records, log_level, identity_enforcement = boundary_multiplex_config.load_multiplex_config_with_diagnostics(args.config)
+        records, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients = (
+            boundary_multiplex_config.load_multiplex_config_with_sse(args.config))
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
         return 2
@@ -3566,6 +3844,10 @@ def main(argv: list[str] | None = None) -> int:
     # design/FABLE-DISPATCH-MECHANICS-SPEC.md §3: same construction-time-defense-in-depth
     # pattern as log_level above -- already validated whole-file by boundary_multiplex_config.py.
     configure_identity_enforcement(identity_enforcement)
+    # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4: same construction-time-defense-in-
+    # depth pattern -- already validated whole-file by boundary_multiplex_config.py.
+    configure_sse_poll_interval(sse_poll_interval_secs)
+    configure_max_sse_clients(max_sse_clients)
     # Multiplex spec §4: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment
     # sub-bound is computed ONCE here (never re-derived per request) and PRINTED at startup
     # (spec §4, verbatim) so an operator can see what their own deployment count produced.
@@ -3573,9 +3855,13 @@ def main(argv: list[str] | None = None) -> int:
     sys.stderr.write(
         f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global) "
         f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
-        f"deployment(s): {sorted(records.keys())})\n")
+        f"deployment(s): {sorted(records.keys())}) MAX_SSE_CLIENTS={max_sse_clients} (per hub) "
+        f"SSE_POLL_INTERVAL_SECS={sse_poll_interval_secs}\n")
     # Diagnostic-logging spec §2 L4/§5 emission site (d): the startup banner's own typed call
-    # site, beside (not instead of) the pre-existing human stderr line directly above.
+    # site, beside (not instead of) the pre-existing human stderr line directly above. Extra
+    # fields beyond Event.STARTUP's own required set are permitted (log_event only enforces
+    # PRESENCE of the required set, never a closed field list) -- additive, not a vocabulary
+    # change.
     boundary_diagnostic_log.log_event(
         boundary_diagnostic_log.Event.STARTUP,
         deployments=sorted(records.keys()),
@@ -3583,6 +3869,8 @@ def main(argv: list[str] | None = None) -> int:
         max_inflight_per_deployment=per_dep_limit,
         log_level=log_level,
         identity_enforcement=identity_enforcement,
+        max_sse_clients=max_sse_clients,
+        sse_poll_interval_secs=sse_poll_interval_secs,
     )
     configs: dict[str, BoundaryConfig] = {}
     for name, record in records.items():
