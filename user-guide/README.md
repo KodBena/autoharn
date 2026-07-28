@@ -24,7 +24,15 @@ points you at it, or when you hit the specific question it answers — none of t
 
 ## Adopter recipes, FAQs, templates, and reference
 
-- [USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md) — "Can I do that?": operator questions about a scaffolded project, answered as recipes.
+- [USER-RECIPES-FAQ.md](USER-RECIPES-FAQ.md) — "Can I do that?": operator questions about a scaffolded project, answered as recipes. As of the faq-refactor-by-concern split (ledger row 185, 2026-07-28) this page is a thin index over eight factor files in `recipes/`, one per subsystem:
+  - [recipes/SETUP-AND-SCAFFOLD.md](recipes/SETUP-AND-SCAFFOLD.md) — standing a world up; what the scaffold puts inside it.
+  - [recipes/DECLARING-AND-QUEUES.md](recipes/DECLARING-AND-QUEUES.md) — rows you write to declare intent, policy, or a plan.
+  - [recipes/IDENTITY-AND-AUTHORITY.md](recipes/IDENTITY-AND-AUTHORITY.md) — who may act, on what basis, and what happens when that changes.
+  - [recipes/EVIDENCE-AND-TRUST.md](recipes/EVIDENCE-AND-TRUST.md) — can I believe what the record says, and how would I prove it.
+  - [recipes/THE-RECORD.md](recipes/THE-RECORD.md) — the life of a row after it is written.
+  - [recipes/REVIEW-AND-GATING.md](recipes/REVIEW-AND-GATING.md) — obligations to review, and the gates that hold work until they are discharged.
+  - [recipes/CLI-AND-BOUNDARY.md](recipes/CLI-AND-BOUNDARY.md) — the verbs and the service that carries them.
+  - [recipes/METHODS.md](recipes/METHODS.md) — disciplines with no mechanism behind them.
 - [USER-SHAPED-RECIPES-FAQ.md](USER-SHAPED-RECIPES-FAQ.md) — mechanical recipe patterns that carry a validated formal specimen.
 - [USER-BLESSED-TABLE-TEMPLATE.md](USER-BLESSED-TABLE-TEMPLATE.md) — fill-in template for your project's Capability Registry (blessed tools).
 - [USER-TAXONOMY-DECLARATION.md](USER-TAXONOMY-DECLARATION.md) — declaring a boundary discipline (a taxonomy) on your own project.

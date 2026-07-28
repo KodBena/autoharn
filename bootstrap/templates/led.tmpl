@@ -1299,7 +1299,7 @@ def _check_review_queue(trimmed: str) -> bool:
 
     def refuse(msg: str) -> bool:
         print(f"led: REFUSED -- malformed 'review:' statement -- {msg}.", file=sys.stderr)
-        print("  grammar (user-guide/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+        print("  grammar (user-guide/recipes/DECLARING-AND-QUEUES.md \"Your review queue\"):", file=sys.stderr)
         print("    review: <SLUG> | <RANK> | <WHAT> | <POINTER>", file=sys.stderr)
         print(f"  the four fields, in order: {', '.join(fields)}", file=sys.stderr)
         print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces)", file=sys.stderr)
@@ -1436,7 +1436,7 @@ def _check_review_done(trimmed: str) -> bool:
 
     def refuse(msg: str) -> bool:
         print(f"led: REFUSED -- malformed 'review-done:' statement -- {msg}.", file=sys.stderr)
-        print("  grammar (user-guide/USER-RECIPES-FAQ.md \"Your review queue\"):", file=sys.stderr)
+        print("  grammar (user-guide/recipes/DECLARING-AND-QUEUES.md \"Your review queue\"):", file=sys.stderr)
         print("    review-done: <SLUG> | <DISPOSITION>", file=sys.stderr)
         print(f"  the two fields, in order: {', '.join(fields)}", file=sys.stderr)
         print("  SLUG must match ^[a-z0-9][a-z0-9-]*$ (a bare slug, no spaces -- the same grammar", file=sys.stderr)
