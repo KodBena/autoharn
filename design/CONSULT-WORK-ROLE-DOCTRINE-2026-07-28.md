@@ -16,15 +16,23 @@ which survives the seal failure; the [CORR] corroborations are adjudicated agree
 only, not independent confirmation. Removal condition: superseded by the maintainer's
 disposition of the doctrine. -->
 
+**What this is, in one line:** a second-opinion consult report on autoharn's
+work-unit role-assignment doctrine (who opens, claims, closes, and reviews a work
+item) — commissioned by the maintainer, produced by a second AI consultant, delivered
+twice; the notes above and below record an integrity problem in how it was delivered
+and what that does and does not taint.
+
 **Provenance:** second Fable-class consultant, 2026-07-28, two deliveries. The
 completion (Phase 1 reconstructed + citations) is first below; the originally-delivered
 Phase 2 follows verbatim as the second section, unrevised. Filed verbatim at commit
-`ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 A-side
-pre-review pass (2026-07-28, swept against
-[attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md)) —
-a vocabulary block added below and two bare citations linked, no factual claim,
-verdict, marker, or quoted passage altered; the as-delivered original is the `ded5d89`
-version.
+`ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop
+(2026-07-28: an A-side pre-review swept against
+[attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md),
+then blind-round-1 repairs) — an orientation line, a vocabulary block, editorial
+signposts, and one markup normalization; no factual claim, verdict, or quoted passage
+altered; the as-delivered original is the `ded5d89` version. (One A-side vocabulary
+entry mischaracterized the sealed appendix and was corrected in the blind-round-1
+repair — the entry below is the corrected one.)
 
 **Vocabulary and citation conventions (added for the zero-context reader):**
 - **GxP** — the family of "Good x Practice" life-science regulations (GMP, GLP, GCP,
@@ -87,21 +95,57 @@ version.
 - **"The FAQ"** — the "Work-unit role assignment" section of
   [user-guide/USER-RECIPES-FAQ.md](../user-guide/USER-RECIPES-FAQ.md) (committed at
   `5541e5d`), the doctrine draft this consult was commissioned to check.
-- **"The brief" / "the sealed appendix"** — the maintainer's commissioning
-  instructions for this consult (an ephemeral prompt, not a file tracked in this
-  repository, per this project's standing rule against committing session
-  ephemera); its "sealed appendix" is that brief's own pre-written Phase-2
-  adjudication text, meant to stay hidden from the consultant until Phase 1 was
-  delivered independently. The Standing integrity disclosure just below is about
-  that seal failing to hold.
+- **"The brief" / "the sealed appendix"** — the commissioning instructions for this
+  consult (an ephemeral prompt file, not tracked in this repository, per this
+  project's standing rule against committing session ephemera). Its "sealed
+  appendix" was the COMMISSIONER'S OWN prior assessments of the same questions,
+  placed at the bottom of the brief behind a do-not-read-until-Phase-1-is-written
+  instruction, so the consultant's derivation would be formed before seeing them.
+  The Standing integrity disclosure just below is about that seal failing to hold.
 - **Tier 1 / Tier 2 / Tier 3** — this consult's own three-way bucketing of proposed
   mechanisms, reconstructed here from how the terms are used below (no separate
   file defines them): Tier 1 = candidate kernel refusals; Tier 2 = views/visibility
   surfaces; Tier 3 = deliberately left as convention, never gated. The bucketing is
   the sealed appendix's vocabulary, adopted by reference in Phase 2.
-- **"The coordinator"** — the orchestrating session that commissioned this consult
-  and recalled it after the seal failure; distinct from the consultant whose words
-  fill this document.
+- **"The coordinator" / "the commissioner"** — the same party: the orchestrating
+  session (the project's primary AI collaborator) that authored the doctrine draft,
+  commissioned this consult, and recalled it after the seal failure. "The
+  commissioner" is the consultant's word for that party as the author of the sealed
+  assessments; "the maintainer" is always the human project owner, a third and
+  distinct party whose disposition this whole document awaits.
+- **Fable / "Fable-class"** — the maintainer's primary AI-collaborator authoring
+  model (this project's `CLAUDE.md` and `GLOSSARY.md` define the role); "second
+  Fable-class consultant" means a separate instance of that same model class, with
+  none of the coordinator's working context.
+- **WITNESSED / UNWITNESSED / raw-fetched / search-surfaced** — this project's
+  evidence grades, applied here to citations: WITNESSED = the writer observed it
+  directly (ran it, or fetched and quoted the source); raw-fetched = the actual
+  page was retrieved and quoted (the strong form); search-surfaced = only a search
+  engine's summary of the source was seen (weaker, marked as such); UNWITNESSED =
+  asserted without either, with that status stated.
+- **Witness / witness-ref** — the citation a work-item close (or other claim)
+  attaches as its evidence — e.g. `row:<id>` naming a ledger row, or
+  `commit:<sha>` naming a commit; "witness-ref shape" below is about which KINDS
+  of row may legitimately stand in that position.
+- **Permit-to-work** — the safety-industry norm that a named person must hold an
+  explicit authorization before work starts; used here as the analogy for "a claim
+  must precede work."
+- **Entitlement conjuncts** — s60's two conditions that must BOTH hold for a gated
+  act to be accepted (an in-force role binding covering the act, and an authority
+  chain reaching the world's founding principal).
+- **"Three-constructor disposition"** — `led work close`'s rule that every close
+  states its review disposition through exactly one of three flags:
+  `--review-witness <ref>`, `--review-deferred`, or `--review-bookkeeping
+  --witness commit:<sha>`. (Distinct from the four `work_resolution` values —
+  shipped/superseded/dropped/deferred — which say what became of the WORK, not of
+  its review.)
+- **"Regards" / "regards-the-successor"** — a review row's `regards` field names
+  the row it reviews; the regards-the-successor rule (grounded in §4 below) says a
+  re-review after a superseding close must regard the NEW close row, never the
+  superseded one.
+- **Runs-are-linear** — this project's standing rule that a world, once superseded
+  by a rebirth, is settled read-only evidence ("dust"); relevant here only as why
+  kernel changes land in the NEXT world's birth rather than editing live ones.
 
 ---
 
@@ -126,7 +170,7 @@ Two deviations from the brief's procedure, on the record:
 
 ### What prior art transfers, and what is theater here
 
-From the fetched sources (citation list below): what regulated practice and single-repo review cultures actually *mandate* is **attributability and recorded verification** — ALCOA's "traceable to the specific individual who generated, collected, or reviewed it"; 820.100(a)(4)'s "verifying or validating the corrective and preventive action to ensure that such action is effective," which **contains no independent-personnel clause**; the kernel's `Signed-off-by` chain-of-custody; RACI's exactly-one-Accountable rule. What they leave to *deliberate configuration* is identity separation — Gerrit: "By default, there are no built-in restrictions preventing uploaders from voting on their own changes." **Transfers**: attributability; single accountable owner; verification as a recorded act naming verifier and object; typed attestation vocabulary; self-approval as a disclosed configuration choice. **Theater in a single-operator shop**: mandatory distinct-person approval, CAB boards, forced opener≠closer, a QA-unit hat. The kernel's existing posture — grade identity distinctness (computed `discharge_grade`), refuse only *dishonest* claims of independence (s21/s34/s41) — is the correct GxP translation for this shop. **[CORR** on the grade-vs-force conclusion; the *Gerrit anchoring* of it is my own.**]**
+From the fetched sources (citation list below): what regulated practice and single-repo review cultures actually *mandate* is **attributability and recorded verification** — ALCOA's "traceable to the specific individual who generated, collected, or reviewed it"; 820.100(a)(4)'s "verifying or validating the corrective and preventive action to ensure that such action is effective," which **contains no independent-personnel clause**; the kernel's `Signed-off-by` chain-of-custody; RACI's exactly-one-Accountable rule. What they leave to *deliberate configuration* is identity separation — Gerrit: "By default, there are no built-in restrictions preventing uploaders from voting on their own changes." **Transfers**: attributability; single accountable owner; verification as a recorded act naming verifier and object; typed attestation vocabulary; self-approval as a disclosed configuration choice. **Theater in a single-operator shop**: mandatory distinct-person approval, CAB boards, forced opener≠closer, a QA-unit hat. The kernel's existing posture — grade identity distinctness (computed `discharge_grade`), refuse only *dishonest* claims of independence (s21/s34/s41) — is the correct GxP translation for this shop. **[CORR on the grade-vs-force conclusion; the Gerrit anchoring of it is my own.]**
 
 ### The doctrine
 
@@ -162,6 +206,11 @@ From the fetched sources (citation list below): what regulated practice and sing
 ---
 
 ## Phase 2 — adjudication (unchanged, as previously delivered)
+
+*(Editorial signpost, not consultant text: the paragraph below is the consultant's own
+condensed restatement of its Phase 2; the FULL verbatim Phase-2 text it condenses
+appears further down under "Original first delivery (Phase 2 only), verbatim" — same
+content at two levels of compression, not two different adjudications.)*
 
 Delivered in my prior message and reproduced by reference, unrevised, per the coordinator's instruction. Its operative content: **agreements** (opening ownerless; accountability rides the claim; closer-is-claimant with claim-first handoff; performer/minted-delegate attribution as Tier-2 visibility; fix-gate rules 1–4; Tier 3 non-enforcements; sealed planning points 1–3). **Divergences** (all argued there): the FAQ omits the third delta (review-regards-in-force) its own worked specimen demands; the opener obligation is too thin (adjudicable definition-of-done as a SHOULD); the witness-shape check must be enumerated per close *shape* (review/finding generally + child `work_opened` where in-force parent edges exist; `bookkeeping`'s `commit:` refs untouched by construction) — "per resolution kind" as worded is unimplementable; closer-is-claimant's composite reading is claim-at-decomposition-time, not a trigger exemption; my own handoff-kind instinct demoted to a derived-view flag under the named-consumer test. **Corrections list** W1 (the FAQ's "since s64 the `dispatch mint` verb" misattribution — s64's header explicitly excludes dispatch mechanics; the real verb is repo-local `autoharn dispatch` under FABLE-DISPATCH-MECHANICS-SPEC.md, not scaffolded into fresh worlds), A1–A3, E1–E2, V1. **Delta verdicts:** all three survive in the forms stated there, and I put my name on all three in those forms only.
 
