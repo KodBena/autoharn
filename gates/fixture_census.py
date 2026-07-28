@@ -232,6 +232,7 @@ REGISTRY: dict[str, str] = {
     "deployment-pinning":           "seen-red/deployment-pinning/run_fixtures.py",
     "orchlog-since-filter":         "seen-red/orchlog-since-filter/run_fixtures.py",
     "scaffold-orchlog-wrapper":     "seen-red/scaffold-orchlog-wrapper/run_fixtures.py",
+    "scaffold-dispatcher-verb-glob": "seen-red/scaffold-dispatcher-verb-glob/run_fixtures.py",
     "kind-shape-manifest-gate":     "seen-red/kind-shape-manifest-gate/run_fixtures.py",
     "idris-model-freshness":        "seen-red/idris-model-freshness/run_fixtures.py",
     "design-currency":              "seen-red/design-currency/run_fixtures.py",
