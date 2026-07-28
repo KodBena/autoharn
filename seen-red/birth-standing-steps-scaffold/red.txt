@@ -7,10 +7,26 @@ cutover's by-hand `kernel.world_identity` INSERT) are now real birth acts inside
 `bootstrap/new-project.sh`'s own --new-world sequence, with matching PASS/FAIL/SKIP checks added
 to `bootstrap/templates/doctor.tmpl`.
 
+FIX-ROUND NOTE (reviewer-refuted finding on commit 1eaee52, this same worktree): a fresh-context
+review found that the FIRST cut of the `courier principal registered` FAIL teach-text named
+`./autoharn led register-principal courier tool ...` as the fix -- but on the class of world most
+likely to show this FAIL (freshly-birthed or interrupted, no boundary configured yet), THAT verb
+itself refuses (`serving/boundary_cli_client.py`'s `load_served_config` refuses loudly whenever
+`deployment.json` lacks `boundary_url`/`boundary_deployment`), and its own suggested fallback
+(`./legacy/led`) is a retired teaching-refusal stub that just re-refuses pointing back at the same
+dead end. The reviewer reproduced this verbatim. The teach-text's PRIMARY fix is now the raw,
+owner-connection `kernel.registration_write` call -- byte-identical in shape and purpose text to
+the one `bootstrap/new-project.sh`'s own s58 courier birth act makes -- which needs no boundary at
+all; the served CLI path is named second, as the alternative once a boundary is configured. The
+fixture below now EXECUTES both fix commands (extracted verbatim from doctor's own live output,
+never re-typed) and witnesses each check flip FAIL -> PASS, closing the gap between "the teach-
+text contains a command-shaped string" and "the command actually works."
+
 Both polarities below are from a LIVE run of `seen-red/birth-standing-steps-scaffold/
 run_fixtures.py` against the real toy Postgres db (192.168.122.1) — a real
 `bootstrap/new-project.sh --new-world` birth (twice: once at the pre-fix merge-base commit,
-once at the current tree), a real `./autoharn doctor` run against each, a real
+once at the current tree), a real `./autoharn doctor` run against each, two real EXECUTED fix
+commands (extracted from doctor's own output) against the broken RED world, a real
 `serving.boundary_service` instance, and a real `libexec/autoharn/courier` pull. Nothing stubbed
 at the Python-object level. Both scratch worlds and their tempdirs were torn down cleanly after
 this run (0 FAIL); left standing on any future failure.
@@ -30,7 +46,7 @@ pre-fix-shaped world):
 
   RED doctor output (world bshredw):
     ### doctor -- is this world set up right?
-        (/tmp/birth-standing-steps-fixture-ixrztl_u/bshredw)
+        (/tmp/birth-standing-steps-fixture-rszevn1g/bshredw)
 
     deployment.json                  PASS parsed (.../bshredw/deployment.json)
     database reachable               PASS 192.168.122.1/toy (SELECT 1 ok)
@@ -39,10 +55,20 @@ pre-fix-shaped world):
     principals registered            PASS 4 row(s) in bshredw_kernel.principal
     courier principal registered     FAIL no 'courier' principal in bshredw_kernel.principal --
       every missive receipt this world pulls needs this identity to record arrivals as (design/
-      FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix: ./autoharn led register-principal courier tool
-      --purpose "Records cross-world missive arrivals pulled over the boundary service -- and can
-      write nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3
-      ratified row 1157). Never a deciding identity."
+      FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix (owner connection -- works with no boundary
+      configured, the same kernel.registration_write call this world's own birth act makes): psql
+      -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "SELECT * FROM bshredw_kernel.
+      registration_write(jsonb_build_object('name','courier','agent_class','tool','purpose',
+      'Records cross-world missive arrivals pulled over the boundary service -- and can write
+      nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified
+      row 1157). Never a deciding identity.','statement','principal ''courier'' registered (class
+      tool) -- doctor teach-text recovery, registrar: author','actor',(SELECT id FROM
+      bshredw_kernel.principal WHERE name = 'author')));" -- or, once this world's deployment.json
+      carries boundary_url and boundary_deployment (a served boundary), the equivalent served
+      path: ./autoharn led register-principal courier tool --purpose "Records cross-world missive
+      arrivals pulled over the boundary service -- and can write nothing else (kernel-scoped:
+      validate_missive_courier_scope, s58; consult §4.3, Q3 ratified row 1157). Never a deciding
+      identity."
     world_identity populated         FAIL bshredw_kernel.world_identity has no row -- every
       missive write (send/receive/dispose) will refuse loudly until this is populated (design/
       FABLE-MISSIVES-KERNEL-SPEC.md §2.1). Fix (owner connection -- the granted role
@@ -57,11 +83,45 @@ pre-fix-shaped world):
 
   RED doctor: overall exit 1 (at least one FAIL) -- PASS
   RED doctor: 'courier principal registered' FAILs -- PASS
-  RED doctor: courier FAIL teach-text names the fix command -- PASS
+  RED doctor: courier FAIL teach-text names the owner-connection registration_write fix (works
+    with no boundary configured) -- PASS
+  RED doctor: courier FAIL teach-text ALSO names the served CLI path as the boundary-configured
+    alternative -- PASS
+  RED doctor: courier fix command extractable from the teach-text (never re-typed) -- PASS
+
+  running courier's EXTRACTED fix command (verbatim from the teach-text above, not re-typed):
+    psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "SELECT * FROM bshredw_kernel.
+    registration_write(jsonb_build_object('name','courier','agent_class','tool','purpose',
+    'Records cross-world missive arrivals pulled over the boundary service -- and can write
+    nothing else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified
+    row 1157). Never a deciding identity.','statement','principal ''courier'' registered (class
+    tool) -- doctor teach-text recovery, registrar: author','actor',(SELECT id FROM
+    bshredw_kernel.principal WHERE name = 'author')));"
+  stdout:
+     disposition | row_id | refusal_id | sqlstate | message
+    -------------+--------+------------+----------+---------
+     accepted    |     13 |            |          |
+    (1 row)
+
+  RED fix EXECUTED: courier registration_write call exits 0 and accepts -- PASS
+  RED fix WITNESSED: 'courier principal registered' flips FAIL -> PASS -- PASS
+
   RED doctor: 'world_identity populated' FAILs -- PASS
   RED doctor: world_identity FAIL teach-text names the owner-INSERT fix -- PASS
+  RED doctor: world_identity fix command extractable from the teach-text (never re-typed) -- PASS
 
-GREEN (the current, fixed bootstrap/new-project.sh, this checkout's working tree):
+  running world_identity's EXTRACTED fix command (verbatim from the teach-text above, the one
+  placeholder <this-world's-own-name> filled in exactly as the printed instruction says to):
+    psql -h 192.168.122.1 -d toy -v ON_ERROR_STOP=1 -c "INSERT INTO bshredw_kernel.world_identity
+    (world_name) VALUES ('bshredw');"
+  stdout:
+    INSERT 0 1
+
+  RED fix EXECUTED: world_identity owner INSERT exits 0 -- PASS
+  RED fix WITNESSED: 'world_identity populated' flips FAIL -> PASS -- PASS
+
+GREEN (the current, fixed bootstrap/new-project.sh, this checkout's working tree, a SECOND
+freshly-birthed scratch world so RED's already-healed WORLD_RED above is never reused):
 
   GREEN birth: current new-project.sh --new-world exits 0 -- PASS
   GREEN birth transcript: courier registration line present
@@ -71,7 +131,7 @@ GREEN (the current, fixed bootstrap/new-project.sh, this checkout's working tree
 
   GREEN doctor output (world bshgrnw):
     ### doctor -- is this world set up right?
-        (/tmp/birth-standing-steps-fixture-ixrztl_u/bshgrnw)
+        (/tmp/birth-standing-steps-fixture-rszevn1g/bshgrnw)
 
     deployment.json                  PASS parsed (.../bshgrnw/deployment.json)
     database reachable               PASS 192.168.122.1/toy (SELECT 1 ok)

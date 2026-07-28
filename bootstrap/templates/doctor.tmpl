@@ -319,14 +319,41 @@ def check_courier_registered(dep: deployment_record.DeploymentRecord) -> tuple[s
                      f"to bind to here)"), SKIP
     if count not in ("", "0"):
         return _line("courier principal registered", PASS, f"registered ({dep.kern}.principal)"), PASS
+    # Fix-round correction (reviewer-refuted finding on the first cut of this check, commit
+    # 1eaee52): the ORIGINAL teach-text named `./autoharn led register-principal ...` as the fix
+    # -- but that verb is a rebased, SERVED shim (serving/boundary_cli_client.py's
+    # load_served_config REFUSES loudly whenever deployment.json lacks boundary_url/
+    # boundary_deployment) and its own suggested escape, `./legacy/led`, is a retired teaching-
+    # refusal stub (bootstrap/new-project.sh's "legacy/led: RETIRED" heredoc) that just re-
+    # refuses pointing back at the SAME dead end -- reproduced verbatim by a fresh-context
+    # reviewer on exactly the class of world most likely to show this FAIL (freshly-birthed or
+    # interrupted, no boundary configured yet). The PRIMARY fix below is now the raw,
+    # owner-connection `kernel.registration_write` call -- byte-identical in shape and purpose
+    # text to the one `bootstrap/new-project.sh`'s own s58 courier birth act makes (§2.6) -- which
+    # needs no boundary at all (the same "owner connection" posture the world_identity fix
+    # immediately below already uses, and for the same reason: this call bypasses the granted
+    # role's own REVOKE/GRANT surface, so it works whether or not a boundary is served). The
+    # served CLI path is named second, as the alternative once boundary_url/boundary_deployment
+    # are configured.
     return _line("courier principal registered", FAIL,
                  f"no 'courier' principal in {dep.kern}.principal -- every missive receipt this "
                  f"world pulls needs this identity to record arrivals as (design/"
-                 f"FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix: ./autoharn led register-principal "
-                 f"courier tool --purpose \"Records cross-world missive arrivals pulled over the "
-                 f"boundary service -- and can write nothing else (kernel-scoped: "
-                 f"validate_missive_courier_scope, s58; consult §4.3, Q3 ratified row 1157). "
-                 f"Never a deciding identity.\""), FAIL
+                 f"FABLE-MISSIVES-KERNEL-SPEC.md §2.6). Fix (owner connection -- works with no "
+                 f"boundary configured, the same kernel.registration_write call this world's own "
+                 f"birth act makes): psql -h {dep.host} -d {dep.db} -v ON_ERROR_STOP=1 -c "
+                 f"\"SELECT * FROM {dep.kern}.registration_write(jsonb_build_object("
+                 f"'name','courier','agent_class','tool','purpose','Records cross-world missive "
+                 f"arrivals pulled over the boundary service -- and can write nothing else "
+                 f"(kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 ratified "
+                 f"row 1157). Never a deciding identity.','statement','principal ''courier'' "
+                 f"registered (class tool) -- doctor teach-text recovery, registrar: author',"
+                 f"'actor',(SELECT id FROM {dep.kern}.principal WHERE name = 'author')));\" -- "
+                 f"or, once this world's deployment.json carries boundary_url and "
+                 f"boundary_deployment (a served boundary), the equivalent served path: "
+                 f"./autoharn led register-principal courier tool --purpose \"Records cross-world "
+                 f"missive arrivals pulled over the boundary service -- and can write nothing "
+                 f"else (kernel-scoped: validate_missive_courier_scope, s58; consult §4.3, Q3 "
+                 f"ratified row 1157). Never a deciding identity.\""), FAIL
 
 
 def check_world_identity(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:

@@ -212,14 +212,59 @@ def red_case(tmpdir: Path) -> None:
         check("RED doctor: overall exit 1 (at least one FAIL)", dr.returncode == 1, dr.stderr)
         m_courier = re.search(r"^courier principal registered\s+FAIL\s+(.*)$", dr.stdout, re.MULTILINE)
         check("RED doctor: 'courier principal registered' FAILs", m_courier is not None, dr.stdout)
+        # fix-round addition (reviewer-refuted finding on commit 1eaee52): the ORIGINAL fixture
+        # only asserted the teach-text CONTAINED a fix-command-shaped substring -- never ran it.
+        # A fresh-context reviewer reproduced a real dead end (the command it named refused on a
+        # boundaryless world, and its own suggested fallback re-refused pointing back). The teach-
+        # text is now doctor's own PRIMARY fix, extracted and executed verbatim below -- this
+        # fixture FAILS if the printed command and the working command ever drift again.
         if m_courier:
-            check("RED doctor: courier FAIL teach-text names the fix command",
+            check("RED doctor: courier FAIL teach-text names the owner-connection "
+                  "registration_write fix (works with no boundary configured)",
+                  "kernel.registration_write call this world's own birth act makes" in m_courier.group(1)
+                  and "registration_write(jsonb_build_object(" in m_courier.group(1), m_courier.group(1))
+            check("RED doctor: courier FAIL teach-text ALSO names the served CLI path as the "
+                  "boundary-configured alternative",
                   "register-principal courier tool" in m_courier.group(1), m_courier.group(1))
+            cmd_m = re.search(r"Fix \(owner connection[^:]*\):\s*(psql .*?)\s+-- or, once",
+                               m_courier.group(1))
+            check("RED doctor: courier fix command extractable from the teach-text (never "
+                  "re-typed)", cmd_m is not None, m_courier.group(1))
+            if cmd_m:
+                fix_cmd = cmd_m.group(1)
+                fr = sh(["bash", "-c", fix_cmd])
+                print(f"  running courier's EXTRACTED fix command:\n    {fix_cmd}\n"
+                      f"  stdout:\n" + "\n".join(f"    {l}" for l in fr.stdout.splitlines()))
+                check("RED fix EXECUTED: courier registration_write call exits 0 and accepts",
+                      fr.returncode == 0 and "accepted" in fr.stdout, fr.stdout + fr.stderr)
+                dr2 = run_doctor(tmpdir, WORLD_RED)
+                check("RED fix WITNESSED: 'courier principal registered' flips FAIL -> PASS",
+                      re.search(r"^courier principal registered\s+PASS", dr2.stdout, re.MULTILINE) is not None,
+                      dr2.stdout)
+
         m_wi = re.search(r"^world_identity populated\s+FAIL\s+(.*)$", dr.stdout, re.MULTILINE)
         check("RED doctor: 'world_identity populated' FAILs", m_wi is not None, dr.stdout)
         if m_wi:
             check("RED doctor: world_identity FAIL teach-text names the owner-INSERT fix",
                   "INSERT INTO" in m_wi.group(1) and "world_identity" in m_wi.group(1), m_wi.group(1))
+            cmd_m2 = re.search(r"Fix \(owner connection[^:]*\):\s*(psql .*)$", m_wi.group(1))
+            check("RED doctor: world_identity fix command extractable from the teach-text "
+                  "(never re-typed)", cmd_m2 is not None, m_wi.group(1))
+            if cmd_m2:
+                # The teach-text's own placeholder for the operator to fill in -- substituting it
+                # is not "re-typing the command", it's doing what the printed instruction says to
+                # do; the command TEXT itself (psql invocation, INSERT statement, column) is used
+                # verbatim, unchanged from what doctor printed.
+                fix_cmd = cmd_m2.group(1).replace("<this-world's-own-name>", WORLD_RED)
+                fr = sh(["bash", "-c", fix_cmd])
+                print(f"  running world_identity's EXTRACTED fix command:\n    {fix_cmd}\n"
+                      f"  stdout:\n" + "\n".join(f"    {l}" for l in fr.stdout.splitlines()))
+                check("RED fix EXECUTED: world_identity owner INSERT exits 0",
+                      fr.returncode == 0 and "INSERT 0 1" in fr.stdout, fr.stdout + fr.stderr)
+                dr3 = run_doctor(tmpdir, WORLD_RED)
+                check("RED fix WITNESSED: 'world_identity populated' flips FAIL -> PASS",
+                      re.search(r"^world_identity populated\s+PASS", dr3.stdout, re.MULTILINE) is not None,
+                      dr3.stdout)
     finally:
         if old_script.exists():
             old_script.unlink()
