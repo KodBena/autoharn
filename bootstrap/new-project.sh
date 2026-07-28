@@ -193,15 +193,37 @@ _is_non_verb_template() {
     return 1
 }
 
-_write_world_dispatcher() {
-    _wwd_table=""
-    for _wwd_file in "$TEMPLATES"/*.tmpl; do
-        [ -e "$_wwd_file" ] || continue  # literal, never-matched glob guard (POSIX sh fallback)
-        _wwd_base="$(basename "$_wwd_file")"
-        if _is_non_verb_template "$_wwd_base"; then
+_scan_verb_templates() {
+    # WRITES NOTHING (fix-round finding 1, autoharn3 row 101 re-review, 2026-07-28): the glob +
+    # header-validation pass, factored out of _write_world_dispatcher() below so it can be run as
+    # a PRE-WRITE gate, before any scaffold file exists on disk, on every path that reaches this
+    # dispatcher generation (--new-world/classic/--profile all resolve TEMPLATES at one shared
+    # point in this script, immediately followed by a call to this function -- see that call
+    # site's own comment). A header-less template refusing generation used to be true only when
+    # DISCOVERED by _write_world_dispatcher() itself, which runs near the END of the scaffold
+    # sequence -- by then deployment.json/.autoharn-world.json/.gitignore/.claude/*/keys/
+    # attestations/roles/ were already written, so that refusal's own "Nothing was touched" text
+    # was FALSE on that one path (of 14 such messages in this script) -- the ONE deviation from
+    # this script's own refuse-before-touching invariant. Fixing the WORDING would have left the
+    # invariant broken; this fixes the CLASS instead -- the validation itself moved earlier, so
+    # nothing before it can have run yet on any code path that calls it before its own first
+    # write. _write_world_dispatcher() below still calls this (a cheap, already-validated
+    # re-check on the ordinary scaffold flow; the ONLY validation on --refresh-dispatcher, which
+    # never had the ordering hazard to begin with -- it writes nothing else before or after
+    # ./autoharn) -- it is simply no longer positioned to be the FIRST place a broken template is
+    # discovered on the ordinary flow.
+    #
+    # Sets DISPATCH_TABLE (tab-separated verb\tdesc lines, sorted) and VERB_ROSTER (space-joined
+    # verb names) as a side effect; refuses loudly and exits 2, writing nothing, on a
+    # non-excluded template with no '# autoharn-verb-desc: ...' header.
+    _svt_table=""
+    for _svt_file in "$TEMPLATES"/*.tmpl; do
+        [ -e "$_svt_file" ] || continue  # literal, never-matched glob guard (POSIX sh fallback)
+        _svt_base="$(basename "$_svt_file")"
+        if _is_non_verb_template "$_svt_base"; then
             continue
         fi
-        _wwd_verb="${_wwd_base%.tmpl}"
+        _svt_verb="${_svt_base%.tmpl}"
         # Header-line convention (this class fix's chosen single home for help-text descriptions,
         # applied to every dispatched verb template in the same commit): the FIRST line matching
         # '^# autoharn-verb-desc: ' anywhere in the file, grep -m1 so a template is free to place
@@ -209,29 +231,54 @@ _write_world_dispatcher() {
         # shebang). A template that lacks it refuses generation LOUDLY -- never a silent blank
         # description -- naming exactly what to add or, if the file genuinely isn't a verb, that
         # it belongs in NON_VERB_TEMPLATES above instead.
-        _wwd_desc="$(grep -m1 '^# autoharn-verb-desc: ' "$_wwd_file" | sed 's/^# autoharn-verb-desc: //')"
-        if [ -z "$_wwd_desc" ]; then
-            echo "new-project.sh: REFUSED -- $_wwd_file carries no '# autoharn-verb-desc: ...' header line." >&2
+        _svt_desc="$(grep -m1 '^# autoharn-verb-desc: ' "$_svt_file" | sed 's/^# autoharn-verb-desc: //')"
+        if [ -z "$_svt_desc" ]; then
+            echo "new-project.sh: REFUSED -- $_svt_file carries no '# autoharn-verb-desc: ...' header line." >&2
             echo "                bootstrap/new-project.sh's dispatcher generation derives the verb roster" >&2
             echo "                from the bootstrap/templates/*.tmpl glob (autoharn3 ledger row 101's class" >&2
             echo "                fix) -- every dispatched verb template must carry this header, or be added" >&2
-            echo "                to _write_world_dispatcher()'s own NON_VERB_TEMPLATES exclusion list in this" >&2
+            echo "                to _scan_verb_templates()'s own NON_VERB_TEMPLATES exclusion list in this" >&2
             echo "                script if it genuinely is not a verb. Nothing was touched." >&2
             exit 2
         fi
-        _wwd_line="$(printf '%s\t%s' "$_wwd_verb" "$_wwd_desc")"
-        if [ -z "$_wwd_table" ]; then
-            _wwd_table="$_wwd_line"
+        _svt_line="$(printf '%s\t%s' "$_svt_verb" "$_svt_desc")"
+        if [ -z "$_svt_table" ]; then
+            _svt_table="$_svt_line"
         else
-            _wwd_table="$_wwd_table
-$_wwd_line"
+            _svt_table="$_svt_table
+$_svt_line"
         fi
     done
     # Stable, deterministic order regardless of the filesystem's own glob enumeration order.
-    DISPATCH_TABLE="$(printf '%s\n' "$_wwd_table" | sort)"
+    DISPATCH_TABLE="$(printf '%s\n' "$_svt_table" | sort)"
     VERB_ROSTER="$(printf '%s\n' "$DISPATCH_TABLE" | cut -f1 | tr '\n' ' ')"
+}
 
-    cat > "$PROJECT_ROOT/autoharn" <<DISPATCHEREOF
+_write_world_dispatcher() {
+    _scan_verb_templates  # cheap, already-validated re-check on the ordinary flow -- see its own comment
+
+    # NEVER OVERWRITE A DIFFERING FILE BLIND (fix-round finding 2, autoharn3 row 101 re-review,
+    # 2026-07-28): --refresh-dispatcher (and any --force re-scaffold of an existing world, which
+    # shares this same function) used to `cat >` straight over $PROJECT_ROOT/autoharn -- an
+    # operator's own hand-edit there (a local patch, an experiment, a manual fix ahead of this
+    # generator catching up) was silently discarded with no trace. Write the NEW content to a
+    # scratch file on the SAME filesystem first (mktemp under $PROJECT_ROOT itself -- portable
+    # `mv` afterward, never a cross-device copy), THEN decide, by comparing bytes, which of
+    # exactly three things this run does -- never a fourth, unnamed one:
+    #   SKIPPED-IDENTICAL  the existing file already matches byte-for-byte -- nothing written,
+    #                      nothing backed up (there is nothing to lose).
+    #   REPLACED           the existing file differs -- moved aside to $PROJECT_ROOT/autoharn.
+    #                      pre-refresh (overwriting any EARLIER backup of that exact name --
+    #                      disclosed below, not hidden) BEFORE the new file lands, so the prior
+    #                      content survives on disk under a named, discoverable path rather than
+    #                      being silently lost.
+    #                      fresh-write     no prior $PROJECT_ROOT/autoharn existed at all (the
+    #                      ordinary --new-world/classic/--profile birth path, every time).
+    # Every one of the three is printed, by name, in this function's own success line -- a caller
+    # reading stdout always knows which one happened, never has to guess or diff by hand.
+    _wwd_target="$PROJECT_ROOT/autoharn"
+    _wwd_new="$(mktemp "$PROJECT_ROOT/.autoharn-dispatcher-new.XXXXXX")"
+    cat > "$_wwd_new" <<DISPATCHEREOF
 #!/bin/sh
 # autoharn -- this world's ONE operator-surface dispatcher (design/FABLE-AUTOHARN-UMBRELLA-CLI-
 # SPEC.md §6 amendment, ledger rows 1357/1365/1366/1367; verb-roster generation CLASS-FIXED
@@ -288,8 +335,27 @@ fi
 
 exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/"\$VERB".tmpl "\$@"
 DISPATCHEREOF
-    chmod +x "$PROJECT_ROOT/autoharn"
-    echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $VERB_ROSTER)"
+    chmod +x "$_wwd_new"
+
+    if [ -f "$_wwd_target" ] && cmp -s "$_wwd_target" "$_wwd_new"; then
+        rm -f "$_wwd_new"
+        echo "autoharn dispatcher: SKIPPED-IDENTICAL -- $_wwd_target already matches the current bootstrap/templates/*.tmpl roster byte-for-byte; nothing written."
+    elif [ -f "$_wwd_target" ]; then
+        _wwd_backup="$PROJECT_ROOT/autoharn.pre-refresh"
+        if [ -e "$_wwd_backup" ]; then
+            echo "autoharn dispatcher: NOTE -- an earlier $_wwd_backup already existed; it is being overwritten by the file replaced THIS run (only the most recent pre-refresh copy is kept)."
+        fi
+        mv -f "$_wwd_target" "$_wwd_backup"
+        mv -f "$_wwd_new" "$_wwd_target"
+        chmod +x "$_wwd_target"
+        echo "autoharn dispatcher: REPLACED -- prior $_wwd_target differed from the current roster; its content was moved to $_wwd_backup (byte-identical backup) before the new one was written -- it was never discarded."
+        echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $VERB_ROSTER)"
+    else
+        mv -f "$_wwd_new" "$_wwd_target"
+        chmod +x "$_wwd_target"
+        echo "autoharn dispatcher: fresh-write -- no prior $_wwd_target existed."
+        echo "wrote autoharn (dispatcher -> $EXEC_ROOT/bootstrap/templates/<verb>.tmpl, roster: $VERB_ROSTER)"
+    fi
 }
 # ---------------------------------------------------------------------------------------------
 
@@ -789,6 +855,20 @@ fi
 TEMPLATES="$AUTOHARN_ROOT/bootstrap/templates"
 PY="$HOME/w/vdc/venvs/generic/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
+
+# PRE-WRITE VALIDATION (fix-round finding 1, autoharn3 row 101 re-review, 2026-07-28): the ONE
+# place, on the --new-world/classic/--profile flow, where TEMPLATES first becomes resolvable --
+# so this is the earliest point _scan_verb_templates()'s glob-plus-header check CAN run, and
+# nothing this script writes (deployment.json, .autoharn-world.json, .gitignore, .claude/*,
+# keys/, attestations/, roles/, the dispatcher itself, ...) has been written yet. Calling it here
+# makes every one of this script's "Nothing was touched" refusal messages true on every path,
+# including this one -- _write_world_dispatcher()'s own later call to the same function (near the
+# END of the scaffold sequence, where the roster is actually consumed to write ./autoharn) is now
+# a cheap, already-validated re-check, never the first place a header-less template is caught.
+# Discards the DISPATCH_TABLE/VERB_ROSTER this validation-only call computes as a side effect --
+# _write_world_dispatcher() recomputes them later itself (the templates directory cannot change
+# mid-run) rather than threading state across the many intervening scaffold-writing sections.
+_scan_verb_templates
 
 # design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §3: the FOREIGN-content refusal, BEFORE
 # `mkdir -p` (this used to `mkdir -p` and merge into ANY occupied directory lacking
