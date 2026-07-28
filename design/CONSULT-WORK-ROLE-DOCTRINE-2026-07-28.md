@@ -5,7 +5,9 @@ commissioned via an untracked session brief file -- see the Vocabulary entry "Th
 brief"; terms of art in this comment are all defined in the Vocabulary block below,
 read it first if any stops you). INTEGRITY HISTORY, in
 order: (1) first delivery carried Phase 2 only -- no written Phase 1, no citations;
-(2) on the coordinator's recall the consultant disclosed that THE SEAL NEVER HELD -- the
+(2) on the recall by the coordinator (the orchestrating AI session -- see the
+Vocabulary entry; distinct from "the maintainer", the human owner) the consultant
+disclosed that THE SEAL NEVER HELD -- the
 brief's Read returned the whole file, appendix included, in one call, so no blind phase
 existed at any point; (3) the completion below therefore presents Phase 1 as a
 RECONSTRUCTED derivation with per-point contamination markers ([INDEP] = self-evidencing
@@ -26,8 +28,9 @@ and what that does and does not taint.
 
 **Provenance:** second Fable-class consultant (the term is defined in the Vocabulary
 block below), 2026-07-28, two deliveries. The
-completion (Phase 1 reconstructed + citations) is first below; the originally-delivered
-Phase 2 follows verbatim as the second section, unrevised. Filed verbatim at commit
+document has four pieces, in order: Phase 1 (reconstructed derivation), the citation
+list, a condensed restatement of Phase 2, and the originally-delivered Phase 2
+verbatim as the final section, unrevised. Filed verbatim at commit
 `ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 +A:B:C loop
 (2026-07-28: an A-side pre-review swept against
 [attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md),
@@ -102,6 +105,23 @@ and was corrected in the blind-round-1 repair — the corrected entry is the
   [ADR-0017](../law/adr/0017-the-zero-context-reader.md)'s Instance bindings).
 - **[INDEP] / [CORR]** — this consult's own per-point contamination markers, defined
   at first use in the Standing integrity disclosure immediately below.
+- **Kernel** — this project's append-only Postgres ledger/schema substrate;
+  "kernel-refused/-enforced/-computed" means the database's own constraint layer
+  (not any tool or convention) rejected, requires, or derives the thing.
+- **Principal / the principal registry** — an identity (human, model, subagent, or
+  tool) the kernel tracks as an actor; the registry is the kernel's table of them,
+  and "delegate principal" is one minted for a commissioned sub-agent.
+- **Claimant-of-record** — the principal whose claim on a work item is currently
+  live (the latest in-force `work_claimed` row); the doctrine's unit of
+  accountability.
+- **Independence rungs** — the review `independence` field's closed values, least
+  to most independent: `self-review`, `technical`, `managerial`, `financial` (plus
+  the disclosure-only `disclosed-isolated-dispatch`); the kernel refuses a claimed
+  rung the stamp identity cannot support, and `discharge_grade` records what the
+  identity evidence actually proves. "The s34 idiom" = naming the near-unreachable
+  upper rungs honestly rather than omitting them.
+- **"Read"** (capitalized, in the integrity disclosure) — the file-read tool call
+  the consultant used on the brief; capitalized because it is the tool's name.
 - **`work_opened` / `work_claimed` / `work_closed`** — the three ledger row kinds of
   a work item's lifecycle: the row recording that an item was opened (slug, title,
   rationale), that a principal claimed it, and that it was closed (with its
@@ -282,6 +302,10 @@ Delivered in my prior message and reproduced by reference, unrevised, per the co
 ---
 
 ## Original first delivery — Phase 2 full text, verbatim (the appendix the condensed restatement above refers back to)
+
+The verbatim text begins with its own original heading, reproduced unchanged below;
+inline repo paths inside it are quoted as delivered (unlinked) — the load-bearing one
+resolves as [design/FABLE-DISPATCH-MECHANICS-SPEC.md](FABLE-DISPATCH-MECHANICS-SPEC.md).
 
 ## Phase 2 — adjudication (FAQ as committed at 5541e5d, plus the sealed assessments)
 
