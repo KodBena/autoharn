@@ -18,7 +18,90 @@ disposition of the doctrine. -->
 
 **Provenance:** second Fable-class consultant, 2026-07-28, two deliveries. The
 completion (Phase 1 reconstructed + citations) is first below; the originally-delivered
-Phase 2 follows verbatim as the second section, unrevised.
+Phase 2 follows verbatim as the second section, unrevised. Filed verbatim at commit
+`ded5d89`; the text below now carries LEGIBILITY REPAIRS from an ADR-0017 A-side
+pre-review pass (2026-07-28, swept against
+[attestations/COMMON-DEFECT-CLASSES.md](../attestations/COMMON-DEFECT-CLASSES.md)) —
+a vocabulary block added below and two bare citations linked, no factual claim,
+verdict, marker, or quoted passage altered; the as-delivered original is the `ded5d89`
+version.
+
+**Vocabulary and citation conventions (added for the zero-context reader):**
+- **GxP** — the family of "Good x Practice" life-science regulations (GMP, GLP, GCP,
+  …) this consult treats as a reference frame for audit-trail/attestation practice,
+  never a compliance claim.
+- **RACI** — a responsibility-assignment framework (Responsible/Accountable/
+  Consulted/Informed); this document leans only on its "exactly one Accountable"
+  rule, applied to the claimant-of-record.
+- **CAPA** — Corrective and Preventive Action, the regulated-industry process (21
+  CFR 820.100, cited in the citation list below) for recording that a fix was
+  verified effective; cited here for its verification-recording norm, not adopted as
+  autoharn process.
+- **ALCOA(+)** — the data-integrity acronym (Attributable, Legible, Contemporaneous,
+  Original, Accurate, plus Complete/Consistent/Enduring/Available) behind the
+  "every record traceable to who did it" norm this consult treats as the cornerstone
+  transfer (citation list, item 5).
+- **CAB** — Change Advisory Board; **ITIL** — the IT service-management framework CAB
+  is drawn from. Both appear only as named examples of multi-human review theater
+  this consult judges unnecessary for a single-operator shop (item 6 below is
+  UNWITNESSED and load-bearing nowhere).
+- **Gerrit** — the code-review tool cited for its default (no built-in restriction on
+  self-approval) and its `Signed-off-by`/`Reviewed-by` commit trailers (attestation
+  lines a committer or reviewer appends, a convention borrowed from the Linux
+  kernel) — fetched sources in the citation list below.
+- **ADR** — Architecture Decision Record, this project's law format; `ADR-NNNN`
+  resolves to `law/adr/NNNN-<slug>.md`, e.g.
+  [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md),
+  [ADR-0011](../law/adr/0011-mechanization-discipline.md),
+  [ADR-0014](../law/adr/0014-executor-second-opinion.md),
+  [ADR-0017](../law/adr/0017-the-zero-context-reader.md) (the standard this repair
+  pass itself follows). ADR-0018 is the consult-loop precedent this commission
+  invoked when proposing a second-consultant check.
+- **sNN** (s21, s28, s34, s41, s47, s48, s60, s64, …) — the Nth numbered kernel
+  migration delta, one file each under
+  [`kernel/lineage/`](../kernel/lineage/README.md); "sNN header" means the rule or
+  requirement text at the top of that delta's own file.
+- **Ledger-row citations** ("row 339", "autoharn2 row 1265", "rows 431/435") — a row
+  number in this project's append-only decision ledger (a Postgres-backed record
+  kept outside this repository); resolve one with `./led show <row>` against the
+  world the number belongs to (the worlds named here are `autoharn2` and the three
+  worlds the census below reads from).
+- **The named-consumer test** — the maintainer's standing check that a proposed
+  mechanism or view must name the specific reader who will use it before it is
+  built; an unnameable consumer marks the proposal as ritual, not a requirement
+  (this project's orchestration contract, `CLAUDE.md`).
+- **Fail-safe delta / strictly-additive refusal** — a kernel change that only adds a
+  refusal, view, or vocabulary without loosening anything existing; `CLAUDE.md`'s
+  "class-ratified fail-safe deltas" rule pre-clears this shape without a per-delta
+  maintainer question.
+- **`discharge_grade`, `review_gap`** — kernel-computed surfaces: `discharge_grade`
+  grades how independent a review's author is from the work it reviews;
+  `review_gap` is the review-debt view an obliged writer's rows sit in until a
+  distinct-actor review counter-signs them (both described in
+  [ADR-0017](../law/adr/0017-the-zero-context-reader.md)'s Instance bindings).
+- **[INDEP] / [CORR]** — this consult's own per-point contamination markers, defined
+  at first use in the Standing integrity disclosure immediately below.
+- **"The census"** —
+  [design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md](WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md),
+  the read-only work-item-lifecycle survey this consult's evidence base rests on.
+- **"The FAQ"** — the "Work-unit role assignment" section of
+  [user-guide/USER-RECIPES-FAQ.md](../user-guide/USER-RECIPES-FAQ.md) (committed at
+  `5541e5d`), the doctrine draft this consult was commissioned to check.
+- **"The brief" / "the sealed appendix"** — the maintainer's commissioning
+  instructions for this consult (an ephemeral prompt, not a file tracked in this
+  repository, per this project's standing rule against committing session
+  ephemera); its "sealed appendix" is that brief's own pre-written Phase-2
+  adjudication text, meant to stay hidden from the consultant until Phase 1 was
+  delivered independently. The Standing integrity disclosure just below is about
+  that seal failing to hold.
+- **Tier 1 / Tier 2 / Tier 3** — this consult's own three-way bucketing of proposed
+  mechanisms, reconstructed here from how the terms are used below (no separate
+  file defines them): Tier 1 = candidate kernel refusals; Tier 2 = views/visibility
+  surfaces; Tier 3 = deliberately left as convention, never gated. The bucketing is
+  the sealed appendix's vocabulary, adopted by reference in Phase 2.
+- **"The coordinator"** — the orchestrating session that commissioned this consult
+  and recalled it after the seal failure; distinct from the consultant whose words
+  fill this document.
 
 ---
 
@@ -37,7 +120,7 @@ Two deviations from the brief's procedure, on the record:
 
 ### Evidence base (all read in full or spot-checked as noted, WITNESSED)
 
-- **Census** `design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md`: 100% of opens/claims/closes in all three worlds by one principal (`author`), one session (`main`); role separation appears only on the review surface; all 31 experience4 reviews honestly `independence='self-review'`; one dishonest `technical` claim kernel-refused (row 339); the fix-gate specimen rows 413→436 with a re-review twice regarding the superseded close, caught only by self-discipline; one witness-ref citing a `work_claimed` row as a "review witness" (autoharn2 row 1265, s48 checks existence only); claim-before-close is CLI-only (`led.tmpl` `_slug_claimant` ~line 2256: *some* claimant, identity unchecked); closer-is-claimant enforced nowhere; multiple claims legal by design (s47), last-claim-wins a view convention.
+- **Census** [design/WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md](WORK-ROLE-PRACTICE-EVIDENCE-2026-07-28.md): 100% of opens/claims/closes in all three worlds by one principal (`author`), one session (`main`); role separation appears only on the review surface; all 31 experience4 reviews honestly `independence='self-review'`; one dishonest `technical` claim kernel-refused (row 339); the fix-gate specimen rows 413→436 with a re-review twice regarding the superseded close, caught only by self-discipline; one witness-ref citing a `work_claimed` row as a "review witness" (autoharn2 row 1265, s48 checks existence only); claim-before-close is CLI-only (`led.tmpl` `_slug_claimant` ~line 2256: *some* claimant, identity unchecked); closer-is-claimant enforced nowhere; multiple claims legal by design (s47), last-claim-wins a view convention.
 - **LAW**: ADR-0000 in full (incl. the 2026-07-02 closure-statement amendment — "the class gets named at exactly the scope of the fix the executor has already built" — and the 2026-07-22 named-consumer anecdote), ADR-0011 in full (enforcement-surface vocabulary; recurrence→mechanism; life-critical amendment: mechanism ships with the first fix), ADR-0014 in full (independence of second opinions; grade-the-brief), ADR-0018; ADR-0008/0012/0017 by their governing postures. CLAUDE.md orchestration contract; runs-are-linear; class-ratified fail-safe deltas.
 - **Mechanisms**: s60 header (entitlement conjuncts; deliberately milestone-only close gating), s64 header (delegation conditions kernel-only; *"dispatch mechanics... NOT built here"*), `hooks/pretooluse_change_gate.py` `decomposition_review` (distinct-actor countersign of the claimed item's `work_opened`, riding `review_gap`; default `"observe"`), `led.tmpl` `cmd_work_close` (three-constructor disposition; claim-before-close gate), s22/s29/s39/s47/s48/s21/s34/s41 via the census's §4 trigger map which I spot-checked rather than re-derived.
 
