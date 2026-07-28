@@ -937,6 +937,17 @@ def _generic_outcome(cls: str, disp: str, r: subprocess.CompletedProcess, **extr
 
 
 # --------------------------------------------------------------- fix round 2: provenance sidecar
+#
+# DISCLOSED LIMIT (zero-trust verification 2026-07-29, autoharn3 row 361): the sidecar
+# row this convention writes is an ORDINARY UNGRADED decision -- visible to `led show`/
+# `--recent`, but INVISIBLE to this tool's own next extraction (1.2 filters on
+# decision_grade IS NOT NULL; 1.21 needs the resource: shape). Provenance is therefore
+# one-generation BY THIS MECHANISM ALONE, deliberately: the durable closure is
+# design/FABLE-FOSSIL-AND-BACKUP-SPEC.md §2's fossil resolver -- a sidecar need only
+# outlive its generation until its world fossilizes, after which any xrow/refs walk
+# resolves (hash-verified) against the fossil forever. Do not "fix" this by grading
+# sidecars durable en masse; that spams the standing-decision channel the compaction
+# hook re-asserts into every rebuilt context.
 
 _ROW_WRITTEN_RE = re.compile(r"row (\d+) written")
 
