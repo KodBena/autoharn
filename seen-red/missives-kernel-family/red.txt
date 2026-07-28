@@ -288,3 +288,90 @@ this file, plus one more ephemeral loopback mock counterpart. No ledger writes a
 deployment. Throwaway broken-copy files (`/tmp/mkf_courier_flagbroken.py`) removed after use, per
 this file's existing convention; `.toml` scratch files under /tmp are left behind, matching this
 file's existing (pre-existing, unchanged) convention for every other scenario here.
+
+ACK-CROSSING ROUND TRIP -- work item courier-ack-disposition-drop, autoharn3 row 131,
+2026-07-28, new sibling file `ack_crossing_fixture.py` (not this file's own body -- registered
+alongside it in `run_fixtures.py`'s own subprocess invocation, same one-registered-fixture-
+per-dir discipline this whole family already uses).
+
+Every prior courier fixture in this directory (`courier_witness_fixtures.py`, above) mocks the
+counterpart with a stdlib `http.server` handler. Row 131's own defect lives in what a REAL
+counterpart's OWN `missive_outbound` view serves and what the real courier forwards from it, so
+this leg spins up TWO real `serving.boundary_service` instances, each fronting its own real
+scratch schema/kernel pair through the family's own CHAIN (s58/s59) -- world A (`ackworlda`)
+and world B (`ackworldb`) -- and drives the real `libexec/autoharn/courier` binary against both,
+crossing the boundary in BOTH directions: A sends, B's courier pulls the request, B dispositions
+it via `kernel.missive_dispose` (minting the acknowledgment with `missive_disposition`), and A's
+courier pulls that acknowledgment back.
+
+THE DEFECT (witnessed live 2026-07-28, row 131): pre-fix, `libexec/autoharn/courier`'s payload
+block forwarded `missive_responds_to`/`missive_cites` as optional envelope columns but omitted
+`missive_disposition` -- the one optional column an acknowledgment missive MUST carry (spec
+§2.3 note ², `missive_disposition_mandatory_on_ack`). Every ack crossing a real boundary
+therefore arrived stripped, and the addressee kernel correctly refused it. The live incident
+recorded 0 of 4 acks; this fixture reproduces the identical shape at the scale of one ack.
+
+RED: A's courier AS COMMITTED AT `0429c6c` (the fix commit `86cb5c4`'s own parent, fetched via
+`git show 0429c6c:libexec/autoharn/courier` -- byte-identical, never hand-reconstructed) pulls
+B's real acknowledgment and POSTs it stripped of `missive_disposition`; the real kernel refuses
+on `missive_disposition_mandatory_on_ack`; A's own schema confirms zero acknowledgment receipts
+landed.
+
+GREEN: A's courier AS COMMITTED IN THIS TREE (the real, current `libexec/autoharn/courier`, no
+throwaway copy) re-pulls the SAME still-unrecorded ack (an idempotent retry -- exactly what row
+131's own live incident's fix witnessed) and records it: the pull's own report shows one
+new/one recorded where the RED leg above recorded zero, AND the recorded `missive_received` row
+on A's OWN scratch schema (queried directly, never taken on courier's stdout say-so) carries
+`missive_disposition` intact -- `'escalated'`, exactly what B dispositioned it as.
+
+WITNESSED, verbatim, this run (2026-07-28, `python3 seen-red/missives-kernel-family/
+ack_crossing_fixture.py`, exit 0):
+
+    [ok] setup: A's missive_sent accepted
+    == B's courier pulls A's request ==
+      courier: ackworlda: pulled=1 new=1 recorded=[6] dedup-raced=0
+    [ok] setup: B's courier pull of A's request exits 0
+    [ok] setup: B's courier recorded the request
+    [ok] setup: B's receipt row id resolved
+    [ok] setup: B's missive_dispose('escalated') accepted, minting the ack
+    [ok] setup: B's own outbound view carries the acknowledgment, disposition intact (the row A's courier is about to pull)
+    == RED: A's courier at 0429c6c pulls B's acknowledgment (stripped payload) ==
+      courier: ackworldb: pulled=1 new=1 recorded=[] dedup-raced=0
+      courier: ackworldb: LOUD non-dedup refusal: missive (thread='ackworlda/ack-crossing' seq=1) refused NOT as a dedup race: new row for relation "ledger" violates check constraint "missive_disposition_mandatory_on_ack"
+      courier: exiting 1 (kernel-refused-or-config-error) ...
+    [ok] RED: A's pull of the ack is NOT recorded (0/1, stripped-payload refusal, matching row 131's own 0/4 live specimen)
+    [ok] RED: refused NOT as a dedup race -- the kernel names the mandatory-on-ack CHECK
+    [ok] RED: the run fails loudly (nonzero exit) rather than silently dropping the ack
+    [ok] RED: A's own schema confirms zero acknowledgment receipts landed
+    == GREEN: A's real courier (this tree) pulls B's acknowledgment ==
+      courier: ackworldb: pulled=1 new=1 recorded=[9] dedup-raced=0
+    [ok] GREEN: exit 0
+    [ok] GREEN: A's pull RECORDS the ack (1/1, where the RED leg above recorded 0/1)
+    [ok] GREEN: the recorded ack's missive_disposition is intact ('escalated', exactly what B dispositioned it as)
+    [ok] GREEN: exactly one acknowledgment receipt now on A's own schema (not a duplicate, not still zero)
+
+    ack_crossing_fixture: all cases behaved as expected. ✓
+
+HAZARD FOUND AND FIXED IN REACH OF THIS SAME WORK (2026-07-28): while wiring this leg in,
+`courier_witness_fixtures.py`'s own `_reverted_courier_no_batch_report` (above) held a
+hardcoded `old`/`new` text pair that predated `86cb5c4`'s `missive_disposition`-forwarding
+lines -- the row-131 fix had silently broken this SIBLING fixture (`batch_witness_loss_case`
+raised `RuntimeError: RED REPRO SETUP FAILED` on every run, never a green OR a red result, just
+a crash). Fixed by updating both text blocks to match courier's current body, keeping the
+row-131 forwarding fix intact in the revert (only the outcomes/completed/finally batch-witness
+mechanism is reverted, per that function's own existing convention) -- re-verified green,
+`courier_witness_fixtures.py` own appendix above unchanged in substance.
+
+WITNESSED, same appendix: `python3 gates/no_lazy_imports.py` exit 0; `python3
+gates/fixture_census.py` exit 0 (191 seen-red gates, clean); `python3 gates/staging_guard.py`,
+`python3 gates/layout_census.py`, `python3 gates/max_lines.py` all exit 0; `python3
+seen-red/missives-kernel-family/run_fixtures.py` exit 0 end to end (every case in this file,
+`courier_witness_fixtures.py`, `concurrent_race_fixtures.py`, `amendment2_transport_fixture.py`,
+`led_cli_verbs_fixture.py`, and this new `ack_crossing_fixture.py`, all green). Scratch schemas
+`mkfacka_scratch`/`mkfacka_scratch_kernel`/`mkfackb_scratch`/`mkfackb_scratch_kernel` and roles
+verified dropped after the run (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'mkf%'`
+empty post-run). No live port touched (8433/8422 untouched -- this leg spawns two brand-new
+scratch `boundary_service.py` instances on ephemeral loopback ports, never the repo's own
+running 8433 instance). `.toml` scratch files under /tmp left behind, matching this file's
+existing convention; the two throwaway `.py` courier copies (pre-fix `git show` copy and,
+inside `courier_witness_fixtures.py`, its own reverted/broken copies) are removed after use.

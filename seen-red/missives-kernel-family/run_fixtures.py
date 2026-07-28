@@ -433,7 +433,19 @@ END $$;
         print(led_cli_cp.stderr, file=sys.stderr)
     led_cli_ok = led_cli_cp.returncode == 0
 
-    if FAILURES or not race_ok or not a2_ok or not courier_ok or not led_cli_ok:
+    # work item courier-ack-disposition-drop (autoharn3 row 131): the full ack ROUND TRIP
+    # between two real scratch worlds -- same one-registered-fixture-per-dir invocation
+    # discipline as the four siblings above.
+    ack_crossing_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "ack_crossing_fixture.py")
+    ack_crossing_cp = sh([sys.executable, ack_crossing_script])
+    print(ack_crossing_cp.stdout)
+    if ack_crossing_cp.stderr:
+        print(ack_crossing_cp.stderr, file=sys.stderr)
+    ack_crossing_ok = ack_crossing_cp.returncode == 0
+
+    if (FAILURES or not race_ok or not a2_ok or not courier_ok or not led_cli_ok
+            or not ack_crossing_ok):
         if FAILURES:
             print(f"\nmissives-kernel-family seen-red: {len(FAILURES)} FAILURE(S): {FAILURES}")
         if not race_ok:
@@ -448,6 +460,9 @@ END $$;
         if not led_cli_ok:
             print("\nmissives-kernel-family seen-red: led_cli_verbs_fixture.py FAILED "
                   f"(exit {led_cli_cp.returncode})")
+        if not ack_crossing_ok:
+            print("\nmissives-kernel-family seen-red: ack_crossing_fixture.py FAILED "
+                  f"(exit {ack_crossing_cp.returncode})")
         return 1
     print("\nmissives-kernel-family seen-red: all cases behaved as expected. ✓")
     return 0
