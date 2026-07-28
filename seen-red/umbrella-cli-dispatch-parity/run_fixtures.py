@@ -207,11 +207,14 @@ _EXPECTED_VERBS = {
 _USAGE_MARKERS = {
     "led": "led -- read from and write to this project's decision ledger.",
     "judge": "usage: judge [--drop-record] [extra ledger_differential.py flags...]",
-    "pickup": "pickup — the resume verb (",
-    # Round-4 review SEVERE fix: pinned to the LEGACY variant's own distinguishing suffix (see
-    # _SIBLING_SERVED_MARKERS below) -- legacy-distance-to-clean.tmpl is the file
-    # libexec/autoharn/distance-to-clean actually execs for this repo's own root.
-    "distance-to-clean": "usage: distance-to-clean  (LEGACY direct-psql original)",
+    # Root-repoint (work item root-verbs-served-repoint, ledger row 220, serving/README.md's
+    # "Two trust roots" section): libexec/autoharn/{pickup,distance-to-clean,asof-export} now
+    # exec the SERVED variants -- the three markers below pin the SERVED variant's own
+    # distinguishing text (verified against real --help output, by hand, at the repoint), and
+    # _SIBLING_LEGACY_MARKERS below asserts the LEGACY sibling's text is ABSENT (the same
+    # wrong-target protection as before, contract inverted with the dispatch).
+    "pickup": "pickup -- REBASED onto the boundary service (design/FABLE-BOUNDARY-MULTIPLEX-",
+    "distance-to-clean": "usage: distance-to-clean  (served via the boundary)",
     "attest-tags": "usage: attest-tags [--repo PATH] [--keys-dir PATH] [--json]",
     "audit": "usage: audit [--retain] [--differential]",
     "doctor": "usage: doctor",
@@ -256,8 +259,19 @@ _USAGE_MARKERS = {
 # A FUTURE VERB THAT GROWS A SERVED/LEGACY SPLIT SHOULD GET THE SAME TREATMENT: add its served
 # variant's distinguishing text here, or confirm (and note, as done above for pickup) that its
 # existing marker already cannot collide.
-_SIBLING_SERVED_MARKERS = {
-    "distance-to-clean": "usage: distance-to-clean  (served via the boundary)",
+# CONTRACT INVERTED at the root repoint (row 220): the dispatch now execs the SERVED variant,
+# so the wrong-target protection asserts the LEGACY sibling's distinguishing text is ABSENT
+# (verified per verb against real legacy --help output at the repoint: legacy
+# distance-to-clean prints its "(LEGACY direct-psql original)" usage suffix; legacy pickup's
+# docstring header uses an em dash + the vestigial ORCH-OPUS path; legacy asof-export's usage
+# line is byte-identical to the served one, so its absence marker is the served variant's own
+# "Served via the boundary" epilog INVERTED -- i.e. for asof-export we assert the served text
+# is PRESENT, the only distinguishable direction for that pair).
+_SIBLING_LEGACY_MARKERS = {
+    "distance-to-clean": "usage: distance-to-clean  (LEGACY direct-psql original)",
+    "pickup": "pickup — the resume verb (",
+}
+_SIBLING_REQUIRED_MARKERS = {
     "asof-export": "Served via the boundary",
 }
 
@@ -284,22 +298,27 @@ def _assert_no_shared_boilerplate(verb: str, combined: str) -> str | None:
 
 
 def _assert_sibling_pair_identity(verb: str, combined: str) -> str | None:
-    """Round-4 review SEVERE fix. Returns a FAIL message, or None if clean. For a verb with a
-    served/legacy sibling split (see `_SIBLING_SERVED_MARKERS`'s own comment above), asserts the
-    SERVED sibling's own distinguishing text is ABSENT from real output -- the presence-only
-    `_USAGE_MARKERS` check cannot, by itself, distinguish "the real legacy verb ran" from "the
-    served sibling ran instead" when the two variants' usage/header text collides (the exact
-    class of escape reproduced red this round for distance-to-clean, then found again by sweep in
-    asof-export). Verbs with no sibling split, or an already-safe pair, are simply absent from
-    `_SIBLING_SERVED_MARKERS` and this is a no-op for them."""
-    served_marker = _SIBLING_SERVED_MARKERS.get(verb)
-    if served_marker is None:
-        return None
-    if served_marker in combined:
-        return (f"'{verb}' output contains its SERVED sibling template's own distinguishing text "
-                f"({served_marker!r}) -- this repo's dispatch is contracted to exec the LEGACY "
-                f"direct-psql variant for this verb, so this looks like a wrong-target dispatch "
-                f"serving the OTHER sibling template underneath; combined output: {combined!r}")
+    """Round-4 review SEVERE fix; contract INVERTED at the root repoint (ledger row 220). For a
+    verb with a served/legacy sibling split, the presence-only `_USAGE_MARKERS` check cannot, by
+    itself, distinguish "the served variant ran" from "the legacy sibling ran instead" when the
+    two variants' usage/header text collides -- so this asserts, per the dicts' own comments:
+    the LEGACY sibling's distinguishing text is ABSENT (`_SIBLING_LEGACY_MARKERS`), and where
+    the pair is only distinguishable in the other direction, the SERVED variant's text is
+    PRESENT (`_SIBLING_REQUIRED_MARKERS`). Verbs with no sibling split are absent from both
+    dicts and this is a no-op. Returns a FAIL message, or None if clean."""
+    legacy_marker = _SIBLING_LEGACY_MARKERS.get(verb)
+    if legacy_marker is not None and legacy_marker in combined:
+        return (f"'{verb}' output contains its LEGACY sibling template's own distinguishing text "
+                f"({legacy_marker!r}) -- this repo's dispatch is contracted (root repoint, row "
+                f"220) to exec the SERVED variant for this verb, so this looks like a "
+                f"wrong-target dispatch serving the OTHER sibling template underneath; "
+                f"combined output: {combined!r}")
+    required_marker = _SIBLING_REQUIRED_MARKERS.get(verb)
+    if required_marker is not None and required_marker not in combined:
+        return (f"'{verb}' output LACKS the served variant's distinguishing text "
+                f"({required_marker!r}) -- for this sibling pair the usage lines collide and "
+                f"presence-of-served is the only distinguishable direction; its absence looks "
+                f"like the legacy sibling ran; combined output: {combined!r}")
     return None
 
 
