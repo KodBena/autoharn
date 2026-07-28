@@ -238,6 +238,12 @@ def run_counterpart(self_base: str, self_name: str, actor_id: int, counterpart: 
                 payload["missive_responds_to"] = r["missive_responds_to"]
             if r.get("missive_cites") is not None:
                 payload["missive_cites"] = r["missive_cites"]
+            # missive_disposition rides ONLY on acknowledgment missives (spec §2.3 note ²'s
+            # second licensed home) -- omitted here until 2026-07-28, when the FIRST live ack
+            # crossing refused on missive_disposition_mandatory_on_ack (autoharn3 row 131):
+            # the "served envelope columns verbatim" contract was false by exactly this column.
+            if r.get("missive_disposition") is not None:
+                payload["missive_disposition"] = r["missive_disposition"]
             exit_code, verdict = bcc.post_write(f"{self_base}/d/{self_name}", "ledger", payload)
             if exit_code == 0:
                 recorded.append(verdict["row_id"])
