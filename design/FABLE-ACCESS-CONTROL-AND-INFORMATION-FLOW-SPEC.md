@@ -41,6 +41,23 @@ honest — hiding existence would make every count a lie, and the panel's own C6
 row-count of the universe; the one place existence itself anchors (a redaction marker
 "regarding YOU") is named in §4's not-covered list rather than papered over.
 
+**1c. Disclosure tiers — the full-redaction slot (named now, maintainer question
+2026-07-29: medical-grade settings require hiding existence itself, "even for AI agents
+acting on behalf of principals in that arena").** The scope object carries a
+`disclosure_mode` field from its first version — additive, one ledgered value — with
+three tiers, of which only the first is built in this spec's own build: **marked**
+(existence + typed redaction marker; full client-side chain verification — today's
+design), **hash-stub** (existence and `row_hash` visible, content withheld; integrity
+verifiable without disclosure — the tier a medical auditor wants), and **full** (the
+row does not cross at all; counts become scope-relative truths; chain verification for
+that principal becomes instrument-only, disclosed as such). Two standing obligations
+this slot imposes on everything built earlier: the pagination contract NEVER promises
+row-id continuity (the keyset cursors already tolerate gaps; the promise is simply
+never made), and no served surface derives a client-visible global count a full-tier
+scope would falsify. Full-tier scoping for principals outside the operator's own trust
+domain additionally waits on the trust-model protocol version (durable row 31); the
+mechanism slot itself is trust-model-agnostic.
+
 ## 2. Enforcement points, layered honestly
 
 - **Boundary-side filtering (first, serving layer):** the conduit applies the resolved
@@ -93,7 +110,9 @@ the CLI (an HTTP client of the same routes since the served rebase), courier pul
 (counterpart-boundary GETs), asof-export artifacts, fossil exports (the resolver of the
 fossil-and-backup spec inherits scope at read time), `/attestation` and `/meta`/`/health`
 (capability metadata: open-scope always, disclosed). Identity channels: vendor stamp,
-minted principal, anonymous — the three s43 already admits.
+minted principal, anonymous — the three s43 already admits. Disclosure axis: the three
+tiers of §1c (marked built here; hash-stub and full are named slots whose obligations —
+no id-continuity promise, no global-count surface — bind from this spec's first build).
 
 **Named as not covered, deliberately:** the independent instruments (verify-chain, judge,
 audit, doctor — direct-psql by the two-trust-roots ruling; a scoped principal simply
