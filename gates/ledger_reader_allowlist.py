@@ -85,7 +85,25 @@ CHAIN = [
     "s63-supersession-body-restoration.sql", "s64-principal-stamps-delegation-conditions.sql",
     "s65-refusal-attempted-kind.sql", "s66-forged-stamp-journal-totality.sql",
     "s67-refusal-digest-bound.sql", "s68-typed-absence-dispositions.sql", "s69-role-coherence-refusals.sql",
+    "s70-scope-binding.sql",
 ]
+# s70 (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
+# SPEC.md sec1b/sec1c, ratified ledger row 639) extends this SAME gate's scratch CHAIN. It ships
+# ONE new view (principal_scopes, factors through ledger_current exclusively -- classifies clean,
+# no allowlist entry needed, the s41 D-5/principal_role_bindings precedent one kind over) and ONE
+# new function (scope_exclusions_shape_ok, reads only its own jsonb ARGUMENT -- no table/view
+# reference of any kind, trivially clean). It CREATE-OR-REPLACEs entitlement_act_class_of (the
+# SAME function the s60 entry below already allowlists by name -- unchanged reason, this delta
+# only adds a branch after the existing raw-read branch, never a new raw read of its own kind)
+# and entitlement_act_class_of_target/entitlement_enforce_class -- BOTH of which classify clean
+# with NO allowlist entry, unchanged by this widening: entitlement_act_class_of_target takes
+# SCALAR parameters (never a raw `ledger` read of its own -- the row-addressed lookup lives in
+# validate_entitlement, already allowlisted), and entitlement_enforce_class factors through
+# entitlement_class_roles/principal_role_bindings/principal_authority_chain_reaches_genesis_
+# scoped exclusively. So this delta registers NO new allowlist entry. validate_entitlement (the
+# trigger already on this allowlist since s60) is NOT re-issued at all by this delta (its own
+# Element 9's header) -- the existing entry is untouched.
+
 # record-currency-s58-s69 (ledger row 237 hazard 2, autoharn3): CHAIN stopped at s62 though the lineage head moved to s69; the hazard note's claim ("s63-s69 add no new raw readers") is read PRECISELY here, not restated on faith: all seven files read in full, every re-issued/added function or view traced. ALL SEVEN classify clean, NO new ALLOWLIST ENTRY needed (no new UNLICENSED object) -- s63/s65/s66/s67/s68 only re-issue already-standing objects (validate_supersession_target; compute_row_hash; the two column-complete views; the `:"kern".`-namespaced journal_write_refusal/ledger_write/set_stamp, outside this gate's `:"schema".` universe); s64's four new functions read only principal_relations/ledger_current. s69 is the one exception worth stating precisely: it widens validate_review/validate_review_witness_existence/validate_supersession_target by one branch each, and the witness-existence widening DOES add a genuinely new raw `ledger` read (a row-addressed kind lookup, reason text below) inside an already-allowlisted function -- no fresh entry required, but the read is real and named at its own entry, not glossed over. Full narrative: s-history.md's own s60-s69 entries.
 # s60 (kernel/lineage/s60-entitlement-enforcement.sql, design/FABLE-ENTITLEMENT-ENFORCEMENT-
 # SPEC.md §1) extends this SAME gate's scratch CHAIN and ships THREE declared raw-`ledger`

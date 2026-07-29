@@ -234,7 +234,7 @@ BASELINE: dict[str, int] = {
     # (`=` or `<>`) instead of assuming `=`, since the kind-disposition coupling's own four-member
     # vocabulary needs the inequality form (three of four members mean NULL, not one) -- witnessed
     # growth from two new manifest entries plus one classifier capability, not unnoticed growth.
-    "gates/kind_shape_manifest_gate.py":           1716,
+    "gates/kind_shape_manifest_gate.py":           1765,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -372,7 +372,7 @@ BASELINE: dict[str, int] = {
     # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
     # comments kept verbatim above; the union is the measured merged file. Same
     # merge-union ratchet-crossing class as the reconciliations above.
-    "gates/ledger_reader_allowlist.py":            636,
+    "gates/ledger_reader_allowlist.py":            654,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -550,7 +550,12 @@ BASELINE: dict[str, int] = {
     # both concurrent builds added one REGISTRY entry each (ac-read-identity, row 744 family;
     # seen-red/setup-tui-config-extension, rows 685/693); ceiling set to the post-merge actual
     # (454), the same additive-census-row class as every prior bump above.
-    "gates/fixture_census.py":                     454,
+    # Reconciled again at the s70-scope-binding completion-round merge (rows 639/732/794): this
+    # branch's own pre-merge bump (451, one new REGISTRY row for seen-red/s70-scope-binding)
+    # unions with main's 454 above; the post-merge file (carrying both the s70 REGISTRY row and
+    # main's ac-read-identity/setup-tui-config-extension rows) re-measures to 455 -- the same
+    # merge-union ratchet-crossing class as every reconciliation above.
+    "gates/fixture_census.py":                     455,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -686,7 +691,18 @@ BASELINE: dict[str, int] = {
     # both concurrent builds bumped this gate's own BASELINE (805 and 810) carrying their
     # fixture_census/config_seam growth; ceiling set to the post-merge measured actual,
     # re-measured after writing -- the same self-referential fixpoint as every prior bump.
-    "gates/max_lines.py":                          811,
+    # bumped 797 -> 815 (s70 build, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md
+    # sec1b/sec1c, ratification row 639, ac-scope-kernel-delta): this gate's own BASELINE growing
+    # to carry the three entries this same commit bumps (gates/kind_shape_manifest_gate.py
+    # 1716 -> 1765, gates/ledger_reader_allowlist.py 636 -> 654, gates/fixture_census.py
+    # 450 -> 451) -- the same self-referential fixpoint as every prior bump, re-measured after
+    # writing.
+    # Reconciled again at the s70-scope-binding completion-round merge (rows 639/732/794): both
+    # this branch's own pre-merge bump chain (797 -> 815) and main's own concurrent bump (811,
+    # ac-read-identity + setup-tui-config-extension merge) collapse, plus the fixture_census.py
+    # 454 -> 455 reconciliation directly above and this entry's own settling -- the same
+    # self-referential fixpoint as every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          827,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
