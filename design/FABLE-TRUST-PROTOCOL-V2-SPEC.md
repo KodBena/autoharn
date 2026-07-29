@@ -125,6 +125,42 @@ contribution is that its records can *survive hostile audit* — every access at
 to a key, every redaction typed, every chain verifiable at the tier the viewer is
 entitled to.
 
+The PRIMARY medical control deserves naming on its own (maintainer, 2026-07-29, from
+Swedish practice: a physician may not open the record of a patient who is not theirs —
+the problem is not only after-the-fact manufacture but unauthorized reading by
+legitimately-credentialed insiders): that control is the AC spec's half of this
+composition, not this spec's. The scope IS the care relation — a keyed clinician
+principal's scope covers their own patients' rows and excludes everyone else's — and
+the journaled read channel is the audit substrate such regimes actually run on: every
+look-up attributable, every scoped-out access a typed refusal on the record, sampled
+audit possible over the journal. What this spec's keys add on top is that the journal's
+attributions and the records' provenance survive dispute. Insider read control without
+keys is already real (tier 1, one operator's own agents); keys make it real against
+parties.
+
+## 4a. Backwards compatibility (maintainer question 2026-07-29, answered in the design)
+
+Compatibility is designed-in at five seams, of different kinds. (1) **Unarmed is
+byte-identical:** a world birthed with the v2-capable kernel but `authn_mode =
+single-operator` behaves exactly like v1, the same per-world arming discipline every
+kernel delta since s21 carries. (2) **Per-deployment coexistence:** one hub serves
+armed and unarmed worlds simultaneously — the per-deployment posture machinery
+(`serving/boundary_multiplex_config.py`'s override idiom) is the template `authn_mode`
+reuses. (3) **Per-principal gradualism:** inside an armed world, an UNKEYED principal's
+acts stay stamp-grade — obligations attach as principals enroll, never to the world
+wholesale, so legacy agents run unmodified. (4) **Recorded-not-gated degradation:** a
+v2-aware client writing into an unarmed or v1-era world lands its signatures in the
+slots that have existed since v1 — the proof is stored even where the kernel does not
+check it, which makes v1-era signed rows RETROACTIVELY verifiable by any later or
+external verifier; cross-world correspondence between keyed and unkeyed worlds degrades
+pairwise to the weaker party's tier with the grade visible per row, never silently
+flattened. (5) **Runs-are-linear is itself the deepest seam:** nothing upgrades, worlds
+are born at their protocol level, so no migration surface exists to break. The one
+honest asymmetry: DISARMING an armed world weakens guarantees for rows written after
+the disarm — the arming state is ledgered, so every row carries its era and an auditor
+can always tell which guarantee it was written under. Backwards compatible, yes; a
+silent downgrade, deliberately never.
+
 ## 5. Threat model (what v2 defends, and the honest not-covered list)
 
 This version newly defends against: cross-party forgery (party A cannot mint party B's
