@@ -16,23 +16,32 @@ line between them, drawn deliberately.
 
 ## 0. What trust is here, and what we actually have (the honest baseline)
 
-The maintainer's working assumption (row 639, corrected there): that multi-party trust
-already existed, minus an optional key-signing ritual. The true state: **every identity
-channel in the system is forgeable by the same OS user** — the stamp secret is a
-chmod-600 file the agent's own user can read (s17's LIMITS says so in its own header),
-minted-principal headers are asserted strings, `LED_ACTOR` is a name you type. Within one
-trust domain this is not a defect; it is the ratified design ("tripwire, not
-authentication"), and it is why the kernel's SoD machinery polices *process shape*
-(distinct invocations, distinct actors) rather than *adversarial identity*. The signing
-"rigamarole" was never a ceremony on top of trust — it is the only thing that would make a
-second party's claim verifiable rather than honored. What exists as real cryptography
-today: the signed-genesis ceremony and the `verify-commission`/`attest-tags` rungs (GPG
-against committed public keys) — one root, the maintainer's, used for provenance of
-commissions and tags, not for per-principal runtime identity. The named-empty slots:
-s41's `principal_key_bound`/possession-attestation kinds (recorded, gating nothing),
-s58's missive signing slot, the wire protocol's `authn_mode` field (value: forever
-`single-operator` so far). v2 is the act of filling those slots — and nothing else; the
-slots were shaped for exactly this so the retrofit surface is small by construction.
+The maintainer's working assumption (row 639, corrected there) was that multi-party trust
+already existed, minus an optional key-signing ritual. The true state is that **every
+identity channel in the system is forgeable by the same OS user**: the
+[stamp](../GLOSSARY.md#stamp) — the HMAC that binds a ledger row to the session that
+wrote it — has its secret held in a chmod-600 file the agent's own user can read, a
+limitation [`kernel/lineage/s17-stamp-mechanism.sql`](../kernel/lineage/s17-stamp-mechanism.sql)
+names in its own header comment (this document cites several kernel-lineage schema
+migrations this way, each numbered `sNN`); minted-principal headers are asserted strings,
+and `LED_ACTOR` is a name you type. Within one trust domain this is not a defect; it is
+the ratified design ("tripwire, not authentication"), and it is why the kernel's SoD
+(separation-of-duties) machinery polices *process shape* (distinct invocations, distinct
+actors) rather than *adversarial identity*. The signing "rigamarole" was never a ceremony
+on top of trust — it is the only thing that would make a second party's claim verifiable
+rather than honored. What exists as real cryptography today is the signed-genesis
+ceremony and the `verify-commission`/`attest-tags` rungs (GPG against committed public
+keys) — one root, the maintainer's, used for provenance of commissions and tags, not for
+per-principal runtime identity. Three places already have named slots that presently do
+nothing — "named-empty" meaning the field or act-kind exists and is recorded, but nothing
+in the kernel gates on it yet. First, migration s41 defines two such kinds, a
+`principal_key_bound` act and a possession-attestation act (detailed in §1 below); both
+are recorded when they occur, but neither currently gates anything. Second, migration s58
+defines a missive signing slot, for signing cross-world messages, that the wire format
+carries but nothing yet populates or checks. Third, the wire protocol's `authn_mode`
+field has so far only ever held the value `single-operator`. v2 is the act of filling
+these three slots — and nothing else; they were shaped in advance for exactly this, so
+the retrofit surface this spec describes is small by construction.
 
 ## 1. The trust topology (who can prove what to whom)
 
@@ -63,12 +72,20 @@ attests independence across a trust boundary**: the eight (soon nine) authority-
 act classes when the actor is a keyed principal; reviews whose independence claim is load
 bearing for another party's decision; missives from keyed worlds; and the enrollment acts
 themselves. Everything else — ordinary rows, notes, work bookkeeping *within* one party's
-own scope — stays stamp-grade, deliberately: signing everything would move the cost from
-"where trust crosses a boundary" to "everywhere," which is how signing regimes die of
-friction and start getting bypassed. The kernel enforces this as one new conjunct in the
-s60 idiom (per-world armed, unarmed byte-identical — the same fail-safe shape as every
-delta since s21): *for a gated act by a keyed principal, a valid detached signature over
-the row's canonical bytes must verify against that principal's in-force bound key.*
+own scope — stays **stamp-grade** (protected only by the existing
+[stamp](../GLOSSARY.md#stamp), not a signature), deliberately: signing everything would
+move the cost from "where trust crosses a boundary" to "everywhere," which is how signing
+regimes die of friction and start getting bypassed. The kernel enforces this as one new
+**conjunct** — one clause ANDed into an existing all-must-pass check, the same sense
+[GLOSSARY.md's entitlement entry](../GLOSSARY.md#entitlement) uses for s60's two existing
+conjuncts — added to the s60 idiom. That idiom is **armed** or **unarmed** per world: a
+world's configuration turns the check on or leaves it off, and an unarmed world behaves
+byte-identically to today — the same fail-safe shape every kernel-lineage delta since s21
+has carried. The new conjunct itself: *for a gated act by a keyed principal, a valid
+**detached signature** (a signature stored and verified separately from the data it
+covers) over the row's **canonical bytes** (the row's one fixed, deterministic byte
+serialization — the same bytes every verifier reproduces) must verify against that
+principal's **in-force** (currently valid — not suspended or revoked) bound key.*
 Verification is kernel-side (pgcrypto or an equivalent verified path — the birth
 dependency the fixture sweeps already witness), so a signature is checked where the row
 lands, not where a client promises it was checked.
@@ -78,10 +95,12 @@ lands, not where a client promises it was checked.
 `protocol_version` goes to `2`; `authn_mode` gains `multi-party`. A v2 boundary session
 for a keyed principal authenticates by signature over a server nonce (challenge-response
 at session start; no long-lived bearer tokens, nothing replayable), and the session's
-reads then resolve identity for the flow-control machinery (the AC spec's scopes — this
-is where the two specs meet: scopes decide *what a party may see*, keys decide *whether
-the party is who the session claims*). Anonymous reads remain legal exactly as the AC
-spec rules, at open scope or whatever scope the world's posture assigns anonymity.
+reads then resolve identity for the flow-control machinery —
+[FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+(called "the AC spec" below)'s scopes. This is where the two specs meet: scopes decide
+*what a party may see*, keys decide *whether the party is who the session claims*.
+Anonymous reads remain legal exactly as the AC spec rules, at open scope or whatever
+scope the world's posture assigns anonymity.
 **Loopback stays the default binding.** The moment a deployment binds beyond loopback,
 TLS becomes mandatory in the same config stroke (refused otherwise, teach-text naming
 why) — but network exposure is its own operator decision this spec does not make; medical
@@ -89,12 +108,15 @@ tier on one host with keyed local parties is fully served on loopback.
 
 ## 4. The medical tier, composed (why this is enough, and what it is not)
 
-The medical scenario from rows 567/608 and the maintainer's tier question: information
-control at full-redaction grade for agents acting on behalf of arena principals.
-Composition: **scopes at `full` disclosure** (AC spec §1c — existence-hidden, counts
-scope-relative, instrument-only verification) carried by **keyed principals** (this
-spec), with the **hash-stub tier** serving the auditor who must verify integrity without
-seeing content. What this composition honestly is: HIPAA-*shaped* technical controls —
+The medical scenario from rows 567/608 and the maintainer's tier question concern this:
+information control at full-redaction grade for agents acting on behalf of arena
+principals (the AC spec §1c's term for the principals participating in a scope's
+domain — here, the medical scenario). The composition is: **scopes at `full`
+disclosure** (AC spec §1c — existence-hidden, counts scope-relative, instrument-only
+verification) carried by **keyed principals** (this spec), with the **hash-stub tier**
+(AC spec §1c's middle disclosure tier: existence and row hash visible, content withheld)
+serving the auditor who must verify integrity without seeing content. What this
+composition honestly is: HIPAA-*shaped* technical controls —
 attributable, integrity-protected, access-scoped, journaled. What it is not, stated so
 it is never oversold: a compliance claim (the project bar remains NRC-grade product,
 best-effort process), an operator-proof system (§1), or a substitute for the
@@ -105,15 +127,17 @@ entitled to.
 
 ## 5. Threat model (what v2 defends, and the honest not-covered list)
 
-Defended, newly: cross-party forgery (party A cannot mint party B's acts — the core);
-repudiation of signed acts (a party cannot disown its signature while its key was
-in-force and possession-attested); operator-side *accidental* substitution (a mislabeled
-agent cannot satisfy a signature gate); after-the-fact manufacture of signed history
-(signatures bind to chain-hashed rows; back-dating requires breaking the chain the
-instruments verify). NOT defended, named per ADR-0000's discipline: the root operator
-acting deliberately (owns the host); key theft from a party's own custody (their
-perimeter, not ours — revocation via the existing s45 lifecycle is the remedy, and s45's
-prospective-only severance semantics apply to keys exactly as to standing); side channels
+This version newly defends against: cross-party forgery (party A cannot mint party B's
+acts — the core); repudiation of signed acts (a party cannot disown its signature while
+its key was in-force and possession-attested); operator-side *accidental* substitution (a
+mislabeled agent cannot satisfy a signature gate); and after-the-fact manufacture of
+signed history (signatures bind to chain-hashed rows; back-dating requires breaking the
+chain the instruments verify). Not defended — named per ADR-0000's discipline, which
+requires stating a guarantee's honest limits rather than leaving them unsaid — are: the
+root operator acting deliberately (owns the host); key theft from a party's own custody
+(their perimeter, not ours — revocation via the existing migration-s45 standing-lifecycle
+machinery is the remedy, and that same machinery's prospective-only severance semantics
+apply to keys exactly as they already apply to a principal's standing); side channels
 below the boundary (same tripwire posture as the AC spec §2, unchanged); coercion,
 collusion, and every social channel; and quantum-era signature breakage (algorithm
 agility is a config field on the binding act, not a promise).
@@ -123,13 +147,14 @@ agility is a config field on the binding act, not a promise).
 Nothing in this spec activates by merge. The sequence, each step his: (1) ratify this
 spec, slowly — the reading IS the step; (2) the key ceremony he has reserved to himself
 (row 264's grounding requirement is honored, not bypassed: this spec re-raises nothing —
-it was commissioned); operator root key, then per-party enrollment as parties actually
-appear; (3) flip a world's `authn_mode` to `multi-party` — per-deployment, the same
-posture idiom the identity_enforcement split just built, grace-then-enforce staging
-available for the same reasons; (4) the first keyed world birth carries the v2 conjunct
-delta in its chain. Until (3), every world behaves byte-identically to today regardless
-of how much of v2 has merged — the same unarmed-is-identical discipline every kernel
-delta since s21 has carried.
+it was commissioned) — he establishes the operator root key first, then enrolls each
+party's key as parties actually appear; (3) flip a world's `authn_mode` to
+`multi-party` — per-deployment, the same posture idiom the `identity_enforcement`
+grace/enforce split just built (`serving/boundary_multiplex_config.py`), with
+grace-then-enforce staging available for the same reasons; (4) the first keyed world
+birth carries the v2 conjunct delta in its chain. Until (3), every world behaves
+byte-identically to today regardless of how much of v2 has merged — the same
+unarmed-is-identical discipline every kernel delta since s21 has carried.
 
 ## 7. Closure statement (ADR-0000 Rule 2(a))
 
@@ -139,18 +164,20 @@ a kernel-verified signature against that principal's in-force, possession-attest
 and no unarmed world's behavior differs by one byte from v1.
 
 **Quantification universe:** the gated act classes (the authority-bearing set as then
-constituted, enumerated by `entitlement_act_class_of` at the delta's writing — nine with
-s70 — plus reviews, missives-from-keyed-worlds, and the enrollment acts); the identity
-channels (stamp, minted, anonymous, and new: signed-session); both arming states; the
-key lifecycle states s45 admits (in-force, suspended, revoked — severance prospective);
-both transports (loopback; network-with-TLS).
+constituted, enumerated by `entitlement_act_class_of` at the delta's writing — nine once
+this spec's own kernel delta lands as migration s70 — plus reviews,
+missives-from-keyed-worlds, and the enrollment acts); the identity channels (stamp,
+minted, anonymous, and new: signed-session); both arming states; the key lifecycle
+states migration s45 admits (in-force, suspended, revoked — severance prospective); both
+transports (loopback; network-with-TLS).
 
-**Named as not covered:** everything in §5's not-defended list; the SPA/panel (a
-browser cannot hold party keys safely — panel sessions ride operator identity or scoped
-anonymity until a dedicated design earns otherwise, stated so nobody wires a private key
-into a web bundle); automated key rotation (manual via bind/revoke acts until a need is
-witnessed); and cross-project federation beyond pairwise world keys (no web of trust, no
-CA — pairwise enrollment only, the smallest shape that serves the want).
+**Named as not covered:** everything in §5's not-defended list; the SPA (single-page
+application) / panel (a browser cannot hold party keys safely — panel sessions ride
+operator identity or scoped anonymity until a dedicated design earns otherwise, stated so
+nobody wires a private key into a web bundle); automated key rotation (manual via
+bind/revoke acts until a need is witnessed); and cross-project federation beyond pairwise
+world keys (no web of trust, no certificate authority (CA) — pairwise enrollment only,
+the smallest shape that serves the want).
 
 **Denomination check:** trust is denominated in *verifiable acts* (signatures over
 canonical row bytes against ledgered keys) — never in network position, process
