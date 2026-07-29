@@ -39,15 +39,14 @@ import re
 from pathlib import Path
 
 from tools.configtree import FieldName, NodeId, ScopedFieldKey
+from tools.setup_tui import boundary_config_values as bcv
 from tools.setup_tui import config_file, content, destination, durable_decisions, governed_files, probes
-from tools.setup_tui import runner, steps_boundary, steps_features
+from tools.setup_tui import runner, steps_features
 from tools.setup_tui.plan import CommandAct
 
-# setup-tui-config-extension: short local aliases for steps_boundary's own re-exported vocabulary
-# homes (ADR-0012 P1 -- import, never a second literal copy of a default/bound).
-_bdl = steps_boundary.boundary_diagnostic_log
-_bmc = steps_boundary.boundary_multiplex_config
-_IEO_INHERIT = steps_boundary._IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT
+# fix round (row 776 finding 2): `boundary_config_values` is the ONE shared public home for the
+# enforcement default/INHERIT values below -- no longer reached through `steps_boundary`'s own
+# private `_IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT`/re-exported module aliases (both retired).
 
 # --------------------------------------------------------------------------------------------
 # 1. --from-config: compile to a per-step {slug: {field: value}} answers dict -- the shape
@@ -111,12 +110,12 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
             "world": world, "host": str(g("substrate.host", "")), "db": str(g("substrate.db", "")),
             "start_now": bool(g("boundary.start_now", False)),
             # setup-tui-config-extension (row 685/693, gaps 1-5): defaults imported from
-            # steps_boundary.py (ADR-0012 P1), never a second "grace"/"INFO"/2.0/16 copy.
-            "log_level": str(g("boundary.log_level", _bdl.DEFAULT_LEVEL)),
-            "identity_enforcement": str(g("boundary.identity_enforcement", _bmc.DEFAULT_IDENTITY_ENFORCEMENT)),
-            "identity_enforcement_override": str(g("boundary.identity_enforcement_override", _IEO_INHERIT)),
-            "sse_poll_interval_secs": str(g("boundary.sse_poll_interval_secs", _bmc.DEFAULT_SSE_POLL_INTERVAL_SECS)),
-            "max_sse_clients": str(g("boundary.max_sse_clients", _bmc.DEFAULT_MAX_SSE_CLIENTS)),
+            # boundary_config_values.py (ADR-0012 P1; row 776 finding 2), never a second copy.
+            "log_level": str(g("boundary.log_level", bcv.LogLevel.default().value)),
+            "identity_enforcement": str(g("boundary.identity_enforcement", bcv.IdentityEnforcementPosture.default().value)),
+            "identity_enforcement_override": str(g("boundary.identity_enforcement_override", bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT)),
+            "sse_poll_interval_secs": str(g("boundary.sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value)),
+            "max_sse_clients": str(g("boundary.max_sse_clients", bcv.MaxSseClients.default().value)),
         },
         # setup-tui-config-extension (gap 6): unconditional (no "run" gate); an empty
         # counterparts list is a legal answer (steps_courier.py's own submit() docstring).
@@ -410,15 +409,15 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
     # setup-tui-config-extension (gaps 1-5): steps_boundary.submit's own state_updates sets each
     # boundary_* key below every time it runs; the fallback only guards a state dict that never
     # reached that submit at all (ADR-0002 rule 2: degrade to the honest field default).
-    out["boundary.log_level"] = state.get("boundary_log_level", _bdl.DEFAULT_LEVEL)
+    out["boundary.log_level"] = state.get("boundary_log_level", bcv.LogLevel.default().value)
     out["boundary.identity_enforcement"] = state.get(
-        "boundary_identity_enforcement", _bmc.DEFAULT_IDENTITY_ENFORCEMENT)
+        "boundary_identity_enforcement", bcv.IdentityEnforcementPosture.default().value)
     out["boundary.identity_enforcement_override"] = state.get(
-        "boundary_identity_enforcement_override", _IEO_INHERIT)
+        "boundary_identity_enforcement_override", bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT)
     out["boundary.sse_poll_interval_secs"] = float(state.get(
-        "boundary_sse_poll_interval_secs", _bmc.DEFAULT_SSE_POLL_INTERVAL_SECS))
+        "boundary_sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value))
     out["boundary.max_sse_clients"] = int(state.get(
-        "boundary_max_sse_clients", _bmc.DEFAULT_MAX_SSE_CLIENTS))
+        "boundary_max_sse_clients", bcv.MaxSseClients.default().value))
 
     # setup-tui-config-extension (gap 6): an empty list is honest when courier was never
     # reached, or reached with zero counterparts.

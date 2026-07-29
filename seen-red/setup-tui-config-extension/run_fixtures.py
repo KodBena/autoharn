@@ -62,6 +62,7 @@ except ImportError:
 from tools.configtree import NodeId  # noqa: E402
 from tools.configtree.fields import default_of, get_field_value  # noqa: E402
 from tools.configtree.ids import FieldName, ScopedFieldKey  # noqa: E402
+from tools.setup_tui import boundary_config_values as bcv  # noqa: E402
 from tools.setup_tui import config_file, steps, steps_boundary, steps_courier  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
@@ -414,6 +415,73 @@ def case_pilot_driven(scratch: str) -> None:
     asyncio.run(_case_pilot_driven_async(scratch))
 
 
+def case_typed_construction() -> None:
+    """Fix round (review row 776, finding 1): one RED (out-of-contract value refused at
+    construction, message naming the contract) + one GREEN (valid value round-trips through
+    `.value`/`.raw`) pair per typed home in `tools/setup_tui/boundary_config_values.py` -- the
+    five NEW boundary-multiplex values no longer travel as bare str/float/int without a single
+    constructing home checking their contract. `bcv` is imported at module level above (CLAUDE.md's
+    lazy-import ban)."""
+    # LogLevel: RED (unknown level, message names the vocabulary) + GREEN (round-trips).
+    try:
+        bcv.LogLevel.parse("BOGUS")
+        raise AssertionError("case f RED failed: LogLevel accepted an out-of-vocabulary value")
+    except ValueError as exc:
+        assert "LEVELS" in str(exc) or "DEBUG" in str(exc), exc
+    assert bcv.LogLevel.parse("DEBUG").value == "DEBUG"
+    assert bcv.LogLevel.default().value == "INFO"
+
+    # IdentityEnforcementPosture (hub-wide default, re-used from serving/boundary_multiplex_config.py):
+    # RED (unknown posture, message names both key locations) + GREEN (round-trips).
+    try:
+        bcv.IdentityEnforcementPosture.parse("BOGUS", where="identity_enforcement (hub-wide default)",
+                                              path=__import__("pathlib").Path("<fixture>"))
+        raise AssertionError("case f RED failed: IdentityEnforcementPosture accepted an "
+                              "out-of-vocabulary value")
+    except bcv.boundary_multiplex_config.MultiplexConfigError as exc:
+        assert "grace" in str(exc) and "enforce" in str(exc), exc
+    assert bcv.IdentityEnforcementPosture.parse(
+        "enforce", where="identity_enforcement (hub-wide default)",
+        path=__import__("pathlib").Path("<fixture>")).value == "enforce"
+    assert bcv.IdentityEnforcementPosture.default().value == "grace"
+
+    # IdentityEnforcementOverride: RED (unknown override value, same teach-text as the hub-wide
+    # default) + GREEN (both "inherit" and a valid posture round-trip; .inherits flags correctly).
+    try:
+        bcv.IdentityEnforcementOverride.parse("BOGUS")
+        raise AssertionError("case f RED failed: IdentityEnforcementOverride accepted an "
+                              "out-of-vocabulary value")
+    except bcv.boundary_multiplex_config.MultiplexConfigError as exc:
+        assert "grace" in str(exc) and "enforce" in str(exc), exc
+    assert bcv.IdentityEnforcementOverride.parse("inherit").inherits is True
+    assert bcv.IdentityEnforcementOverride.parse("grace").inherits is False
+    assert bcv.IdentityEnforcementOverride.parse("grace").raw == "grace"
+    assert bcv.IdentityEnforcementOverride.default().raw == bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT
+
+    # SsePollIntervalSecs: RED (zero, out of (0, MAX]; message names the bound) + GREEN.
+    try:
+        bcv.SsePollIntervalSecs.parse("0")
+        raise AssertionError("case f RED failed: SsePollIntervalSecs accepted 0")
+    except ValueError as exc:
+        assert "0" in str(exc) and str(bcv.boundary_multiplex_config.MAX_SSE_POLL_INTERVAL_SECS) in str(exc), exc
+    assert bcv.SsePollIntervalSecs.parse("5.5").value == 5.5
+    assert bcv.SsePollIntervalSecs.default().value == bcv.boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS
+
+    # MaxSseClients: RED (zero, out of [1, CEILING]; message names the bound) + GREEN.
+    try:
+        bcv.MaxSseClients.parse("0")
+        raise AssertionError("case f RED failed: MaxSseClients accepted 0")
+    except ValueError as exc:
+        assert "0" in str(exc) and str(bcv.boundary_multiplex_config.MAX_SSE_CLIENTS_CEILING) in str(exc), exc
+    assert bcv.MaxSseClients.parse("42").value == 42
+    assert bcv.MaxSseClients.default().value == bcv.boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS
+
+    print("case f ok: each of the five typed homes in boundary_config_values.py refuses an "
+          "out-of-contract value at construction (naming the contract) and round-trips a valid "
+          "one -- LogLevel, IdentityEnforcementPosture, IdentityEnforcementOverride, "
+          "SsePollIntervalSecs, MaxSseClients")
+
+
 def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-config-extension-")
     try:
@@ -427,6 +495,7 @@ def main() -> int:
                   "e drives the real Tree+Form app via Pilot/run_test()")
         else:
             case_pilot_driven(scratch)
+        case_typed_construction()
         print("ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension "
               "(ledger row 685's audit / row 693), zero residue")
         return 0

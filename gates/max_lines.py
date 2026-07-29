@@ -681,7 +681,7 @@ BASELINE: dict[str, int] = {
     # gate's own BASELINE growing to carry the gates/doc_attestation_presence.py bump (905 -> 970)
     # this same commit makes, re-measured after writing -- the same self-referential fixpoint as
     # every prior bump.
-    # bumped 797 -> 809 (work item setup-tui-config-extension, row 685/693): this gate's own
+    # bumped 797 -> 810 (work item setup-tui-config-extension, row 685/693): this gate's own
     # BASELINE growing to carry the config_seam.py (414->463) and fixture_census.py (450->451)
     # bumps this same commit makes, re-measured after writing -- the same self-referential
     # fixpoint as every prior bump.
