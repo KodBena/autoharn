@@ -1,0 +1,57 @@
+seen-red/ac-boundary-scope-filter/red.txt -- RED capture, banked per gates/fixture_census.py's
+own "a gate never seen red is a claim" discipline (ADR-0011).
+
+Captured by running seen-red/ac-boundary-scope-filter/run_fixtures.py (this fixture's own code,
+unchanged) against the tree BEFORE this build's own changes: `git stash push -u` of
+serving/boundary_scope_filter.py (the new module), serving/boundary_service.py,
+serving/boundary_diagnostic_log.py, serving/boundary_models.py, serving/boundary_read_journal.py
+-- this fixture's own directory (seen-red/ac-boundary-scope-filter/) and
+gates/fixture_census.py's own registry entry left OUT of the stash, so the proof itself and its
+registration both stayed in place; only the production code they exercise reverted.
+
+Command: env -u PGOPTIONS HARNESS_PGHOST=192.168.122.1 python3 seen-red/ac-boundary-scope-filter/run_fixtures.py
+
+Observed (verbatim):
+
+Traceback (most recent call last):
+  File ".../seen-red/ac-boundary-scope-filter/run_fixtures.py", line 67, in <module>
+    import boundary_scope_filter  # noqa: E402  (this build's own new module -- unit legs call it directly)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'boundary_scope_filter'
+
+Exit code: 1
+
+WHY THIS IS THE RIGHT RED (not an accidental/unrelated failure): design/
+FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§1c/§2/§4's own boundary-side scope
+enforcement filter (serving/boundary_scope_filter.py) does not exist at all on the pre-build
+tree -- this fixture's own unit legs call `boundary_scope_filter.apply_scope` directly, so the
+import itself is the first thing to fail, before a single HTTP request is even made (and before
+any of the live scratch-world legs, which would ALSO have failed differently: on the pre-build
+tree, `serving/boundary_service.py`'s `_json_read_response` never threads `cfg`/`view`/
+`id_field` through at all, so every scoped-principal leg below would instead observe the
+scope-bind write succeed silently but every read stay UNFILTERED -- the exact vulnerability
+this build closes, not merely a missing import).
+
+After the build, the SAME fixture, unchanged, passes every one of its witness legs GREEN:
+  - 5 unit legs (disclosure-mode default, thread-family match + full-tier drop, the unknown-
+    exclusion-family loud refusal, vendor/anonymous always-passthrough) against
+    `boundary_scope_filter.apply_scope` directly, no live substrate needed.
+  - leg1 unarmed-world-byte-identical (reviewer's own read == anonymous's own read, before any
+    scope is ever bound).
+  - leg2 kind-class exclusion, marked tier (content withheld, typed marker kept) + the
+    unscoped-caller-unchanged control.
+  - leg3 hash_stub tier (content withheld, row_hash disclosed and verified equal to the real
+    row's own hash).
+  - leg4 full tier (the row absent from the list route with no marker at all, scope-relative
+    count; the single-row route answers the SAME 404 shape as a genuinely absent row).
+  - leg5 rows-family exclusion (an explicit row id).
+  - leg6 work-item-lineage exclusion on GET /work/items (an exact work_slug).
+  - leg7 the read journal carries a typed redaction summary (family/value/disclosure_mode/
+    count), never the excluded row's own statement text.
+  - leg8/leg9 /health's capabilities.s70_scope_filter is true on the s70-headed world, false
+    (and every route byte-identical regardless of identity) on a pre-s70 world.
+
+Witnessed against two real scratch worlds (acsfw<pid>, s70-headed via CHAIN_S70; acsfp<pid>,
+pre-s70 via CHAIN_B) on dynamic loopback ports, torn down with zero residue on every run
+(confirmed: no acsf*-prefixed schema survives in db=toy after either a pass or a raised
+exception, `finally` always tears down).

@@ -74,7 +74,8 @@ def _iso_now() -> str:
 
 
 def append_read(world_dir: Path | None, *, deployment: str | None, route: str, view: str | None,
-                 identity: dict[str, Any], row_count: int | None) -> None:
+                 identity: dict[str, Any], row_count: int | None,
+                 redactions: list[dict[str, Any]] | None = None) -> None:
     """Appends ONE journal line for a completed GET request. A no-op, always, when `world_dir`
     is `None` (a direct/unit-shaped `create_app` caller that never wired one -- this project's
     own fixture bank, e.g., which has no `--config`-derived world directory at all) -- the same
@@ -86,6 +87,18 @@ def append_read(world_dir: Path | None, *, deployment: str | None, route: str, v
     never a hash of them, never enough to reconstruct them. This is the spec's own §1b-forward
     invariant applied a build early: "the journal must never become a second copy of scoped
     data."
+
+    `redactions` (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§1c, work item
+    ac-boundary-scope-filter): THE READ JOURNAL'S OWN TYPED REDACTION EVENT, this build's
+    witness half. A SUMMARY only -- `[{family, value, disclosure_mode, count}, ...]`
+    (`boundary_scope_filter.ScopeFilterResult.redactions`'s own shape) -- carrying WHICH
+    exclusion families/values fired and HOW MANY rows each excluded, never the excluded rows'
+    own content or ids: the identical "never a second copy of scoped data" invariant above,
+    applied to redactions specifically. `None`/omitted defaults to an empty list in the
+    written record (always present as a key, so a consumer can `jq 'select(.redactions != [])'`
+    uniformly without a presence check first -- the SAME "one shape per field name, everywhere"
+    discipline `boundary_diagnostic_log.py`'s own module docstring states for its event
+    vocabulary, applied here to this sibling journal's one record shape).
     """
     if world_dir is None:
         return
@@ -96,6 +109,7 @@ def append_read(world_dir: Path | None, *, deployment: str | None, route: str, v
         "view": view,
         "identity": identity,
         "row_count": row_count,
+        "redactions": redactions or [],
     }
     try:
         path = journal_path(world_dir)
