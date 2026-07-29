@@ -16,7 +16,7 @@ from tools.configtree import CommitSpec, SectionResult
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import commit_executor as CE
 from tools.setup_tui import config_seam, content, signed_genesis
-from tools.setup_tui import steps_boundary, steps_features, steps_fork_target, steps_hydration
+from tools.setup_tui import steps_boundary, steps_courier, steps_features, steps_fork_target, steps_hydration
 from tools.setup_tui import steps_load_config, steps_observability, steps_preflight
 from tools.setup_tui import steps_principals_authority
 from tools.setup_tui import steps_rehearsal_birth, steps_signed_genesis, steps_substrate
@@ -49,6 +49,11 @@ SECTIONS = (
     # `led` served (both modules' own `_served_led`/`served_led_path` default), never the
     # retired `legacy/led` direct-psql shim.
     steps_boundary.STEP,
+    # setup-tui-config-extension (row 685/693, gap 6): "courier" derives self/self_base from
+    # Boundary's own picked URL (`state["boundary_url"]`) -- placed immediately after it so a
+    # commit-time run has that fact already resolved (`steps.py`'s own module docstring: this
+    # tuple is both the sidebar order AND the real commit-time execution order).
+    steps_courier.STEP,
     steps_principals_authority.STEP,
     steps_signed_genesis.STEP,
     steps_observability.STEP,

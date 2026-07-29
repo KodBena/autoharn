@@ -413,7 +413,13 @@ BASELINE: dict[str, int] = {
     # genuinely-coupled jobs (ADR-0007's own "a single coherent unit ... where splitting would
     # fragment cross-line invariants" exception) across files for no reader benefit. Written
     # plain, no golfing (ADR-0007's no-go clause).
-    "tools/setup_tui/config_seam.py":                   414,
+    # bumped 414 -> 463 (work item setup-tui-config-extension, ledger row 685's audit / row 693):
+    # the five new boundary scalar fields (log_level/identity_enforcement(+override)/
+    # sse_poll_interval_secs/max_sse_clients) and the new courier.counterparts list each need one
+    # line in answers_for_from_config, _SCOPED_OVERRIDE_KEYS, and capture_resolved_config (the
+    # SAME three seams every existing scalar/list already threads through) -- genuinely new
+    # decision surface, not padding. Written plain, no golfing (ADR-0007's no-go clause).
+    "tools/setup_tui/config_seam.py":                   463,
     "tools/experiments/typed_table.py":                 442,
     "engine/contemp_audit.py":                          441,
     # NEW to BASELINE, 428 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build, spec §1's purity-gate
@@ -540,11 +546,11 @@ BASELINE: dict[str, int] = {
     # added one REGISTRY entry each (boundary-sse-events, row 169; birth-standing-steps-
     # scaffold, row 270); ceiling set to the post-merge actual (450), the same
     # additive-census-row class as every prior bump above.
-    # bumped 450 -> 453 (work item ac-read-identity, design/
-    # FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a): one new REGISTRY entry
-    # (ac-read-identity) plus its own two-line comment, re-measured after writing -- the same
-    # self-referential fixpoint as every prior bump.
-    "gates/fixture_census.py":                     453,
+    # union-merged at the ac-read-identity + setup-tui-config-extension merge (rows 773/786):
+    # both concurrent builds added one REGISTRY entry each (ac-read-identity, row 744 family;
+    # seen-red/setup-tui-config-extension, rows 685/693); ceiling set to the post-merge actual
+    # (454), the same additive-census-row class as every prior bump above.
+    "gates/fixture_census.py":                     454,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -676,11 +682,11 @@ BASELINE: dict[str, int] = {
     # gate's own BASELINE growing to carry the gates/doc_attestation_presence.py bump (905 -> 970)
     # this same commit makes, re-measured after writing -- the same self-referential fixpoint as
     # every prior bump.
-    # bumped 797 -> 805 (work item ac-read-identity, design/
-    # FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a): this gate's own BASELINE
-    # growing to carry the gates/fixture_census.py bump (450 -> 453) this same commit makes,
+    # union-merged at the ac-read-identity + setup-tui-config-extension merge (rows 773/786):
+    # both concurrent builds bumped this gate's own BASELINE (805 and 810) carrying their
+    # fixture_census/config_seam growth; ceiling set to the post-merge measured actual,
     # re-measured after writing -- the same self-referential fixpoint as every prior bump.
-    "gates/max_lines.py":                          805,
+    "gates/max_lines.py":                          811,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

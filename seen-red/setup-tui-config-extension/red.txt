@@ -1,0 +1,105 @@
+seen-red/setup-tui-config-extension -- banked both-polarity evidence (fixture-census)
+
+Work item setup-tui-config-extension (ledger row 685's audit / row 693): the audit's seven
+coverage gaps closed in tools/setup_tui/, config-as-data idiom:
+
+  1. identity_enforcement (hub-wide default) -- ChoiceField in the Boundary step, default
+     "grace"; written to boundary-multiplex.toml ONLY when non-default.
+  2. identity_enforcement per-deployment override -- optional ChoiceField, written into
+     [deployments.NAME] only when set away from "inherit".
+  3. log_level -- ChoiceField whose vocabulary is IMPORTED from
+     serving/boundary_diagnostic_log.LEVELS (ADR-0012 P1), never a hardcoded copy.
+  4/5. sse_poll_interval_secs (float, default 2.0, (0, 3600]) and max_sse_clients (int, default
+     16, [1, 100000]) -- written only when non-default; bounds imported from
+     serving/boundary_multiplex_config.py (renamed public, this build) rather than duplicated.
+  6. courier configuration -- a new "Courier" section (tools/setup_tui/steps_courier.py): self/
+     self_base DERIVED (read-only, ADR-0019 C2) from Birth's world name and Boundary's picked
+     boundary_url; counterparts a ListField (world name -> base URL); authn fixed at
+     "single-operator" (row 1162's own named empty slot), never a choice. Zero counterparts ->
+     courier.toml is NOT written this run (libexec/autoharn/courier's own load_courier_config
+     refuses an empty [courier.counterparts] table just as loudly as a missing file, so a stub
+     would never be a working config -- disclosed in steps_courier.py's own submit() docstring).
+  7. birth_stamp_secret -- a new feature_facts.toml entry documenting the auto-provisioned
+     .claude/secrets/stamp_secret.hex (chmod 600, gitignored, birth-sequence provenance),
+     rendered by steps_rehearsal_birth.py's own birth_submit.
+
+Plus: config_schema.toml gains the corresponding closed keys (boundary.log_level/
+identity_enforcement/identity_enforcement_override/sse_poll_interval_secs/max_sse_clients,
+courier.counterparts) so --from-config round-trips every new field; a typo'd key is refused,
+naming it. Forward slots (authn_mode, scope posture) are named as a comment in
+config_schema.toml, not built as fields (neither spec is ratified).
+
+WHAT THE FIXTURE PROVES, IN ORDER (seen-red/setup-tui-config-extension/run_fixtures.py):
+
+  a. DEFAULTS-UNCHANGED REGRESSION -- every new field left at its own default emits
+     BYTE-IDENTICAL boundary-multiplex.toml to before this build (no top-level keys at all,
+     `[deployments.NAME]` unchanged); courier.toml is not written at all with zero counterparts.
+  b. BOUNDARY NEW FIELDS THROUGH THE REAL LOADER -- non-default values for all five fields
+     parse through serving.boundary_multiplex_config.load_multiplex_config_with_deployment_
+     identity (the REAL loader, no synthetic parser) with every value intact, INCLUDING the
+     per-deployment override differing from the hub-wide default. RED control: an out-of-range
+     sse_poll_interval_secs ("0") is refused by steps_boundary.submit itself, naming the field.
+  c. COURIER THROUGH THE REAL LOADER -- one counterpart parses through libexec/autoharn/
+     courier's own real load_courier_config with self/self_base/authn/counterparts intact. RED
+     control: a counterpart named the same as this world's own name is refused, naming the field.
+  d. CONFIG-SCHEMA ROUND-TRIP -- render_toml -> load_config_file -> validate is a fixed point
+     for every new key (green control). RED control: a typo'd key ("boundary.log_leveel") is
+     refused, naming it.
+  e. PILOT-DRIVEN END-TO-END -- the REAL Tree+Form app (tools.setup_tui.tui_app, Textual Pilot/
+     run_test()) drives three real RadioSet clicks (log_level/identity_enforcement/
+     identity_enforcement_override) and two real typed Input fields (sse_poll_interval_secs/
+     max_sse_clients) in the real "boundary" section, then reads the persisted live-field slot
+     back via fields.get_field_value and confirms steps_boundary.submit resolves the exact same
+     values; then drives the real Add-modal flow (a real Add-button click, real typed modal
+     Input fields, a real Save-button click -- the same AddItemModal flow seen-red/setup-tui-
+     configtree-journey's own case 24 already proved for a MasterDetailFieldWidget, exercised
+     here against a plain ListFieldWidget instead) in the real "courier" section, and confirms
+     steps_courier.submit reaches the added row.
+
+ONE DEFECT THIS FIXTURE'S OWN BUILD CAUGHT (named per this project's own "claims carry
+witnesses" discipline): the first draft of case (e) read the outer `state` dict after driving
+Pilot interactions and found every field still at its DEFAULT value, even though the widgets
+themselves visibly changed (RadioSet.pressed_index moved, Input.value changed) -- root cause:
+`tools.configtree.app.ConfigTreeApp.__init__` shallow-copies its `initial_state`
+(`self.state = dict(initial_state or {})`), so a NEW top-level key (`"_live_fields"`) created
+by the running app's own write-through lands on `app.state`'s OWN dict, invisible from the
+fixture's outer `state` variable -- the exact silent-divergence class ADR-0012 P1 warns about,
+here between two dict OBJECTS rather than two functions. FIXED (not by reading `app.state`
+instead, which would only move the coupling, but by pre-seeding `state["_live_fields"] = {}`
+before `build_app` -- the shallow copy then shares that ONE nested dict object by reference, the
+same trick seen-red/setup-tui-config-file's own case v already relies on for its own overrides
+dict, now named explicitly here for the next fixture author who hits this).
+
+Full transcript (live run, this build):
+
+case a ok: every new boundary field left at its own default emits BYTE-IDENTICAL
+boundary-multiplex.toml to before this build (no top-level keys at all)
+case a ok (courier): zero counterparts entered -- courier.toml is NOT queued for writing at all
+case b ok: boundary-multiplex.toml with all five new fields set to non-default values parses
+through the REAL serving.boundary_multiplex_config loader with every value intact -- including
+the per-deployment override ('grace') differing from the hub-wide default ('enforce')
+case b ok (RED control): an out-of-range sse_poll_interval_secs ('0') is refused by
+steps_boundary.submit itself, naming the field
+case c ok: courier.toml with one counterpart parses through the REAL
+libexec/autoharn/courier load_courier_config with self/self_base/counterparts intact
+({'self': 'cfgextc', 'self_base': 'http://127.0.0.1:8421', 'counterparts':
+{'cfgextcpeer': 'http://127.0.0.1:8500'}})
+case c ok (RED control): a counterpart named the same as this world's own name is refused by
+steps_courier.submit, naming the field
+case d ok: every new key (boundary.log_level/identity_enforcement/
+identity_enforcement_override/sse_poll_interval_secs/max_sse_clients, courier.counterparts)
+round-trips through render_toml -> load_config_file -> validate as a fixed point
+case d ok (RED control): a typo'd key ('boundary.log_leveel') is refused, named in the refusal
+case e ok (boundary): three real RadioSet clicks + two real typed Inputs thread through
+get_field_value into the exact answers dict steps_boundary.submit resolves, matching the widget
+state end to end
+case e ok (courier): a real Add-button click + real typed modal Input fields + real Save-button
+click lands a counterpart row through the SAME AddItemModal a plain ListField uses, and
+steps_courier.submit reaches it
+ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension (ledger row 685's audit /
+row 693), zero residue
+
+Cases (a)-(d) need no live Postgres/GPG/boundary-service (every case drives `submit` directly or
+via Pilot against synthetic-but-real state, never a live birth), so nothing here is UNEXERCISED
+for lack of HARNESS_PGHOST/EPISTEMIC_PGHOST; case (e) is UNEXERCISED only if `textual` is not
+importable on the running interpreter (witnessed importable, 8.2.8, this build).

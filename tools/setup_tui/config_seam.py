@@ -39,9 +39,14 @@ import re
 from pathlib import Path
 
 from tools.configtree import FieldName, NodeId, ScopedFieldKey
+from tools.setup_tui import boundary_config_values as bcv
 from tools.setup_tui import config_file, content, destination, durable_decisions, governed_files, probes
 from tools.setup_tui import runner, steps_features
 from tools.setup_tui.plan import CommandAct
+
+# fix round (row 776 finding 2): `boundary_config_values` is the ONE shared public home for the
+# enforcement default/INHERIT values below -- no longer reached through `steps_boundary`'s own
+# private `_IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT`/re-exported module aliases (both retired).
 
 # --------------------------------------------------------------------------------------------
 # 1. --from-config: compile to a per-step {slug: {field: value}} answers dict -- the shape
@@ -104,6 +109,18 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
             "override": True, "dest": dest,
             "world": world, "host": str(g("substrate.host", "")), "db": str(g("substrate.db", "")),
             "start_now": bool(g("boundary.start_now", False)),
+            # setup-tui-config-extension (row 685/693, gaps 1-5): defaults imported from
+            # boundary_config_values.py (ADR-0012 P1; row 776 finding 2), never a second copy.
+            "log_level": str(g("boundary.log_level", bcv.LogLevel.default().value)),
+            "identity_enforcement": str(g("boundary.identity_enforcement", bcv.IdentityEnforcementPosture.default().value)),
+            "identity_enforcement_override": str(g("boundary.identity_enforcement_override", bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT)),
+            "sse_poll_interval_secs": str(g("boundary.sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value)),
+            "max_sse_clients": str(g("boundary.max_sse_clients", bcv.MaxSseClients.default().value)),
+        },
+        # setup-tui-config-extension (gap 6): unconditional (no "run" gate); an empty
+        # counterparts list is a legal answer (steps_courier.py's own submit() docstring).
+        "courier": {
+            "counterparts": list(g("courier.counterparts", []) or []),
         },
         "observability": {
             "run": bool(g("observability.run", False)), "dest": dest,
@@ -196,6 +213,12 @@ _SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
     # no "boundary.configure" entry -- retired (ledger row 1149/1150): the section carries no
     # "run" field to seed, it is unconditional.
     "boundary.start_now": ("boundary", "start_now"),
+    # setup-tui-config-extension (row 685/693, gaps 1-5).
+    "boundary.log_level": ("boundary", "log_level"),
+    "boundary.identity_enforcement": ("boundary", "identity_enforcement"),
+    "boundary.identity_enforcement_override": ("boundary", "identity_enforcement_override"),
+    "boundary.sse_poll_interval_secs": ("boundary", "sse_poll_interval_secs"),
+    "boundary.max_sse_clients": ("boundary", "max_sse_clients"),
     "observability.run": ("observability", "run"),
     "observability.otelcol": ("observability", "otelcol"),
     "observability.otel_watch": ("observability", "otel_watch"),
@@ -213,7 +236,14 @@ _REPEATABLE_KEYS: dict[str, tuple[str, str]] = {
     "principals_authority.competences": ("principals-authority", "competences"),
     "principals_authority.relations": ("principals-authority", "relations"),
     "features.principal_set": ("features", "principal_set"),
+    # setup-tui-config-extension (gap 6).
+    "courier.counterparts": ("courier", "counterparts"),
 }
+
+# setup-tui-config-extension (gaps 4/5): these two are TextFields (no numeric field kind
+# exists) -- a config file's native TOML number must be stringified before entering the
+# TextField's own live-value slot (a Textual Input, str-typed).
+_NUMERIC_STRINGIFIED_KEYS = frozenset({"boundary.sse_poll_interval_secs", "boundary.max_sse_clients"})
 
 _PRINCIPALS_ENGAGED_KEYS = (
     "principals_authority.run", "principals_authority.register",
@@ -241,6 +271,8 @@ def build_live_field_overrides(
         val = config_file.get(doc, dotted)
         if val is None:
             continue
+        if dotted in _NUMERIC_STRINGIFIED_KEYS:
+            val = str(val)
         live[ScopedFieldKey(section=NodeId(section), field=FieldName(field_name))] = val
         seeded.append(dotted)
 
@@ -374,6 +406,22 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
     # "not in SCHEMA -- caller bug" guard), correctly, since it is no longer a decision this run
     # made (the section is unconditional).
     out["boundary.start_now"] = bool(state.get("boundary_will_start"))
+    # setup-tui-config-extension (gaps 1-5): steps_boundary.submit's own state_updates sets each
+    # boundary_* key below every time it runs; the fallback only guards a state dict that never
+    # reached that submit at all (ADR-0002 rule 2: degrade to the honest field default).
+    out["boundary.log_level"] = state.get("boundary_log_level", bcv.LogLevel.default().value)
+    out["boundary.identity_enforcement"] = state.get(
+        "boundary_identity_enforcement", bcv.IdentityEnforcementPosture.default().value)
+    out["boundary.identity_enforcement_override"] = state.get(
+        "boundary_identity_enforcement_override", bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT)
+    out["boundary.sse_poll_interval_secs"] = float(state.get(
+        "boundary_sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value))
+    out["boundary.max_sse_clients"] = int(state.get(
+        "boundary_max_sse_clients", bcv.MaxSseClients.default().value))
+
+    # setup-tui-config-extension (gap 6): an empty list is honest when courier was never
+    # reached, or reached with zero counterparts.
+    out["courier.counterparts"] = list(state.get("courier_counterparts", []))
 
     out["observability.run"] = bool(state.get("observability_engaged"))
     out["observability.otelcol"] = any(d.name == "otelcol" for d in daemons)

@@ -276,6 +276,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-multichoice-filter":     "seen-red/setup-tui-multichoice-filter/run_fixtures.py",
     "setup-tui-seeded-value-visibility": "seen-red/setup-tui-seeded-value-visibility/run_fixtures.py",
     "setup-tui-adr-synopsis-drift":     "seen-red/setup-tui-adr-synopsis-drift/run_fixtures.py",
+    "setup-tui-config-extension":       "seen-red/setup-tui-config-extension/run_fixtures.py",
     # work item setup-tui-worldname-boundary-allowlist (row 1317 arc): WorldName's contract
     # strengthened to the shell/SQL-identifier x boundary-deployment-slug INTERSECTION
     # ([a-z0-9]{1,64}) -- both-polarity proof against pinned pre-fix idtypes.py + the real

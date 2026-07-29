@@ -96,6 +96,13 @@ provenance = ["user-guide/USER-GPG-TRUST-LAYER-FAQ.md"]
 maintainer_refs = ["design/MAINT-GPG-TRUST-LAYER.md §3", "design/FABLE-SETUP-TUI-SIGNED-GENESIS-SPEC.md", "ledger rows 1724/1725"]
 
 [[fact]]
+key = "birth_stamp_secret"
+label = "stamp secret (auto-provisioned)"
+lead = "This world's founding scaffold provisions a fresh, random stamp secret for you -- there is no field to fill in and nothing to choose; it is a one-time, unconditional part of the birth sequence, not a standards-conformance aim."
+external = "A standing file-custody responsibility: the secret lives at .claude/secrets/stamp_secret.hex (chmod 600, gitignored) and the matching row in kernel.stamp_secret -- keep the file's permissions intact and never commit it."
+maintainer_refs = ["bootstrap/new-project.sh", "hooks/stamp_intercept.py", "kernel/lineage/s17-stamp-mechanism.sql"]
+
+[[fact]]
 key = "boundary_service"
 label = "boundary service"
 lead = "Starts a small HTTP service other tools/clients can call against this world -- governed by this project's own service-contract discipline, not built to an external certification. Its request stream feeds the same OTel channel the observability screen (below) can watch."
