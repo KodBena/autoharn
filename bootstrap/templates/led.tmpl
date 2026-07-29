@@ -2266,6 +2266,57 @@ def _slug_claimant(cfg: bcc.ServedConfig, slug: str):
     return None
 
 
+def _commit_witness_reachability_violation(world_root: Path, sha: str) -> list[str] | None:
+    """close-witness-reachability-check (ledger rows 402/336-family): `led work close --witness
+    commit:<sha>` -- in ANY of its constructors (`--review-bookkeeping`'s mandatory commit
+    witness, or a plain `--witness commit:<sha>` riding along on `--review-witness`/
+    `--review-deferred`/a `shipped` close alike) -- must cite a sha that is an ancestor of (or
+    equal to) the CURRENT HEAD of THIS DEPLOYMENT'S OWN repository, resolved from `world_root`
+    (`_world_root()`: the directory the deployment record itself was found in), NEVER the
+    caller's cwd. Mechanizes the twice-witnessed defect this item exists to close: row 302's
+    coordinator error (a close chained onto an unverified commit result) and this batch's own
+    finding -- a close run from a WORKTREE citing a commit unreachable from the world's own
+    main; a worktree's cwd can see commits main cannot, so cwd is the attack surface here, never
+    the anchor. The repo the deployment record names is the one truth this check is anchored to
+    (ADR-0012 P1: `_world_root()` is already the ONE home for that resolution, reused here rather
+    than a second hand-derived notion of "the repo").
+
+    TWO checks, in order (mirrors `_review_witness_violation`'s own two-checks-in-order shape
+    immediately below): (1) EXISTENCE -- `git cat-file -e <sha>^{commit}` (a nonexistent sha is a
+    distinct, more legible refusal than folding it into the ancestor check's own plumbing exit
+    code); (2) REACHABILITY -- `git merge-base --is-ancestor <sha> HEAD` (ancestor-of-or-equal-to
+    HEAD is exactly `--is-ancestor`'s own contract, HEAD included). Both invoked with `-C
+    world_root` only -- this process's own cwd never enters either git invocation.
+
+    Returns REFUSED teach-text (stderr lines) naming the sha, the resolved repo root, and that
+    the fix is completing the merge first -- this check never auto-passes -- or None if the sha
+    is a reachable ancestor. A witness that does not match `_COMMIT_WITNESS_RE` (prose, a bare
+    ref, `row:<id>`, `artifact:<hash>`, ...) never reaches this function at all -- untouched by
+    this check, exactly as the item's own spec states; see `cmd_work_close`'s own call site for
+    the shape gate."""
+    r = subprocess.run(["git", "-C", str(world_root), "cat-file", "-e", f"{sha}^{{commit}}"],
+                        capture_output=True)
+    if r.returncode != 0:
+        return [f"led work close: REFUSED -- --witness commit '{sha}' failed the COMMIT-"
+                f"EXISTENCE check against {world_root}.",
+                f"  Cite a real, already-committed sha (git -C {world_root} log). NOTHING was "
+                f"written."]
+    r = subprocess.run(["git", "-C", str(world_root), "merge-base", "--is-ancestor", sha, "HEAD"],
+                        capture_output=True)
+    if r.returncode != 0:
+        head_r = subprocess.run(["git", "-C", str(world_root), "rev-parse", "HEAD"],
+                                 capture_output=True, text=True)
+        head = head_r.stdout.strip() if head_r.returncode == 0 else "<unresolvable>"
+        return [f"led work close: REFUSED -- --witness commit:{sha} is not reachable from (not "
+                f"an ancestor of, and not equal to) the current HEAD ({head}) of the repo rooted "
+                f"at {world_root} -- resolved from THIS DEPLOYMENT'S OWN repository record "
+                f"(_world_root(), never this process's cwd; a worktree's cwd is the attack "
+                f"surface this check exists to close).",
+                f"  Fix: finish merging {sha} into {world_root}'s HEAD first, then close -- this "
+                f"check never auto-passes. NOTHING was written."]
+    return None
+
+
 def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     witness = review_witness = None
     review_deferred = review_bookkeeping = strict = False
@@ -2309,6 +2360,19 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         print("led work close: REFUSED -- resolution=shipped REQUIRES a non-blank --witness "
               "<ref>. NOTHING was written.", file=sys.stderr)
         return 1
+    # close-witness-reachability-check (ledger rows 402/336-family): ANY commit-shaped --witness
+    # on `led work close` -- not only --review-bookkeeping's mandatory one -- must name a sha
+    # reachable from this deployment's own repo HEAD. Checked here, once, before the
+    # disposition-specific branches below (which no longer duplicate this check -- see
+    # `_commit_witness_reachability_violation`'s own docstring). A witness that is not
+    # commit-shaped (prose, row:<id>, artifact:<hash>, a bare ref, ...) never matches
+    # `_COMMIT_WITNESS_RE` and is untouched by this gate, per the item's own spec.
+    if witness and _COMMIT_WITNESS_RE.match(witness):
+        violation = _commit_witness_reachability_violation(_world_root(), witness[len("commit:"):])
+        if violation is not None:
+            for line in violation:
+                print(line, file=sys.stderr)
+            return 1
     # claim-before-close gate (led-side; the kernel's own trigger checks only that <slug> was
     # OPENED, not that anyone claimed it) -- run-5 forensics: two work items were closed with no
     # claim ever landing, unflagged.
@@ -2348,15 +2412,8 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
                   f"failed the COMMIT-SHAPE check (must match ^commit:[0-9a-f]{{7,40}}$).",
                   file=sys.stderr)
             return 1
-        sha = witness[len("commit:"):]
-        world_root = _world_root()
-        r = subprocess.run(["git", "-C", str(world_root), "cat-file", "-e", f"{sha}^{{commit}}"],
-                            capture_output=True)
-        if r.returncode != 0:
-            print(f"led work close: REFUSED -- --review-bookkeeping's --witness commit "
-                  f"'{sha}' failed the COMMIT-EXISTENCE check against {world_root}.",
-                  file=sys.stderr)
-            return 1
+        # existence + reachability are already checked above, once, for every commit-shaped
+        # --witness (close-witness-reachability-check) -- nothing further to do here.
     if review_witness:
         rw_violation = _review_witness_violation(cfg, review_witness)
         if rw_violation is not None:
