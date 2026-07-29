@@ -42,10 +42,13 @@ Usage: python3 seen-red/ac-read-identity/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -54,6 +57,22 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SIBLING = REPO / "seen-red" / "boundary-service" / "run_fixtures.py"
+# Ledger row 744, fix-round leg (review CLEARS with one MODERATE): world_b's own CHAIN_B
+# (s43 head) carries no s51-artifact-store, so its own capability probe refuses the artifact
+# routes entirely -- the fix this leg witnesses (GET /artifacts/{hash}'s content route now
+# binds the read journal's row_count exactly like its .../stat sibling) needs a real,
+# capability-PRESENT artifact route to exercise. Rather than re-deriving an s51-capable
+# scaffold+birth sequence, this file loads seen-red/legacy-led-retirement-part-ab-boundary/
+# run_fixtures.py THE SAME WAY it already loads `bs_fixtures` below -- that module already
+# banks a proven CHAIN_S57 (s43 through s57, s51 included) scaffold/apply_chain/birth
+# sequence tailored to that later schema shape (bs_fixtures.birth_via_boundary's own payloads
+# are shaped for CHAIN_B's s43 head specifically and do NOT carry forward cleanly onto s44+'s
+# added constraints -- witnessed directly: a first attempt at extending CHAIN_B in-place with
+# the s44-s51 tail and reusing birth_via_boundary hit a live
+# principal_binding_active_kind_shape constraint violation on the very first birth act,
+# because s44/s45 tighten that constraint's shape). ADR-0012 P1: reuse the sibling's own
+# working mechanism, not a hand-rolled variant of it.
+ARTIFACT_SIBLING = REPO / "seen-red" / "legacy-led-retirement-part-ab-boundary" / "run_fixtures.py"
 
 sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(REPO / "serving"))
@@ -71,11 +90,35 @@ bs_fixtures = importlib.util.module_from_spec(_spec)
 sys.modules["boundary_service_fixtures_ac_read_identity"] = bs_fixtures
 _spec.loader.exec_module(bs_fixtures)
 
+_aspec = importlib.util.spec_from_file_location(
+    "legacy_led_retirement_part_ab_boundary_fixtures_ac_read_identity", ARTIFACT_SIBLING)
+assert _aspec is not None and _aspec.loader is not None
+llrpab_fixtures = importlib.util.module_from_spec(_aspec)
+sys.modules["legacy_led_retirement_part_ab_boundary_fixtures_ac_read_identity"] = llrpab_fixtures
+_aspec.loader.exec_module(llrpab_fixtures)
+
 RUN_SUFFIX = bs_fixtures.RUN_SUFFIX
 CHAIN_B = bs_fixtures.CHAIN_B
 PGHOST, PGDB = bs_fixtures.PGHOST, bs_fixtures.PGDB
 check = bs_fixtures.check
 sh = bs_fixtures.sh
+assert llrpab_fixtures.PGHOST == PGHOST and llrpab_fixtures.PGDB == PGDB, (
+    "the two sibling fixture modules must agree on which live db they target")
+
+
+def http_get_bytes(url: str) -> tuple[int, bytes]:
+    """The raw-bytes sibling of `bs_fixtures.http_get` -- the artifact CONTENT route (unlike
+    every other GET route this fixture family exercises) returns the artifact's own stored
+    media_type, never a JSON envelope (serving/boundary_service.py's own `artifact_get`
+    docstring), so a `json.loads` on the response body is wrong for the success leg. The 404
+    miss-path DOES still return a JSON body (`_bad_artifact_hash`/the not-found branch precede
+    the raw-bytes `Response` construction), so that leg still reads via `bs_fixtures.http_get`
+    unchanged."""
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
 
 # Live infra, dynamic loopback port -- NEVER 8433/8420/8422 (this project's standing production
 # ports): `bs_fixtures.free_port()` binds-then-closes an ephemeral port each call.
@@ -108,7 +151,9 @@ def main() -> int:
     failures: list[str] = []
     procs: list = []
     world_b = f"acri{RUN_SUFFIX}"
+    world_c = f"acric{RUN_SUFFIX}"
     bs_fixtures.teardown(world_b)
+    bs_fixtures.teardown(world_c)
     try:
         print(f"== scaffolding classic world {world_b} (chain ends {CHAIN_B[-1]}) ==")
         wb = bs_fixtures.scaffold_classic(world_b, CHAIN_B)
@@ -279,6 +324,78 @@ def main() -> int:
         bs_fixtures.stop_server(proc)
         procs.remove(proc)
 
+        # -----------------------------------------------------------------------------------
+        # LEG 7: fix-round ac-read-identity (review row 744, this fix's own leg) -- the raw
+        # artifact CONTENT route (`GET /artifacts/{hash}`) now binds `bind_read_row_count`
+        # exactly at the point the handler holds `row`, mirroring its `.../stat` sibling
+        # (serving/boundary_service.py's `artifact_get`). A SEPARATE, s51-capable world
+        # (world_c, `llrpab_fixtures.CHAIN_S57`) since world_b's own CHAIN_B stops at s43 and
+        # would only ever exercise the capability_absent path, never the served-content path
+        # this fix actually touches -- scaffolded and born via `llrpab_fixtures`' own proven
+        # mechanism (see this file's own ARTIFACT_SIBLING comment above for why, not
+        # `bs_fixtures.scaffold_classic`/`birth_via_boundary`, which are shaped for CHAIN_B's
+        # s43 head and do not carry forward onto s44+'s tightened constraints).
+        # -----------------------------------------------------------------------------------
+        print(f"== scaffolding world {world_c} via llrpab_fixtures "
+              f"(chain ends {llrpab_fixtures.CHAIN_S57[-1]}) ==")
+        llrpab_fixtures.apply_chain(world_c)
+        author_id_c_str, _reviewer_id_c = llrpab_fixtures.birth(world_c)
+        author_id_c = int(author_id_c_str)
+        tmpdir_c = Path(tempfile.mkdtemp(prefix=f"{world_c}-seenred-"))
+        world_dir_c = tmpdir_c
+        cfg_c = llrpab_fixtures.write_multiplex_config(tmpdir_c, world_c)
+        proc_c, port_c = llrpab_fixtures.start_server(cfg_c)
+        procs.append(proc_c)
+        base_c = f"http://127.0.0.1:{port_c}/d/{world_c}"
+        up_c = llrpab_fixtures.wait_health(f"http://127.0.0.1:{port_c}/d/{world_c}/health")
+        if not up_c:
+            tail = llrpab_fixtures.stop_server(proc_c)
+            raise RuntimeError(f"world_c server never became healthy: {tail[-2000:]}")
+
+        content = b"ac-read-identity leg7 fixture artifact content, review row 744.\n"
+        content_hash = hashlib.sha256(content).hexdigest()
+        st_put, body_put = bs_fixtures.http_post(f"{base_c}/artifacts", {
+            "bytes": base64.b64encode(content).decode("ascii"),
+            "media_type": "text/plain", "hash": content_hash, "actor": author_id_c})
+        check("leg7-artifact-put-accepted",
+              st_put == 200 and isinstance(body_put, dict)
+              and body_put.get("disposition") == "accepted",
+              f"status={st_put} body={body_put}", failures)
+
+        content_route = f"/d/{world_c}/artifacts/{content_hash}"
+        st_get, raw_get = http_get_bytes(f"{base_c}/artifacts/{content_hash}")
+        check("leg7-served-content-byte-identical",
+              st_get == 200 and raw_get == content,
+              f"status={st_get} bytes-match={raw_get == content}", failures)
+
+        lines_c = read_journal_lines(world_dir_c)
+        content_lines = [l for l in lines_c if l.get("route") == content_route]
+        check("leg7-served-content-journals-row-count-1",
+              bool(content_lines) and all(l.get("row_count") == 1 for l in content_lines),
+              f"journal lines for {content_route!r}: {content_lines}",
+              failures)
+
+        # Miss path: an unregistered hash 404s BEFORE the handler ever holds a real `row` --
+        # exactly the same shape `artifact_stat`'s own 404 branch already had pre-fix (that
+        # branch returns before ever calling `_json_read_response`), so the journal line this
+        # produces carries `row_count: null`, unchanged by this fix -- the "correct value on
+        # the miss path" the fix brief asks this leg to witness is precisely THIS null, not a
+        # 0 (0 would falsely claim the handler sized an empty-but-real response).
+        fake_hash = "0" * 64
+        st_404, body_404 = bs_fixtures.http_get(f"{base_c}/artifacts/{fake_hash}")
+        check("leg7-unregistered-hash-404",
+              st_404 == 404, f"status={st_404} body={body_404}", failures)
+        fake_route = f"/d/{world_c}/artifacts/{fake_hash}"
+        lines_c2 = read_journal_lines(world_dir_c)
+        miss_lines = [l for l in lines_c2 if l.get("route") == fake_route]
+        check("leg7-miss-path-journals-row-count-null",
+              bool(miss_lines) and all(l.get("row_count") is None for l in miss_lines),
+              f"journal lines for {fake_route!r}: {miss_lines}",
+              failures)
+
+        llrpab_fixtures.stop_server(proc_c)
+        procs.remove(proc_c)
+
     finally:
         for p in procs:
             try:
@@ -286,6 +403,7 @@ def main() -> int:
             except Exception:
                 pass
         bs_fixtures.teardown(world_b)
+        llrpab_fixtures.teardown(world_c)
 
     print(f"\n{'ALL PASS' if not failures else f'{len(failures)} FAILURE(S): ' + ', '.join(failures)}")
     return 0 if not failures else 1

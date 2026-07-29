@@ -4292,6 +4292,14 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         if row is None:
             return JSONResponse(status_code=404, content={
                 "detail": f"no artifact registered with hash {hash!r}."})
+        # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: this route returns raw
+        # bytes, never `_json_read_response` (no JSON envelope -- see this handler's own
+        # docstring), so it must bind the read journal's row-count fact itself, HERE, at the
+        # exact point its sibling `artifact_stat` does (where the handler holds the real `row`).
+        # `1 if row else 0` mirrors `_json_read_response`'s own single-object case -- the 404
+        # path above already returned before this line, matching `artifact_stat`'s own treatment
+        # (that route's 404 also returns before ever calling `_json_read_response`).
+        boundary_diagnostic_log.bind_read_row_count(1 if row else 0)
         raw = base64.b64decode(row["b64"])
         computed = hashlib.sha256(raw).hexdigest()
         if computed != hash:
