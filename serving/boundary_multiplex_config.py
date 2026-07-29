@@ -66,6 +66,21 @@ anonymous-authority-bearing-write refusal's own posture. Same whole-file validat
 same before-the-socket-binds discipline, same import-the-vocabulary-don't-duplicate-it
 relationship this module already has with `boundary_diagnostic_log.LEVELS` for `log_level`.
 
+PER-DEPLOYMENT IDENTITY_ENFORCEMENT OVERRIDE (work item identity-enforcement-split-flip, ledger
+row 619's adjudication): a `[deployments.NAME]` table MAY ALSO carry its own `identity_enforcement`
+key -- same closed vocabulary, same validation -- overriding the top-level default for THAT
+deployment only. The top-level key stays exactly what it was: the hub-wide default, consulted by
+any deployment that does not carry its own override (absent top-level AND absent per-deployment
+= "grace" = today's behavior, byte-identical -- this addition is purely ADDITIVE). An invalid
+value at EITHER location refuses loudly at config validation, before the socket ever binds,
+naming both valid values and both key locations a posture can be set at (a single constructing
+home, `IdentityEnforcementPosture.parse` below, so the teach-text is identical regardless of
+which of the two sites got it wrong -- CLAUDE.md/ledger row 26, "no bare types": every value gets
+a named type with a single constructing home enforcing its contract). `_load_and_validate`
+returns the fully-resolved EFFECTIVE posture per deployment (top-level default already folded
+in) so `serving/boundary_service.py` never re-derives the "override or default" merge itself
+(ADR-0012 P1).
+
 SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4, work item
 boundary-sse-events, ledger row 169): two new OPTIONAL top-level keys, same whole-file
 validation pass, same before-the-socket-binds discipline. `sse_poll_interval_secs` -- how often
@@ -83,6 +98,7 @@ from __future__ import annotations
 import re
 import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 # filing/ needs its own explicit sys.path entry (not a package-relative import) -- the same
@@ -103,10 +119,17 @@ import boundary_diagnostic_log  # noqa: E402  (serving/boundary_diagnostic_log.p
 # need the same change -- there is no shared importable home across the Python/shell boundary.
 _DEPLOYMENT_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 
-# The five keys a `[deployments.NAME]` table may carry -- named ONCE (ADR-0012 P1), not
+# The five keys a `[deployments.NAME]` table MUST carry -- named ONCE (ADR-0012 P1), not
 # re-derived at each validation call site. See the module docstring's flagged choice for why
 # `pgschema`/`pgkern` join the spec's own three-key example.
 _REQUIRED_ENTRY_KEYS: frozenset[str] = frozenset({"pghost", "pgdatabase", "pguser", "pgschema", "pgkern"})
+
+# The keys a `[deployments.NAME]` table MAY carry in addition to the required five -- named ONCE
+# (ADR-0012 P1), same reasoning. `identity_enforcement` is the per-deployment override (see the
+# module docstring's PER-DEPLOYMENT IDENTITY_ENFORCEMENT OVERRIDE section) -- absent means "no
+# override, inherit the top-level default", never a third posture value.
+_OPTIONAL_ENTRY_KEYS: frozenset[str] = frozenset({"identity_enforcement"})
+_ALL_ENTRY_KEYS: frozenset[str] = _REQUIRED_ENTRY_KEYS | _OPTIONAL_ENTRY_KEYS
 
 # The ONLY top-level keys this file recognizes, as of the SSE-events spec's `sse_poll_interval_secs`/
 # `max_sse_clients` addition -- named ONCE (ADR-0012 P1), consulted by
@@ -127,6 +150,54 @@ _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
 # `boundary_diagnostic_log.LEVELS`.
 IDENTITY_ENFORCEMENT_POSTURES: frozenset[str] = frozenset({"grace", "enforce"})
 DEFAULT_IDENTITY_ENFORCEMENT = "grace"
+
+
+@dataclass(frozen=True)
+class IdentityEnforcementPosture:
+    """The identity_enforcement posture value -- CLAUDE.md/ledger row 26 ("no bare types: every
+    value gets a named type with a single constructing home enforcing its contract"). Construct
+    ONLY via `.parse()` below (never `IdentityEnforcementPosture(raw)` directly from outside this
+    module) -- the ONE site, used identically for the top-level hub default and for a
+    `[deployments.NAME]` override, so an invalid value at either location is refused with the
+    SAME teach-text. `__post_init__` still guards direct construction (e.g. `.default()` below,
+    or a test constructing one in-process) so no path can ever produce a value outside the closed
+    vocabulary, matching `deployment_record.DeploymentRecord`'s own `__post_init__`-guards-every-
+    construction-path idiom."""
+    value: str
+
+    def __post_init__(self) -> None:
+        if self.value not in IDENTITY_ENFORCEMENT_POSTURES:
+            raise ValueError(
+                f"IdentityEnforcementPosture: {self.value!r} is not one of "
+                f"{sorted(IDENTITY_ENFORCEMENT_POSTURES)}")
+
+    @property
+    def enforces(self) -> bool:
+        """True iff this posture refuses an anonymous authority-bearing write."""
+        return self.value == "enforce"
+
+    @classmethod
+    def default(cls) -> "IdentityEnforcementPosture":
+        return cls(DEFAULT_IDENTITY_ENFORCEMENT)
+
+    @classmethod
+    def parse(cls, raw: object, *, where: str, path: Path) -> "IdentityEnforcementPosture":
+        """Validate `raw` against the closed vocabulary, raising `MultiplexConfigError` naming
+        BOTH valid values and BOTH key locations a posture can be set at (the top-level hub
+        default, or a `[deployments.NAME]` override) -- so an operator who gets it wrong at
+        either site sees the same teach-text and knows where else to look."""
+        if not isinstance(raw, str) or raw not in IDENTITY_ENFORCEMENT_POSTURES:
+            raise MultiplexConfigError(
+                f"boundary-multiplex config at {path}: {where} = {raw!r} is not one of "
+                f"{sorted(IDENTITY_ENFORCEMENT_POSTURES)} (design/"
+                f"FABLE-DISPATCH-MECHANICS-SPEC.md §3 -- unknown values refuse loudly, before "
+                f"the socket ever binds). identity_enforcement may be set at the TOP LEVEL (the "
+                f"hub-wide default, applying to every deployment that does not override it; "
+                f"omit the key entirely for the default, {DEFAULT_IDENTITY_ENFORCEMENT!r}) and/"
+                f"or inside a [deployments.NAME] table (overriding the default for that "
+                f"deployment only; omit the key entirely to inherit the top-level default) -- "
+                f"both locations accept only {sorted(IDENTITY_ENFORCEMENT_POSTURES)}.")
+        return cls(raw)
 
 # SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4): defaults named ONCE
 # (ADR-0012 P1) -- serving/boundary_service.py imports these rather than carrying a second
@@ -161,7 +232,7 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     that also needs the resolved log level (`serving/boundary_service.py`'s own `main()`) calls
     `load_multiplex_config_with_log_level` instead, rather than this file growing a second,
     diverging validation path."""
-    deployments, _log_level, _identity_enforcement, _poll, _max_clients = _load_and_validate(path)
+    deployments, _log_level, _identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
     return deployments
 
 
@@ -177,7 +248,7 @@ def load_multiplex_config_with_log_level(
     dispatch-mechanics spec's `identity_enforcement` half, and the SSE spec's two tunables) for
     every EXISTING caller; a caller that needs more calls `load_multiplex_config_with_diagnostics`
     or `load_multiplex_config_with_sse` instead."""
-    deployments, log_level, _identity_enforcement, _poll, _max_clients = _load_and_validate(path)
+    deployments, log_level, _identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
     return deployments, log_level
 
 
@@ -192,7 +263,7 @@ def load_multiplex_config_with_diagnostics(
     SSE spec's two tunables) for every EXISTING caller; `serving/boundary_service.py`'s `main()`
     now calls `load_multiplex_config_with_sse` instead (superseding its prior call to this
     function), which also needs those."""
-    deployments, log_level, identity_enforcement, _poll, _max_clients = _load_and_validate(path)
+    deployments, log_level, identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
     return deployments, log_level, identity_enforcement
 
 
@@ -203,20 +274,44 @@ def load_multiplex_config_with_sse(
     as the loaders above (never a second, independent parse of the same file), also returning the
     resolved `sse_poll_interval_secs`/`max_sse_clients` (already validated, defaulted to
     `DEFAULT_SSE_POLL_INTERVAL_SECS`/`DEFAULT_MAX_SSE_CLIENTS` when the TOML omits either key
-    entirely). `serving/boundary_service.py`'s `main()` calls this one now (superseding its prior
-    call to `load_multiplex_config_with_diagnostics`)."""
+    entirely). Kept byte-for-byte backward compatible (discards the per-deployment
+    identity_enforcement override dict) for every EXISTING caller; `serving/boundary_service.py`'s
+    `main()` now calls `load_multiplex_config_with_deployment_identity` instead (superseding its
+    prior call to this function), which also needs that."""
+    deployments, log_level, identity_enforcement, poll, max_clients, _by_dep = _load_and_validate(path)
+    return deployments, log_level, identity_enforcement, poll, max_clients
+
+
+def load_multiplex_config_with_deployment_identity(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int,
+           dict[str, "IdentityEnforcementPosture"]]:
+    """Work item identity-enforcement-split-flip (ledger row 619's adjudication) -- the RICHEST
+    entry point, SAME single validation pass as every loader above (never a second, independent
+    parse of the same file), also returning the fully-RESOLVED per-deployment
+    `identity_enforcement` posture: a `dict[str, IdentityEnforcementPosture]` keyed by every
+    deployment name in `deployments`, with the top-level default already folded in for any
+    deployment that carries no `[deployments.NAME].identity_enforcement` override of its own.
+    `serving/boundary_service.py`'s `main()` calls this one now (superseding its prior call to
+    `load_multiplex_config_with_sse`) so the "override or inherit the default" merge happens in
+    exactly ONE place (ADR-0012 P1), never re-derived at the request-handling layer."""
     return _load_and_validate(path)
 
 
 def _load_and_validate(
     path: str | Path,
-) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int]:
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int,
+           dict[str, "IdentityEnforcementPosture"]]:
     """The ONE home (ADR-0012 P1) every public loader above routes through -- every validation
     axis (unknown top-level key, missing/unknown/malformed `deployments` entry, an
     unrecognized `log_level`/`identity_enforcement`/`sse_poll_interval_secs`/`max_sse_clients`
-    value) runs in this SAME whole-file pass, before any public function returns anything,
-    matching spec §3's "the WHOLE file validates before the socket binds" applied to each new
-    key exactly as it already applies to every existing one."""
+    value, at the top level OR inside a `[deployments.NAME]` table) runs in this SAME whole-file
+    pass, before any public function returns anything, matching spec §3's "the WHOLE file
+    validates before the socket binds" applied to each new key exactly as it already applies to
+    every existing one. The sixth return element is the fully-resolved, per-deployment
+    `identity_enforcement` posture -- one `IdentityEnforcementPosture` per deployment name, the
+    top-level default already folded in for any deployment with no override of its own (row 619's
+    adjudication)."""
     p = Path(path)
     if not p.is_file():
         raise MultiplexConfigError(
@@ -250,14 +345,14 @@ def _load_and_validate(
             f"before the socket ever binds; omit the key entirely for the default, "
             f"{boundary_diagnostic_log.DEFAULT_LEVEL!r}).")
 
-    identity_enforcement = raw.get("identity_enforcement", DEFAULT_IDENTITY_ENFORCEMENT)
-    if not isinstance(identity_enforcement, str) or identity_enforcement not in IDENTITY_ENFORCEMENT_POSTURES:
-        raise MultiplexConfigError(
-            f"boundary-multiplex config at {p}: 'identity_enforcement' = "
-            f"{identity_enforcement!r} is not one of {sorted(IDENTITY_ENFORCEMENT_POSTURES)} "
-            f"(design/FABLE-DISPATCH-MECHANICS-SPEC.md §3 -- unknown values refuse loudly, "
-            f"before the socket ever binds; omit the key entirely for the default, "
-            f"{DEFAULT_IDENTITY_ENFORCEMENT!r}).")
+    default_identity_enforcement = IdentityEnforcementPosture.parse(
+        raw.get("identity_enforcement", DEFAULT_IDENTITY_ENFORCEMENT),
+        where="'identity_enforcement' (top-level)", path=p)
+    identity_enforcement = default_identity_enforcement.value  # kept as a bare str ONLY for the
+    # four existing public loaders below, which return the hub-wide default as a plain string
+    # (byte-for-byte compatible with every caller that existed before this build); the NEW richest
+    # loader, `load_multiplex_config_with_deployment_identity`, returns the typed per-deployment
+    # dict instead.
 
     # SSE TUNABLES (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4): same whole-file
     # validation pass, same before-the-socket-binds discipline as log_level/identity_enforcement
@@ -302,6 +397,7 @@ def _load_and_validate(
             f"expected common case, but it still needs exactly one [deployments.NAME] table.")
 
     result: dict[str, deployment_record.DeploymentRecord] = {}
+    identity_enforcement_by_deployment: dict[str, IdentityEnforcementPosture] = {}
     for name, entry in deployments_raw.items():
         if not _DEPLOYMENT_NAME_RE.match(name):
             raise MultiplexConfigError(
@@ -312,11 +408,11 @@ def _load_and_validate(
             raise MultiplexConfigError(
                 f"boundary-multiplex config at {p}: [deployments.{name}] must be a table, "
                 f"got {type(entry).__name__}")
-        unknown = sorted(set(entry) - _REQUIRED_ENTRY_KEYS)
+        unknown = sorted(set(entry) - _ALL_ENTRY_KEYS)
         if unknown:
             raise MultiplexConfigError(
                 f"boundary-multiplex config at {p}: [deployments.{name}] has unknown key(s) "
-                f"{unknown} -- only {sorted(_REQUIRED_ENTRY_KEYS)} are recognized (spec §3: "
+                f"{unknown} -- only {sorted(_ALL_ENTRY_KEYS)} are recognized (spec §3: "
                 f"'unknown keys anywhere refuse startup by name').")
         missing = sorted(_REQUIRED_ENTRY_KEYS - set(entry))
         if missing:
@@ -332,4 +428,16 @@ def _load_and_validate(
         result[name] = deployment_record.DeploymentRecord(
             db=entry["pgdatabase"], host=entry["pghost"], schema=entry["pgschema"],
             kern=entry["pgkern"], role=entry["pguser"], name=name)
-    return result, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients
+        # PER-DEPLOYMENT IDENTITY_ENFORCEMENT OVERRIDE (row 619's adjudication): present ->
+        # validate through the SAME constructing home as the top-level key, naming this exact
+        # [deployments.NAME] location on refusal; absent -> inherit the top-level default
+        # resolved above (byte-identical to today when no [deployments.NAME] table ever sets
+        # this key, the regression leg's own requirement).
+        if "identity_enforcement" in entry:
+            identity_enforcement_by_deployment[name] = IdentityEnforcementPosture.parse(
+                entry["identity_enforcement"],
+                where=f"[deployments.{name}].identity_enforcement", path=p)
+        else:
+            identity_enforcement_by_deployment[name] = default_identity_enforcement
+    return (result, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients,
+            identity_enforcement_by_deployment)

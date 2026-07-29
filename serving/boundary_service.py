@@ -1358,7 +1358,11 @@ def _apply_minted_actor(payload: dict) -> JSONResponse | None:
                     f"resolved (design/FABLE-DISPATCH-MECHANICS-SPEC.md §2: identity resolution "
                     f"is declared, never silent): either drop the payload's `actor` field (the "
                     f"minted principal will be attributed), set it equal to the minted "
-                    f"principal, or drop the minted-principal header. Nothing was written."),
+                    f"principal, or drop the minted-principal header. Nothing was written. "
+                    f"The minted principal is AUTHENTICATED identity (this boundary verified the "
+                    f"header itself); the payload's actor is merely DECLARED identity (an "
+                    f"unverified assertion) -- which is why a disagreement between them refuses "
+                    f"rather than one silently outranking the other."),
             )
             boundary_diagnostic_log.log_event(
                 boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition,
@@ -1369,20 +1373,16 @@ def _apply_minted_actor(payload: dict) -> JSONResponse | None:
 
 
 # IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c
-# "rung (a)"): the anonymous-write refusal's own posture, set ONCE at startup from the multiplex
-# TOML (already validated against `boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES`) --
-# mirrors `boundary_diagnostic_log.configure_level`'s own construction-time-defense-in-depth
-# pattern exactly.
-_identity_enforcement_posture = boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT
-
-
-def configure_identity_enforcement(posture: str) -> None:
-    global _identity_enforcement_posture
-    if posture not in boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES:
-        raise ValueError(
-            f"boundary_service: REFUSED -- configure_identity_enforcement({posture!r}) is not "
-            f"one of {sorted(boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES)}.")
-    _identity_enforcement_posture = posture
+# "rung (a)"; PER-DEPLOYMENT override, row 619): the anonymous-write refusal's own posture is no
+# longer a single process-global -- work item identity-enforcement-split-flip made it per-
+# deployment overridable, so there is no longer one module-global value to set once at startup.
+# Each deployment's OWN effective posture now lives on its own `BoundaryConfig.identity_enforcement`
+# (an `IdentityEnforcementPosture`, resolved once in `main()` below from
+# `boundary_multiplex_config.load_multiplex_config_with_deployment_identity` -- the top-level
+# hub default already folded in for a deployment carrying no override of its own). The former
+# `configure_identity_enforcement`/`_identity_enforcement_posture` module-global pair is REMOVED
+# rather than left as an unread, misleading holdover (a stale "looks load-bearing but is not"
+# global is exactly the hazard this project's own CLAUDE.md engineering-responsibility bar names).
 
 
 # The write-shaped routes the anonymous-write refusal (rung a) applies to -- every `/write/*`
@@ -1399,6 +1399,22 @@ def _is_authority_bearing_write(method: str, path: str) -> bool:
     parts = path.split("/", 3)
     rest = "/" + parts[3] if len(parts) > 3 else "/"
     return rest.startswith("/write/") or rest == "/artifacts"
+
+
+# Work item identity-enforcement-split-flip (row 619): the anonymous-write refusal (rung a) is
+# now PER-DEPLOYMENT, so the diagnostic-logging middleware below (which runs BEFORE Starlette's
+# own routing -- `request.path_params` is not yet populated at this point) needs the same
+# `/d/{deployment}/...` segment `_is_authority_bearing_write` above already strips, this time
+# KEEPING the segment instead of discarding it. Returns None for any path that does not carry
+# the mandatory `/d/{name}` prefix at all (spec §2) -- the caller falls through to ordinary
+# routing, which 404s a malformed path exactly as it always has; this function only needs to
+# recognize the shape well enough to look the name up, never to validate it (that is
+# `_resolve_deployment`'s job, downstream, on the SAME configs dict).
+def _extract_deployment_segment(path: str) -> str | None:
+    parts = path.split("/", 3)
+    if len(parts) >= 3 and parts[1] == "d" and parts[2]:
+        return parts[2]
+    return None
 
 # design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B: `POST /d/{deployment}/artifacts`' own raw-
 # body buffering bound. NOT a second, independent judgment of "is this artifact too large" (the
@@ -1480,6 +1496,7 @@ class BoundaryConfig:
         record: deployment_record.DeploymentRecord,
         dep_semaphore: threading.BoundedSemaphore | None = None,
         dep_limit: int | None = None,
+        identity_enforcement: boundary_multiplex_config.IdentityEnforcementPosture | None = None,
     ) -> None:
         for field_name in ("schema", "kern", "role"):
             value = getattr(record, field_name)
@@ -1498,6 +1515,16 @@ class BoundaryConfig:
         # than a zero-capacity semaphore that would wedge on its very first acquire.
         self.dep_limit = dep_limit if dep_limit is not None else MAX_INFLIGHT_KERNEL_CALLS
         self.dep_semaphore = dep_semaphore if dep_semaphore is not None else threading.BoundedSemaphore(self.dep_limit)
+        # Work item identity-enforcement-split-flip (row 619): THIS deployment's own EFFECTIVE
+        # identity_enforcement posture -- `main()` below resolves this once, per deployment, from
+        # `boundary_multiplex_config.load_multiplex_config_with_deployment_identity` (top-level
+        # default already folded in for a deployment with no override of its own). A call site
+        # that builds a `BoundaryConfig` without wiring this (e.g. an in-process unit-shaped
+        # witness) gets the closed vocabulary's own default ("grace"), the SAME permissive-default
+        # posture `dep_limit` above already establishes for an unwired construction path.
+        self.identity_enforcement = (
+            identity_enforcement if identity_enforcement is not None
+            else boundary_multiplex_config.IdentityEnforcementPosture.default())
 
     @property
     def name(self) -> str:
@@ -1894,8 +1921,9 @@ _judge_derivations_root: Path = _DEFAULT_JUDGE_DERIVATIONS_ROOT
 
 
 def configure_judge_derivations_root(path: Path) -> None:
-    """Construction-time-defense-in-depth (the SAME pattern `configure_identity_enforcement`
-    above already uses): overrides `_judge_derivations_root` wholesale -- the fixture's own seam
+    """Construction-time-defense-in-depth (the SAME pattern `configure_sse_poll_interval`/
+    `boundary_diagnostic_log.configure_level` below already use): overrides
+    `_judge_derivations_root` wholesale -- the fixture's own seam
     for witnessing BOTH polarities (a scratch dir with a planted `derivation.json`; an empty
     scratch dir with none) without touching this checkout's own real, accumulating derivation
     bank. Never called in ordinary operation (`main` below leaves the default in place unless a
@@ -2848,9 +2876,9 @@ backstop bound) and `PSQL_EXEC_TIMEOUT_S`, above, for why that backstop's value 
 
 # The two SSE tunables (spec §1 items 1/4), DEFAULT-set from boundary_multiplex_config's own
 # defaults, overridden once at startup (`main()`) via the `configure_*` functions below --
-# construction-time-defense-in-depth, the SAME pattern `configure_identity_enforcement`/
-# `boundary_diagnostic_log.configure_level` already establish: the TOML value is already
-# validated whole-file by boundary_multiplex_config.py before either function here ever runs.
+# construction-time-defense-in-depth, the SAME pattern `boundary_diagnostic_log.configure_level`
+# already establishes: the TOML value is already validated whole-file by
+# boundary_multiplex_config.py before either function here ever runs.
 _sse_poll_interval_secs: float = boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS
 _max_sse_clients: int = boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS
 
@@ -3194,22 +3222,38 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 return response
             boundary_diagnostic_log.bind_identity(
                 resolution_case, principal=principal_id, vendor_stamp=vendor_stamp)
-            # rung (a) (spec §3, ledger row 1471 sub-item 4c): an ANONYMOUS authority-bearing
-            # write refuses once this deployment's identity_enforcement posture is "enforce" --
-            # "grace" (the default) accepts it unchanged, byte-identical, so the operator
-            # surface is never broken mid-migration. Checked here, not per-route (ADR-0012 P1:
-            # one gate, every /write/*+/artifacts route inherits it) -- deliberately BEFORE
-            # deployment resolution, since the posture is process-global (mirrors log_level's
-            # own scope), not per-deployment.
-            if (resolution_case == "anonymous"
-                    and _identity_enforcement_posture == "enforce"
-                    and _is_authority_bearing_write(request.method, request.url.path)):
+            # rung (a) (spec §3, ledger row 1471 sub-item 4c), PER-DEPLOYMENT as of row 619's
+            # adjudication: an ANONYMOUS authority-bearing write refuses once THIS DEPLOYMENT'S
+            # OWN effective identity_enforcement posture is "enforce" -- "grace" (the default)
+            # accepts it unchanged, byte-identical, so the operator surface is never broken
+            # mid-migration. Checked here, not per-route (ADR-0012 P1: one gate, every
+            # /write/*+/artifacts route inherits it) -- this middleware runs BEFORE Starlette's
+            # own routing (`request.path_params` is not populated yet), so the deployment name is
+            # read directly off the path via `_extract_deployment_segment` and looked up against
+            # the SAME `configs` dict `_resolve_deployment` uses downstream. An unresolvable
+            # deployment name here (missing `/d/{name}` prefix, or a name this hub does not
+            # serve) is deliberately NOT itself an identity refusal -- there is no deployment
+            # whose posture could apply -- the request falls through to ordinary routing/
+            # `_resolve_deployment`, which 404s it exactly as it always has.
+            cfg_for_identity: BoundaryConfig | None = None
+            if resolution_case == "anonymous" and _is_authority_bearing_write(
+                    request.method, request.url.path):
+                deployment_segment = _extract_deployment_segment(request.url.path)
+                if deployment_segment is not None:
+                    cfg_for_identity = configs.get(deployment_segment)
+            if (cfg_for_identity is not None
+                    and cfg_for_identity.identity_enforcement.enforces):
                 body = AnonymousWriteRefused(
                     message="this write carries neither a vendor stamp nor a minted-principal "
                             "identity header, and this deployment's identity_enforcement "
                             "posture is 'enforce' (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, "
                             "ledger row 1471 sub-item 4c: 'anonymous sessions keep NO write "
-                            "surface beyond journaled refusals'). Nothing was written.")
+                            "surface beyond journaled refusals'). Nothing was written. This "
+                            "refuses the absence of AUTHENTICATED identity -- a vendor stamp or "
+                            "minted-principal header this boundary itself verified -- never a "
+                            "merely DECLARED identity (an actor name the writer's own payload "
+                            "could assert, unchecked); the enforce ceremony proves the channel, "
+                            "not the claim.")
                 boundary_diagnostic_log.log_event(
                     boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
                 response = JSONResponse(status_code=403, content=body.model_dump())
@@ -3314,11 +3358,13 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             world=cfg.schema,
             service_principal=service_principal_name(cfg),
             capabilities=capability_manifest(cfg),
-            # Row 173/row 318: the SAME module-global `_identity_enforcement_posture`
-            # `configure_identity_enforcement` set once at startup from the multiplex TOML, and
-            # the anonymous-write refusal (rung a, above) reads at request time -- one value, two
-            # readers, never a second copy that could drift.
-            identity_enforcement=_identity_enforcement_posture,
+            # Row 173/row 318, PER-DEPLOYMENT as of row 619: THIS deployment's own
+            # `cfg.identity_enforcement` -- the SAME resolved value the middleware's anonymous-
+            # write refusal (rung a, above) reads at request time for this exact deployment, one
+            # value, two readers, never a second copy that could drift. `.value` unwraps the
+            # typed `IdentityEnforcementPosture` back to the plain "grace"/"enforce" string this
+            # response field's wire shape carries.
+            identity_enforcement=cfg.identity_enforcement.value,
         )
 
     @app.get("/d/{deployment}/rows/current")
@@ -4402,8 +4448,9 @@ def main(argv: list[str] | None = None) -> int:
     # keys anywhere, a missing required key, or zero deployments each refuse loudly BY NAME,
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
-        records, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients = (
-            boundary_multiplex_config.load_multiplex_config_with_sse(args.config))
+        (records, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients,
+         identity_enforcement_by_deployment) = (
+            boundary_multiplex_config.load_multiplex_config_with_deployment_identity(args.config))
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
         return 2
@@ -4411,9 +4458,12 @@ def main(argv: list[str] | None = None) -> int:
     # this point) by boundary_multiplex_config.py against boundary_diagnostic_log.LEVELS --
     # configure_level here is construction-time defense in depth, not the primary validation.
     boundary_diagnostic_log.configure_level(log_level)
-    # design/FABLE-DISPATCH-MECHANICS-SPEC.md §3: same construction-time-defense-in-depth
-    # pattern as log_level above -- already validated whole-file by boundary_multiplex_config.py.
-    configure_identity_enforcement(identity_enforcement)
+    # design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, row 619: `identity_enforcement` above is the
+    # HUB-WIDE DEFAULT only (kept for the startup banner/log below); the per-deployment EFFECTIVE
+    # posture each `BoundaryConfig` actually enforces under comes from
+    # `identity_enforcement_by_deployment` (already resolved, override-or-default, by
+    # `boundary_multiplex_config.py`), wired onto each `BoundaryConfig` in the loop below -- there
+    # is no longer a single process-global posture to `configure_*` here.
     # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 items 1/4: same construction-time-defense-in-
     # depth pattern -- already validated whole-file by boundary_multiplex_config.py.
     configure_sse_poll_interval(sse_poll_interval_secs)
@@ -4427,6 +4477,14 @@ def main(argv: list[str] | None = None) -> int:
         f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
         f"deployment(s): {sorted(records.keys())}) MAX_SSE_CLIENTS={max_sse_clients} (per hub) "
         f"SSE_POLL_INTERVAL_SECS={sse_poll_interval_secs}\n")
+    # Row 619: per-deployment identity_enforcement is now overridable, so the operator-visible
+    # startup banner names each deployment's own EFFECTIVE posture explicitly -- an operator who
+    # only reads stderr (never the diagnostic log) can still see a deployment that deviates from
+    # the hub-wide default={identity_enforcement!r} without having to go read the TOML back.
+    _identity_by_dep_str = {n: p.value for n, p in sorted(identity_enforcement_by_deployment.items())}
+    sys.stderr.write(
+        f"boundary_service: identity_enforcement (hub default={identity_enforcement!r}) per "
+        f"deployment: {_identity_by_dep_str}\n")
     # Diagnostic-logging spec §2 L4/§5 emission site (d): the startup banner's own typed call
     # site, beside (not instead of) the pre-existing human stderr line directly above. Extra
     # fields beyond Event.STARTUP's own required set are permitted (log_event only enforces
@@ -4439,6 +4497,8 @@ def main(argv: list[str] | None = None) -> int:
         max_inflight_per_deployment=per_dep_limit,
         log_level=log_level,
         identity_enforcement=identity_enforcement,
+        identity_enforcement_by_deployment={
+            name: posture.value for name, posture in identity_enforcement_by_deployment.items()},
         max_sse_clients=max_sse_clients,
         sse_poll_interval_secs=sse_poll_interval_secs,
     )
@@ -4448,6 +4508,7 @@ def main(argv: list[str] | None = None) -> int:
             record,
             dep_semaphore=threading.BoundedSemaphore(per_dep_limit),
             dep_limit=per_dep_limit,
+            identity_enforcement=identity_enforcement_by_deployment[name],
         )
     app = create_app(configs)
     if args.pidfile:
