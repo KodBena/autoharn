@@ -29,6 +29,15 @@ adopter could not write themselves, against their own world, from documentation 
 reported in §5 as a **harness expressiveness gap**, not quietly built around. That makes this
 page double as a small expressiveness audit of the substrate it documents.
 
+**Currency note (2026-07-29): this page predates the access-control batch — read §7 first if
+you want the current picture.** Everything below was written before scopes existed as a
+first-class, ledgered concept. §1–§6 describe real, still-accurate mechanisms — nothing here
+is wrong — but §4's read-zoning recipe (RLS, hand-authored per deployment) now has a
+general-purpose, ledger-native sibling: [§7](#7-the-general-medium-scope-binding-scope-filtering-and-the-entitlement-floor)
+covers scope binding, the boundary's own scope filter, and the judge entitlement floor the
+2026-07-29 batch shipped. Read §1–§6 for the delegation/taint/license/embargo recipes
+(unchanged); read §7 for what generalizes them.
+
 **Honest scoping, stated once up front (spec:
 [`design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md`](../design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md)
 §4).** Item 1 rests on kernel-live deltas:
@@ -747,12 +756,21 @@ someone thinks to check `pg_views.security_invoker`.
 
 ### Honest limits (named, not glossed over)
 
-**The served GET surface is unauthenticated today.**
+**The served GET surface is unauthenticated today — updated 2026-07-29, partially superseded,
+read the correction rather than the original claim alone.** When this section was written,
 [`design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md`](../design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md)
-§4's own words: "the served GET surface gains per-zone scoping in the same arc [as the domain/zone
-conjunct]; today it is unauthenticated." This recipe secures a direct Postgres connection with a
-named, distinct login role — it says nothing about a boundary service serving the same content over
-HTTP to an unauthenticated caller. Do not read this recipe as covering that surface.
+§4 stated flatly: "the served GET surface gains per-zone scoping in the same arc [as the domain/zone
+conjunct]; today it is unauthenticated." That is no longer the whole truth. The boundary now
+resolves an identity (minted / vendor / anonymous) on every GET, not just writes, and journals
+who read what — see [§7](#7-the-general-medium-scope-binding-scope-filtering-and-the-entitlement-floor)
+for the mechanism. **What has NOT changed:** an anonymous read is still never refused for
+anonymity — it resolves to the open scope, byte-identical to before — and a scoped-out boundary
+GET degrades to a typed redaction marker rather than an authentication challenge, so "resolved
+identity" here is not the same guarantee as "authenticated caller" in the login-role sense §2/§4
+build against a direct Postgres connection. This recipe (row-level security on a named Postgres
+login role) and the served-surface scope filter are two different enforcement layers, described
+separately, composing rather than substituting for one another; do not read either as making
+the other redundant.
 
 **Row-class classification is, again, a text convention** (`CONSULT-EMBARGO:` prefix) rather than a
 structural, kernel-typed column — the same residual §3 names. An RLS policy can match on any SQL
@@ -802,10 +820,18 @@ recipes above from primitives a zero-context adopter already has.
    it is exactly the kind of "private knowledge a zero-context adopter would not have" the
    correction asks to surface — but it did not block the encoding (§2 above carries the fix), so it
    is not filed as a blocking gap, only flagged.
-4. **There is no served-boundary equivalent of RLS.** §4's honest-limits paragraph names this: the DB-level
-   confinement in this page has no counterpart on the served GET surface, which authenticates no
-   caller at all today. Building the domain/zone conjunct without also arming the served surface
-   would leave exactly the gap [`s51`](../kernel/lineage/s51-artifact-store.sql)'s airlock
+4. **There is no served-boundary equivalent of RLS — UPDATED 2026-07-29, partially closed, not
+   the same guarantee.** §4's honest-limits paragraph named this gap when written: the DB-level
+   confinement in this page had no counterpart on the served GET surface. The boundary scope
+   filter ([§7](#7-the-general-medium-scope-binding-scope-filtering-and-the-entitlement-floor))
+   is that counterpart now — a scope binding's exclusions and disclosure tier are enforced on
+   every served GET route, not just a direct Postgres connection. It is still not the SAME
+   substrate-level guarantee RLS gives §2/§4's direct-connection recipes: it depends on the
+   boundary service's own code path (never bypassed by a stray adopter-authored SQL view the
+   way RLS is; but also never enforced for a caller that reaches Postgres directly, bypassing
+   the boundary entirely — a different trust boundary than "does this connecting role have the
+   grant"). Building the domain/zone conjunct without also arming the served surface would still
+   leave exactly the gap [`s51`](../kernel/lineage/s51-artifact-store.sql)'s airlock
    pattern already warns about (a compliant path that
    is cheaper than the leaky one, not a leaky path closed outright).
 
@@ -897,3 +923,266 @@ stamp](../kernel/lineage/s17-stamp-mechanism.sql) (a per-session tamper-evidence
 a writer's own claim of who they are) and the hash chain elsewhere in this kernel. And every label-based convention in §2–§4 is exactly as strong as the discipline applying
 it consistently — §5's gaps are the honest list of where a structural column would replace that
 discipline with a type, and are not yet built.
+
+---
+
+## 7. The general medium: scope binding, scope filtering, and the entitlement floor
+
+**A note on the "row N" citations below, before any appear:** every such citation is
+provenance from autoharn's own build ledger for THIS repository's deployment — readable via
+`./autoharn led show N` run against this repo, never against a reader's own scaffolded world,
+which has no such row. Each sentence carrying one stands on its own without it; the citation is
+parenthetical support for a reader who wants to chase the source, not a dependency for
+understanding the claim.
+
+**This section was added 2026-07-29 by the access-control batch.** §§1–6 above document mechanisms an adopter
+builds themselves from generic Postgres primitives (RLS, labeling conventions, the s60/s61/s62
+delegation substrate). This section documents a different thing: a **harness-native, ledgered**
+generalization of the same idea — [design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](../design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)'s
+own words, "identity on every request and scoped visibility as first-class concepts, after
+which reviewer blindness, export redaction, and counterpart scoping are instances, not
+builds." Where §4's RLS recipe is something you author per deployment, a **scope** is a kind
+the kernel itself knows about — `principal_scope_bound` — with the boundary service enforcing
+it on every served GET, not just a direct Postgres connection.
+
+### What's live on main today, versus what rides the next birth chain
+
+**Runs-are-linear governs here exactly as it does everywhere else in this project.** The kernel
+deltas that make scopes a first-class kind — `kernel/lineage/s70-scope-binding.sql` and
+`kernel/lineage/s71-row-level-scope-policies.sql` — are **not applied to autoharn3** or any
+other already-born world. `bootstrap/new-project.sh --new-world` carries both for the next
+world scaffolded after this batch landed; a live world never gets a retroactive kernel delta.
+**What IS live on main regardless:** the serving-layer scope filter
+(`serving/boundary_scope_filter.py`), the CLI minting surface (`./autoharn dispatch mint
+--scope-*`), and `judge`'s entitlement-layer differential — all of them run against any world,
+but have nothing to enforce on a world whose kernel predates s70 (`principal_scopes` simply
+doesn't exist there yet, and the filter degrades to the open scope rather than erroring).
+
+### s72 — the stamp-binding conjunct: RBAC's authenticated input
+
+**This subsection was added 2026-07-29 for the batch's final delta — same next-birth-chain
+caveat as s70/s71, stated again because it is easy to assume the batch stopped at the boundary
+filter.**
+`kernel/lineage/s72-stamp-binding-conjunct.sql` is **not applied to autoharn3** either; it
+rides the same `LINEAGE_CHAIN` a future `--new-world` scaffold carries. Where scope binding
+(s70/s71) answers "what may this principal's reads see," s72 answers a different question
+entitlement's own actor/role/chain machinery (s60) cannot: "was THIS PARTICULAR WRITE actually
+produced by an invocation this principal is on record as controlling" — a forger who merely
+knows a genesis-chained actor's numeric id can already satisfy entitlement's role/chain
+conjuncts; s72 additionally requires the write to carry a kernel-VERIFIED interception stamp
+(never a mere string match) whose `stamp_agent` resolves to an in-force `principal_stamp_bound`
+row naming that exact actor.
+
+**Empty by default — no behavior change until a world arms it.** Two new kinds,
+`principal_stamp_bound` (binds a principal to a `stamp_agent` string, e.g. `main`) and
+`stamp_binding_class_configured` (nominates which act class this conjunct governs, s60's own
+configuration shape one axis over). Zero classes are nominated at birth; the conjunct is a
+total no-op for every act class until a deployment writes a `stamp_binding_class_configured`
+row naming one.
+
+**Two limits disclosed in the delta's own header, worth carrying into any adoption decision:**
+
+- **Binding is on `stamp_agent` ALONE, never the `(stamp_session, stamp_agent)` pair** s21 uses
+  for cross-session distinctness — single-trust-domain semantics, stated as such rather than
+  papered over. Binding a principal to `main` admits every governed session's own `main`
+  thread as that principal's authenticated voice; that is the shape of the guarantee, not a
+  gap in it, for a solo-operator world. It secures orchestrator-only act classes cleanly
+  (`principal_registered`, `principal_role_bound`, `standing_lifecycle`,
+  `entitlement_class_configured`, plus s72's own two self-protecting tokens); it does **not**
+  secure `milestone_closure`/`gate_edge_supersession` (see below).
+- **The ephemeral-dispatched-agent fork is reported, not resolved.** A dispatched subagent's
+  `stamp_agent` is a harness-minted id, unknowable in advance — it can never be bound to a
+  principal ahead of time. Arming this conjunct over `milestone_closure` or
+  `gate_edge_supersession` (routinely closed by the dispatched subagent that was assigned the
+  work, not the orchestrator's main thread) with only `main`-bound principals available would
+  refuse every legitimate subagent close. A dispatch-time/first-verified-use binding path is
+  named as the fix — explicitly deferred to
+  **[trust-protocol-v2](../design/FABLE-TRUST-PROTOCOL-V2-SPEC.md)** (the
+  commissioned multi-party-trust spec, per-principal keys as the activation
+  gate), not built here, per the
+  adjudicating row's own STOP-and-report instruction rather than picked silently under this
+  build's time budget.
+
+A restarting orchestrator hitting a refusal on an armed world sees, verbatim (banked fixture,
+`seen-red/s72-stamp-binding-conjunct/red.txt`): *"entitlement refused (s72, factored acceptance
+predicate conjunct c, `<class>`) ... this write's own interception stamp (verified=`<t/f>`,
+agent=`<agent>`) does not resolve to an in-force `principal_stamp_bound` row naming actor `<id>`
+as bound to that agent string."* **Not re-witnessed live for this addendum** — cited from the
+merged fixture's own banked, ALL-GREEN transcript (commit `a218a1b4`) rather than re-run against
+a fresh scratch world; see [ORCH-CAPABILITIES.md item 47](../ORCH-CAPABILITIES.md) for which
+choice was made and why.
+
+### Worked example — witnessed live, this session, on a throwaway scratch world
+
+Scratch world `docsacsweep` (schema/kernel/role `docsacsweep`/`docsacsweep_kernel`/
+`docsacsweep_rw`), scaffolded fresh via `bootstrap/new-project.sh --new-world docsacsweep --db
+toy --host 192.168.122.1` — a fresh scaffold today applies the full current kernel lineage, so
+this world is born WITH s70/s71 already (`doctor`'s own migration-epoch check passed clean,
+reporting `chain_high_water.max_id=13` — the ledger's own row-id high-water mark after birth
+bookkeeping, not a per-delta id; s70/s71's presence was confirmed separately, by the
+`principal_scope_bound` write below succeeding rather than being refused for an
+out-of-vocabulary kind). A boundary service was started by hand against a
+throwaway `boundary-multiplex.toml` (the setup wizard automates this step for a real
+deployment; done manually here only to keep the witness self-contained), then torn down after.
+
+**A second principal, registered, then scope-bound** — surfaces limited to `ledger_current`,
+excluding the `decision` kind-class, disclosure mode `marked`:
+```
+$ ./autoharn led register-principal scopedreader model --purpose "docs witness: scope-bound
+  reader for the AC batch doc sweep"
+led: row 15 written.
+
+$ ./autoharn led --json ledger - <<'EOF'
+{"kind":"principal_scope_bound","statement":"docs witness: scope bound for principal
+  scopedreader (id 7) -- surfaces=[ledger_current], exclusions=[kind-class:decision],
+  disclosure_mode=marked","principal_subject":7,"principal_binding_active":true,
+  "scope_surfaces":["ledger_current"],
+  "scope_exclusions":[{"family":"kind-class","value":"decision"}],
+  "scope_disclosure_mode":"marked"}
+EOF
+led: row 19 written.
+```
+(Principal ids and ledger row ids are two separate sequences — `scopedreader`'s ledger
+*registration event* is row 15, but its own `principal.id` — the value a scope binds against —
+is 7, read back from `GET /standing/principals`. This tripped the first attempt: binding
+against `principal_subject: 15` refused with a foreign-key violation, `write_refused` row 18,
+because no principal with id 15 exists. Left in as a real specimen of the same mistake an
+adopter is likely to make once.)
+
+**A `decision` row written before the bind — content visible to an unscoped reader, invisible
+to the scope-bound one:**
+```
+$ ./autoharn led decision "witnessing statement: this row must be invisible to the
+  scope-bound reader (docs witness for the AC batch sweep)"
+led: row 16 written.
+
+$ curl -s http://127.0.0.1:8931/d/docsacsweep/rows/current | python3 -m json.tool | grep -A4 '"id": 16'
+        "id": 16,
+        "ts": "2026-07-29T12:33:41.149337+02:00",
+        "kind": "decision",
+        "refs": null,
+        "actor": 1,
+```
+
+**The same route, same row, as the minted scoped principal — content replaced by a typed
+redaction marker, existence still disclosed:**
+```
+$ curl -s -H "X-Autoharn-Minted-Principal: 7" http://127.0.0.1:8931/d/docsacsweep/rows/current \
+  | python3 -m json.tool | grep -A4 '"id": 16'
+        "id": 16,
+        "redacted": true,
+        "scope": {
+            "family": "kind-class",
+            "value": "decision"
+```
+
+**The read journal (`.claude/logs/boundary_reads.jsonl`) captured both reads, attributing the
+redaction to the resolved identity — never row content, per the spec's own "the journal must
+never become a second copy of scoped data":**
+```
+{"ts": "...", "route": "/d/docsacsweep/rows/current", "view": "/rows/current",
+ "identity": {"channel": "minted", "principal": "7"}, "row_count": 18,
+ "redactions": [{"family": "kind-class", "value": "decision", "disclosure_mode": "marked",
+                 "count": 1}]}
+{"ts": "...", "route": "/d/docsacsweep/rows/current", "view": "/rows/current",
+ "identity": {"channel": "anonymous"}, "row_count": 18, "redactions": []}
+```
+
+**`./autoharn judge --layer entitlement` — no longer a NO-FLOOR notice, a real differential:**
+```
+$ ./autoharn judge --layer entitlement
+  [OK ] docsacsweep AGREE              asp=171 sql=171 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+```
+
+**`tools/dispatch_scope.py`'s flag-construction logic, exercised directly (pure, no ledger
+write — the CLI parsing half of what `./autoharn dispatch mint --scope-surface ... --scope-
+exclude ... --scope-disclosure-mode ...` does before it ever reaches the boundary):**
+```
+>>> extract_scope_flags(["--scope-surface", "ledger_current", "--scope-exclude",
+...                       "kind-class:decision", "--scope-disclosure-mode", "hash_stub",
+...                       "--other-flag", "value"])
+residual: ['--other-flag', 'value']
+spec.fields(): {'scope_disclosure_mode': 'hash_stub', 'scope_surfaces': ['ledger_current'],
+                'scope_exclusions': [{'family': 'kind-class', 'value': 'decision'}]}
+```
+`./autoharn dispatch mint` itself was **not** exercised end-to-end against a real deployment
+for this page: it mints against THIS repository's own `deployment.json` (design's own words,
+"an autoharn-repo-specific operator verb... mints/retires THIS repo's OWN dispatched-agent
+principals"), never a disposable scratch world, and doing so for a documentation witness would
+write a real delegate principal into this project's own live governance ledger. **UNEXERCISED,
+concrete blocker:** the live end-to-end `dispatch mint --scope-*` path is not something a docs
+build should exercise against production state; the scope-bind mechanics it drives are
+witnessed above via the identical underlying write (`principal_scope_bound` via `led --json
+ledger`), and its flag parsing is witnessed directly above — the gap is specifically the
+`dispatch mint` process wrapper itself, not the mechanism it wraps.
+
+`docsacsweep` was torn down after this witness (`bootstrap/teardown-world.sh docsacsweep
+--force-non-scratch` — the world name doesn't match the script's scratch-safe pattern, so the
+flag was needed; boundary process killed, both the `docsacsweep_owner` and `docsacsweep_rw`
+roles verified dropped), zero residue.
+
+### Fail-closed arming — read this before assuming an "exclusion-only" binding does what it sounds like
+
+A `principal_scopes` row existing at all **arms** the principal onto exactly the surfaces named
+in its own `scope_surfaces` — this was a fix-round correction (ledger row 889) to a real CRITICAL
+a fresh-context review caught: an armed binding's surface list was fetched and never consulted,
+so an "exclusion-only" binding silently read as "open surface, minus these rows" when the
+kernel's own ground truth says an armed principal with `scope_surfaces IS NULL` gets **no**
+surface at all. If you want exclusion-only behavior on a named surface, bind `scope_surfaces`
+explicitly listing it — the worked example above does exactly that (`["ledger_current"]`)
+for precisely this reason.
+
+### Disclosure tiers — what's actually enforced today
+
+Three tiers exist in the kernel's own vocabulary (`marked` / `hash_stub` / `full`); the live
+boundary filter recognizes and routes all three, but only `marked` — existence plus a typed
+redaction marker, full client-side chain verification — is exercised in the worked example
+above. `hash_stub` additionally carries `row_hash` when the underlying surface has one;
+`full` withholds the row entirely and turns counts scope-relative. A binding with no explicit
+`scope_disclosure_mode` defaults to `marked`, the most-disclosing tier, never a stricter one
+nobody asked for.
+
+### Cost, disclosed rather than hidden
+
+A minted-but-unbound principal (the common case, per s70's own fail-safe-open default) pays
+two small extra round trips per scoped read — measured on a live scratch world at roughly
++120 to +170 percent latency on a loopback-HTTP-to-Postgres path (ledger row 943, an open
+known synthesizing two independent measurement runs; the filter module's own docstring reports
+the first run's +150-170 percent figure, not fixed structurally). A `full`-tier-
+excluded existing row also costs measurably more than a genuinely-absent id, even though both
+now return a byte-identical 404 body. Neither number is asserted from first principles — both
+are measured, box-dependent, and disclosed as measurements, not claims about what "should" be
+cheap.
+
+### What this section does NOT change about §§1–6
+
+Nothing above alters any claim in §§1–6 — the RLS-based recipes there remain correct,
+independent mechanisms, still the right tool for a direct-Postgres-connection guarantee this
+new medium does not target (it secures the *served boundary*, not a raw psql connection). The
+one place §§1–6's own text needed a currency correction is flagged in place, at §4's "served
+GET surface is unauthenticated" paragraph and §5 item 4 — both now point here.
+
+### The distinction this batch exists to serve
+
+The maintainer's own framing (ledger rows 567/608, echoed in the spec's own opening line):
+access control's most important deliverable is control over how information can travel, and
+its first named consumer is that reviewers should be guaranteed not to understand the
+rationale for their being there. What this batch buys, once s70/s71 land in a born world: a
+dispatch that mints a reviewer principal can, in the same act, bind a scope excluding the
+commissioning lineage — the work item's opener/decision rows, the finding rows that motivated
+the review — so the reviewer's own reads *cannot* return the rationale, however careless the
+brief, and the read journal witnesses what was and wasn't read. s72's stamp-binding conjunct
+adds the write-side half of the same story, once armed: entitlement's role/chain conjuncts
+answer "is this actor authorized," s72 additionally answers "did this actor's own bound
+invocation actually produce this write" — RBAC's authenticated input, closing the gap where a
+forger who merely knows a genesis-chained actor's numeric id could otherwise satisfy
+entitlement alone. **What this does NOT yet guarantee:** identity channels remain
+same-user-forgeable until trust-protocol-v2's key binding (durable row 31 stands — every
+principal here is one operator's own; scopes partition context, not trust) — and s72's own
+binding is deliberately single-trust-domain (every session's `main` thread is one voice) with
+the ephemeral-dispatched-agent fork reported, not resolved, until that same trust-protocol-v2
+work lands a dispatch-time binding path. Read this plainly rather than oversold. See
+[design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](../design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+§3/§4 for the full closure statement and its quantification universe.

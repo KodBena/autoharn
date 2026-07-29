@@ -79,6 +79,13 @@ Registering principals, standing, roles, competence, relations. Full recipe: [re
 
 Who may act, and when a claim may start. Full recipe: [recipes/IDENTITY-AND-AUTHORITY.md](recipes/IDENTITY-AND-AUTHORITY.md#entitlement-enforcement-and-work-gating-s60-who-may-act-and-when-a-claim-may-start).
 
+**"Can I also restrict WHAT a principal may read, not just what it may do?"** — yes, added
+2026-07-29: scope binding, the boundary's own scope filter, and `judge`'s entitlement-layer
+differential. Full recipe:
+[USER-ACCESS-CONTROL-GUIDE.md §7](USER-ACCESS-CONTROL-GUIDE.md#7-the-general-medium-scope-binding-scope-filtering-and-the-entitlement-floor)
+— note its own currency caveat: the kernel side (s70/s71) rides the next scaffolded world's
+birth chain, not autoharn3 today; the served-boundary filter and CLI minting are live now.
+
 ## Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)
 
 Refused writes as committed, attributed, hash-covered ledger rows. Full recipe: [recipes/EVIDENCE-AND-TRUST.md](recipes/EVIDENCE-AND-TRUST.md#recording-verdicts-and-refusals-as-typed-queryable-ledger-entries-s42s43).
