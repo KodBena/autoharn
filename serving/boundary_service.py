@@ -1358,7 +1358,11 @@ def _apply_minted_actor(payload: dict) -> JSONResponse | None:
                     f"resolved (design/FABLE-DISPATCH-MECHANICS-SPEC.md §2: identity resolution "
                     f"is declared, never silent): either drop the payload's `actor` field (the "
                     f"minted principal will be attributed), set it equal to the minted "
-                    f"principal, or drop the minted-principal header. Nothing was written."),
+                    f"principal, or drop the minted-principal header. Nothing was written. "
+                    f"The minted principal is AUTHENTICATED identity (this boundary verified the "
+                    f"header itself); the payload's actor is merely DECLARED identity (an "
+                    f"unverified assertion) -- which is why a disagreement between them refuses "
+                    f"rather than one silently outranking the other."),
             )
             boundary_diagnostic_log.log_event(
                 boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition,
@@ -3209,7 +3213,12 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                             "identity header, and this deployment's identity_enforcement "
                             "posture is 'enforce' (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, "
                             "ledger row 1471 sub-item 4c: 'anonymous sessions keep NO write "
-                            "surface beyond journaled refusals'). Nothing was written.")
+                            "surface beyond journaled refusals'). Nothing was written. This "
+                            "refuses the absence of AUTHENTICATED identity -- a vendor stamp or "
+                            "minted-principal header this boundary itself verified -- never a "
+                            "merely DECLARED identity (an actor name the writer's own payload "
+                            "could assert, unchecked); the enforce ceremony proves the channel, "
+                            "not the claim.")
                 boundary_diagnostic_log.log_event(
                     boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
                 response = JSONResponse(status_code=403, content=body.model_dump())

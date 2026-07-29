@@ -282,7 +282,10 @@ class AnonymousWriteRefused(BaseModel):
     once the multiplex TOML's `identity_enforcement` key is `"enforce"` (default `"grace"`,
     which accepts an anonymous write unchanged -- byte-identical -- so the operator surface is
     never broken mid-migration, per the spec's own ordering: CLI forwarding must work FIRST,
-    witnessed, before this refusal turns on)."""
+    witnessed, before this refusal turns on). What this refuses the ABSENCE of is AUTHENTICATED
+    identity -- a vendor stamp or minted-principal header this boundary itself verified -- never
+    a merely DECLARED identity (a name or actor the writer's own payload asserts, unchecked); the
+    enforce ceremony proves the channel, not the claim."""
 
     disposition: str = "anonymous_write_refused"
     message: str = Field(description="teach-text: no vendor stamp or minted-principal header "
@@ -315,7 +318,11 @@ class MintedActorConflict(BaseModel):
     (the diagnostic log is diagnostic-grade, never evidentiary -- maintainer principle
     2026-07-11 -- so 'logged' cannot stand in for 'declared'; a refusal the caller must resolve
     is the only shape that leaves no evidentiary gap). A payload with NO `actor`, or one equal
-    to the minted principal, proceeds with the minted attribution as before."""
+    to the minted principal, proceeds with the minted attribution as before. The two values this
+    disposition names are not peers: `minted_principal` is AUTHENTICATED identity -- the header
+    this boundary itself validated -- while `payload_actor` is merely DECLARED identity -- an
+    unverified assertion the payload carries -- which is exactly why a disagreement between them
+    refuses instead of one silently outranking the other."""
 
     disposition: str = "minted_actor_conflict"
     minted_principal: int = Field(description="the X-Autoharn-Minted-Principal header's validated principal id")
