@@ -340,6 +340,9 @@ REGISTRY: dict[str, str] = {
     # courier pull against the freshly-birthed world's own registered courier principal (the
     # row-122 class, witnessed closed).
     "birth-standing-steps-scaffold":  "seen-red/birth-standing-steps-scaffold/run_fixtures.py",
+    # work item ac-read-identity (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md
+    # §1a): read-path identity resolution + read journaling, serving layer.
+    "ac-read-identity":               "seen-red/ac-read-identity/run_fixtures.py",
 }
 
 def _red_evidence_name(d: str) -> str | None:

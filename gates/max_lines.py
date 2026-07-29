@@ -540,7 +540,11 @@ BASELINE: dict[str, int] = {
     # added one REGISTRY entry each (boundary-sse-events, row 169; birth-standing-steps-
     # scaffold, row 270); ceiling set to the post-merge actual (450), the same
     # additive-census-row class as every prior bump above.
-    "gates/fixture_census.py":                     450,
+    # bumped 450 -> 453 (work item ac-read-identity, design/
+    # FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a): one new REGISTRY entry
+    # (ac-read-identity) plus its own two-line comment, re-measured after writing -- the same
+    # self-referential fixpoint as every prior bump.
+    "gates/fixture_census.py":                     453,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -672,7 +676,11 @@ BASELINE: dict[str, int] = {
     # gate's own BASELINE growing to carry the gates/doc_attestation_presence.py bump (905 -> 970)
     # this same commit makes, re-measured after writing -- the same self-referential fixpoint as
     # every prior bump.
-    "gates/max_lines.py":                          797,
+    # bumped 797 -> 805 (work item ac-read-identity, design/
+    # FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a): this gate's own BASELINE
+    # growing to carry the gates/fixture_census.py bump (450 -> 453) this same commit makes,
+    # re-measured after writing -- the same self-referential fixpoint as every prior bump.
+    "gates/max_lines.py":                          805,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
