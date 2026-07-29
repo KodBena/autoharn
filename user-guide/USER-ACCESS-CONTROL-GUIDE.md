@@ -1018,7 +1018,10 @@ row naming one.
   `gate_edge_supersession` (routinely closed by the dispatched subagent that was assigned the
   work, not the orchestrator's main thread) with only `main`-bound principals available would
   refuse every legitimate subagent close. A dispatch-time/first-verified-use binding path is
-  named as the fix — explicitly deferred to **trust-protocol-v2**, not built here, per the
+  named as the fix — explicitly deferred to
+  **[trust-protocol-v2](../design/FABLE-TRUST-PROTOCOL-V2-SPEC.md)** (the
+  commissioned multi-party-trust spec, per-principal keys as the activation
+  gate), not built here, per the
   adjudicating row's own STOP-and-report instruction rather than picked silently under this
   build's time budget.
 
