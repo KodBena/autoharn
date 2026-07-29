@@ -5,9 +5,11 @@ fresh-context Fable-eyes pass, commissioned by the maintainer on his own hunch t
 [Autoharn.idr](../../design/Autoharn.idr) could be stricter/more polymorphic and that a refined model
 might lower back into a cleaner implementation; the categorical consult was supplied as
 context WITH NO WEIGHT per his instruction. All refinement fragments were machine-checked
-(Idris 2 v0.7.0, %default total): [RefKernel.idr](../../design/RefKernel.idr) (R1-R9 + Refl semantic
-witnesses) and [RefUniverse.idr](../../design/RefUniverse.idr) (kind-universe pattern), banked beside
-this record. Verdict: REFINE-AND-LOWER, weight on refining the model; the implementation's
+(Idris 2 v0.7.0, %default total): `RefKernel.idr` (R1-R9 + Refl semantic
+witnesses) and `RefUniverse.idr` (kind-universe pattern), banked beside
+this record at the time; both were discarded 2026-07-29 by maintainer ruling
+after their refinements folded into `design/Autoharn.idr` (ledger row 982 —
+the files remain in git history). Verdict: REFINE-AND-LOWER, weight on refining the model; the implementation's
 own same-day trajectory (s31 + three gates) had already absorbed most of the lowering.
 
 ---
