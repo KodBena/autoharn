@@ -1,6 +1,17 @@
 # CAPABILITIES — what the harness can already do, in plain words
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
+<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair.
+
+     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, 2026-07-29): this touch IS content, not
+     link repair -- items 43-46 (read-path identity + journaling, scope binding, the boundary
+     scope filter, the entitlement floor's judge differential) document the access-control
+     batch, with a live witness run against a throwaway scratch world. This build explicitly
+     does NOT self-attest per its own commissioning brief -- the coordinator runs the +A:B:C
+     loop after this build lands, in a blind round this build's own context must not poison.
+     Flagged here per this marker's own stated removal condition, rather than silently
+     stretching "mechanical edit" to cover new prose, or silently striking a waiver this build
+     has no authority to discharge. Removal condition unchanged: strike this marker and run the
+     real A:B:C loop next time this file is touched for content. -->
 
 
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
@@ -1463,6 +1474,90 @@ committed record; a real `--new-world` scaffold run confirms the birth-chain pat
 carry `principal_binding_active=true` from birth, an `undeclare-standing` round trip lands clean,
 and the dual login/role declaration behavior is not bricked by unbinding only one of the two.
 **Not witnessed by this sweep directly**, same reason and same limit as item 41.
+
+A SIXTH sweep (2026-07-29, doc-only, no code/kernel touched) added items 43–46 covering the
+access-control batch: read-path identity + read journaling, the scope-binding medium (kernel
+s70/s71, CLI minting, boundary enforcement), and the entitlement layer's own ASP/SQL floor.
+Method: read every cited source file in full, then scaffold a throwaway probe world
+(`bootstrap/new-project.sh .../docsacsweep --new-world docsacsweep --db toy --host
+192.168.122.1` — a fresh scaffold today births with s70/s71 already in `LINEAGE_CHAIN`, unlike
+autoharn3 itself), hand-start a boundary service against it, and drive the actual mechanism —
+principal registration, a real `principal_scope_bound` write, a GET compared as an unscoped
+reader versus the scope-bound one, the read journal's own captured lines, and a real `judge
+--layer entitlement` run — rather than trust the banked merge record alone. Torn down after
+(`bootstrap/teardown-world.sh docsacsweep --force-non-scratch` — the name doesn't match the
+script's scratch-safe pattern, so the flag was needed; zero residue verified, including the
+`docsacsweep_owner`/`docsacsweep_rw` roles). `./autoharn dispatch mint --scope-*` itself was
+NOT exercised end-to-end (see item 44) — it mints against THIS repository's own live
+deployment, never a disposable world, so a docs/capabilities sweep does not exercise it for
+real; its flag-parsing and its underlying write are witnessed separately instead.
+
+**43. Read-path identity resolution + read journaling (`serving/boundary_read_journal.py`,
+work item `ac-read-identity`, merge `8f0694c8`; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
+FLOW-SPEC.md §1a).** Every completed boundary GET now resolves an identity (minted / vendor /
+anonymous — the same three-case resolution the write path already used) and appends one line
+to `<world_dir>/.claude/logs/boundary_reads.jsonl`: `{ts, deployment, route, view, identity,
+row_count, redactions}` — never row content. Purely additive: an anonymous read is never
+refused and serves byte-identical content to before. *Witnessed this pass, live on
+`docsacsweep`*: two `GET /rows/current` calls (one anonymous, one as a minted principal with a
+scope bound) each produced their own journal line; the scoped read's line carried
+`"redactions": [{"family": "kind-class", "value": "decision", "disclosure_mode": "marked",
+"count": 1}]`, matching the one row actually redacted in that response — the journal's own
+count is not a separate, hand-maintained number, it is the true count of what that response
+withheld.
+
+**44. Scope binding: the kernel delta (future-birth only), the CLI minting surface (live), and
+fail-closed arming (`kernel/lineage/s70-scope-binding.sql`, `tools/dispatch_scope.py`, merges
+`5c580ef0`/`3ca32ca3`; spec §1b/§5 item 4).** `principal_scope_bound` is a new kind naming a
+principal's granted `scope_surfaces` (registry view/route names) plus optional
+`scope_exclusions` (closed four-family vocabulary: `kind-class`, `thread`, `work-item-lineage`,
+`rows`). **`kernel/lineage/s70-scope-binding.sql` and its RLS sibling s71 are NOT applied to
+autoharn3** — runs-are-linear, they ride the NEXT `--new-world` scaffold's `LINEAGE_CHAIN`
+(confirmed present there this pass). `./autoharn dispatch mint --scope-surface/--scope-
+exclude/--scope-disclosure-mode` IS live on main — omitting every `--scope-*` flag leaves
+`mint` byte-identical to its pre-scope behavior; on a world predating s70 the scope-bind write
+would be refused by the kernel's own closed `ledger_kind_check` vocabulary, and the CLI warns
+loudly that the delegate holds the OPEN scope rather than the one requested (read from source,
+not exercised against a live pre-s70 mint — see this sweep's own header note on why `dispatch
+mint` itself was not run end-to-end). *Witnessed this pass, live on `docsacsweep`* (a
+post-s70 world): `led register-principal` + a raw `principal_scope_bound` write via `led --json
+ledger` (the same POST `dispatch_scope.bind_scope` issues) bound principal 7 to surfaces
+`["ledger_current"]` excluding kind-class `decision`; `tools.dispatch_scope.extract_scope_flags`
+exercised directly (pure, no ledger write) round-tripped
+`--scope-surface ledger_current --scope-exclude kind-class:decision --scope-disclosure-mode
+hash_stub` into the exact typed `ScopeBindingSpec` fields a real `mint` call would send.
+**Fail-closed arming, a real behavior correction (row 889):** a `principal_scopes` row existing
+at all arms the principal onto EXACTLY its own `scope_surfaces`; `scope_surfaces IS NULL` on an
+armed binding grants NO surface, not "open surface minus exclusions" — an adopter wanting
+exclusion-only behavior must bind `scope_surfaces` explicitly (as this pass's own witness did).
+
+**45. The boundary scope filter (`serving/boundary_scope_filter.py`, merge `dc643dfb`; spec
+§1c/§2/§4).** One seam (`boundary_service._json_read_response`) enforces a resolved scope on
+every GET route that returns row-shaped content: a scoped-out row becomes a typed redaction
+marker (`{id_field, redacted: true, scope: {family, value}}`, plus `row_hash` at the
+`hash_stub` tier), never silently dropped — existence still counts, content and rationale do
+not cross. Three disclosure tiers exist in the closed vocabulary (`marked`/`hash_stub`/`full`);
+only `marked` was exercised this pass. **Cost is disclosed, not hidden (row 943, an open
+known):** the filter module's own docstring measures roughly +150 to +170 percent latency for
+a minted-but-unbound principal (two extra small round trips) and a real gap between a
+`full`-tier-excluded existing row and a genuinely-absent id, on a loopback-HTTP-to-Postgres
+path — box-dependent numbers, disclosed as measured, not re-measured by this sweep. *Witnessed
+this pass, live on `docsacsweep`*: `GET /rows/current` with no identity header returned row 16
+(a `decision`) in full; the identical route with `X-Autoharn-Minted-Principal: 7` (the
+scope-bound principal from item 44) returned the SAME row id as `{"id": 16, "redacted": true,
+"scope": {"family": "kind-class", "value": "decision"}}` — every other row in the same response
+unaffected, confirming the exclusion is row-scoped, not surface-wide.
+
+**46. The entitlement layer's ASP/SQL differential floor (`engine/ledger_floor.py`, merge
+`e1b02f4d`; closes the gap the s70 merge itself disclosed, rows 802/803).** `./autoharn judge
+--layer entitlement` used to report `NO-FLOOR` — a real ASP encoding with no independent SQL
+producer to differential against, so the layer was never actually checked by a bare `judge`
+run. `engine/ledger_floor.py` now derives the SAME five predicates in SQL
+(`reaches_genesis/1`, `reaches_genesis_scoped/2`, `open_scope/1`, `may_read_surface/2`,
+`scope_disclosure/2`), and the layer differentials for real. *Witnessed this pass, live on
+`docsacsweep`*: `./autoharn judge --layer entitlement` printed `AGREE asp=171 sql=171 atoms;
+Δasp=[] Δsql=[]` — a genuine two-producer agreement over this scratch world's own s60-through-
+s71 entitlement/scope substrate, not a NO-FLOOR skip.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 

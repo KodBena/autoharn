@@ -1,3 +1,11 @@
+<!-- doc-attest-exempt: work item docs-ac-batch-sweep (2026-07-29) -- adds one short pointer
+     under the existing "Entitlement enforcement and work gating (s60)" entry, to USER-ACCESS-
+     CONTROL-GUIDE.md §7's new scope-binding material. This build's own commissioning brief
+     explicitly forbids self-attestation: the coordinator runs the +A:B:C loop after this build
+     lands, in a blind round this build's own context must not poison. No A:B:C loop claimed for
+     this touch. Removal condition: strike this marker and run the real two-round A:B:C loop the
+     next time this file is touched for content. -->
+
 # Can I do that? — recipes FAQ for operators
 
 This page is written for an operator of a scaffolded project who wants to know whether the
@@ -78,6 +86,12 @@ Registering principals, standing, roles, competence, relations. Full recipe: [re
 ## Entitlement enforcement and work gating (s60): who may act, and when a claim may start
 
 Who may act, and when a claim may start. Full recipe: [recipes/IDENTITY-AND-AUTHORITY.md](recipes/IDENTITY-AND-AUTHORITY.md#entitlement-enforcement-and-work-gating-s60-who-may-act-and-when-a-claim-may-start).
+**"Can I also restrict WHAT a principal may read, not just what it may do?"** — yes, added
+2026-07-29: scope binding, the boundary's own scope filter, and `judge`'s entitlement-layer
+differential. Full recipe:
+[USER-ACCESS-CONTROL-GUIDE.md §7](USER-ACCESS-CONTROL-GUIDE.md#7-the-general-medium-scope-binding-scope-filtering-and-the-entitlement-floor)
+— note its own currency caveat: the kernel side (s70/s71) rides the next scaffolded world's
+birth chain, not autoharn3 today; the served-boundary filter and CLI minting are live now.
 
 ## Recording verdicts and refusals as typed, queryable ledger entries (s42/s43)
 

@@ -23,7 +23,17 @@
      touching only those clauses. No A:B:C loop run for this touch either (single-clause factual
      correction, stack-review-flagged); still owed to the coordinator's batch. Removal condition
      unchanged: strike all markers and run the real loop next time this file is touched for
-     content. -->
+     content.
+
+     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, 2026-07-29): adds the "Scope binding and
+     the access-control medium" section (scope binding/`principal_scope_bound`, disclosure
+     tiers, `scope_armed`/fail-closed arming, the entitlement floor) documenting the
+     access-control batch (merges 5c580ef0/3ca32ca3/94b4839d/e1b02f4d/dc643dfb). This build
+     explicitly does NOT self-attest per its own commissioning brief -- the coordinator runs
+     the +A:B:C loop after this build lands, in a blind round this build's own context must not
+     poison. Flagged here rather than silently re-widening the existing waiver's stated scope.
+     Removal condition unchanged: strike all markers and run the real loop next time this file
+     is touched for content. -->
 
 # Glossary — autoharn's coined vocabulary
 
@@ -954,6 +964,93 @@ route, `EventSourceResponse`, or `StreamingResponse` exists in `serving/boundary
 today; update this entry to "shipped" only once that route is observed live, not merely
 merged. Answers the maintainer's punch-list item 7. Source:
 [`design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md`](design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md).
+
+## Scope binding and the access-control medium (added 2026-07-29)
+
+The terms below entered the vocabulary with the access-control batch
+([design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)):
+scopes as a first-class, ledgered visibility predicate, layered on top of the
+[entitlement](#entitlement) machinery above. **Runs-are-linear caveat, stated once here rather
+than in every entry below:** the kernel deltas this section documents (s70, s71) ride
+`bootstrap/new-project.sh`'s `LINEAGE_CHAIN` for the NEXT `--new-world` scaffold; they are NOT
+applied to autoharn3 or any other already-born world. The serving-layer enforcement (the
+boundary scope filter) and the CLI minting surface (`dispatch mint --scope-*`) ARE live on
+main regardless — see each entry for which side of that line it's on.
+
+<a id="scope-binding"></a>
+### scope binding / `principal_scope_bound`
+A named, ledgered visibility predicate bound to one principal: a set of granted read
+`scope_surfaces` (registry view/route names) plus an optional `scope_exclusions` array (each
+member `{family, value}`, `family` one of a closed four-member vocabulary — `kind-class`,
+`thread`, `work-item-lineage`, `rows`). Kernel delta
+[`kernel/lineage/s70-scope-binding.sql`](kernel/lineage/s70-scope-binding.sql) (kernel-side,
+**future birth only**, see this section's caveat above): a new `principal_scope_bound` kind,
+the `principal_scopes` derived view, and the fail-safe default that makes the whole mechanism
+additive — **a principal with no bound scope holds the OPEN scope**, byte-identical to every
+world today. `tools/dispatch_scope.py` mirrors the same closed vocabularies one layer up (a
+caller cannot even CONSTRUCT an out-of-vocabulary value), never looser or stricter than the
+kernel CHECKs it mirrors, which remain the true authority. Minted via `./autoharn dispatch
+mint --scope-surface <name>` (repeatable), `--scope-exclude <family>:<value>` (repeatable),
+`--scope-disclosure-mode <mode>` — all optional; omitting every `--scope-*` flag leaves `mint`
+byte-identical to its pre-scope behavior. On a world that predates s70, a scope-bind attempt
+mints the delegate principal successfully but has its `principal_scope_bound` write refused by
+the kernel (the kind is outside the closed `ledger_kind_check` vocabulary there); the CLI warns
+loudly that the delegate holds the OPEN scope, not the requested one. Source:
+[design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+§1b/§5; [`kernel/lineage/s70-scope-binding.sql`](kernel/lineage/s70-scope-binding.sql);
+[`tools/dispatch_scope.py`](tools/dispatch_scope.py).
+
+<a id="disclosure-tiers"></a>
+### disclosure tiers / `scope_disclosure_mode`
+A closed three-member vocabulary naming how much a scoped-out row's existence discloses:
+`marked` (the default — existence plus a typed redaction marker, `{id_field: <value>,
+"redacted": true, "scope": {...}}`; full client-side chain verification), `hash_stub`
+(existence and `row_hash` visible, content withheld — integrity verifiable without
+disclosure), and `full` (the row does not cross at all; counts become scope-relative truths;
+chain verification for that principal is instrument-only). Only `marked` is enforced by the
+live boundary filter's own byte-for-byte contract; all three tiers are recognized and routed
+correctly by [`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py) today. A
+scope binding with no explicit `scope_disclosure_mode` (NULL) is treated as `marked` — the
+MOST-disclosing tier — never a stricter one the binder never asked for. Two standing
+obligations this slot imposes everywhere: the pagination contract never promises row-id
+continuity, and no served surface derives a client-visible global count a `full`-tier scope
+would falsify. Source:
+[design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+§1c.
+
+<a id="scope-armed"></a>
+### `scope_armed` / fail-closed arming
+The boundary scope filter's own arming rule (a fix round, ledger row 889, closing a CRITICAL
+where an armed binding's `scope_surfaces` was fetched and never consulted — a silent no-op
+that let the principal read everything): a `principal_scopes` row existing AT ALL arms the
+principal onto EXACTLY the surfaces named in its own `scope_surfaces`. A binding whose
+`scope_surfaces IS NULL` — armed but handed no allow-list — therefore grants NO surface
+whatsoever; an "exclusion-only" binding (exclusions set, no explicit surfaces) reads as "no
+surface granted, read nothing," never as "open surface minus these rows." Mirrors
+`design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md`'s own `scope_armed(P) :-
+scope_binding_row(P)` predicate — the same row-existence rule on both the SQL and ASP sides of
+[the entitlement floor](#entitlement-floor) below. **Disclosed cost, not hidden:** a
+minted-but-unbound principal (the common case) pays two extra small round trips per read —
+measured on a live scratch world at roughly +150 to +170 percent latency on a
+loopback-HTTP-to-Postgres path (ledger row 943, an open known, named in the module's own
+docstring rather than fixed structurally); a `full`-tier-excluded existing row also measurably
+outpaces a genuinely-absent id even though both now return a byte-identical 404 body. Source:
+[`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py).
+
+<a id="entitlement-floor"></a>
+### entitlement floor (judge's `entitlement` layer)
+`./autoharn judge --layer entitlement` used to report `NO-FLOOR`: the layer's ASP encoding
+(`engine/lp/ledger_entitlement.lp`) ran with no independent SQL producer to differential
+against. `engine/ledger_floor.py` now derives the SAME five predicates in SQL
+(`reaches_genesis/1`, `reaches_genesis_scoped/2`, `open_scope/1`, `may_read_surface/2`,
+`scope_disclosure/2` — the s70 scope additions alongside the pre-existing s60/s64 entitlement
+ones), closing the gap the s70 merge itself disclosed (rows 802/803): `judge` now runs a real
+two-producer differential for this layer and reports AGREE/DIVERGE like every other layer,
+never a silent skip. On a world predating s70 the scope predicates trivially agree empty (no
+`principal_scope_bound` rows exist to disagree about); the check becomes substantively live
+once a world scope-binds a principal for real. Source:
+[`engine/ledger_floor.py`](engine/ledger_floor.py); [`engine/lp_registry.py`](engine/lp_registry.py);
+[`design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md`](design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md).
 
 <!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
      doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated
