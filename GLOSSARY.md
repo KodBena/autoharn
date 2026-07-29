@@ -1035,16 +1035,18 @@ that let the principal read everything): a `principal_scopes` row existing AT AL
 principal onto EXACTLY the surfaces named in its own `scope_surfaces`. A binding whose
 `scope_surfaces IS NULL` — armed but handed no allow-list — therefore grants NO surface
 whatsoever; an "exclusion-only" binding (exclusions set, no explicit surfaces) reads as "no
-surface granted, read nothing," never as "open surface minus these rows." Mirrors
-[`engine/lp/ledger_entitlement.lp`](engine/lp/ledger_entitlement.lp)'s own `scope_armed(P) :-
-scope_binding_row(P)` predicate — the same row-existence rule on both the SQL and ASP sides of
-[the entitlement floor](#entitlement-floor) below. **Disclosed cost, not hidden:** a
-minted-but-unbound principal (the common case) pays two extra small round trips per read —
-measured on a live scratch world at roughly +150 to +170 percent latency on a
+surface granted, read nothing," never as "open surface minus these rows." Specified in
+[design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md](design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md)
+and mirrored by [`engine/lp/ledger_entitlement.lp`](engine/lp/ledger_entitlement.lp)'s own
+`scope_armed(P) :- scope_binding_row(P)` predicate — the same row-existence rule on both the
+SQL and ASP sides of [the entitlement floor](#entitlement-floor) below. **Disclosed cost, not
+hidden:** a minted-but-unbound principal (the common case) pays two extra small round trips
+per read — measured on a live scratch world at roughly +150 to +170 percent latency on a
 loopback-HTTP-to-Postgres path (ledger row 943, an open known, named in the module's own
 docstring rather than fixed structurally); a `full`-tier-excluded existing row also measurably
 outpaces a genuinely-absent id even though both now return a byte-identical 404 body. Source:
-[`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py).
+[`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py);
+[design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md](design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md).
 
 <a id="entitlement-floor"></a>
 ### entitlement floor (judge's `entitlement` layer)
