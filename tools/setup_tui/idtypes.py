@@ -9,12 +9,38 @@ instance is UNCONSTRUCTABLE: `WorldName("bad name!")` raises the SAME way `World
 constructor every other call site uses -- there is exactly one path to a legal instance.
 
 SCOPE, STATED HONESTLY (this build's own judgment call -- see the build report): this module
-covers the two value classes this rebuild's own new code treats as load-bearing identifiers
+covers the value classes this rebuild's own new code treats as load-bearing identifiers
 crossing a module boundary with a REAL, non-trivial contract of their own beyond `tools.
 formwizard.ids`'s generic field/step-id/label/index/exit-code types -- a world name (spliced into
-shell argv and SQL identifiers downstream) and a destination path (queued into a Plan). Free-form
-prose already covered by `formwizard.ids.Label`, and already-typed dataclasses (`plan.Hole`,
-`plan.Act`), are deliberately not re-wrapped here.
+shell argv and SQL identifiers downstream), a destination path (queued into a Plan), and (work
+item setup-tui-bare-types-retrofit, ledger rows 778/789, discharging durable row 26's own clause
+"if the consumer is in an existing module, the module will be rewritten as appropriate" for this
+package's PRE-EXISTING bare scalars) the five Postgres-splice values every `deployment.json`/
+`boundary-multiplex.toml`-writing step constructs from operator answers or a scaffolded config:
+`host`, database, schema, kern-schema, and role. Free-form prose already covered by
+`formwizard.ids.Label`, and already-typed dataclasses (`plan.Hole`, `plan.Act`), are deliberately
+not re-wrapped here.
+
+PG* TYPES (`PgHost`/`PgDatabase`/`PgSchema`/`PgKernSchema`/`PgRole`), ADDED THIS RETROFIT: each is
+a THIN named home over ONE of `tools/setup_tui/probes.py`'s own two closed-alphabet contracts
+(`valid_hostname` for `PgHost`, `valid_identifier` for the other four) -- the contract itself
+still lives in `probes.py` (ADR-0012 P1, imported not copied, exactly like `WorldName` above
+composes `probes.valid_identifier`'s allowlist into its own stricter intersection), this module
+only owns the CONSTRUCTING HOME. Four of the five (`PgDatabase`/`PgSchema`/`PgKernSchema`/
+`PgRole`) share one literal contract (`probes.valid_identifier`) but are kept as four DISTINCT
+classes rather than one generic wrapper -- the same reasoning `boundary_config_values.py`'s own
+docstring gives for `LogLevel`/`SsePollIntervalSecs`/`MaxSseClients` staying separate frozen
+dataclasses even where a bound is shared: a named type's job is to make it a construction-time
+type error to pass a role where a schema was meant, not merely to check a shared alphabet (a
+`PgRole` and a `PgDatabase` holding the same string are still different mistakes to make at a
+call site). Every one of these five is a THIN validating wrapper: construction is the ONLY
+checkpoint (`__post_init__`, no bypassable second path), `.parse()` only normalizes
+(`.strip()`) before delegating to the same constructor, and `str(instance)` unwraps back to the
+plain scalar every existing call site (subprocess argv, SQL/TOML text, a `state`/`deployment.json`
+dict) already expects -- construction is a validating GATE the value passes through once, not a
+wrapper type threaded through the whole pipeline (matching `boundary_config_values.py`'s own
+"unwrapped back to a plain scalar only once each value has passed its own gate" idiom, not a
+wider rewrite of every downstream consumer's signature).
 
 WORLDNAME'S CONTRACT IS AN INTERSECTION, NOT JUST THE SQL/SHELL ALLOWLIST (work item
 setup-tui-worldname-boundary-allowlist, flagged by the track-work-retirement builder, row 1317
@@ -47,6 +73,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
+from tools.setup_tui import probes
 
 
 class WorldNameError(ValueError):
@@ -120,6 +148,119 @@ class DestPath:
     @staticmethod
     def parse(raw: str) -> "DestPath":
         return DestPath(raw.strip())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class PgHostError(ValueError):
+    """A candidate Postgres host fails `probes.valid_hostname`'s contract (letters, digits, dot,
+    hyphen, underscore -- a DNS name or dotted-quad, never a bare SQL/shell identifier) -- raised
+    at construction, never discovered later inside a `psql` argv or a written TOML file."""
+
+
+@dataclass(frozen=True)
+class PgHost:
+    """A validated Postgres host (a DNS name or IP literal). Contract lives in
+    `probes.valid_hostname` (ADR-0012 P1, imported not copied); this class only owns the
+    constructing home. `__post_init__` is the ONLY enforcement point."""
+    value: str
+
+    def __post_init__(self) -> None:
+        if not probes.valid_hostname(self.value):
+            raise PgHostError(
+                f"host {self.value!r} must match probes.valid_hostname's contract (letters, "
+                f"digits, dot, hyphen, underscore) -- refusing to splice it into program text "
+                f"(law/adr/0012's interpreter-boundary rule).")
+
+    @staticmethod
+    def parse(raw: str) -> "PgHost":
+        return PgHost(raw.strip())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class PgIdentifierError(ValueError):
+    """A candidate Postgres identifier (database/schema/kern-schema/role name) fails
+    `probes.valid_identifier`'s closed alphabet (`[A-Za-z0-9_]+`) -- raised at construction, never
+    discovered later inside a SQL/shell splice site."""
+
+
+def _check_pg_identifier(label: str, value: str) -> None:
+    """ONE shared check, four named homes below (`PgDatabase`/`PgSchema`/`PgKernSchema`/
+    `PgRole`) -- same idiom `boundary_config_values.IdentityEnforcementOverride.__post_init__`
+    uses to re-run `IdentityEnforcementPosture.parse`'s own check rather than hand-copy it."""
+    if not probes.valid_identifier(value):
+        raise PgIdentifierError(
+            f"{label} {value!r} must match [A-Za-z0-9_]+ (probes.valid_identifier's contract) -- "
+            f"refusing to splice it into SQL/shell/config text (law/adr/0012's interpreter-"
+            f"boundary rule).")
+
+
+@dataclass(frozen=True)
+class PgDatabase:
+    """A validated Postgres database name. See this module's own docstring ("PG* TYPES") for why
+    this is a distinct class from `PgSchema`/`PgKernSchema`/`PgRole` despite sharing one
+    alphabet."""
+    value: str
+
+    def __post_init__(self) -> None:
+        _check_pg_identifier("database name", self.value)
+
+    @staticmethod
+    def parse(raw: str) -> "PgDatabase":
+        return PgDatabase(raw.strip())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class PgSchema:
+    """A validated Postgres schema name (a world's own ledger schema, e.g. `boundary-multiplex.
+    toml`'s `pgschema`). See this module's own docstring ("PG* TYPES")."""
+    value: str
+
+    def __post_init__(self) -> None:
+        _check_pg_identifier("schema", self.value)
+
+    @staticmethod
+    def parse(raw: str) -> "PgSchema":
+        return PgSchema(raw.strip())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class PgKernSchema:
+    """A validated Postgres kernel-schema name (a world's own `<world>_kernel`-shaped schema,
+    e.g. `boundary-multiplex.toml`'s `pgkern`). See this module's own docstring ("PG* TYPES")."""
+    value: str
+
+    def __post_init__(self) -> None:
+        _check_pg_identifier("kern schema", self.value)
+
+    @staticmethod
+    def parse(raw: str) -> "PgKernSchema":
+        return PgKernSchema(raw.strip())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class PgRole:
+    """A validated Postgres role name. See this module's own docstring ("PG* TYPES")."""
+    value: str
+
+    def __post_init__(self) -> None:
+        _check_pg_identifier("role", self.value)
+
+    @staticmethod
+    def parse(raw: str) -> "PgRole":
+        return PgRole(raw.strip())
 
     def __str__(self) -> str:
         return self.value

@@ -24,7 +24,7 @@ from pathlib import Path
 from tools.configtree import ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField
 from tools.setup_tui import boundary_config_values as bcv
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import destination, feature_facts, governed_files, probes
+from tools.setup_tui import destination, feature_facts, governed_files, idtypes, probes
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
 from tools.setup_tui.plan import (BackgroundAct, CallableAct, CommandAct, DaemonSelection,
                                    PlanEntry, WriteAct)
@@ -190,8 +190,8 @@ def submit(state: dict, answers: dict) -> SectionResult:
     # own defense against being driven with a state dict that skipped Birth (e.g. a test harness),
     # not a second copy of the allowlist.
     world = str(world_name)
-    host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
-    db = answers["db"].strip() or state.get("db", "toy")
+    host_raw = answers["host"].strip() or state.get("pghost", "192.168.122.1")
+    db_raw = answers["db"].strip() or state.get("db", "toy")
 
     port = probes.free_port()
     boundary_url = f"http://127.0.0.1:{port}"
@@ -202,28 +202,15 @@ def submit(state: dict, answers: dict) -> SectionResult:
     if os.path.isfile(dep_json_path):
         with open(dep_json_path) as f:
             dep = json.load(f)
-    schema, kern, role = dep.get("schema", world), dep.get("kern", f"{world}_kernel"), dep.get("role", f"{world}_rw")
+    schema_raw, kern_raw, role_raw = (dep.get("schema", world), dep.get("kern", f"{world}_kernel"),
+                                       dep.get("role", f"{world}_rw"))
 
-    for label, val, checker in (("host", host, probes.valid_hostname), ("database", db, probes.valid_identifier),
-                                 ("role", role, probes.valid_identifier), ("schema", schema, probes.valid_identifier),
-                                 ("kern", kern, probes.valid_identifier), ("world", world, probes.valid_identifier)):
-        if not checker(val):
-            cl.add("boundary", "multiplex TOML values validated", ck.REFUSED, f"'{val}' ({label}) invalid")
-            return SectionResult(ok=False, errors={"": f"{label} '{val}' fails the interpreter-boundary "
-                                                 "allowlist"})
-
-    # CONFIG-EXTENSION ADDENDUM (row 693/685), TYPED CONSTRUCTION (fix round, review row 776,
-    # finding 1 -- CLAUDE.md/ledger row 26: "every value construction goes through one SSOT that
-    # checks a contract; no bare ints, no bare strs"). Each of the five values is constructed
-    # through `boundary_config_values` -- the ONE typed home per value, hit whether or not the
-    # answer already passed its own field's inline validator (a blank/whitespace answer skips
-    # that validator entirely, `fields.validate_value`'s own "only when non-blank" rule, and must
-    # still fall back to the default rather than crash) -- never a second, ad hoc re-derivation
-    # of the same contract. `.value`/`.raw` is unwrapped back to a plain scalar only once each
-    # value has passed its own gate -- what state/config_seam/the TOML writer below need next.
-    # `_typed` is the ONE adapter from a typed home's own ValueError/MultiplexConfigError to this
-    # function's own REFUSED-checklist-row + SectionResult shape, instead of five near-identical
-    # try/excepts (kept to one line per call so this addendum stays inside ADR-0007's ceiling).
+    # TYPED CONSTRUCTION (CLAUDE.md/row 26 -- work item setup-tui-bare-types-retrofit, rows
+    # 778/789): host/db/role/schema/kern now construct through idtypes.PgHost/PgDatabase/PgRole/
+    # PgSchema/PgKernSchema (idtypes.py's own "PG* TYPES" section) via the SAME `_typed` adapter
+    # the five boundary-multiplex values below already use, replacing the old ad hoc tuple-loop
+    # of raw `probes.valid_*` booleans. Unwrapped to plain str right after -- byte-identical
+    # downstream (state/TOML/new-project.sh argv unchanged).
     toml_path = os.path.join(dest, "boundary-multiplex.toml")
 
     def _typed(field: str, parse_call):
@@ -232,6 +219,20 @@ def submit(state: dict, answers: dict) -> SectionResult:
         except (ValueError, boundary_multiplex_config.MultiplexConfigError) as exc:
             cl.add("boundary", "multiplex TOML values validated", ck.REFUSED, f"{field}: {exc}")
             return None, SectionResult(ok=False, errors={field: str(exc)})
+
+    _pg_raw = {"host": (idtypes.PgHost, host_raw), "db": (idtypes.PgDatabase, db_raw),
+               "role": (idtypes.PgRole, role_raw), "schema": (idtypes.PgSchema, schema_raw),
+               "kern": (idtypes.PgKernSchema, kern_raw)}
+    _pg_t: dict = {}
+    for _field, (_cls, _raw) in _pg_raw.items():
+        _pg_t[_field], refusal = _typed(_field, lambda _cls=_cls, _raw=_raw: _cls.parse(_raw))
+        if refusal: return refusal  # noqa: E701
+    if not probes.valid_identifier(world):  # world already a WorldName; strict-subset re-check, harmless
+        cl.add("boundary", "multiplex TOML values validated", ck.REFUSED, f"'{world}' (world) invalid")
+        return SectionResult(ok=False, errors={"": f"world '{world}' fails the interpreter-boundary allowlist"})
+
+    host, db, role, schema, kern = (str(_pg_t["host"]), str(_pg_t["db"]), str(_pg_t["role"]),
+                                     str(_pg_t["schema"]), str(_pg_t["kern"]))
 
     log_level_t, refusal = _typed("log_level", lambda: bcv.LogLevel.parse(answers["log_level"]))
     if refusal: return refusal  # noqa: E701 (one-liner, see `_typed`'s own docstring comment above)

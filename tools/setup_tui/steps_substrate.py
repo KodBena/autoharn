@@ -7,7 +7,7 @@ from __future__ import annotations
 from tools.configtree import (ChoiceField, ConfirmField, ElucidationHeading, SectionResult,
                                SectionSpec, TextField, is_field_touched)
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import feature_facts, pghba, probes
+from tools.setup_tui import feature_facts, idtypes, pghba, probes
 
 _SLUG = "substrate"
 
@@ -17,10 +17,19 @@ SUBSTRATE_CHOICES = (
 )
 
 
-def _ident_validator(label: str):
+def _typed_validator(label: str, cls):
+    """Live TextField feedback for a `idtypes.PgHost`/`PgDatabase`/`PgRole` field -- delegates to
+    the SAME typed home `submit` below constructs through (work item
+    setup-tui-bare-types-retrofit, ledger rows 778/789), never a second, ad hoc regex check; only
+    translates that type's own `ValueError` into the plain string-or-None a `TextField` validator
+    returns, matching `steps_boundary.py`'s own `_validate_sse_poll_interval_secs` idiom."""
     def v(val: str) -> "str | None":
-        if val and not probes.valid_identifier(val):
-            return f"{label} must match [A-Za-z0-9_]+"
+        if not val:
+            return None
+        try:
+            cls.parse(val)
+        except ValueError as exc:
+            return str(exc)
         return None
     return v
 
@@ -31,13 +40,13 @@ def fields(state: dict) -> tuple:
         ChoiceField(name="path", label="Which substrate path?", options=SUBSTRATE_CHOICES,
                     default="existing"),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
-                  required=False),
+                  required=False, validator=_typed_validator("host", idtypes.PgHost)),
         TextField(name="db_existing", label="Existing database name (existing path)", default="toy",
-                  required=False),
+                  required=False, validator=_typed_validator("database name", idtypes.PgDatabase)),
         TextField(name="db_dedicated", label="New (dedicated) database name", required=False,
-                  validator=_ident_validator("database name")),
+                  validator=_typed_validator("database name", idtypes.PgDatabase)),
         TextField(name="role", label="New (dedicated) role name", required=False,
-                  validator=_ident_validator("role name")),
+                  validator=_typed_validator("role name", idtypes.PgRole)),
         TextField(name="subnets", label="Subnets to trust (comma-separated CIDR, dedicated path)",
                   default="192.168.122.68/32,192.168.122.1/32", required=False),
     )
@@ -52,12 +61,30 @@ def submit(state: dict, answers: dict) -> SectionResult:
                "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("substrate configuration skipped.",))
 
-    host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
+    host_raw = answers["host"].strip() or state.get("pghost", "192.168.122.1")
     path = answers["path"]
+
+    # TYPED CONSTRUCTION (work item setup-tui-bare-types-retrofit, ledger rows 778/789,
+    # discharging durable row 26's own "if the consumer is in an existing module, the module is
+    # rewritten" clause): `host`/`db`/`role` are constructed through `idtypes.PgHost`/`PgDatabase`/
+    # `PgRole` -- the ONE typed home per value -- hit whether or not the answer already passed its
+    # own field's inline `_typed_validator` (a blank answer skips that validator, the same
+    # "only when non-blank" rule `steps_boundary.py`'s own five-value fix documents), rather than
+    # a second, ad hoc `probes.valid_*` re-derivation of the same contract. `.value`/`str()` is
+    # unwrapped back to a plain scalar immediately below -- state/`pghba`/the prepared psql text
+    # all still travel a plain str, byte-identical to before this retrofit.
+    try:
+        host = str(idtypes.PgHost.parse(host_raw))
+    except idtypes.PgHostError as exc:
+        return SectionResult(ok=False, errors={"host": str(exc)})
     state = {"substrate_path": path, "pghost": host}
 
     if path == "existing":
-        db = answers["db_existing"].strip() or "toy"
+        db_raw = answers["db_existing"].strip() or "toy"
+        try:
+            db = str(idtypes.PgDatabase.parse(db_raw))
+        except idtypes.PgIdentifierError as exc:
+            return SectionResult(ok=False, errors={"db_existing": str(exc)})
         ok, detail = probes.pg_reachable(host)
         lines.append(f"  reachability probe: {'GREEN' if ok else 'RED'} -- {detail}")
         cl.add("substrate", f"existing-db {db}@{host} reachable",
@@ -65,11 +92,14 @@ def submit(state: dict, answers: dict) -> SectionResult:
         state["db"] = db
         return SectionResult(ok=True, state_updates=state, info_lines=tuple(lines))
 
-    db, role = answers["db_dedicated"].strip(), answers["role"].strip()
-    for label, val in (("database name", db), ("role name", role)):
-        if not probes.valid_identifier(val):
-            return SectionResult(ok=False, errors={"db_dedicated" if label == "database name" else "role":
-                                                 f"{label} must match [A-Za-z0-9_]+"})
+    db_raw, role_raw = answers["db_dedicated"].strip(), answers["role"].strip()
+    typed_pg: dict = {}
+    for field, cls, raw in (("db_dedicated", idtypes.PgDatabase, db_raw), ("role", idtypes.PgRole, role_raw)):
+        try:
+            typed_pg[field] = cls.parse(raw)
+        except idtypes.PgIdentifierError as exc:
+            return SectionResult(ok=False, errors={field: str(exc)})
+    db, role = str(typed_pg["db_dedicated"]), str(typed_pg["role"])
     subnet_list = [s.strip() for s in answers["subnets"].split(",") if s.strip()]
     for subnet in subnet_list:
         if not probes.valid_subnet(subnet):
