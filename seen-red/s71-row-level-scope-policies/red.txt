@@ -1,0 +1,84 @@
+== scaffolding classic world s71fxpre (chain ends s70-scope-binding.sql, NO s71) ==
+=== REGRESSION-DETECT-ABSENT ===
+  [ok] s71-row-level-scope-policies.detect.sql on the s70-head world (no s71 applied): 'f' (expected f)
+
+=== REGRESSION-ORDINARY-READ-UNAFFECTED ===
+  [ok] a pre-s71 world has no RLS at all -- :role's own read count (5) matches the owner's (5)
+
+== scaffolding classic world s71fxmain (chain ends s71-row-level-scope-policies.sql) ==
+=== REGRESSION-DETECT-PRESENT ===
+  [ok] s71-row-level-scope-policies.detect.sql on the s71-head world: 't' (expected t)
+
+=== NOTE1-ACCEPTED ===
+  [ok] ordinary note write -- verdict={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== FINDING-ACCEPTED ===
+  [ok] ordinary finding write -- verdict={'row_id': 9, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== UNARMED-BYTE-IDENTICAL-NO-GUC ===
+  [ok] :role with NO app.scope_principal GUC set reads 9 rows, the owner's own full count 9 -- byte-identical, unarmed
+
+=== UNARMED-BYTE-IDENTICAL-NEVER-BOUND ===
+  [ok] :role with the GUC set to a NEVER-scope-bound principal (5) reads 10 rows, the owner's OWN fresh full count 10 -- the s70 open-scope fail-safe default, one layer over
+
+=== SCOPE-BIND-FOR-EXCLUSION-ACCEPTED ===
+  [ok] author (genesis-chained) binds a scope onto reviewer excluding kind-class 'note' -- verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== ARMED-KIND-CLASS-EXCLUSION-FILTERS ===
+  [ok] reviewer's GUC armed: 'note' rows read as :role = 0 (owner sees 2), 'finding' rows unaffected (1 == owner's 1)
+
+=== ROWS-SCOPE-BIND-ACCEPTED ===
+  [ok] author binds rowsprincipal's scope excluding row id 9 -- verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== ARMED-ROWS-FAMILY-EXCLUDES-EXACT-ROW ===
+  [ok] rowsprincipal's GUC armed: the excluded row 9 reads 0 (expected 0); an unexcluded row 7 reads 1 (expected 1)
+
+=== MALFORMED-GUC-FAILS-OPEN ===
+  [ok] a non-numeral app.scope_principal ('not-a-number') reads 12 rows, the owner's OWN fresh full count 12 -- fails OPEN, never a hard error
+
+=== OVERFLOW-GUC-FAILS-OPEN ===
+  [ok] a purely-numeral, bigint-overflowing app.scope_principal ('9999999999999999999999999') reads 12 rows, the owner's OWN fresh full count 12 -- fails OPEN, never a hard error
+
+=== WRITE-PATH-UNAFFECTED ===
+  [ok] an ordinary write via the owner-run SECURITY DEFINER path after RLS is enabled and a policy is armed -- still ACCEPTED (writes never run as :role, s43's own REVOKE; no INSERT/UPDATE/DELETE policy exists on this table at all) -- verdict={'row_id': 13, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT ===
+  [ok] ./autoharn verify-chain after every act above -- exit=0, INTACT in output=True
+
+=== AGREE-sql-asp-work-differential ===
+  [ok] judge output (s71fxmain): ['AGREE']
+
+== scaffolding REAL --new-world (split) world s71fxsplit ==
+=== SPLIT-DETECT-PRESENT ===
+  [ok] s71-row-level-scope-policies.detect.sql on the real --new-world (split) birth: 't' (expected t)
+
+=== SPLIT-SCHEMA-OWNED-BY-DEDICATED-ROLE ===
+  [ok] schema 's71fxsplit' is owned by 's71fxsplit_owner' (expected the dedicated, non-login 's71fxsplit_owner' -- 0e2eda39's own S2b split, confirming this world IS genuinely split, not merely assumed)
+
+=== SPLIT-SCOPE-BIND-ACCEPTED ===
+  [ok] author (genesis-chained) self-excludes 'note' in the split world -- verdict={'row_id': 16, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== SPLIT-ROLE-FILTERS-AS-EXPECTED ===
+  [ok] sanity check: :role in the SPLIT world, armed against its own excluding scope, reads 0 'note' rows (expected 0) -- the policy is live on this genuinely split world too, not merely on world_main
+
+=== SPLIT-OWNER-BYPASSES-POLICY ===
+  [ok] reading as the split's own $OWNER (s71fxsplit_owner) with the SAME armed, self-excluding GUC bound to author -- reads 2 'note' rows, the FULL unfiltered count 2 -- the table-owner bypass, unforced, this delta's own ELEMENT 2 disclosure, witnessed on a GENUINELY split world (not merely assumed)
+
+== scaffolding RAW (non-split) world s71fxlegacy (chain ends s71-row-level-scope-policies.sql) ==
+=== LEGACY-CONNECTING-IDENTITY-OWNS-SCHEMA ===
+  [ok] RAW apply, no S2b split: the connecting DDL identity (bork) IS the schema owner (bork) -- the literal pre-split configuration
+
+=== LEGACY-DETECT-PRESENT ===
+  [ok] s71-row-level-scope-policies.detect.sql on the RAW non-split world: 't' (expected t -- FAIL-SAFE-ADDITIVE applies unconditionally, split or not)
+
+=== LEGACY-SCOPE-BIND-ACCEPTED ===
+  [ok] author (genesis-chained) self-excludes 'note' in the RAW legacy world -- verdict={'row_id': 7, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== LEGACY-OWNER-IDENTITY-INERT ===
+  [ok] reading AS the schema-owning connecting identity (bork), with the SAME armed, self-excluding GUC -- reads 2 'note' rows, the full unfiltered count 2 -- INERT, the literal 'connecting role owns the schema' configuration this delta's header names
+
+=== LEGACY-GRANTED-ROLE-NOT-INERT ===
+  [ok] the SAME armed GUC, read instead as s71fxlegacy_rw (granted, never owner, even in this non-split RAW world) -- reads 0 'note' rows (expected 0) -- proves inertness tracks OWNER IDENTITY, never 'no split ran' alone, exactly this delta's own HONEST BOUND header note
+
+
+ALL GREEN

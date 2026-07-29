@@ -183,6 +183,7 @@ CHAIN = [
     "s68-typed-absence-dispositions.sql",
     "s69-role-coherence-refusals.sql",
     "s70-scope-binding.sql",
+    "s71-row-level-scope-policies.sql",
 ]
 # s69 (kernel/lineage/s69-role-coherence-refusals.sql) extends this SAME gate's scratch CHAIN and
 # ships ZERO new columns/kinds/CHECKs (its own HISTORY section: "zero columns, zero kinds, zero
@@ -200,6 +201,15 @@ CHAIN = [
 # shape (six kinds -> seven, principal_scope_bound joins) -- both rows' own `kinds` tuples are
 # updated in place below (an EDIT, not a new row, mirroring s45's own identical "ROW UPDATE, not
 # a new MANIFEST entry" precedent for the same constraint one delta over).
+
+# s71 (kernel/lineage/s71-row-level-scope-policies.sql, design/FABLE-ACCESS-CONTROL-AND-
+# INFORMATION-FLOW-SPEC.md sec2/sec5 item 6, "the RLS slot") extends this SAME gate's scratch
+# CHAIN and ships ZERO new columns/kinds/CHECKs of any kind: it adds ONE new function
+# (scope_row_visible) and enables Postgres ROW LEVEL SECURITY with one new policy -- neither is a
+# kind-shape CHECK constraint, both invisible to this gate's constraint classifier by
+# construction (the SAME "no MANIFEST change" outcome s66/s69 above already establish for a
+# trigger-body-only/zero-added-shape delta) -- no MANIFEST change, verified live by running this
+# gate against the extended chain and reading the SAME MANIFEST rows as the s70 head.
 
 # s66 (kernel/lineage/s66-forged-stamp-journal-totality.sql) re-issues ONLY kernel.set_stamp (a
 # trigger function, not a kind-shape CHECK) -- zero MANIFEST changes, named. s67 (kernel/lineage/
