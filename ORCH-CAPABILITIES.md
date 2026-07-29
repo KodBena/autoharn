@@ -1484,7 +1484,7 @@ carry `principal_binding_active=true` from birth, an `undeclare-standing` round 
 and the dual login/role declaration behavior is not bricked by unbinding only one of the two.
 **Not witnessed by this sweep directly**, same reason and same limit as item 41.
 
-A SIXTH sweep (2026-07-29, doc-only, no code/kernel touched) added items 43–46 covering the
+A LATER sweep (2026-07-29, doc-only, no code/kernel touched) added items 43–46 covering the
 access-control batch: read-path identity + read journaling, the scope-binding medium (kernel
 s70/s71, CLI minting, boundary enforcement), and the entitlement layer's own ASP/SQL floor.
 Method: read every cited source file in full, then scaffold a throwaway probe world
@@ -1550,8 +1550,9 @@ marker (`{id_field, redacted: true, scope: {family, value}}`, plus `row_hash` at
 `hash_stub` tier), never silently dropped — existence still counts, content and rationale do
 not cross. Three disclosure tiers exist in the closed vocabulary (`marked`/`hash_stub`/`full`);
 only `marked` was exercised this pass. **Cost is disclosed, not hidden (row 943, an open
-known):** the filter module's own docstring measures roughly +150 to +170 percent latency for
-a minted-but-unbound principal (two extra small round trips) and a real gap between a
+known):** row 943 synthesizes +120-170 percent latency across two independent measurement runs
+for a minted-but-unbound principal (two extra small round trips) — the filter module's own
+docstring reports the first run's +150-170 percent figure — and a real gap between a
 `full`-tier-excluded existing row and a genuinely-absent id, on a loopback-HTTP-to-Postgres
 path — box-dependent numbers, disclosed as measured, not re-measured by this sweep. *Witnessed
 this pass, live on `docsacsweep`*: `GET /rows/current` with no identity header returned row 16
@@ -1579,7 +1580,10 @@ authenticated input (spec §5 item 5 — item 43 above links the spec in full):
 entitlement (s60) checks role/chain; this conjunct additionally checks that the write itself
 carries a kernel-VERIFIED interception stamp resolving to an in-force `principal_stamp_bound`
 row naming the acting principal — two new entries in the closed vocabulary of authority-bearing
-ledger kinds (`principal_stamp_bound`, `stamp_binding_class_configured`). **Same future-birth-only posture
+ledger kinds (`principal_stamp_bound`, `stamp_binding_class_configured`), **the TENTH and
+ELEVENTH authority-bearing tokens** (s72's own header comment: "mints the TENTH and ELEVENTH
+tokens"; the count runs s60's six, s62's SEVENTH, s64's eighth, s70's NINTH, each verifiable by
+grepping its own lineage file). **Same future-birth-only posture
 as s70/s71 — NOT applied to autoharn3.** Empty by default: zero act classes nominated at
 birth, so the conjunct is a total no-op and a fresh world's ordinary writes are byte-identical
 to pre-s72, until a deployment arms it. **The ephemeral-dispatched-agent fork is reported, not

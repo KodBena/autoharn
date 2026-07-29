@@ -950,6 +950,13 @@ discipline with a type, and are not yet built.
 
 ## 7. The general medium: scope binding, scope filtering, and the entitlement floor
 
+**A note on the "row N" citations below, before any appear:** every such citation is
+provenance from autoharn's own build ledger for THIS repository's deployment — readable via
+`./autoharn led show N` run against this repo, never against a reader's own scaffolded world,
+which has no such row. Each sentence carrying one stands on its own without it; the citation is
+parenthetical support for a reader who wants to chase the source, not a dependency for
+understanding the claim.
+
 **This section was added 2026-07-29 by the access-control batch.** §§1–6 above document mechanisms an adopter
 builds themselves from generic Postgres primitives (RLS, labeling conventions, the s60/s61/s62
 delegation substrate). This section documents a different thing: a **harness-native, ledgered**
@@ -1130,8 +1137,10 @@ witnessed above via the identical underlying write (`principal_scope_bound` via 
 ledger`), and its flag parsing is witnessed directly above — the gap is specifically the
 `dispatch mint` process wrapper itself, not the mechanism it wraps.
 
-`docsacsweep` was torn down after this witness (`bootstrap/teardown-world.sh`, boundary process
-killed, `docsacsweep_rw` role dropped), zero residue.
+`docsacsweep` was torn down after this witness (`bootstrap/teardown-world.sh docsacsweep
+--force-non-scratch` — the world name doesn't match the script's scratch-safe pattern, so the
+flag was needed; boundary process killed, both the `docsacsweep_owner` and `docsacsweep_rw`
+roles verified dropped), zero residue.
 
 ### Fail-closed arming — read this before assuming an "exclusion-only" binding does what it sounds like
 
@@ -1158,8 +1167,9 @@ nobody asked for.
 
 A minted-but-unbound principal (the common case, per s70's own fail-safe-open default) pays
 two small extra round trips per scoped read — measured on a live scratch world at roughly
-+150 to +170 percent latency on a loopback-HTTP-to-Postgres path (ledger row 943, an open
-known named in the filter module's own docstring, not fixed structurally). A `full`-tier-
++120 to +170 percent latency on a loopback-HTTP-to-Postgres path (ledger row 943, an open
+known synthesizing two independent measurement runs; the filter module's own docstring reports
+the first run's +150-170 percent figure, not fixed structurally). A `full`-tier-
 excluded existing row also costs measurably more than a genuinely-absent id, even though both
 now return a byte-identical 404 body. Neither number is asserted from first principles — both
 are measured, box-dependent, and disclosed as measurements, not claims about what "should" be

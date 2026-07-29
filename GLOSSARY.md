@@ -1041,9 +1041,10 @@ and mirrored by [`engine/lp/ledger_entitlement.lp`](engine/lp/ledger_entitlement
 `scope_armed(P) :- scope_binding_row(P)` predicate — the same row-existence rule on both the
 SQL and ASP sides of [the entitlement floor](#entitlement-floor) below. **Disclosed cost, not
 hidden:** a minted-but-unbound principal (the common case) pays two extra small round trips
-per read — measured on a live scratch world at roughly +150 to +170 percent latency on a
-loopback-HTTP-to-Postgres path (ledger row 943, an open known, named in the module's own
-docstring rather than fixed structurally); a `full`-tier-excluded existing row also measurably
+per read — measured on a live scratch world at roughly +120 to +170 percent latency on a
+loopback-HTTP-to-Postgres path (ledger row 943, synthesizing two independent measurement runs;
+the module's own docstring reports the first run's +150-170% figure, an open known rather than
+fixed structurally); a `full`-tier-excluded existing row also measurably
 outpaces a genuinely-absent id even though both now return a byte-identical 404 body. Source:
 [`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py);
 [design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md](design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md).
@@ -1071,7 +1072,11 @@ autoharn3.** RBAC's authenticated input (design/FABLE-ACCESS-CONTROL-AND-INFORMA
 SPEC.md §5 item 5): entitlement (s60) answers "does this principal hold the required
 role/chain"; this conjunct additionally answers "was THIS write actually produced by an
 invocation this principal is on record as controlling." Two new kinds join the closed
-vocabulary of authority-bearing ledger kinds: `principal_stamp_bound` (binds a principal to a `stamp_agent`
+vocabulary of authority-bearing ledger kinds — **the TENTH and ELEVENTH authority-bearing
+tokens**, s72's own header comment says so verbatim (`kernel/lineage/s72-stamp-binding-
+conjunct.sql`, "mints the TENTH and ELEVENTH tokens"), continuing the count s60 started at six,
+s62 widened to SEVENTH (delegation), s64 to eighth (`independent_verification_...`), and s70 to
+NINTH (`scope_binding`) — `principal_stamp_bound` (binds a principal to a `stamp_agent`
 identity string, e.g. `main`) and `stamp_binding_class_configured` (nominates which act class
 the conjunct governs, s60's `entitlement_class_configured` shape one axis over). **Empty by
 default** — no act class is nominated at birth, so the conjunct is a total no-op everywhere
