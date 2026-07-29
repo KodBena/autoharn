@@ -66,6 +66,73 @@ SEPARATE, not-yet-built mechanism this module does not anticipate). This is the 
 conservative posture the AC spec's own §1a text already committed to for read identity
 generally ("anonymous... resolves to the world's open scope").
 
+SURFACE ALLOW-LIST ENFORCEMENT -- THE FAIL-CLOSED ARMING RULE (fix round, adjudication row
+889, closing a CRITICAL a fresh-context review found in commit 4cf16621: `scope_surfaces` was
+fetched by `resolve_scope` and then NEVER consulted, so an armed binding whose whole intent
+was a surface allow-list with no row exclusions resolved to a silent no-op and the principal
+read everything). The rule, taken verbatim from design/
+FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md sec1c's `scope_armed(P) :- scope_binding_row(P)`
+and `may_read_surface(P, S) :- scope_bound(P, S)` (the SAME row-existence predicate the ASP
+engine's own floor keys on, never non-emptiness of any one column): a `principal_scopes` row
+existing AT ALL arms the principal; an armed principal may read EXACTLY the surfaces named in
+its own `scope_surfaces` (kernel/lineage/s70-scope-binding.sql's `scope_surfaces_nonempty` CHECK
+means this column is either NULL or a non-empty array -- there is no representable "explicitly
+empty" state to special-case). A binding with `scope_surfaces IS NULL` -- an armed principal
+who was never handed an allow-list at all -- therefore grants NO surface whatsoever: EVERY
+filtered route this module is wired into returns nothing (per the binding's own disclosure
+tier) for that principal, full stop, exclusions notwithstanding. This is a real, disclosed
+behavior change from the pre-fix-round build: an "exclusion-only" binding (scope_exclusions
+set, scope_surfaces left NULL) used to read as "open surface, minus these rows"; per the
+ASP-twin spec's own ground truth it now reads as "no surface granted -- read nothing", and a
+deployment wanting exclusion-only behavior on named surfaces must now bind `scope_surfaces`
+explicitly listing them (seen-red/ac-boundary-scope-filter/run_fixtures.py's own legs 2-6
+were updated in this fix round to do exactly that, so they keep demonstrating ROW-level
+exclusion rather than being silently swallowed by the new whole-surface denial). `view=None`
+(a caller that cannot name the surface being read) is conservatively treated as not-granted --
+`_surface_allowed` below never treats an unknown surface as open. Denial of a whole surface
+reuses the SAME per-row marker/drop machinery row-level exclusion already uses (`_apply_
+redaction`, shared by both paths, ADR-0012 P1) under a synthetic, serving-layer-only exclusion
+entry (`family="surface-not-granted", value=<the surface name>`) -- never a new HTTP status, a
+new envelope shape, or a second redaction-marker convention.
+
+DISCLOSED RESIDUAL -- THE SCOPE-RESOLUTION TIMING ASYMMETRY (MODERATE, fix round row 889;
+measured, not fixed structurally): `resolve_scope` issues its one DB round trip ONLY once a
+route has already resolved the requested content (e.g. `GET /rows/{id}` first queries the row
+by id; only a row that EXISTS ever reaches `apply_scope` at all, since a genuinely-absent id
+returns its own 404 before `_json_read_response` is even called). A genuinely-absent id
+therefore never pays the `principal_scopes` round trip; a `full`-tier-excluded EXISTING row
+pays it. Both now serve a BYTE-IDENTICAL 404 body (`absent_detail`, threaded from each route's
+own genuine-absence message -- see `boundary_service._json_read_response`), so the response
+CONTENT no longer distinguishes the two cases, but the response TIME may still: measured on a
+live scratch world (seen-red/ac-boundary-scope-filter/run_fixtures.py's own leg6e, 30 requests
+each, median of wall-clock deltas over an HTTP loopback round trip through a real boundary
+service against real Postgres), a genuinely-absent `GET /rows/{id}` measured ~17-23ms median
+against a `full`-tier-excluded EXISTING row's `GET /rows/{id}` at ~50-67ms median -- a delta of
+roughly +33 to +44ms (this run's own printed numbers; wall-clock, not asymptotic, so a
+different box/load will print a different absolute number -- the SHAPE, "excluded costs
+noticeably more than absent", is the disclosed fact, not the exact millisecond count). Never
+masked with a sleep (which would not remove the asymmetry, only hide it behind a constant that
+itself becomes a NEW, cruder side channel). Removing it structurally would mean paying the
+`principal_scopes` round trip UNCONDITIONALLY before the existence check on every single-row
+route regardless of whether the row exists at all -- a change to every route's own control
+flow, sized as a real follow-on, not smuggled into this fix round's own scope under time
+pressure.
+
+HOT-PATH COST (MINOR, fix round row 889; measured, house precedent shape: the read-identity
+build's own measured-0.3% disclosure): the added latency this filter puts on the read path FOR
+A CALLER THIS MODULE ULTIMATELY PASSES THROUGH UNCHANGED (a minted principal with no bound
+scope at all -- the common case, per s70's own fail-safe-open-world default) is the cost of
+`resolve_scope`'s one `regclass_exists` probe plus one `principal_scopes` SELECT, both cheap,
+indexed, single-row lookups. Measured on the SAME live scratch world (30 requests each,
+`GET /rows/current`, seen-red/ac-boundary-scope-filter/run_fixtures.py's own leg6e): an
+anonymous read (no scope resolution paid at all -- `resolution_case != "minted"` short-circuits
+before any query) measured ~21-27ms median; the SAME read as a minted-but-never-bound
+principal (pays both queries, resolves to the fail-safe open-scope no-op) measured ~52-72ms
+median -- roughly +150-170% on THIS scratch box's own loopback-HTTP-to-real-Postgres path, two
+extra small round trips dominating what is otherwise a fast local read. Disclosed as measured,
+not asserted from this module's own reasoning about what "should" be cheap; a deployment on a
+slower db link would see a different absolute number but the same two-extra-round-trips shape.
+
 DISCLOSURE-MODE DEFAULT (a NAMED LIMIT, s70's own header: "which tiers a boundary filter
 actually HONORS... is a serving-layer fact... this delta does not pick one"): a scope binding
 carrying no explicit `scope_disclosure_mode` (NULL) is treated as `marked` here -- the
@@ -139,7 +206,7 @@ expects of `boundary_service._query_json`/`_regclass_exists`.
 """
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 # The closed, four-member exclusion-family vocabulary kernel/lineage/s70-scope-binding.sql's
 # own `scope_exclusions_shape_ok` CHECK admits -- quoted here so a typo'd family name in this
@@ -153,6 +220,16 @@ _FAMILY_ROWS = "rows"
 _KNOWN_FAMILIES = frozenset({
     _FAMILY_KIND_CLASS, _FAMILY_THREAD, _FAMILY_WORK_ITEM_LINEAGE, _FAMILY_ROWS,
 })
+
+# A FIFTH, SERVING-LAYER-ONLY family (fix round, adjudication row 889; design/
+# FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md sec1c's fail-closed arming rule) -- never
+# written to `scope_exclusions` (the kernel's `scope_exclusions_shape_ok` CHECK does not admit
+# it and never will: it is not a ROW-level exclusion at all), used ONLY as the synthetic
+# `entry` `_apply_redaction` below tallies/marks with when an ENTIRE surface is withheld
+# because an armed binding never granted it. Kept OUT of `_KNOWN_FAMILIES` deliberately -- a
+# `scope_exclusions` entry actually naming this string would still hit
+# `_row_matches_exclusion`'s own loud refusal, exactly as any other unrecognized family does.
+_FAMILY_SURFACE_NOT_GRANTED = "surface-not-granted"
 
 # The three-tier disclosure vocabulary kernel/lineage/s70-scope-binding.sql's own
 # `scope_disclosure_mode_vocabulary` CHECK admits (spec §1c).
@@ -273,6 +350,75 @@ class ScopeFilterResult:
         self.redactions = redactions
 
 
+def _surface_allowed(scope_surfaces: list[str] | None, view: str | None) -> bool:
+    """FAIL-CLOSED arming (module docstring, "SURFACE ALLOW-LIST ENFORCEMENT"; design/
+    FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md sec1c): an ARMED principal (a
+    `principal_scopes` row exists at all -- the caller already checked this) may read EXACTLY
+    the surfaces named in `scope_surfaces`. `scope_surfaces IS NULL` (kernel/lineage/
+    s70-scope-binding.sql's `scope_surfaces_nonempty` CHECK forecloses an explicitly-empty
+    array -- NULL is the only representable "nothing granted" state) or an unnameable `view`
+    (a caller that cannot say which surface it is reading) both deny -- never the fail-OPEN
+    direction this function's absence let the CRITICAL this fix round closes slip through."""
+    if scope_surfaces is None or view is None:
+        return False
+    return view in scope_surfaces
+
+
+def _apply_redaction(
+    content: Any,
+    id_field: str,
+    disclosure_mode: str,
+    match_fn: "Callable[[dict[str, Any]], dict[str, Any] | None]",
+) -> tuple[Any, bool, dict[tuple[str, str], int]]:
+    """The shared list/dict redaction walk BOTH `apply_scope` call sites below use -- row-level
+    exclusion (`match_fn` asks "does this row match one of the binding's own exclusion
+    entries") and whole-surface denial (`match_fn` answers "yes, every row" via a constant
+    synthetic entry) differ only in what `match_fn` returns; the marker/drop/tally machinery
+    that follows a match is identical either way, factored once (ADR-0012 P1) rather than
+    duplicated per caller, as it was pre-fix-round. Returns `(content_out, omit_singleton,
+    per-(family,value)-tally)`; the caller renders the tally into the public `redactions`
+    summary shape."""
+    tally: dict[tuple[str, str], int] = {}
+
+    def _tally(entry: dict[str, Any]) -> None:
+        key = (str(entry.get("family")), str(entry.get("value")))
+        tally[key] = tally.get(key, 0) + 1
+
+    if isinstance(content, list):
+        out: list[Any] = []
+        for row in content:
+            if not isinstance(row, dict):
+                out.append(row)
+                continue
+            entry = match_fn(row)
+            if entry is None:
+                out.append(row)
+                continue
+            _tally(entry)
+            if disclosure_mode == DISCLOSURE_FULL:
+                continue  # full tier: the row does not cross at all -- dropped, no marker.
+            out.append(_redact_row(row, entry, disclosure_mode, id_field))
+        return out, False, tally
+    if isinstance(content, dict):
+        entry = match_fn(content)
+        if entry is None:
+            return content, False, tally
+        _tally(entry)
+        if disclosure_mode == DISCLOSURE_FULL:
+            return None, True, tally
+        return _redact_row(content, entry, disclosure_mode, id_field), False, tally
+    return content, False, tally
+
+
+def _redactions_summary(
+    tally: dict[tuple[str, str], int], disclosure_mode: str,
+) -> list[dict[str, Any]]:
+    return [
+        {"family": family, "value": value, "disclosure_mode": disclosure_mode, "count": count}
+        for (family, value), count in tally.items()
+    ]
+
+
 def apply_scope(
     content: Any,
     *,
@@ -286,13 +432,14 @@ def apply_scope(
 ) -> ScopeFilterResult:
     """The one entry point `serving/boundary_service.py`'s `_json_read_response` calls. See
     module docstring's "FAIL-SAFE / BYTE-IDENTICAL REGRESSION BAR" for the exact passthrough
-    conditions. `view`/`id_field` name the surface being read (VIEW_REGISTRY's own key-column
-    choice, or the literal view name for the fixed routes -- `ledger`/`ledger_current` for the
-    raw/current row routes); both are used ONLY to select which column each exclusion family
-    reads off a served row, never as a scope-surfaces allow-list (scope_surfaces enforcement --
-    denying an entire ungranted SURFACE, as opposed to excluding individual ROWS within a
-    granted one -- is NAMED, NOT built by this increment; see this work item's own commission,
-    which enumerates exclusion semantics and the three disclosure tiers, not surface gating)."""
+    conditions and "SURFACE ALLOW-LIST ENFORCEMENT" for the fail-closed arming rule this
+    function enforces (fix round, adjudication row 889). `view`/`id_field` name the surface
+    being read (VIEW_REGISTRY's own key-column choice, or the literal view name for the fixed
+    routes -- `ledger`/`ledger_current` for the raw/current row routes): `id_field` selects
+    which column the `rows` exclusion family reads off a served row; `view` is ALSO now the
+    scope_surfaces allow-list key (`_surface_allowed` below) -- an armed principal whose
+    binding never named this surface gets the whole route denied, before row-level exclusions
+    are even consulted."""
     no_op = ScopeFilterResult(content, False, [])
     if cfg is None or resolution_case != "minted" or principal is None:
         return no_op
@@ -303,52 +450,24 @@ def apply_scope(
     scope_row = resolve_scope(query_json_fn, regclass_exists_fn, cfg, principal_id)
     if not scope_row:
         return no_op  # fail-safe default: no bound scope == open scope.
+    scope_surfaces = scope_row.get("scope_surfaces")
     exclusions = scope_row.get("scope_exclusions") or []
-    if not exclusions:
-        return no_op  # a binding that grants/excludes nothing is a no-op here too.
     disclosure_mode = scope_row.get("scope_disclosure_mode") or _DEFAULT_DISCLOSURE_MODE
 
-    redaction_tally: dict[tuple[str, str], int] = {}
+    if not _surface_allowed(scope_surfaces, view):
+        # THE CRITICAL FIX: armed, but this surface was never granted -- deny the whole route
+        # under the binding's own disclosure tier, via the SAME per-row marker/drop machinery
+        # row-level exclusion uses, keyed on a synthetic serving-layer-only entry (never a
+        # kernel-recognized family -- module docstring, "SURFACE ALLOW-LIST ENFORCEMENT").
+        deny_entry = {"family": _FAMILY_SURFACE_NOT_GRANTED, "value": view}
+        content_out, omit, tally = _apply_redaction(
+            content, id_field, disclosure_mode, lambda _row: deny_entry)
+        return ScopeFilterResult(content_out, omit, _redactions_summary(tally, disclosure_mode))
 
-    def _tally(entry: dict[str, Any]) -> None:
-        key = (str(entry.get("family")), str(entry.get("value")))
-        redaction_tally[key] = redaction_tally.get(key, 0) + 1
+    if not exclusions:
+        return no_op  # allowed surface, no row-level exclusions: unrestricted within it.
 
-    if isinstance(content, list):
-        out: list[Any] = []
-        for row in content:
-            if not isinstance(row, dict):
-                out.append(row)
-                continue
-            entry = _matching_exclusion(exclusions, row, id_field)
-            if entry is None:
-                out.append(row)
-                continue
-            _tally(entry)
-            if disclosure_mode == DISCLOSURE_FULL:
-                continue  # full tier: the row does not cross at all -- dropped, no marker.
-            out.append(_redact_row(row, entry, disclosure_mode, id_field))
-        content_out: Any = out
-        omit = False
-    elif isinstance(content, dict):
-        entry = _matching_exclusion(exclusions, content, id_field)
-        if entry is None:
-            content_out = content
-            omit = False
-        else:
-            _tally(entry)
-            if disclosure_mode == DISCLOSURE_FULL:
-                content_out = None
-                omit = True
-            else:
-                content_out = _redact_row(content, entry, disclosure_mode, id_field)
-                omit = False
-    else:
-        content_out = content
-        omit = False
-
-    redactions = [
-        {"family": family, "value": value, "disclosure_mode": disclosure_mode, "count": count}
-        for (family, value), count in redaction_tally.items()
-    ]
-    return ScopeFilterResult(content_out, omit, redactions)
+    content_out, omit, tally = _apply_redaction(
+        content, id_field, disclosure_mode,
+        lambda row: _matching_exclusion(exclusions, row, id_field))
+    return ScopeFilterResult(content_out, omit, _redactions_summary(tally, disclosure_mode))

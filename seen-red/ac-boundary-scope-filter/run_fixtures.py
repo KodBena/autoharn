@@ -43,6 +43,31 @@ WHAT IS WITNESSED (this work item's own commission, both polarities, scratch, re
     code path exists for scoped-out content to reach it regardless of this build; unchanged by
     this build, so a live SSE leg would be testing a route this work item never touched.
 
+FIX ROUND (adjudication row 889, closing a fresh-context review's BLOCKS on commit 4cf16621) --
+three additional legs, plus a disclosed timing measurement:
+  - leg6b, THE CRITICAL's own red: armed + allow-list (scope_surfaces set) + EMPTY exclusions --
+    a surface NOT in the allow-list must be REFUSED wholesale (every row redacted as
+    surface-not-granted), not silently served -- this is the exact shape the pre-fix
+    `apply_scope` treated as a no-op (fetched scope_surfaces, never consulted it). A control
+    leg on the SAME principal's GRANTED surface stays fully unredacted.
+  - leg6c: armed with scope_surfaces NULL (no allow-list at all, no exclusions either -- a bare
+    arming row) denies EVERY filtered route entirely -- the ASP-twin spec's own fail-closed
+    arming rule (`scope_armed(P) :- scope_binding_row(P)`, `may_read_surface(P,S) :-
+    scope_bound(P,S)`) applied literally: armed-with-no-surfaces derives no may_read_surface at
+    all, never "everything" (a real, disclosed behavior change from the pre-fix-round build --
+    legs 2-6 above now bind scope_surfaces explicitly so they keep demonstrating row-level
+    exclusion rather than being swallowed by this denial).
+  - leg6d: the full-tier withheld 404 for GET /rows/{id} renders the EXACT SAME `{"detail": "no
+    row {id}"}` template row_by_id's own genuine-absence branch uses for that id -- verified by
+    literal string equality, not merely status-code equality, and cross-checked against a
+    genuinely nonexistent id rendering the identical template shape.
+  - leg6e: DISCLOSED, not asserted -- the hot-path cost this filter adds for an unscoped minted
+    caller (median of 30 requests, anonymous vs. minted-unscoped) and the scope-resolution
+    TIMING asymmetry between a genuinely-absent and a full-tier-excluded GET /rows/{id} (bodies
+    already proven byte-identical by leg6d; the wall-clock delta is a real residual, printed and
+    recorded in boundary_scope_filter.py's own module docstring, never silently left unmeasured
+    and never masked with a sleep).
+
 Usage: python3 seen-red/ac-boundary-scope-filter/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
 from __future__ import annotations
@@ -114,7 +139,12 @@ def main() -> int:  # noqa: C901
             schema = "unused"
 
         def _fake_query(cfg, sql, extra_v=None):
-            return {"scope_surfaces": None,
+            # fix round (row 889): scope_surfaces must now name the surface being read, or the
+            # fail-closed allow-list gate denies the WHOLE surface before row-level exclusion
+            # is even consulted (module docstring, "SURFACE ALLOW-LIST ENFORCEMENT") -- this
+            # unit leg means to exercise the disclosure-mode default on a row-level exclusion,
+            # so it grants the one surface it reads.
+            return {"scope_surfaces": ["ledger_current"],
                     "scope_exclusions": [{"family": "kind-class", "value": "finding"}],
                     "scope_disclosure_mode": None}
 
@@ -136,7 +166,7 @@ def main() -> int:  # noqa: C901
         print("=== unit-thread-family-match ===")
 
         def _fake_query_thread(cfg, sql, extra_v=None):
-            return {"scope_surfaces": None,
+            return {"scope_surfaces": ["missive_outbound"],
                     "scope_exclusions": [{"family": "thread", "value": "t-secret"}],
                     "scope_disclosure_mode": "full"}
 
@@ -159,7 +189,7 @@ def main() -> int:  # noqa: C901
         print("=== unit-unknown-family-loud-refusal ===")
 
         def _fake_query_bad(cfg, sql, extra_v=None):
-            return {"scope_surfaces": None,
+            return {"scope_surfaces": ["ledger_current"],
                     "scope_exclusions": [{"family": "not-a-real-family", "value": "x"}],
                     "scope_disclosure_mode": "marked"}
 
@@ -188,6 +218,50 @@ def main() -> int:  # noqa: C901
                   r.content == [{"id": 1, "kind": "finding"}] and r.redactions == [],
                   f"resolution_case={case!r} always passes through unchanged (no principal id "
                   f"this layer can safely bind a scope query to) -- got {r.content!r}", failures)
+
+        print("=== unit-surface-not-granted-denies-whole-route (THE CRITICAL, in-process) ===")
+
+        def _fake_query_allowlist_only(cfg, sql, extra_v=None):
+            # armed, grants ONLY "work_item_current", excludes nothing -- the pre-fix build
+            # treated an empty `scope_exclusions` as a total no-op regardless of
+            # `scope_surfaces`; the fix must deny "ledger_current" wholesale here instead.
+            return {"scope_surfaces": ["work_item_current"],
+                    "scope_exclusions": None,
+                    "scope_disclosure_mode": "marked"}
+
+        result_denied = boundary_scope_filter.apply_scope(
+            [{"id": 1, "kind": "note"}, {"id": 2, "kind": "finding"}],
+            cfg=_FakeCfg(), view="ledger_current", id_field="id",
+            resolution_case="minted", principal="7",
+            query_json_fn=_fake_query_allowlist_only, regclass_exists_fn=_fake_regclass_exists)
+        check("unit-surface-not-granted-denies-whole-route",
+              result_denied.content == [
+                  {"id": 1, "redacted": True,
+                   "scope": {"family": "surface-not-granted", "value": "ledger_current"}},
+                  {"id": 2, "redacted": True,
+                   "scope": {"family": "surface-not-granted", "value": "ledger_current"}}]
+              and result_denied.redactions == [
+                  {"family": "surface-not-granted", "value": "ledger_current",
+                   "disclosure_mode": "marked", "count": 2}],
+              f"an allow-list binding that never granted 'ledger_current' must deny EVERY row "
+              f"on that surface, not silently no-op past an empty scope_exclusions -- got "
+              f"content={result_denied.content!r} redactions={result_denied.redactions!r}",
+              failures)
+
+        def _fake_query_granted(cfg, sql, extra_v=None):
+            return {"scope_surfaces": ["ledger_current"],
+                    "scope_exclusions": None,
+                    "scope_disclosure_mode": "marked"}
+
+        result_granted = boundary_scope_filter.apply_scope(
+            [{"id": 1, "kind": "note"}], cfg=_FakeCfg(), view="ledger_current", id_field="id",
+            resolution_case="minted", principal="7",
+            query_json_fn=_fake_query_granted, regclass_exists_fn=_fake_regclass_exists)
+        check("unit-surface-granted-no-exclusions-unrestricted-control",
+              result_granted.content == [{"id": 1, "kind": "note"}]
+              and result_granted.redactions == [],
+              f"the SAME shape but WITH the surface granted must stay fully unredacted -- got "
+              f"{result_granted.content!r}", failures)
 
         # =================================================================================
         # LIVE HTTP LEGS: an s70-headed scratch world, served over a real boundary_service.
@@ -256,6 +330,13 @@ def main() -> int:  # noqa: C901
         v_bind_marked = s70fx.bw_call(world_main, "ledger_write", {
             "kind": "principal_scope_bound", "statement": "reviewer scoped: exclude findings",
             "actor": author, "principal_subject": reviewer, "principal_binding_active": "true",
+            # fix round (adjudication row 889): scope_surfaces is now REQUIRED to grant this
+            # reviewer's own reads of /rows/current -- see boundary_scope_filter's own module
+            # docstring, "SURFACE ALLOW-LIST ENFORCEMENT": a binding with scope_surfaces left
+            # NULL is armed-with-nothing-granted and now reads NOTHING at all (leg-b below
+            # exercises exactly that state); this binding's OWN intent is "grant ledger_current,
+            # exclude findings within it", so it must say so.
+            "scope_surfaces": ["ledger_current"],
             "scope_exclusions": [{"family": "kind-class", "value": "finding"}],
             "scope_disclosure_mode": "marked"})
         assert v_bind_marked["disposition"] == "accepted", v_bind_marked
@@ -291,6 +372,7 @@ def main() -> int:  # noqa: C901
             "kind": "principal_scope_bound", "statement": "reviewer rebound: hash_stub",
             "supersedes": v_bind_marked["row_id"],
             "actor": author, "principal_subject": reviewer, "principal_binding_active": "true",
+            "scope_surfaces": ["ledger_current"],
             "scope_exclusions": [{"family": "kind-class", "value": "finding"}],
             "scope_disclosure_mode": "hash_stub"})
         assert v_bind_hash["disposition"] == "accepted", v_bind_hash
@@ -314,6 +396,11 @@ def main() -> int:  # noqa: C901
             "kind": "principal_scope_bound", "statement": "reviewer rebound: full",
             "supersedes": v_bind_hash["row_id"],
             "actor": author, "principal_subject": reviewer, "principal_binding_active": "true",
+            # This binding is read via BOTH /rows/current (view="ledger_current") and
+            # /rows/{finding_id} (view="ledger") below -- both surfaces must be granted or the
+            # single-row leg would 404 for "surface not granted" rather than for the full-tier
+            # exclusion this leg means to exercise (leg-d relies on this being the SAME reason).
+            "scope_surfaces": ["ledger_current", "ledger"],
             "scope_exclusions": [{"family": "kind-class", "value": "finding"}],
             "scope_disclosure_mode": "full"})
         assert v_bind_full["disposition"] == "accepted", v_bind_full
@@ -346,6 +433,7 @@ def main() -> int:  # noqa: C901
             "kind": "principal_scope_bound", "statement": "second-reviewer scoped: exclude one row",
             "actor": author, "principal_subject": second_reviewer,
             "principal_binding_active": "true",
+            "scope_surfaces": ["ledger_current"],
             "scope_exclusions": [{"family": "rows", "value": [note_id]}],
             "scope_disclosure_mode": "marked"})
         assert v_bind_rows["disposition"] == "accepted", v_bind_rows
@@ -367,6 +455,7 @@ def main() -> int:  # noqa: C901
             "kind": "principal_scope_bound", "statement": "third-reviewer scoped: exclude one work item",
             "actor": author, "principal_subject": third_reviewer,
             "principal_binding_active": "true",
+            "scope_surfaces": ["work_item_current"],
             "scope_exclusions": [{"family": "work-item-lineage", "value": "acbsf-excluded-item"}],
             "scope_disclosure_mode": "marked"})
         assert v_bind_work["disposition"] == "accepted", v_bind_work
@@ -378,6 +467,147 @@ def main() -> int:  # noqa: C901
               and wi_row.get("scope") == {"family": "work-item-lineage",
                                            "value": "acbsf-excluded-item"},
               f"GET /work/items for third-reviewer: excluded item row={wi_row!r}", failures)
+
+        # -----------------------------------------------------------------------------------
+        # LEG 6b (fix round, adjudication row 889 -- THE CRITICAL): armed + allow-list +
+        # EMPTY exclusions -- a non-listed surface must be REFUSED, not silently served. This
+        # is the exact shape commit 4cf16621's review found leaking (scope_surfaces fetched,
+        # never enforced): a binding that grants ONLY "work_item_current" and excludes
+        # NOTHING must still deny "ledger_current" entirely to that same principal.
+        # -----------------------------------------------------------------------------------
+        print("=== leg6b-surface-allow-list-denies-non-listed-surface (THE CRITICAL) ===")
+        fourth_reviewer = s70fx.register(world_main, author, "fourth-reviewer")
+        v_bind_allowlist = s70fx.bw_call(world_main, "ledger_write", {
+            "kind": "principal_scope_bound",
+            "statement": "fourth-reviewer scoped: allow-list only, no row exclusions",
+            "actor": author, "principal_subject": fourth_reviewer,
+            "principal_binding_active": "true",
+            "scope_surfaces": ["work_item_current"],
+            "scope_disclosure_mode": "marked"})
+        assert v_bind_allowlist["disposition"] == "accepted", v_bind_allowlist
+        fourth_headers = {"X-Autoharn-Minted-Principal": str(fourth_reviewer)}
+        # Fresh anonymous baseline taken NOW (not body_anon0, which predates every scope-bind/
+        # work-item write since -- a stale count would falsely look like leakage/shrinkage).
+        st_anon_now6b, body_anon_now6b = bs_fixtures.http_get(f"{base}/rows/current")
+        st_deny, body_deny = _get_headers(base, fourth_headers, path="/rows/current")
+        check("leg6b-non-listed-surface-fully-redacted",
+              st_deny == 200 and st_anon_now6b == 200
+              and isinstance(body_deny, list) and len(body_deny) == len(body_anon_now6b)
+              and all(r.get("redacted") is True for r in body_deny)
+              and all("statement" not in r for r in body_deny)
+              and all(r.get("scope") == {"family": "surface-not-granted", "value": "ledger_current"}
+                      for r in body_deny),
+              f"fourth-reviewer (granted ONLY work_item_current, no exclusions) reads "
+              f"/rows/current (ledger_current, NOT granted) -- every row must be redacted as "
+              f"surface-not-granted, none may carry its own statement text; got "
+              f"{body_deny[:2]!r}{'...' if len(body_deny) > 2 else ''}", failures)
+        st_allow, body_allow = _get_headers(base, fourth_headers, path="/work/items")
+        check("leg6b-listed-surface-unrestricted-control",
+              st_allow == 200 and isinstance(body_allow, list)
+              and all("redacted" not in r for r in body_allow) and len(body_allow) >= 1,
+              f"the SAME fourth-reviewer's read of work_item_current (granted, no exclusions) "
+              f"stays fully unredacted -- got {body_allow!r}", failures)
+
+        # -----------------------------------------------------------------------------------
+        # LEG 6c (fix round, adjudication row 889): armed + NULL scope_surfaces (no allow-list
+        # bound at all, no exclusions either -- a bare arming row) -- filtered routes must
+        # serve NOTHING for that principal, the fail-closed default (design/
+        # FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md sec1c: "armed-with-no-surfaces
+        # derives no may_read_surface at all"), never the pre-fix no-op that would have let an
+        # empty-looking binding read everything.
+        # -----------------------------------------------------------------------------------
+        print("=== leg6c-armed-with-null-scope-surfaces-denies-everything ===")
+        fifth_reviewer = s70fx.register(world_main, author, "fifth-reviewer")
+        v_bind_bare = s70fx.bw_call(world_main, "ledger_write", {
+            "kind": "principal_scope_bound",
+            "statement": "fifth-reviewer scoped: bare arming, no surfaces, no exclusions",
+            "actor": author, "principal_subject": fifth_reviewer,
+            "principal_binding_active": "true"})
+        assert v_bind_bare["disposition"] == "accepted", v_bind_bare
+        fifth_headers = {"X-Autoharn-Minted-Principal": str(fifth_reviewer)}
+        st_anon_now6c, body_anon_now6c = bs_fixtures.http_get(f"{base}/rows/current")
+        st_bare, body_bare = _get_headers(base, fifth_headers, path="/rows/current")
+        check("leg6c-bare-arming-denies-every-route",
+              st_bare == 200 and st_anon_now6c == 200
+              and isinstance(body_bare, list) and len(body_bare) == len(body_anon_now6c)
+              and all(r.get("redacted") is True for r in body_bare)
+              and all("statement" not in r for r in body_bare),
+              f"fifth-reviewer (armed, NULL scope_surfaces, no exclusions) reads /rows/current "
+              f"-- every row must be redacted, none may leak its own statement text; got "
+              f"{body_bare[:2]!r}{'...' if len(body_bare) > 2 else ''}", failures)
+
+        # -----------------------------------------------------------------------------------
+        # LEG 6d (fix round, adjudication row 889, MODERATE): the full-tier withheld body for
+        # GET /rows/{finding_id} (reviewer, v_bind_full above) must be BYTE-IDENTICAL to this
+        # SAME route's own genuine-absence body for the SAME id -- not merely the same STATUS
+        # code. `row_by_id`'s own genuine-absence branch renders `f"no row {row_id}"` for a
+        # truly nonexistent id; verified here by exact string equality against that literal
+        # template for the EXCLUDED id, and independently against a genuinely nonexistent id.
+        # -----------------------------------------------------------------------------------
+        print("=== leg6d-full-tier-404-byte-identical-to-genuine-absence ===")
+        check("leg6d-full-tier-body-matches-genuine-absence-template",
+              st_single == 404 and body_single == {"detail": f"no row {finding_id}"},
+              f"GET /rows/{{finding_id}} under full-tier exclusion must render EXACTLY "
+              f"row_by_id's own genuine-absence template for this id -- got {body_single!r}",
+              failures)
+        genuinely_missing_id = 999_999_999
+        st_missing, body_missing = _get_headers(
+            base, reviewer_headers, path=f"/rows/{genuinely_missing_id}")
+        check("leg6d-genuine-absence-same-template-different-id",
+              st_missing == 404
+              and body_missing == {"detail": f"no row {genuinely_missing_id}"},
+              f"a genuinely nonexistent id renders the SAME template (proving both code paths "
+              f"share the one absence-message shape, never a scope-specific dialect) -- got "
+              f"{body_missing!r}", failures)
+        check("leg6d-bodies-share-shape-differ-only-by-id",
+              set(body_single.keys()) == set(body_missing.keys()) == {"detail"},
+              f"both bodies carry EXACTLY the {{'detail': ...}} shape, no extra scope-leaking "
+              f"field on either side -- single={body_single!r} missing={body_missing!r}",
+              failures)
+
+        # -----------------------------------------------------------------------------------
+        # LEG 6e (MINOR, fix round row 889; disclosed timing measurement, house precedent
+        # shape -- "measured, not asserted"): the hot-path cost of this filter for a minted
+        # caller this module ultimately passes through UNCHANGED (outsider: minted, never
+        # bound -- the common case), and the disclosed timing asymmetry between a genuinely-
+        # absent GET /rows/{id} and a full-tier-excluded EXISTING row's GET /rows/{id} (both
+        # now byte-identical in BODY, per leg6d, but not necessarily in wall-clock time -- see
+        # boundary_scope_filter's own module docstring, "DISCLOSED RESIDUAL"). 30 requests
+        # each, median wall-clock delta; printed, never asserted against a fixed threshold
+        # (a hot-path timing number is diagnostic, not a pass/fail gate -- CLAUDE.md's own
+        # "estimates are hazard detection" posture, not an economizing one).
+        # -----------------------------------------------------------------------------------
+        print("=== leg6e-timing-measurement (disclosed, not asserted) ===")
+        _TIMING_N = 30
+
+        def _median_ms(fn) -> float:
+            samples = []
+            for _ in range(_TIMING_N):
+                t0 = time.monotonic()
+                fn()
+                samples.append((time.monotonic() - t0) * 1000.0)
+            samples.sort()
+            return samples[len(samples) // 2]
+
+        anon_ms = _median_ms(lambda: bs_fixtures.http_get(f"{base}/rows/current"))
+        outsider_ms = _median_ms(lambda: _get_headers(base, outsider_headers))
+        hotpath_overhead_pct = (
+            ((outsider_ms - anon_ms) / anon_ms * 100.0) if anon_ms > 0 else float("nan"))
+        print(f"MEASURED hot-path cost: anonymous median={anon_ms:.3f}ms "
+              f"outsider(minted,unscoped) median={outsider_ms:.3f}ms "
+              f"overhead={hotpath_overhead_pct:+.1f}% "
+              f"(disclosed in boundary_scope_filter.py's own module docstring; N={_TIMING_N})")
+
+        missing_ms = _median_ms(
+            lambda: _get_headers(base, reviewer_headers, path=f"/rows/{genuinely_missing_id}"))
+        excluded_ms = _median_ms(
+            lambda: _get_headers(base, reviewer_headers, path=f"/rows/{finding_id}"))
+        timing_delta_ms = excluded_ms - missing_ms
+        print(f"MEASURED scope-resolution timing asymmetry: genuinely-absent median="
+              f"{missing_ms:.3f}ms full-tier-excluded median={excluded_ms:.3f}ms "
+              f"delta={timing_delta_ms:+.3f}ms (disclosed in boundary_scope_filter.py's own "
+              f"module docstring and this fix round's report, body already verified "
+              f"byte-identical by leg6d -- this is a TIME, not a content, residual)")
 
         # -----------------------------------------------------------------------------------
         # LEG 7: the read journal carries a typed redaction summary, never row content.

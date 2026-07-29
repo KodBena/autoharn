@@ -3193,19 +3193,21 @@ def sse_saturated(max_clients: int, message: str) -> JSONResponse:
 # its scope's disclosure tier is `full` -- the SAME "the row does not cross at all" posture
 # every other not-found shape in this service already carries (never a NEW status code that
 # would itself leak "this exists but you may not see it"; see `boundary_scope_filter`'s own
-# module docstring, "FULL TIER").
-def _scope_excluded_not_found(route: str) -> JSONResponse:
-    return JSONResponse(status_code=404, content={
-        "detail": "no row visible to this principal's current scope at this route "
-                  "(design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1c: this "
-                  "row's disclosure tier is 'full' -- existence itself is withheld, "
-                  "indistinguishable from a row that never existed at all)."})
+# module docstring, "FULL TIER"). MODERATE fix (adjudication row 889): the body is now
+# BYTE-IDENTICAL to the genuine-absence 404 the SAME route already emits for a truly
+# nonexistent id/hash -- the pre-fix-round text above this comment ("no row visible to this
+# principal's current scope...") was itself distinguishable from genuine absence and is GONE;
+# each call site now supplies its OWN genuine-absence detail string, verified byte-for-byte in
+# seen-red/ac-boundary-scope-filter/run_fixtures.py's own leg-d.
+def _scope_excluded_not_found(detail: str) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": detail})
 
 
 def _json_read_response(content: Any, *, status_code: int = 200,
                          cfg: "BoundaryConfig | None" = None,
                          view: str | None = None,
-                         id_field: str = "id") -> JSONResponse:
+                         id_field: str = "id",
+                         absent_detail: str | None = None) -> JSONResponse:
     """Every GET route's ONE place to build its row-shaped response -- see this function's
     OWN pre-existing docstring comment immediately above (sec1a's read-journal row-count bind)
     for why HERE and not a body-sniffing middleware pass. `cfg`/`view`/`id_field` are the scope
@@ -3216,7 +3218,13 @@ def _json_read_response(content: Any, *, status_code: int = 200,
     shape for the fixed routes) -- a call site that omits them (this project's own fixture bank,
     metadata-only routes) gets `apply_scope`'s own no-op passthrough, BYTE-IDENTICAL to this
     function's pre-this-build behavior (the regression bar this work item's own commission
-    states verbatim)."""
+    states verbatim). `absent_detail` (fix round, adjudication row 889): the EXACT `detail`
+    string this route's own genuine-absence 404 already emits for this input -- the ONLY two
+    call sites that can ever produce a single-dict `content` (`row_by_id`'s
+    `f"no row {row_id}"`, `artifact_stat`'s `f"no artifact registered with hash {hash!r}."`)
+    both supply it, so a `full`-tier scope exclusion answers BYTE-IDENTICALLY to this route's
+    own genuine-absence body for the identical input, never a scope-specific message that would
+    itself leak "this exists but you may not see it" through the text alone."""
     ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
     resolution_case = ctx.resolution_case if ctx is not None else None
     principal = ctx.principal if ctx is not None else None
@@ -3228,7 +3236,20 @@ def _json_read_response(content: Any, *, status_code: int = 200,
     boundary_diagnostic_log.bind_scope_redactions(result.redactions or None)
     content = result.content
     if result.omit_singleton:
-        return _scope_excluded_not_found(ctx.route if ctx is not None else "?")
+        if absent_detail is None:
+            # Should never be reached in production -- every real single-dict call site
+            # supplies absent_detail (see this function's own docstring). Disclosed loudly
+            # rather than silently falling back to a message that would NOT be byte-identical
+            # to this route's own genuine-absence body, re-opening the exact MODERATE this fix
+            # round closed.
+            absent_detail = (
+                f"no row visible to this principal's current scope at route "
+                f"{ctx.route if ctx is not None else '?'} (design/"
+                f"FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1c) -- THIS CALL SITE "
+                f"SUPPLIED NO absent_detail, so byte-identity with this route's own "
+                f"genuine-absence body is NOT guaranteed here; this is a bug in the call site, "
+                f"not in this function.")
+        return _scope_excluded_not_found(absent_detail)
     if isinstance(content, list):
         n = len(content)
     elif content is None:
@@ -3565,7 +3586,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             cfg, f"SELECT to_jsonb(t) FROM (SELECT * FROM {cfg.schema}.ledger WHERE id = {row_id}) t;")
         if row is None:
             return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
-        return _json_read_response(row, cfg=cfg, view="ledger", id_field="id")
+        return _json_read_response(row, cfg=cfg, view="ledger", id_field="id",
+                                    absent_detail=f"no row {row_id}")
 
     @app.get("/d/{deployment}/rows/{row_id}/history")
     def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
@@ -4434,7 +4456,9 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         if row is None:
             return JSONResponse(status_code=404, content={
                 "detail": f"no artifact registered with hash {hash!r}."})
-        return _json_read_response(row, cfg=cfg, view="artifact", id_field="hash")
+        return _json_read_response(
+            row, cfg=cfg, view="artifact", id_field="hash",
+            absent_detail=f"no artifact registered with hash {hash!r}.")
 
     def artifact_put(deployment: str, request: Request, raw_body: bytes = Depends(_bounded_artifact_body)) -> Response:
         """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 3: register bytes.
