@@ -48,15 +48,25 @@ loudly and touches nothing further -- ADR-0002, ADR-0013 Rule 1):
 THE DATA-DRIVEN CHAIN (the forward-compatibility mechanism -- read this before touching anything
 below). This module contains NO delta names, NO sNN literals, anywhere in its source. The
 ordered list of "what a from-scratch world's kernel is built from" already exists, as data, in
-exactly one place: the `-f "$AUTOHARN_ROOT/kernel/lineage/....sql"` lines inside
-`bootstrap/new-project.sh`'s own `--new-world` psql invocation -- the SAME lines a human
-maintainer or a future delta's author already has to update the moment a new delta is "wired
-into LINEAGE_CHAIN" (kernel/lineage/README.md's own words for that act). `_manifest()` below
-parses those lines with a regex and nothing else; when s30 lands and gets wired into
-new-project.sh (a required step for --new-world births regardless of this script's existence),
-migrate.sh picks it up on its very next invocation, with zero edits here. This is P1 (ADR-0012)
-applied at the process level: new-project.sh's own invocation IS the manifest; this module reads
-it rather than re-typing a second copy that could drift.
+exactly one place: the `kernel/lineage/` DIRECTORY ITSELF, which is what `bootstrap/
+new-project.sh`'s own `--new-world` branch now globs LIVE at birth time (`for _lf in
+"$AUTOHARN_ROOT"/kernel/lineage/s[0-9]*-*.sql`, high_watermark_1.sql applied first, sorted
+numerically by N, N >= 20 -- see that script's own comment immediately above the loop; this
+replaced a hand-typed `-f "kernel/lineage/....sql"` line block, ledger rows 1392/1393/1399, work
+item lineage-chain-lags-directory, precisely because a hand-typed list and the tracked directory
+have no structural link and had already drifted once). `_manifest()` below derives the SAME
+ordered list via `bootstrap/lineage_manifest.py`'s shared `disk_lineage_deltas()` +
+`apply_order()` (the ONE home for this selection rule, ADR-0012 P1 -- gates/
+lineage_chain_coverage.py imports the same module rather than each Python consumer authoring its
+own copy of the regex/threshold/sort shape); when s70 lands as a tracked `kernel/lineage/
+s70-....sql` file (a required step for --new-world births regardless of this script's
+existence), migrate.sh picks it up on its very next invocation, with zero edits here -- this
+module still contains no delta names, no sNN literals. `_manifest()` also refuses loudly,
+before touching anything, if the disk listing looks IMPLAUSIBLE (zero sNN deltas found, or fewer
+than the git-tracked count -- see that function's own docstring for why that is the honest floor)
+rather than ever returning an empty or truncated manifest as if it were a clean answer -- the
+migrate-manifest-glob-drift defect this shape closes was exactly a manifest silently collapsing
+to one entry and being read as "nothing to migrate".
 
 "Current lineage head" is then determined by DETECTING, against the live schema, which manifest
 entries are already applied -- see the next section for how, since filename order alone cannot
@@ -127,6 +137,9 @@ sys.path.insert(0, str(AUTOHARN_ROOT / "filing"))
 sys.path.insert(0, str(AUTOHARN_ROOT / "bootstrap"))
 from deployment_record import DeploymentError, DeploymentRecord, load_deployment  # noqa: E402
 from live_session_check import find_live_sessions, partition_matches  # noqa: E402
+from lineage_manifest import (  # noqa: E402  (bootstrap/lineage_manifest.py, shared home)
+    HIGH_WATERMARK, apply_order, disk_lineage_deltas, git_tracked_lineage_deltas,
+)
 
 LINEAGE_DIR = AUTOHARN_ROOT / "kernel" / "lineage"
 NEW_PROJECT_SH = AUTOHARN_ROOT / "bootstrap" / "new-project.sh"
@@ -139,36 +152,89 @@ class MigrateRefusal(Exception):
 
 
 # --------------------------------------------------------------------------------------------
-# 1. THE MANIFEST -- parsed from new-project.sh, never hardcoded here (see module docstring).
+# 1. THE MANIFEST -- derived from the kernel/lineage/ directory via bootstrap/lineage_manifest.py
+#    (the shared home, ADR-0012 P1), never hardcoded here (see module docstring).
 # --------------------------------------------------------------------------------------------
 
 def _manifest() -> list[str]:
     """The ordered list of kernel/lineage/*.sql basenames a from-scratch --new-world birth
-    applies, extracted from new-project.sh's own psql -f invocation. Order is the order those
-    -f flags appear on the line, which is new-project.sh's own commitment (it is a single psql
-    call; psql applies -f files strictly in the order given)."""
-    if not NEW_PROJECT_SH.is_file():
+    applies RIGHT NOW: `high_watermark_1.sql` first, then every tracked `sNN-<slug>.sql` delta
+    with N >= 20, sorted numerically -- the exact selection+order rule bootstrap/new-project.sh's
+    own glob loop implements, re-derived here via bootstrap/lineage_manifest.py's
+    `disk_lineage_deltas()` + `apply_order()` rather than regex-parsing shell text (see module
+    docstring, "THE DATA-DRIVEN CHAIN").
+
+    PLAUSIBILITY FLOOR (the migrate-manifest-glob-drift fix, work item 430): this function used
+    to regex-scan new-project.sh's `-f` invocation lines, and when that invocation's shape
+    changed to a directory glob, the regex kept matching syntactically but found only ONE line
+    (the still-literal `high_watermark_1.sql` flag) -- a one-entry manifest that was returned as
+    if it were a legitimate, if short, answer. Every downstream reader (serving/
+    boundary_service.py's `_lineage_head`, `_current_head_and_missing` below) then silently
+    treated "one entry, already applied" as "this world is at the lineage head", with ~50 real
+    deltas unapplied and unreported -- fail-dangerous. The honest fix is not merely re-deriving
+    the list correctly; a FUTURE break in the same shape (an empty/near-empty directory listing
+    for any reason -- a bad AUTOHARN_ROOT, a submodule checked out shallow, a partially-extracted
+    tarball) must be a LOUD refusal here too, never a quietly-short manifest read downstream as
+    "nothing to migrate". Two checks, in order:
+      1. ZERO -- disk_lineage_deltas() found no sNN files at all. This can only mean a broken
+         tree (kernel/lineage/ missing or emptied); a from-scratch world genuinely has no lineage
+         chain is not a real case this codebase's own history admits (s20 has shipped since the
+         beginning of the sNN convention).
+      2. SHORTER THAN TRACKED -- the disk listing (what a birth would apply if it ran right now)
+         has FEWER entries than `git_tracked_lineage_deltas()` (what this checkout's own commit
+         history says should be there). A bash glob cannot skip a file that exists on disk, so a
+         disk count below the tracked count means files the repository itself carries are ABSENT
+         from this checkout -- an incomplete `git submodule update`, a partial clone, or a stray
+         `rm` -- never a legitimately smaller lineage than the one already committed. (The
+         reverse -- disk ahead of tracked, e.g. a staged-but-uncommitted new delta -- is not
+         refused: that is exactly the "a future delta's author is mid-edit" case
+         `disk_lineage_deltas()` is deliberately a live directory read, not a tracked-only one,
+         to support.)
+    Either refusal fires before ANYTHING else in this module runs (`_manifest()` is the first
+    call in `main()`) -- nothing is touched."""
+    if not LINEAGE_DIR.is_dir():
         raise MigrateRefusal(
-            f"migrate: cannot find {NEW_PROJECT_SH} -- the manifest this script's whole "
-            f"data-driven chain depends on lives there (its --new-world psql -f invocation). "
+            f"migrate: cannot find {LINEAGE_DIR} -- the manifest this script's whole "
+            f"data-driven chain depends on is derived from that directory's own sNN-*.sql "
+            f"contents. Nothing was touched.")
+    if not (LINEAGE_DIR / HIGH_WATERMARK).is_file():
+        raise MigrateRefusal(
+            f"migrate: cannot find {LINEAGE_DIR / HIGH_WATERMARK} -- every --new-world birth "
+            f"applies this file first (bootstrap/new-project.sh's own `_apply_lineage_deltas`); "
+            f"its absence means this checkout's kernel/lineage/ directory is not a complete one. "
             f"Nothing was touched.")
-    text = NEW_PROJECT_SH.read_text(encoding="utf-8")
-    names = re.findall(r'kernel/lineage/([A-Za-z0-9_.\-]+\.sql)"', text)
-    # De-duplicate while preserving order (defensive -- new-project.sh's invocation should not
-    # repeat a file, but a future edit accidentally doing so must not silently double-apply it).
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for n in names:
-        if n not in seen:
-            seen.add(n)
-            ordered.append(n)
-    if not ordered:
+    deltas = disk_lineage_deltas(LINEAGE_DIR)
+    if not deltas:
         raise MigrateRefusal(
-            f"migrate: parsed {NEW_PROJECT_SH} but found zero kernel/lineage/*.sql references in "
-            f"its --new-world psql invocation -- either that invocation moved/changed shape, or "
-            f"this world truly has no birth chain yet. Refusing rather than guessing an empty "
-            f"chain is correct. Nothing was touched.")
-    return ordered
+            f"migrate: REFUSED before touching anything -- {LINEAGE_DIR} contains zero "
+            f"sNN-<slug>.sql delta files (N >= {20}), the same shape bootstrap/new-project.sh's "
+            f"own --new-world glob loop would see. A from-scratch world with no lineage chain "
+            f"past high_watermark_1.sql is not a real state this codebase's history admits (s20+ "
+            f"has shipped since the sNN convention began) -- this almost certainly means "
+            f"{AUTOHARN_ROOT} is not a complete autoharn checkout (a missing/empty "
+            f"kernel/lineage/ directory, wrong AUTOHARN_ROOT, or similar). Refusing rather than "
+            f"reporting 'already at the lineage head' on an empty chain is the point of this "
+            f"check. Nothing was touched.")
+    try:
+        tracked = git_tracked_lineage_deltas(AUTOHARN_ROOT)
+    except subprocess.CalledProcessError as e:
+        raise MigrateRefusal(
+            f"migrate: REFUSED -- could not determine the git-tracked kernel/lineage/ delta set "
+            f"to sanity-check the {len(deltas)} delta(s) found on disk against ({AUTOHARN_ROOT} "
+            f"does not look like a usable git checkout: {e}). This checkout's own tracked history "
+            f"is the plausibility floor this script refuses to skip. Nothing was touched.") from e
+    if len(deltas) < len(tracked):
+        missing_from_disk = [n for n in tracked if n not in set(deltas)]
+        lines = "\n".join(f"    kernel/lineage/{n}" for n in missing_from_disk)
+        raise MigrateRefusal(
+            f"migrate: REFUSED before touching anything -- {LINEAGE_DIR} has only {len(deltas)} "
+            f"sNN-<slug>.sql delta file(s) on disk, but this checkout's own git history tracks "
+            f"{len(tracked)}. A live directory glob cannot skip a file that is actually there, so "
+            f"disk-behind-tracked means this checkout is INCOMPLETE, not that the lineage is "
+            f"genuinely shorter. Missing from disk:\n{lines}\n"
+            f"Remediation: `git -C {AUTOHARN_ROOT} submodule update --init --recursive` (or "
+            f"whatever brought this checkout here) and re-run. Nothing was touched.")
+    return apply_order(deltas)
 
 
 def _require_detect_files(manifest: list[str]) -> dict[str, Path]:
@@ -936,9 +1002,11 @@ def main(argv: list[str]) -> int:
         manifest = _manifest()
         detects = _require_detect_files(manifest)
         _require_history_headers(manifest)
-        print(f"migrate: manifest has {len(manifest)} entries (parsed from "
-              f"{NEW_PROJECT_SH.relative_to(AUTOHARN_ROOT)}, every one carrying a `.detect.sql` "
-              f"and a declared HISTORY posture).")
+        print(f"migrate: manifest has {len(manifest)} entries (derived from "
+              f"{LINEAGE_DIR.relative_to(AUTOHARN_ROOT)}/ via bootstrap/lineage_manifest.py, "
+              f"the same selection+order rule {NEW_PROJECT_SH.relative_to(AUTOHARN_ROOT)}'s own "
+              f"glob loop applies; every entry carrying a `.detect.sql` and a declared HISTORY "
+              f"posture).")
 
         head, missing = _current_head_and_missing(dep, dep.schema, dep.kern, manifest, detects)
         print(f"migrate: current lineage head = {head or '(none -- no manifest entry detected)'}")
