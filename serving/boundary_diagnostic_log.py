@@ -153,6 +153,19 @@ class RequestContext:
     # `serving/boundary_service.py`'s own read-journal middleware code is this field's ONLY
     # reader.
     read_row_count: int | None = None
+    # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1b/1c (work item
+    # ac-boundary-scope-filter): a SUMMARY of the scope redactions this request's own read
+    # applied -- `[{family, value, disclosure_mode, count}, ...]` -- bound by
+    # `serving/boundary_service.py`'s `_json_read_response` at the SAME place it binds
+    # `read_row_count` above, immediately after `boundary_scope_filter.apply_scope` returns.
+    # NEVER row content (the read journal's own "must never become a second copy of scoped
+    # data" invariant, `boundary_read_journal`'s module docstring, applies here identically).
+    # `None`/empty for every request this build's own filter left unfiltered (an unarmed
+    # world, an unattributable identity, or a route this build does not scope) -- NOT part of
+    # `EVENT_REQUIRED_FIELDS`/`log_event`'s own closed 8-event vocabulary, the SAME posture
+    # `read_row_count` above already holds (a context field the read journal alone reads, not
+    # a diagnostic-log event of its own).
+    scope_redactions: list[dict[str, Any]] | None = None
 
 
 def bind_identity(resolution_case: str, *, principal: str | None = None,
@@ -202,6 +215,17 @@ def bind_read_row_count(n: int | None) -> None:
     ctx = REQUEST_CONTEXT.get()
     if ctx is not None:
         ctx.read_row_count = n
+
+
+def bind_scope_redactions(redactions: list[dict[str, Any]] | None) -> None:
+    """design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1b/1c: mutates the CURRENT
+    request's own `RequestContext.scope_redactions` in place -- the SAME `bind_read_row_count`
+    pattern above. Called from `serving/boundary_service.py`'s `_json_read_response`, right
+    beside its existing `bind_read_row_count` call. A no-op when no request context is bound
+    (a direct, non-HTTP call site)."""
+    ctx = REQUEST_CONTEXT.get()
+    if ctx is not None:
+        ctx.scope_redactions = redactions
 
 
 def current_route() -> str | None:

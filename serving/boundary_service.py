@@ -423,6 +423,10 @@ import boundary_diagnostic_log  # noqa: E402
 # Read calls -- an unrelated producer/consumer/subject entirely). See
 # serving/boundary_read_journal.py's own module docstring for the full reasoning.
 import boundary_read_journal  # noqa: E402
+# design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1b/1c/2/4 (work item
+# ac-boundary-scope-filter): the boundary-side scope enforcement filter -- `_json_read_response`
+# below is its ONE call site (see that module's own docstring, "THE ONE SEAM").
+import boundary_scope_filter  # noqa: E402
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
 # manifest derivation (`_manifest`, a directory read over kernel/lineage/ via bootstrap/
 # lineage_manifest.py, no DB call) as the ONE home for "what is the ordered kernel/lineage/*.sql
@@ -2110,10 +2114,17 @@ def capability_manifest(cfg: BoundaryConfig) -> CapabilityManifest:
     s60_entitlement = _column_exists(cfg, cfg.schema, "ledger", "entitlement_act_class")
     s61_signatures = _regclass_exists(cfg, f"{cfg.schema}.signed_commissions")
     s64_delegation = _column_exists(cfg, cfg.schema, "ledger", "delegation_redelegate_depth")
+    # ac-boundary-scope-filter (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md
+    # sec1c/sec4, "/meta advertises the capability"): object-existence detection of
+    # principal_scopes, the SAME discipline as every fact above -- this service's own
+    # boundary_scope_filter.apply_scope is unconditionally wired into _json_read_response, so
+    # "the view exists" IS "the filter is live" for this build (no separate on/off switch).
+    s70_scope_filter = _regclass_exists(cfg, f"{cfg.schema}.principal_scopes")
     return CapabilityManifest(s22_work=s22, s41_identity=s41, s43_boundary=s43,
                                credited_view=credited, s45_standing_lifecycle=s45,
                                s58_missives=s58_missives, s60_entitlement=s60_entitlement,
-                               s61_signatures=s61_signatures, s64_delegation=s64_delegation)
+                               s61_signatures=s61_signatures, s64_delegation=s64_delegation,
+                               s70_scope_filter=s70_scope_filter)
 
 
 def service_principal_name(cfg: BoundaryConfig) -> str | None:
@@ -3177,7 +3188,68 @@ def sse_saturated(max_clients: int, message: str) -> JSONResponse:
 # `0`. `boundary_diagnostic_log.bind_read_row_count` is a no-op outside a live request (this
 # project's own direct/unit-shaped call sites), matching `bind_identity`/`bind_deployment`'s own
 # posture.
-def _json_read_response(content: Any, *, status_code: int = 200) -> JSONResponse:
+# design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1b/1c/2/4 (work item
+# ac-boundary-scope-filter): the ONE typed shape a scope-excluded single row answers with when
+# its scope's disclosure tier is `full` -- the SAME "the row does not cross at all" posture
+# every other not-found shape in this service already carries (never a NEW status code that
+# would itself leak "this exists but you may not see it"; see `boundary_scope_filter`'s own
+# module docstring, "FULL TIER"). MODERATE fix (adjudication row 889): the body is now
+# BYTE-IDENTICAL to the genuine-absence 404 the SAME route already emits for a truly
+# nonexistent id/hash -- the pre-fix-round text above this comment ("no row visible to this
+# principal's current scope...") was itself distinguishable from genuine absence and is GONE;
+# each call site now supplies its OWN genuine-absence detail string, verified byte-for-byte in
+# seen-red/ac-boundary-scope-filter/run_fixtures.py's own leg-d.
+def _scope_excluded_not_found(detail: str) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": detail})
+
+
+def _json_read_response(content: Any, *, status_code: int = 200,
+                         cfg: "BoundaryConfig | None" = None,
+                         view: str | None = None,
+                         id_field: str = "id",
+                         absent_detail: str | None = None) -> JSONResponse:
+    """Every GET route's ONE place to build its row-shaped response -- see this function's
+    OWN pre-existing docstring comment immediately above (sec1a's read-journal row-count bind)
+    for why HERE and not a body-sniffing middleware pass. `cfg`/`view`/`id_field` are the scope
+    filter's OWN three inputs (`boundary_scope_filter.apply_scope`, ac-boundary-scope-filter);
+    every call site that reads real ledger/registry content passes them, threading the SAME
+    `cfg` it already resolved and naming the view/key-column it is reading (VIEW_REGISTRY's own
+    choice for the `/views/{view}` route, or the literal `ledger`/`ledger_current` id-keyed
+    shape for the fixed routes) -- a call site that omits them (this project's own fixture bank,
+    metadata-only routes) gets `apply_scope`'s own no-op passthrough, BYTE-IDENTICAL to this
+    function's pre-this-build behavior (the regression bar this work item's own commission
+    states verbatim). `absent_detail` (fix round, adjudication row 889): the EXACT `detail`
+    string this route's own genuine-absence 404 already emits for this input -- the ONLY two
+    call sites that can ever produce a single-dict `content` (`row_by_id`'s
+    `f"no row {row_id}"`, `artifact_stat`'s `f"no artifact registered with hash {hash!r}."`)
+    both supply it, so a `full`-tier scope exclusion answers BYTE-IDENTICALLY to this route's
+    own genuine-absence body for the identical input, never a scope-specific message that would
+    itself leak "this exists but you may not see it" through the text alone."""
+    ctx = boundary_diagnostic_log.REQUEST_CONTEXT.get()
+    resolution_case = ctx.resolution_case if ctx is not None else None
+    principal = ctx.principal if ctx is not None else None
+    result = boundary_scope_filter.apply_scope(
+        content, cfg=cfg, view=view, id_field=id_field,
+        resolution_case=resolution_case, principal=principal,
+        query_json_fn=_query_json, regclass_exists_fn=_regclass_exists,
+    )
+    boundary_diagnostic_log.bind_scope_redactions(result.redactions or None)
+    content = result.content
+    if result.omit_singleton:
+        if absent_detail is None:
+            # Should never be reached in production -- every real single-dict call site
+            # supplies absent_detail (see this function's own docstring). Disclosed loudly
+            # rather than silently falling back to a message that would NOT be byte-identical
+            # to this route's own genuine-absence body, re-opening the exact MODERATE this fix
+            # round closed.
+            absent_detail = (
+                f"no row visible to this principal's current scope at route "
+                f"{ctx.route if ctx is not None else '?'} (design/"
+                f"FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1c) -- THIS CALL SITE "
+                f"SUPPLIED NO absent_detail, so byte-identity with this route's own "
+                f"genuine-absence body is NOT guaranteed here; this is a bug in the call site, "
+                f"not in this function.")
+        return _scope_excluded_not_found(absent_detail)
     if isinstance(content, list):
         n = len(content)
     elif content is None:
@@ -3351,6 +3423,11 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                     view=_deployment_relative_path(ctx.route),
                     identity=identity,
                     row_count=ctx.read_row_count,
+                    # ac-boundary-scope-filter (AC spec sec1b/1c): the read journal's own typed
+                    # redaction event -- bound by `_json_read_response` via
+                    # `boundary_diagnostic_log.bind_scope_redactions`, read back here at the SAME
+                    # point `read_row_count` already is.
+                    redactions=ctx.scope_redactions,
                 )
             boundary_diagnostic_log.REQUEST_CONTEXT.reset(token)
 
@@ -3472,7 +3549,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                 f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
                 f"ORDER BY id LIMIT {limit}) t;",
             )
-            return _json_read_response(rows)
+            return _json_read_response(rows, cfg=cfg, view="ledger_current", id_field="id")
         # `include_superseded=true`: reads the RAW `ledger` table (record semantics, every row
         # ever written, current or superseded -- the same raw-table read `rows_asof` below
         # already uses one route over) rather than the `ledger_current` view, so a superseded
@@ -3492,7 +3569,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"FROM {cfg.schema}.ledger l WHERE l.id > {after_id} "
             f"ORDER BY l.id LIMIT {limit}) t;",
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/rows/{row_id}")
     def row_by_id(deployment: str, row_id: int) -> Response:
@@ -3509,7 +3586,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             cfg, f"SELECT to_jsonb(t) FROM (SELECT * FROM {cfg.schema}.ledger WHERE id = {row_id}) t;")
         if row is None:
             return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
-        return _json_read_response(row)
+        return _json_read_response(row, cfg=cfg, view="ledger", id_field="id",
+                                    absent_detail=f"no row {row_id}")
 
     @app.get("/d/{deployment}/rows/{row_id}/history")
     def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
@@ -3584,7 +3662,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"  ORDER BY l.id LIMIT {limit}"
             f") t;",
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/credited")
     def credited(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3612,7 +3690,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"(SELECT * FROM {cfg.schema}.credited_current WHERE id > {after_id} "
             f"ORDER BY id LIMIT {limit}) t;",
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="credited_current", id_field="id")
 
     @app.get("/d/{deployment}/standing/principals")
     def standing_principals(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3647,7 +3725,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"(SELECT * FROM {cfg.schema}.principal_standing_current WHERE id > {after_id} "
             f"ORDER BY id LIMIT {limit}) t;",
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="principal_standing_current", id_field="id")
 
     @app.get("/d/{deployment}/work/items")
     def work_items(deployment: str, after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
@@ -3714,7 +3792,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"ORDER BY slug LIMIT {limit}) t;",
             extra_v={"after_slug": after_slug},
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="work_item_current", id_field="slug")
 
     @app.get("/d/{deployment}/views/{view}")
     def views_view(deployment: str, view: str, after_id: int = 0, after_slug: str = "",
@@ -3802,7 +3880,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                     f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
                     f"ORDER BY {key_col} LIMIT {limit}) t;",
                 )
-                return _json_read_response(rows)
+                return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
             # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
             # view's own text key column. A supplied after_id on a slug-keyed view is never
             # silently ignored either (A11 item 1's own precedent).
@@ -3827,7 +3905,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                 f"ORDER BY {key_col} LIMIT {limit}) t;",
                 extra_v={"after_slug": after_slug},
             )
-            return _json_read_response(rows)
+            return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
 
         # NON-UNIQUE key: the round-2 atomic-tie-group keyset (ledger rows 153/154 -- round 1's
         # CRITICAL finding fixed the plain-non-unique-key case; round 2's CRITICAL-adjacent
@@ -3884,7 +3962,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             extra = len(rows) - limit
             if extra > MAX_TIE_GROUP_EXTRA_ROWS:
                 return _tie_group_too_large(view, extra)
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
 
     @app.get("/d/{deployment}/rows/asof/{ts}")
     def rows_asof(deployment: str, ts: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3934,7 +4012,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"ORDER BY l.id LIMIT {limit}) t;",
             extra_v={"asof": parsed.isoformat()},
         )
-        return _json_read_response(rows)
+        return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/meta", response_model=MetaResponse)
     def meta(deployment: str) -> Response:
@@ -4378,7 +4456,9 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         if row is None:
             return JSONResponse(status_code=404, content={
                 "detail": f"no artifact registered with hash {hash!r}."})
-        return _json_read_response(row)
+        return _json_read_response(
+            row, cfg=cfg, view="artifact", id_field="hash",
+            absent_detail=f"no artifact registered with hash {hash!r}.")
 
     def artifact_put(deployment: str, request: Request, raw_body: bytes = Depends(_bounded_artifact_body)) -> Response:
         """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 3: register bytes.

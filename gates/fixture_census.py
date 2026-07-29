@@ -348,6 +348,7 @@ REGISTRY: dict[str, str] = {
     # work item ac-read-identity (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md
     # §1a): read-path identity resolution + read journaling, serving layer.
     "ac-read-identity":               "seen-red/ac-read-identity/run_fixtures.py",
+    "ac-boundary-scope-filter":       "seen-red/ac-boundary-scope-filter/run_fixtures.py",  # AC spec sec1b/1c/2/4
 }
 
 def _red_evidence_name(d: str) -> str | None:
@@ -359,7 +360,6 @@ def _red_evidence_name(d: str) -> str | None:
         if low == "red.txt" or low.endswith("-red.txt") or low.startswith("red-specimen"):
             return name
     return None
-
 
 # tool-generated dirs that can appear under seen-red/ without ever being a fixture in their own
 # right (fixup finding 3): __pycache__ is recreated by python3 the instant any run_fixtures.py
