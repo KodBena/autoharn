@@ -86,7 +86,19 @@ CHAIN = [
     "s65-refusal-attempted-kind.sql", "s66-forged-stamp-journal-totality.sql",
     "s67-refusal-digest-bound.sql", "s68-typed-absence-dispositions.sql", "s69-role-coherence-refusals.sql",
     "s70-scope-binding.sql",
+    "s71-row-level-scope-policies.sql",
 ]
+# s71 (kernel/lineage/s71-row-level-scope-policies.sql, design/FABLE-ACCESS-CONTROL-AND-
+# INFORMATION-FLOW-SPEC.md sec2/sec5 item 6, "the RLS slot") extends this SAME gate's scratch
+# CHAIN. It ships ONE new function, scope_row_visible -- its own body's FROM clause reads ONLY
+# principal_scopes (already classified clean above, s70's own entry: "factors through
+# ledger_current exclusively"), never a raw `ledger` FROM/JOIN/INTO/UPDATE of its own (this
+# gate's own RAW_LEDGER regex requires exactly that shape; a bare `r ledger` PARAMETER TYPE
+# declaration, which this function's signature does carry, is not a FROM/JOIN/INTO/UPDATE and so
+# does not match) -- classifies clean with NO allowlist entry needed, verified live by running
+# this gate against the extended chain. The new CREATE POLICY this delta also ships is not a
+# view or function at all -- outside this gate's own declared universe (its docstring's own
+# words: "every view/function reading the ledger"), unchanged.
 # s70 (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
 # SPEC.md sec1b/sec1c, ratified ledger row 639) extends this SAME gate's scratch CHAIN. It ships
 # ONE new view (principal_scopes, factors through ledger_current exclusively -- classifies clean,

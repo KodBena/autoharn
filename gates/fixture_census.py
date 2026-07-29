@@ -201,6 +201,7 @@ REGISTRY: dict[str, str] = {
     "s68-typed-absence-dispositions":  "seen-red/s68-typed-absence-dispositions/run_fixtures.py",
     "s69-role-coherence-refusals":     "seen-red/s69-role-coherence-refusals/run_fixtures.py",
     "s70-scope-binding":               "seen-red/s70-scope-binding/run_fixtures.py",
+    "s71-row-level-scope-policies":    "seen-red/s71-row-level-scope-policies/run_fixtures.py",
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "legacy-led-retirement-round1-fixes": "seen-red/legacy-led-retirement-round1-fixes/run_fixtures.py",
     "workflow-drive-dead-legacy-led-default": "seen-red/workflow-drive-dead-legacy-led-default/run_fixtures.py",
