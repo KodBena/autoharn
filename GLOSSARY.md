@@ -1036,7 +1036,7 @@ principal onto EXACTLY the surfaces named in its own `scope_surfaces`. A binding
 `scope_surfaces IS NULL` — armed but handed no allow-list — therefore grants NO surface
 whatsoever; an "exclusion-only" binding (exclusions set, no explicit surfaces) reads as "no
 surface granted, read nothing," never as "open surface minus these rows." Mirrors
-`design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md`'s own `scope_armed(P) :-
+[`engine/lp/ledger_entitlement.lp`](engine/lp/ledger_entitlement.lp)'s own `scope_armed(P) :-
 scope_binding_row(P)` predicate — the same row-existence rule on both the SQL and ASP sides of
 [the entitlement floor](#entitlement-floor) below. **Disclosed cost, not hidden:** a
 minted-but-unbound principal (the common case) pays two extra small round trips per read —
@@ -1068,8 +1068,8 @@ The access-control batch's final delta, `kernel/lineage/s72-stamp-binding-conjun
 autoharn3.** RBAC's authenticated input (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
 SPEC.md §5 item 5): entitlement (s60) answers "does this principal hold the required
 role/chain"; this conjunct additionally answers "was THIS write actually produced by an
-invocation this principal is on record as controlling." Two new kinds, the TENTH and ELEVENTH
-authority-bearing tokens: `principal_stamp_bound` (binds a principal to a `stamp_agent`
+invocation this principal is on record as controlling." Two new kinds join the closed
+vocabulary of authority-bearing ledger kinds: `principal_stamp_bound` (binds a principal to a `stamp_agent`
 identity string, e.g. `main`) and `stamp_binding_class_configured` (nominates which act class
 the conjunct governs, s60's `entitlement_class_configured` shape one axis over). **Empty by
 default** — no act class is nominated at birth, so the conjunct is a total no-op everywhere

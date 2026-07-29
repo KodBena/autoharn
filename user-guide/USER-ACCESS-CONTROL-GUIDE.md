@@ -950,7 +950,7 @@ discipline with a type, and are not yet built.
 
 ## 7. The general medium: scope binding, scope filtering, and the entitlement floor
 
-**Added 2026-07-29, the access-control batch.** §§1–6 above document mechanisms an adopter
+**This section was added 2026-07-29 by the access-control batch.** §§1–6 above document mechanisms an adopter
 builds themselves from generic Postgres primitives (RLS, labeling conventions, the s60/s61/s62
 delegation substrate). This section documents a different thing: a **harness-native, ledgered**
 generalization of the same idea — [design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](../design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)'s
@@ -975,8 +975,9 @@ doesn't exist there yet, and the filter degrades to the open scope rather than e
 
 ### s72 — the stamp-binding conjunct: RBAC's authenticated input
 
-**Added 2026-07-29, the batch's final delta — same next-birth-chain caveat as s70/s71, stated
-again because it is easy to assume the batch stopped at the boundary filter.**
+**This subsection was added 2026-07-29 for the batch's final delta — same next-birth-chain
+caveat as s70/s71, stated again because it is easy to assume the batch stopped at the boundary
+filter.**
 `kernel/lineage/s72-stamp-binding-conjunct.sql` is **not applied to autoharn3** either; it
 rides the same `LINEAGE_CHAIN` a future `--new-world` scaffold carries. Where scope binding
 (s70/s71) answers "what may this principal's reads see," s72 answers a different question
@@ -1028,8 +1029,11 @@ choice was made and why.
 Scratch world `docsacsweep` (schema/kernel/role `docsacsweep`/`docsacsweep_kernel`/
 `docsacsweep_rw`), scaffolded fresh via `bootstrap/new-project.sh --new-world docsacsweep --db
 toy --host 192.168.122.1` — a fresh scaffold today applies the full current kernel lineage, so
-this world is born WITH s70/s71 already (`doctor`'s own migration-epoch check confirmed
-`chain_high_water.max_id=13`, s71's own id). A boundary service was started by hand against a
+this world is born WITH s70/s71 already (`doctor`'s own migration-epoch check passed clean,
+reporting `chain_high_water.max_id=13` — the ledger's own row-id high-water mark after birth
+bookkeeping, not a per-delta id; s70/s71's presence was confirmed separately, by the
+`principal_scope_bound` write below succeeding rather than being refused for an
+out-of-vocabulary kind). A boundary service was started by hand against a
 throwaway `boundary-multiplex.toml` (the setup wizard automates this step for a real
 deployment; done manually here only to keep the witness self-contained), then torn down after.
 

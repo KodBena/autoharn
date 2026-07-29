@@ -1501,9 +1501,11 @@ NOT exercised end-to-end (see item 44) — it mints against THIS repository's ow
 deployment, never a disposable world, so a docs/capabilities sweep does not exercise it for
 real; its flag-parsing and its underlying write are witnessed separately instead.
 
-**43. Read-path identity resolution + read journaling (`serving/boundary_read_journal.py`,
-work item `ac-read-identity`, merge `8f0694c8`; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
-FLOW-SPEC.md §1a).** Every completed boundary GET now resolves an identity (minted / vendor /
+**43. Read-path identity resolution + read journaling ([`serving/boundary_read_journal.py`](serving/boundary_read_journal.py),
+work item `ac-read-identity`, merge `8f0694c8`; spec
+[design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+§1a — items 44-47 below cite this same spec as "spec §...").** Every completed boundary GET now
+resolves an identity (minted / vendor /
 anonymous — the same three-case resolution the write path already used) and appends one line
 to `<world_dir>/.claude/logs/boundary_reads.jsonl`: `{ts, deployment, route, view, identity,
 row_count, redactions}` — never row content. Purely additive: an anonymous read is never
@@ -1516,7 +1518,8 @@ count is not a separate, hand-maintained number, it is the true count of what th
 withheld.
 
 **44. Scope binding: the kernel delta (future-birth only), the CLI minting surface (live), and
-fail-closed arming (`kernel/lineage/s70-scope-binding.sql`, `tools/dispatch_scope.py`, merges
+fail-closed arming ([`kernel/lineage/s70-scope-binding.sql`](kernel/lineage/s70-scope-binding.sql),
+[`tools/dispatch_scope.py`](tools/dispatch_scope.py), merges
 `5c580ef0`/`3ca32ca3`; spec §1b/§5 item 4).** `principal_scope_bound` is a new kind naming a
 principal's granted `scope_surfaces` (registry view/route names) plus optional
 `scope_exclusions` (closed four-family vocabulary: `kind-class`, `thread`, `work-item-lineage`,
@@ -1540,7 +1543,7 @@ at all arms the principal onto EXACTLY its own `scope_surfaces`; `scope_surfaces
 armed binding grants NO surface, not "open surface minus exclusions" — an adopter wanting
 exclusion-only behavior must bind `scope_surfaces` explicitly (as this pass's own witness did).
 
-**45. The boundary scope filter (`serving/boundary_scope_filter.py`, merge `dc643dfb`; spec
+**45. The boundary scope filter ([`serving/boundary_scope_filter.py`](serving/boundary_scope_filter.py), merge `dc643dfb`; spec
 §1c/§2/§4).** One seam (`boundary_service._json_read_response`) enforces a resolved scope on
 every GET route that returns row-shaped content: a scoped-out row becomes a typed redaction
 marker (`{id_field, redacted: true, scope: {family, value}}`, plus `row_hash` at the
@@ -1557,7 +1560,7 @@ scope-bound principal from item 44) returned the SAME row id as `{"id": 16, "red
 "scope": {"family": "kind-class", "value": "decision"}}` — every other row in the same response
 unaffected, confirming the exclusion is row-scoped, not surface-wide.
 
-**46. The entitlement layer's ASP/SQL differential floor (`engine/ledger_floor.py`, merge
+**46. The entitlement layer's ASP/SQL differential floor ([`engine/ledger_floor.py`](engine/ledger_floor.py), merge
 `e1b02f4d`; closes the gap the s70 merge itself disclosed, rows 802/803).** `./autoharn judge
 --layer entitlement` used to report `NO-FLOOR` — a real ASP encoding with no independent SQL
 producer to differential against, so the layer was never actually checked by a bare `judge`
@@ -1568,14 +1571,15 @@ run. `engine/ledger_floor.py` now derives the SAME five predicates in SQL
 Δasp=[] Δsql=[]` — a genuine two-producer agreement over this scratch world's own s60-through-
 s71 entitlement/scope substrate, not a NO-FLOOR skip.
 
-**47. The stamp-binding conjunct — s72, the batch's final delta (`kernel/lineage/
-s72-stamp-binding-conjunct.sql`, merge `a218a1b4` — build `f635ecce` + citation fix `1ded1cd2`;
+**47. The stamp-binding conjunct — s72, the batch's final delta
+([`kernel/lineage/s72-stamp-binding-conjunct.sql`](kernel/lineage/s72-stamp-binding-conjunct.sql),
+merge `a218a1b4` — build `f635ecce` + citation fix `1ded1cd2`;
 addendum pass, 2026-07-29, after items 43-46 above were already written).** RBAC's
-authenticated input (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §5 item 5):
+authenticated input (spec §5 item 5 — item 43 above links the spec in full):
 entitlement (s60) checks role/chain; this conjunct additionally checks that the write itself
 carries a kernel-VERIFIED interception stamp resolving to an in-force `principal_stamp_bound`
-row naming the acting principal — the tenth/eleventh authority-bearing tokens
-(`principal_stamp_bound`, `stamp_binding_class_configured`). **Same future-birth-only posture
+row naming the acting principal — two new entries in the closed vocabulary of authority-bearing
+ledger kinds (`principal_stamp_bound`, `stamp_binding_class_configured`). **Same future-birth-only posture
 as s70/s71 — NOT applied to autoharn3.** Empty by default: zero act classes nominated at
 birth, so the conjunct is a total no-op and a fresh world's ordinary writes are byte-identical
 to pre-s72, until a deployment arms it. **The ephemeral-dispatched-agent fork is reported, not

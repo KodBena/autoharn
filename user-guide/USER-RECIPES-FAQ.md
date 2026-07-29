@@ -86,6 +86,7 @@ Registering principals, standing, roles, competence, relations. Full recipe: [re
 ## Entitlement enforcement and work gating (s60): who may act, and when a claim may start
 
 Who may act, and when a claim may start. Full recipe: [recipes/IDENTITY-AND-AUTHORITY.md](recipes/IDENTITY-AND-AUTHORITY.md#entitlement-enforcement-and-work-gating-s60-who-may-act-and-when-a-claim-may-start).
+
 **"Can I also restrict WHAT a principal may read, not just what it may do?"** — yes, added
 2026-07-29: scope binding, the boundary's own scope filter, and `judge`'s entitlement-layer
 differential. Full recipe:
