@@ -282,7 +282,11 @@ BASELINE: dict[str, int] = {
     # SQL floor QUARANTINED (a judge-input silent-wrong-answer risk) on any s22..s28-range
     # schema. Fixed by column-gating both, mirroring ledger_edb.py::export_work's own
     # has_parent/has_review flags -- genuinely new degrade logic, not padding.
-    "engine/ledger_floor.py":                           857,
+    # NEW to BASELINE, 1022 (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md build, ledger
+    # rows 822/838/839): entitlement_floor_atoms(), the SQL twin closing the entitlement layer's
+    # NoFloor gap (rows 802/803) -- a genuinely new, from-scratch WITH RECURSIVE closure over five
+    # #show'd predicates, not padding.
+    "engine/ledger_floor.py":                           1022,
     "engine/preamble_floor.py":                         801,
     # tools/setup_tui/ui_textual.py -- REMOVED from BASELINE 2026-07-22
     # (design/FABLE-SETUP-TUI-REBUILD-SPEC.md §2, wholesale rebuild): `git rm`'d whole, along
@@ -306,7 +310,11 @@ BASELINE: dict[str, int] = {
     # purely-additive EDB fact families (act_class/1, edge_scope_class/3, edge_unscoped/2,
     # plus delegation_edge/2) for the scoped-closure ASP twin's own AGREE leg. Written plain,
     # no golfing.
-    "engine/ledger_edb.py":                             873,
+    # NEW to BASELINE, 1033 (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md build, ledger
+    # rows 822/838/839): export_entitlement()'s s70 addition (scope_binding_row/scope_bound/
+    # scope_exclusion/scope_disclosure/surface families, the jsonb exclusions decomposition + its
+    # typed parse-refusal), not padding.
+    "engine/ledger_edb.py":                             1033,
     # Reconciled +61 to 733 (2026-07-26, row 1307/1308 follow-up): resolve_repo_root() +
     # --repo-root/AUTOHARN_REPO_ROOT override (refuses a nonexistent path) so recompiling from a
     # worktree bakes the real checkout's ROLE_CHARTER_PY/ROLE_BRIEF_PY path instead of a
@@ -333,7 +341,10 @@ BASELINE: dict[str, int] = {
     # new no-floor-layer disposition (why it QUARANTINEs vs REFUSES, and why -- the same
     # provenance-carrying idiom this file's other docstrings already use), a net growth this
     # build owns rather than trims for the ratchet's sake.
-    "engine/ledger_differential.py":                    553,
+    # NEW to BASELINE, 630 (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md build, ledger
+    # rows 822/838/839): the 'entitlement' layer's run_sql_entitlement + run_layer_differential
+    # branch + main()'s third named consumer surface (the --retain edb_text if-chain), not padding.
+    "engine/ledger_differential.py":                    630,
     "hooks/pretooluse_delegation_observer.py":          588,
     # Reconciled +63 to 588 (2026-07-26, delegation-observer Workflow-coverage review, moderate/
     # SILENT surrogate-hazard fix round): a lone UTF-16 surrogate in a journaled `script`/`prompt`
@@ -555,7 +566,10 @@ BASELINE: dict[str, int] = {
     # unions with main's 454 above; the post-merge file (carrying both the s70 REGISTRY row and
     # main's ac-read-identity/setup-tui-config-extension rows) re-measures to 455 -- the same
     # merge-union ratchet-crossing class as every reconciliation above.
-    "gates/fixture_census.py":                     455,
+    # NEW to BASELINE, 456 (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md build, ledger
+    # rows 822/838/839): one new REGISTRY row for seen-red/engine-asp-twin-entitlement-scope, the
+    # same additive-census-row class as every prior bump above.
+    "gates/fixture_census.py":                     456,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -702,7 +716,11 @@ BASELINE: dict[str, int] = {
     # ac-read-identity + setup-tui-config-extension merge) collapse, plus the fixture_census.py
     # 454 -> 455 reconciliation directly above and this entry's own settling -- the same
     # self-referential fixpoint as every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          827,
+    # bumped 827 -> 846 (self-referential, same idiom as every prior self-reference bump above):
+    # this gate's own BASELINE growing to carry the five entitlement/scope ASP-twin bumps just
+    # above plus this comment's own settling (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-
+    # SPEC.md build, rows 822/838/839).
+    "gates/max_lines.py":                          849,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
@@ -738,7 +756,11 @@ BASELINE: dict[str, int] = {
     # (`_validate_layer_registry`) design item 1 mandates. Witnessed: a synthetic
     # capability-missing LayerSpec raises RegistryError at validation (the closure spec §4
     # negative-control leg) before this bump was taken; see build report.
-    "engine/lp_registry.py":                       469,
+    # NEW to BASELINE, 476 (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md build, ledger
+    # rows 822/838/839): the entitlement floor flip (NoFloor -> frozenset(ENTITLEMENT_PREDS)) +
+    # the MODULES["ledger_entitlement.lp"].provides drift repair (the pre-existing s64 omission,
+    # named in the spec itself), not padding.
+    "engine/lp_registry.py":                       476,
 }
 
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import sys
 
+import atom_quote
 from ledger_edb import Target, resolve
 
 
@@ -839,6 +840,170 @@ def defeat_floor_atoms(name: str) -> set[str]:
     UNION ALL SELECT 'credited('||id||')' FROM credited
     UNION ALL SELECT 'exposure_model('||f||','||d||')' FROM exposure_model
     UNION ALL SELECT 'exposure_model_undischarged('||f||','||d||')' FROM exposure_model_undischarged
+    ;"""
+    out = t.run(sql).stdout
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+# ===========================================================================
+# THE ENTITLEMENT/SCOPE floor (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md): the SQL
+# twin of engine/lp/ledger_entitlement.lp, over the FULL five-predicate roster {reaches_genesis/1,
+# reaches_genesis_scoped/2, open_scope/1, may_read_surface/2, scope_disclosure/2} -- the gap
+# `./judge --layer entitlement` had (engine/lp_registry.py's LAYERS["entitlement"].floor was
+# `NoFloor`, rows 802/803) before this build. INDEPENDENCE (I6): a from-scratch WITH RECURSIVE,
+# never a call into the KERNEL's own principal_authority_chain_reaches_genesis[_scoped] PL/pgSQL
+# functions (which the WRITE-TIME enforcement itself calls) -- calling those would prove "kernel
+# agrees with kernel", not an independent second derivation; every OTHER floor in this file
+# re-derives its own closure by hand for the identical reason (see floor_atoms' own header).
+#
+# `surfaces` (the closed surface vocabulary) and `now_epoch` (the delegation_expiry wall-clock
+# cursor) are BOTH single-home parameters, handed in by the caller (engine/ledger_differential.py)
+# from the SAME one origin the exporter reads (ledger_edb.SURFACE_VOCABULARY) and the SAME one
+# computed instant, respectively -- this floor never sources either itself (the spec's own text:
+# "the floor cannot read [the surface vocabulary]... and must be handed it through the same single
+# home the exporter uses"; "an edge expiring between the two runs manufactures a false
+# DIVERGE_DEFECT" is `support_floor_atoms(name, now_epoch)`'s own already-fixed class, applied
+# here).
+#
+# Surface/Mode text arguments render through atom_quote (THE shared bare-vs-quoted home, module
+# docstring) -- the ONE deliberate exception to this file's own "independent producers never share
+# a code path" law, made because the `_wi_quote` incident (one prior asymmetry in this SAME
+# decision) left the 'work' layer unable to AGREE on any world; the act-class token argument of
+# reaches_genesis_scoped/2 is UNCHANGED from the pre-existing, always-double-quoted convention
+# ledger_edb.export_entitlement's own act_class/edge_scope_class facts already use (never bare --
+# matching that pre-existing family's own style, not atom_quote's).
+ENTITLEMENT_PREDS = ("reaches_genesis", "reaches_genesis_scoped", "open_scope",
+                     "may_read_surface", "scope_disclosure")
+
+# The act-class DOMAIN -- an independent, literal copy of ledger_edb.export_entitlement's own
+# named vocabulary (this project's STANDARDS-REGISTRY posture: a named, non-corpus-discovered
+# list, safe and deliberate to duplicate exactly as WORK_ITEM_PREDS/DEFEAT_PREDS-style tuples
+# already are throughout this file -- the constant itself is not the derivation logic under I6).
+ENTITLEMENT_ACT_CLASSES = (
+    "principal_registered", "principal_role_bound", "standing_lifecycle",
+    "milestone_closure", "gate_edge_supersession", "entitlement_class_configured",
+    "delegation_lifecycle", "independent_verification_delegation")
+
+
+def entitlement_floor_atoms(name: str, surfaces: list[str], now_epoch: int) -> set[str]:
+    """The set of entitlement/scope atoms the SQL floor derives for `name` (read-only), over the
+    five #show'd predicates ledger_entitlement.lp also derives. `surfaces` is the closed surface
+    vocabulary (ledger_edb.SURFACE_VOCABULARY, handed in by the caller); `now_epoch` is the shared
+    wall-clock cursor for the s64 delegation_expiry comparison (both module docstrings above).
+
+    PRE-S70 DEGRADE (spec's "one semantics, not a capability split" ruling): a target capable of
+    the 'entitlement' layer (the s60 marker column) but lacking the three s70 columns computes
+    ZERO scope_binding_row/scope_bound/scope_disclosure facts -- every principal falls out of
+    open_scope, and may_read_surface spans the full injected vocabulary for everyone, matching
+    ledger_entitlement.lp's own #defined-guarded degrade byte-for-byte. PRE-S64 DEGRADE (a target
+    with s60 marker but no s64 delegation_expiry/delegation_scope_classes columns): the act_class/
+    delegation_edge domain empties out, so reaches_genesis_scoped/2 (which needs both to be
+    non-vacuous) derives nothing -- matching the ASP twin's own #defined-guarded empty act_class/1
+    on such a target."""
+    t = resolve(name)
+    rel = t.rel()
+    rel_cur = t.rel("ledger_current")
+    has_s64 = t.has_col("delegation_expiry") and t.has_col("delegation_scope_classes")
+    has_s70 = (t.has_col("scope_surfaces") and t.has_col("scope_exclusions")
+               and t.has_col("scope_disclosure_mode"))
+
+    act_classes_cte = (
+        "act_classes(c) AS (VALUES " +
+        ",".join(f"('{c}')" for c in ENTITLEMENT_ACT_CLASSES) + ")"
+        if has_s64 else "act_classes(c) AS (SELECT NULL::text WHERE false)")
+    deleg_rows_cte = (
+        f"SELECT lc.principal_subject AS x, lc.principal_object AS y, "
+        f"lc.delegation_scope_classes AS scopes FROM {rel_cur} lc "
+        f"WHERE lc.kind = 'principal_relation_asserted' "
+        f"AND lc.principal_relation IN ('acts-for', 'dispatched-by') "
+        f"AND lc.principal_binding_active "
+        f"AND (lc.delegation_expiry IS NULL OR lc.delegation_expiry > to_timestamp({int(now_epoch)}))"
+        if has_s64 else
+        "SELECT NULL::bigint AS x, NULL::bigint AS y, NULL::text[] AS scopes WHERE false")
+    scope_binding_cte = (
+        f"SELECT DISTINCT lc.principal_subject AS p FROM {rel_cur} lc "
+        f"WHERE lc.kind = 'principal_scope_bound' AND lc.principal_binding_active"
+        if has_s70 else "SELECT NULL::bigint AS p WHERE false")
+    scope_bound_cte = (
+        f"SELECT lc.principal_subject AS p, s.m AS surf FROM {rel_cur} lc "
+        f"CROSS JOIN LATERAL unnest(lc.scope_surfaces) AS s(m) "
+        f"WHERE lc.kind = 'principal_scope_bound' AND lc.principal_binding_active "
+        f"AND lc.scope_surfaces IS NOT NULL"
+        if has_s70 else "SELECT NULL::bigint AS p, NULL::text AS surf WHERE false")
+    scope_disclosure_cte = (
+        f"SELECT lc.principal_subject AS p, lc.scope_disclosure_mode AS mode FROM {rel_cur} lc "
+        f"WHERE lc.kind = 'principal_scope_bound' AND lc.principal_binding_active "
+        f"AND lc.scope_disclosure_mode IS NOT NULL"
+        if has_s70 else "SELECT NULL::bigint AS p, NULL::text AS mode WHERE false")
+    surfaces_cte = (
+        "surfaces(s) AS (VALUES " + ",".join(f"('{s}')" for s in surfaces) + ")"
+        if surfaces else "surfaces(s) AS (SELECT NULL::text WHERE false)")
+
+    sql = f"""
+    WITH RECURSIVE
+      princ AS (SELECT id FROM {t.kern}.principal),
+      {act_classes_cte},
+      {surfaces_cte},
+      genesis AS (SELECT principal_subject AS g FROM {rel} WHERE kind = 'principal_registered'
+                  ORDER BY id ASC LIMIT 1),
+      active AS (
+        -- independently re-derived kernel.principal_standing() precedence (revoked dominates
+        -- in-force suspended; else in-force registered => active; else not-active) -- I6, never
+        -- a call into that function itself (this floor's own header note).
+        SELECT p.id FROM princ p
+        WHERE NOT EXISTS (SELECT 1 FROM {rel_cur} e WHERE e.kind = 'principal_revoked'
+                          AND e.principal_subject = p.id)
+          AND NOT EXISTS (SELECT 1 FROM {rel_cur} e WHERE e.kind = 'principal_suspended'
+                          AND e.principal_subject = p.id AND e.principal_binding_active)
+          AND EXISTS (SELECT 1 FROM {rel_cur} e WHERE e.kind = 'principal_registered'
+                     AND e.principal_subject = p.id)
+      ),
+      acts_for_edge AS (
+        SELECT lc.principal_subject AS x, lc.principal_object AS y FROM {rel_cur} lc
+        WHERE lc.kind = 'principal_relation_asserted' AND lc.principal_relation = 'acts-for'
+          AND lc.principal_binding_active
+      ),
+      deleg_rows AS ({deleg_rows_cte}),
+      delegation_edge AS (SELECT DISTINCT x, y FROM deleg_rows),
+      edge_unscoped AS (SELECT DISTINCT x, y FROM deleg_rows WHERE scopes IS NULL),
+      edge_scope_class(x, y, c) AS (
+        SELECT x, y, m FROM deleg_rows CROSS JOIN LATERAL unnest(scopes) AS s(m)
+        WHERE scopes IS NOT NULL
+      ),
+      edge_permits(x, y, c) AS (
+        SELECT eu.x, eu.y, ac.c FROM edge_unscoped eu CROSS JOIN act_classes ac
+        UNION
+        SELECT x, y, c FROM edge_scope_class
+      ),
+      rg(x) AS (
+        SELECT g FROM genesis
+        UNION
+        SELECT p.id FROM princ p WHERE NOT EXISTS (SELECT 1 FROM genesis)
+        UNION
+        SELECT e.x FROM acts_for_edge e JOIN rg ON rg.x = e.y JOIN active a ON a.id = e.y
+      ),
+      rgs(x, c) AS (
+        SELECT g.g, ac.c FROM genesis g CROSS JOIN act_classes ac
+        UNION
+        SELECT p.id, ac.c FROM princ p CROSS JOIN act_classes ac
+        WHERE NOT EXISTS (SELECT 1 FROM genesis)
+        UNION
+        SELECT de.x, rgs.c FROM delegation_edge de
+        JOIN rgs ON rgs.x = de.y
+        JOIN active a ON a.id = de.y
+        JOIN edge_permits ep ON ep.x = de.x AND ep.y = de.y AND ep.c = rgs.c
+      ),
+      scope_binding_row AS ({scope_binding_cte}),
+      open_scope AS (SELECT id AS p FROM princ WHERE id NOT IN (SELECT p FROM scope_binding_row)),
+      scope_bound AS ({scope_bound_cte}),
+      scope_disclosure AS ({scope_disclosure_cte}),
+      may_read_open AS (SELECT o.p, sf.s FROM open_scope o CROSS JOIN surfaces sf)
+    SELECT 'reaches_genesis(' || x || ')' FROM rg
+    UNION ALL SELECT 'reaches_genesis_scoped(' || x || ',"' || c || '")' FROM rgs
+    UNION ALL SELECT 'open_scope(' || p || ')' FROM open_scope
+    UNION ALL SELECT 'may_read_surface(' || p || ',' || {atom_quote.sql_quote_expr("s")} || ')' FROM may_read_open
+    UNION ALL SELECT 'may_read_surface(' || p || ',' || {atom_quote.sql_quote_expr("surf")} || ')' FROM scope_bound
+    UNION ALL SELECT 'scope_disclosure(' || p || ',' || {atom_quote.sql_quote_expr("mode")} || ')' FROM scope_disclosure
     ;"""
     out = t.run(sql).stdout
     return {line.strip() for line in out.splitlines() if line.strip()}

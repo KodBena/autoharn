@@ -1,0 +1,46 @@
+=== REGISTRY-ENTITLEMENT-FLOOR-IS-PREDICATE-SET ===
+  [ok] floor=frozenset({'reaches_genesis_scoped', 'open_scope', 'reaches_genesis', 'may_read_surface', 'scope_disclosure'})
+
+=== REGISTRY-MODULES-PROVIDES-REPAIRED ===
+  [ok] provides=('reaches_genesis/1', 'reaches_genesis_scoped/2', 'open_scope/1', 'may_read_surface/2', 'scope_disclosure/2')
+
+== scaffolding classic world eatsmain (chain ends s70-scope-binding.sql) -- WORLD MAIN ==
+=== ENTITLEMENT-DIFFERENTIAL-AGREE ===
+  [ok] verdict=AGREE; only_asp=[]; only_sql=[]; asp=109 sql=109 atoms
+
+=== BOUND-SCOPED-EXACT-SURFACES-NO-OPEN-SCOPE ===
+  [ok] open_scope present=False; may_read_surface atoms for 3=['may_read_surface(3,countersign_obligation)', 'may_read_surface(3,countersigned_in_force)'] (expected exactly {countersign_obligation,countersigned_in_force})
+
+=== UNBOUND-OPEN-SCOPE-FULL-VOCABULARY ===
+  [ok] open_scope present=True; may_read_surface count for 4=31 (expected 31)
+
+=== BOUND-NO-SURFACES-FAIL-CLOSED ===
+  [ok] open_scope present=False; may_read_surface atoms for 5=[] (expected none -- armed-with-no-surfaces grants nothing, fail-closed)
+
+=== NULL-DISCLOSURE-MODE-NO-FACT ===
+  [ok] scope_disclosure atoms for 5=[] (expected none -- NULL disclosure mode, no explicit tier set)
+
+=== DISCLOSURE-MODE-SET-EMITS-FACT ===
+  [ok] scope_disclosure atoms for 6=['scope_disclosure(6,hash_stub)'] (expected scope_disclosure(6,hash_stub) -- 'hash_stub' is bare-safe per atom_quote, matching both producers)
+
+# marriage differential -- layer='entitlement'
+#   closed verdict vocabulary: ['AGREE', 'DIVERGE_BY_DESIGN', 'DIVERGE_DEFECT', 'QUARANTINED']; RED = ['DIVERGE_DEFECT', 'QUARANTINED']
+
+  [OK ] eatsmain AGREE              asp=109 sql=109 atoms; Δasp=[] Δsql=[]
+
+# DIFFERENTIAL GREEN -- every target bit-identical to the SQL floor
+=== RETAIN-BANKS-NONEMPTY-EDB ===
+  [ok] exit=0; new_dirs=['/home/bork/w/vdc/1/autoharn/.claude/worktrees/engine-asp-twin-entitlement-scope/engine/docs/ledger-marriage/derivations/eatsmain/20260729T093351Z_1dcac8d085d6']; /home/bork/w/vdc/1/autoharn/.claude/worktrees/engine-asp-twin-entitlement-scope/engine/docs/ledger-marriage/derivations/eatsmain/20260729T093351Z_1dcac8d085d6/edb.lp: 4092 bytes, contains scope_binding_row(=True
+
+=== RED-BROKEN-FLOOR-DIVERGES ===
+  [ok] broken (everyone-open) atoms=['open_scope(1)', 'open_scope(2)', 'open_scope(3)', 'open_scope(4)', 'open_scope(5)', 'open_scope(6)']; real (correct) atoms=['open_scope(1)', 'open_scope(2)', 'open_scope(4)'] -- broken WRONGLY includes the scoped/no-surf principals; the differential this proves would read DIVERGE_DEFECT on a real target
+
+== scaffolding classic world eatspre (chain ends s69-role-coherence-refusals.sql, NO s70) -- WORLD PRE ==
+=== PRE-S70-EVERYONE-OPEN-DEGRADE-AGREE ===
+  [ok] verdict=AGREE; only_asp=[]; only_sql=[]; asp=105 sql=105 atoms (pre-s70-but-s60-capable target -- adjudicated under the everyone-open degrade, not skipped)
+
+== scaffolding classic world eatsmal (chain ends s70-scope-binding.sql) -- RED-MALFORMED-EXCLUSIONS ==
+=== RED-MALFORMED-EXCLUSIONS-QUARANTINED ===
+  [ok] verdict=QUARANTINED; asp.q="malformed scope_exclusions (§1b): principal 3: scope_exclusions family 'not-a-real-family' outside the kernel CHECK's closed vocabulary ['kind-class', 'rows', 'thread', 'work-item-lineage']"; sql.q="malformed scope_exclusions (§1b): principal 3: scope_exclusions family 'not-a-real-family' outside the kernel CHECK's closed vocabulary ['kind-class', 'rows', 'thread', 'work-item-lineage']"
+
+ALL OK

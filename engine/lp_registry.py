@@ -64,7 +64,7 @@ from typing import Callable
 
 from belief_floor import BELIEF_PREDS, belief_capable
 from ledger_edb import resolve
-from ledger_floor import DEFEAT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS
+from ledger_floor import DEFEAT_PREDS, ENTITLEMENT_PREDS, WORK_ITEM_PREDS, WORK_REVIEW_PREDS
 
 
 @dataclass(frozen=True)
@@ -212,7 +212,8 @@ MODULES: dict[str, ModuleSpec] = {
              "support_star/affirmed; the 'belief' LAYER entry below is what a differential "
              "runner actually enforces."),
     "ledger_entitlement.lp": ModuleSpec(
-        provides=("reaches_genesis/1",),
+        provides=("reaches_genesis/1", "reaches_genesis_scoped/2", "open_scope/1",
+                  "may_read_surface/2", "scope_disclosure/2"),
         requires=("ledger_tnow.lp",),
         stands_alone=True,
         note="design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1 item 2: the chain closure in the "
@@ -223,7 +224,12 @@ MODULES: dict[str, ModuleSpec] = {
              "principal_authority_chain_reaches_genesis(). Does not itself consume in_force/1/"
              "superseded/1 by name (acts_for_edge/2 arrives already in-force-filtered from the "
              "exporter, mirroring ledger_defeat.lp's own trust_grant/3) -- the 'entitlement' "
-             "LAYER entry below is what a differential runner actually enforces."),
+             "LAYER entry below is what a differential runner actually enforces. `provides` "
+             "REPAIRED (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1c, a hazard in "
+             "reach, fixed in this commission): this list used to read only "
+             "(\"reaches_genesis/1\",), omitting s64's own reaches_genesis_scoped/2 -- now the "
+             "full five-predicate #show list, including s70's scope_binding/open_scope/"
+             "may_read_surface/scope_disclosure additions."),
     "verification_stats.lp": ModuleSpec(
         provides=("count_workflow_verdict/3", "count_role_verdict/3", "count_round_verdict/3",
                   "count_verdict/2", "count_unparseable/1"),
@@ -368,12 +374,13 @@ LAYERS: dict[str, LayerSpec] = {
                          "ledger_belief.lp"), _belief_capability, frozenset(BELIEF_PREDS)),
     "entitlement": LayerSpec(
         ("ledger_tnow.lp", "ledger_entitlement.lp"), _entitlement_capability,
-        NoFloor("no SQL-floor differential is wired for the 'entitlement' layer yet "
-                "(engine/ledger_floor.py has no entitlement floor function) -- capability "
-                "detection only; the floor-wiring gap is FILED (design/FABLE-JUDGE-LAYER-"
-                "CAPABILITY-CLOSURE-SPEC.md §2 item 3's honest-no-floor fallback; a ledger row "
-                "for the floor-wiring follow-on is the orchestrator's to file, this build has no "
-                "ledger-write access) -- never silently widened into an AGREE")),
+        # design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md: the floor-wiring gap rows
+        # 802/803 disclosed (NoFloor) is CLOSED by this commission --
+        # engine/ledger_floor.py::entitlement_floor_atoms now mirrors the full five-predicate
+        # #show roster (reaches_genesis/1, reaches_genesis_scoped/2, open_scope/1,
+        # may_read_surface/2, scope_disclosure/2); `./judge --layer entitlement` on any capable
+        # target now ADJUDICATES (AGREE/DIVERGE_DEFECT/QUARANTINED) rather than refusing.
+        frozenset(ENTITLEMENT_PREDS)),
 }
 
 
