@@ -1,20 +1,75 @@
 #!/usr/bin/env python3
 """tools/setup_tui/steps_boundary.py -- the Boundary step's UI-free core, ported from
-`screen_boundary`."""
+`screen_boundary`.
+
+CONFIG-EXTENSION ADDENDUM (work item setup-tui-config-extension, ledger row 685's audit / row 693):
+`log_level`, `identity_enforcement` (hub-wide default and its per-deployment override), and the two
+SSE tunables (`sse_poll_interval_secs`/`max_sse_clients`) are `boundary-multiplex.toml`'s own
+OPTIONAL top-level/per-deployment keys (`serving/boundary_multiplex_config.py`'s own module
+docstring names each) -- this step's fields are sugar over the SAME closed vocabulary/bounds that
+module already enforces at load time, imported here rather than copied (ADR-0012 P1): the
+vocabulary for `log_level` comes from `serving/boundary_diagnostic_log.LEVELS` (ADR-0012 P1,
+ledger row 685's audit names this explicitly), the vocabulary/bounds for the rest from
+`serving/boundary_multiplex_config.py` itself. Every one of these five fields is written to
+`boundary-multiplex.toml` ONLY when the operator's resolved value differs from that module's own
+default (`submit`'s own logic below) -- the parser's own absent-means-default contract, preserved
+byte-for-byte when every field is left at default (a regression leg checks this)."""
 from __future__ import annotations
 
 import json
 import os
+import sys
+from pathlib import Path
 
-from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField
+from tools.configtree import ChoiceField, ConfirmField, SectionResult, SectionSpec, TextField
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import destination, feature_facts, governed_files, probes
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
 from tools.setup_tui.plan import (BackgroundAct, CallableAct, CommandAct, DaemonSelection,
                                    PlanEntry, WriteAct)
 
+# `serving/` modules import each other by BARE name (`serving/boundary_service.py`'s own module
+# docstring names this convention) -- inserting `serving/` itself onto sys.path, once, at import
+# time (not a lazy/function-body import; CLAUDE.md's ban is about deferred-to-call-time imports,
+# this executes at module load exactly like every other top-of-file import here).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "serving"))
+import boundary_diagnostic_log  # noqa: E402  (serving/boundary_diagnostic_log.py -- the ONE home for LEVELS/DEFAULT_LEVEL)
+import boundary_multiplex_config  # noqa: E402  (serving/boundary_multiplex_config.py -- the ONE home for the identity_enforcement/SSE vocabulary+bounds)
+
 BOUNDARY_PROC_PRODUCES = "boundary-proc"
 _SLUG = "boundary"
+
+# ChoiceField vocabularies -- built ONCE from the imported homes above, never a hand-copied literal
+# set (ADR-0012 P1; this is the audit's own P1 finding for log_level, extended on principle to the
+# sibling identity_enforcement/SSE keys sharing the same "import, don't duplicate" relationship).
+_LOG_LEVEL_CHOICES = tuple(
+    (lvl, lvl) for lvl in sorted(boundary_diagnostic_log.LEVELS, key=boundary_diagnostic_log.LEVELS.get))
+_IDENTITY_ENFORCEMENT_CHOICES = tuple(
+    (p, p) for p in sorted(boundary_multiplex_config.IDENTITY_ENFORCEMENT_POSTURES))
+_IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT = "inherit"
+_IDENTITY_ENFORCEMENT_OVERRIDE_CHOICES = (
+    (_IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT, "inherit -- no override, use the hub-wide default above"),
+) + _IDENTITY_ENFORCEMENT_CHOICES
+
+
+def _validate_sse_poll_interval_secs(raw: str) -> "str | None":
+    try:
+        value = float(raw)
+    except ValueError:
+        return "must be a number"
+    if not (0 < value <= boundary_multiplex_config.MAX_SSE_POLL_INTERVAL_SECS):
+        return f"must be in (0, {boundary_multiplex_config.MAX_SSE_POLL_INTERVAL_SECS}]"
+    return None
+
+
+def _validate_max_sse_clients(raw: str) -> "str | None":
+    try:
+        value = int(raw)
+    except ValueError:
+        return "must be a whole number"
+    if not (1 <= value <= boundary_multiplex_config.MAX_SSE_CLIENTS_CEILING):
+        return f"must be in [1, {boundary_multiplex_config.MAX_SSE_CLIENTS_CEILING}]"
+    return None
 
 
 def fields(state: dict) -> tuple:
@@ -49,6 +104,38 @@ def fields(state: dict) -> tuple:
         TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
         ConfirmField(name="start_now", label="Start the boundary service now (this process)?",
                      default=True),
+        ChoiceField(name="log_level", label="Boundary service log level",
+                    options=_LOG_LEVEL_CHOICES, default=boundary_diagnostic_log.DEFAULT_LEVEL,
+                    help="serving/boundary_diagnostic_log.LEVELS is the ONE home for this "
+                         "vocabulary (ADR-0012 P1) -- omitted from boundary-multiplex.toml "
+                         "entirely when left at the default."),
+        ChoiceField(name="identity_enforcement", label="identity_enforcement (hub-wide default)",
+                    options=_IDENTITY_ENFORCEMENT_CHOICES,
+                    default=boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT,
+                    help="The anonymous-authority-bearing-write refusal's posture, applied to "
+                         "every deployment that does not override it below. Omitted from "
+                         "boundary-multiplex.toml entirely when left at the default (grace)."),
+        ChoiceField(name="identity_enforcement_override",
+                    label="identity_enforcement override for THIS deployment only",
+                    options=_IDENTITY_ENFORCEMENT_OVERRIDE_CHOICES,
+                    default=_IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT,
+                    help="Written into [deployments.{world}] only when set to something other "
+                         "than 'inherit' -- absent means this deployment follows the hub-wide "
+                         "default above, exactly like every other deployment that carries no "
+                         "override of its own."),
+        TextField(name="sse_poll_interval_secs", label="SSE poll interval, seconds",
+                  default=str(boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS),
+                  required=False, validator=_validate_sse_poll_interval_secs,
+                  help=f"How often the shared per-deployment head-watcher polls max(id); "
+                       f"(0, {boundary_multiplex_config.MAX_SSE_POLL_INTERVAL_SECS}]. Omitted "
+                       f"from boundary-multiplex.toml entirely when left at the default."),
+        TextField(name="max_sse_clients", label="Max concurrently open SSE clients (hub-wide)",
+                  default=str(boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS),
+                  required=False, validator=_validate_max_sse_clients,
+                  help=f"The separate, hub-wide bound on concurrently open GET "
+                       f"/d/{{deployment}}/events connections -- NEVER the 24-slot inflight gate; "
+                       f"[1, {boundary_multiplex_config.MAX_SSE_CLIENTS_CEILING}]. Omitted from "
+                       f"boundary-multiplex.toml entirely when left at the default."),
     )
 
 
@@ -111,8 +198,55 @@ def submit(state: dict, answers: dict) -> SectionResult:
             return SectionResult(ok=False, errors={"": f"{label} '{val}' fails the interpreter-boundary "
                                                  "allowlist"})
 
-    toml_text = (f"[deployments.{world}]\npghost = \"{host}\"\npgdatabase = \"{db}\"\n"
-                 f"pguser = \"{role}\"\npgschema = \"{schema}\"\npgkern = \"{kern}\"\n")
+    # CONFIG-EXTENSION ADDENDUM (row 693/685): resolve the five optional keys, each falling back
+    # to its own field's default when the operator left the widget untouched (the `host`/`db`
+    # pattern just above, extended). `sse_poll_interval_secs`/`max_sse_clients` are TextFields
+    # (no numeric field kind exists in tools/configtree/fields.py) -- ChoiceField's own
+    # construction-time membership check already makes `log_level`/`identity_enforcement`/
+    # `identity_enforcement_override` safe by construction; these two get the SAME range check
+    # `_validate_sse_poll_interval_secs`/`_validate_max_sse_clients` perform, run again here
+    # (matching every other business-rule check in this function that also re-validates past a
+    # field's own inline validator, e.g. the interpreter-boundary allowlist loop above) since a
+    # blank/whitespace-only answer skips the inline validator entirely (`fields.validate_value`'s
+    # own "only when non-blank" rule) and must still fall back to the default rather than crash.
+    log_level = answers["log_level"]
+    identity_enforcement = answers["identity_enforcement"]
+    identity_enforcement_override = answers["identity_enforcement_override"]
+    sse_raw = answers["sse_poll_interval_secs"].strip() or str(boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS)
+    problem = _validate_sse_poll_interval_secs(sse_raw)
+    if problem:
+        cl.add("boundary", "multiplex TOML values validated", ck.REFUSED,
+                f"sse_poll_interval_secs {sse_raw!r} {problem}")
+        return SectionResult(ok=False, errors={"sse_poll_interval_secs": problem})
+    sse_poll_interval_secs = float(sse_raw)
+    clients_raw = answers["max_sse_clients"].strip() or str(boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS)
+    problem = _validate_max_sse_clients(clients_raw)
+    if problem:
+        cl.add("boundary", "multiplex TOML values validated", ck.REFUSED,
+                f"max_sse_clients {clients_raw!r} {problem}")
+        return SectionResult(ok=False, errors={"max_sse_clients": problem})
+    max_sse_clients = int(clients_raw)
+
+    # Absent-means-default (the parser's own contract, `serving/boundary_multiplex_config.py`):
+    # a top-level/per-deployment key is written ONLY when it differs from that module's own
+    # default -- an all-defaults run emits BYTE-IDENTICAL TOML to before these fields existed.
+    top_level_lines: list[str] = []
+    if log_level != boundary_diagnostic_log.DEFAULT_LEVEL:
+        top_level_lines.append(f'log_level = "{log_level}"')
+    if identity_enforcement != boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT:
+        top_level_lines.append(f'identity_enforcement = "{identity_enforcement}"')
+    if sse_poll_interval_secs != boundary_multiplex_config.DEFAULT_SSE_POLL_INTERVAL_SECS:
+        top_level_lines.append(f"sse_poll_interval_secs = {sse_poll_interval_secs}")
+    if max_sse_clients != boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS:
+        top_level_lines.append(f"max_sse_clients = {max_sse_clients}")
+
+    deployment_lines = [f'pghost = "{host}"', f'pgdatabase = "{db}"', f'pguser = "{role}"',
+                         f'pgschema = "{schema}"', f'pgkern = "{kern}"']
+    if identity_enforcement_override != _IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT:
+        deployment_lines.append(f'identity_enforcement = "{identity_enforcement_override}"')
+
+    toml_text = "".join(f"{line}\n" for line in top_level_lines)
+    toml_text += f"[deployments.{world}]\n" + "".join(f"{line}\n" for line in deployment_lines)
     toml_path = os.path.join(dest, "boundary-multiplex.toml")
     lines.append(f"--- queuing write: {toml_path} ---\n{toml_text}")
     plan = state["_plan"]
@@ -138,7 +272,16 @@ def submit(state: dict, answers: dict) -> SectionResult:
     else:
         venv_python, interp_reason = None, f"NEITHER {preferred_python} NOR python3 is on PATH"
 
-    updates = {"boundary_url": boundary_url, "boundary_port": port}
+    updates = {
+        "boundary_url": boundary_url, "boundary_port": port,
+        # CONFIG-EXTENSION ADDENDUM (row 693/685): the resolved values, for world-config.toml's
+        # own self-save (config_seam.capture_resolved_config) -- ADR-0012 P1, no second
+        # re-derivation of what was actually decided this run.
+        "boundary_log_level": log_level, "boundary_identity_enforcement": identity_enforcement,
+        "boundary_identity_enforcement_override": identity_enforcement_override,
+        "boundary_sse_poll_interval_secs": sse_poll_interval_secs,
+        "boundary_max_sse_clients": max_sse_clients,
+    }
     if answers["start_now"] and venv_python:
         argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path, "--port", str(port)]
         lines.append(f"interpreter: {interp_reason}")

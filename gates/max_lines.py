@@ -413,7 +413,13 @@ BASELINE: dict[str, int] = {
     # genuinely-coupled jobs (ADR-0007's own "a single coherent unit ... where splitting would
     # fragment cross-line invariants" exception) across files for no reader benefit. Written
     # plain, no golfing (ADR-0007's no-go clause).
-    "tools/setup_tui/config_seam.py":                   414,
+    # bumped 414 -> 463 (work item setup-tui-config-extension, ledger row 685's audit / row 693):
+    # the five new boundary scalar fields (log_level/identity_enforcement(+override)/
+    # sse_poll_interval_secs/max_sse_clients) and the new courier.counterparts list each need one
+    # line in answers_for_from_config, _SCOPED_OVERRIDE_KEYS, and capture_resolved_config (the
+    # SAME three seams every existing scalar/list already threads through) -- genuinely new
+    # decision surface, not padding. Written plain, no golfing (ADR-0007's no-go clause).
+    "tools/setup_tui/config_seam.py":                   463,
     "tools/experiments/typed_table.py":                 442,
     "engine/contemp_audit.py":                          441,
     # NEW to BASELINE, 428 (design/FABLE-SETUP-TUI-TYPED-UI-SPEC.md build, spec §1's purity-gate
@@ -540,7 +546,10 @@ BASELINE: dict[str, int] = {
     # added one REGISTRY entry each (boundary-sse-events, row 169; birth-standing-steps-
     # scaffold, row 270); ceiling set to the post-merge actual (450), the same
     # additive-census-row class as every prior bump above.
-    "gates/fixture_census.py":                     450,
+    # bumped 450 -> 451 (work item setup-tui-config-extension, row 685/693): one new REGISTRY
+    # row, seen-red/setup-tui-config-extension -- the identical registration-driven shape as
+    # every prior bump above.
+    "gates/fixture_census.py":                     451,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -672,7 +681,11 @@ BASELINE: dict[str, int] = {
     # gate's own BASELINE growing to carry the gates/doc_attestation_presence.py bump (905 -> 970)
     # this same commit makes, re-measured after writing -- the same self-referential fixpoint as
     # every prior bump.
-    "gates/max_lines.py":                          797,
+    # bumped 797 -> 809 (work item setup-tui-config-extension, row 685/693): this gate's own
+    # BASELINE growing to carry the config_seam.py (414->463) and fixture_census.py (450->451)
+    # bumps this same commit makes, re-measured after writing -- the same self-referential
+    # fixpoint as every prior bump.
+    "gates/max_lines.py":                          810,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

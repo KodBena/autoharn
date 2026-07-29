@@ -182,6 +182,11 @@ def get(doc: ConfigDoc, key: str, default: object = None) -> object:
 def _render_value(val: object) -> str:
     if isinstance(val, bool):
         return "true" if val else "false"
+    # setup-tui-config-extension (row 685/693): boundary.sse_poll_interval_secs (float)/
+    # boundary.max_sse_clients (int) are this format's first native-numeric scalars -- `bool`'s
+    # own isinstance check above MUST stay first (Python's `bool` is an `int` subclass).
+    if isinstance(val, (int, float)):
+        return repr(val)
     if isinstance(val, str):
         return '"' + val.replace("\\", "\\\\").replace('"', '\\"') + '"'
     if isinstance(val, list):

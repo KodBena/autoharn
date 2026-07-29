@@ -105,6 +105,47 @@ type = "str"
 path = "boundary.start_now"
 type = "bool"
 
+# setup-tui-config-extension (ledger row 685's audit / row 693): the audit's gaps 1-5, closed as
+# --from-config keys -- every one OPTIONAL (never required_GATES; "unset" is a legitimate,
+# absent-means-default answer, config_file.py's own comment on why substrate.db-shaped contextual
+# fields are never a flat always-required set applies here too).
+[[key]]
+path = "boundary.log_level"
+type = "str"
+
+[[key]]
+path = "boundary.identity_enforcement"
+type = "str"
+
+[[key]]
+path = "boundary.identity_enforcement_override"
+type = "str"
+
+[[key]]
+path = "boundary.sse_poll_interval_secs"
+type = "float"
+
+[[key]]
+path = "boundary.max_sse_clients"
+type = "int"
+
+# setup-tui-config-extension (gap 6): courier.toml's own counterpart list. No "courier.run" gate
+# -- like "boundary"/"fork_target"/"features", the section is unconditional (an empty list is a
+# legal, meaningful answer: "this world couriers with no one yet", steps_courier.py's own
+# submit() docstring).
+[[key]]
+path = "courier.counterparts"
+type = "list_table"
+
+# FORWARD SLOTS (named, unratified -- setup-tui-config-extension's own commission, row 693):
+# neither of these is a field anywhere in this tree yet. `authn_mode` -- a courier/boundary trust-
+# protocol selection broader than courier.toml's own fixed "single-operator" -- awaits
+# design/FABLE-TRUST-PROTOCOL-V2-SPEC.md's ratification; a "scope posture" selection (which
+# entitlement/access-control scope a birth adopts) awaits design/
+# FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md's ratification. Neither spec is ratified as
+# of this build -- no key, no field, no default: naming the reserved slot here (as a comment, this
+# data file's own idiom for "not yet a field") rather than inventing a placeholder value for either.
+
 [[key]]
 path = "observability.run"
 type = "bool"

@@ -207,9 +207,13 @@ DEFAULT_SSE_POLL_INTERVAL_SECS = 2.0
 DEFAULT_MAX_SSE_CLIENTS = 16
 # Sanity ceilings, not operational tuning advice -- a value outside these is almost certainly a
 # typo (a poll interval of days, or a client cap in the millions), refused loudly at load time
-# rather than silently accepted and only discovered as a surprise in production (ADR-0002).
-_MAX_SSE_POLL_INTERVAL_SECS = 3600.0
-_MAX_SSE_CLIENTS_CEILING = 100_000
+# rather than silently accepted and only discovered as a surprise in production (ADR-0002). PUBLIC
+# (no leading underscore, work item setup-tui-config-extension): the setup TUI's own boundary step
+# validates its own operator-entered `sse_poll_interval_secs`/`max_sse_clients` fields against
+# these SAME two ceilings before ever writing boundary-multiplex.toml (ADR-0012 P1 -- one home for
+# the bound, imported by the second consumer rather than a second, driftable literal 3600/100_000).
+MAX_SSE_POLL_INTERVAL_SECS = 3600.0
+MAX_SSE_CLIENTS_CEILING = 100_000
 
 
 class MultiplexConfigError(Exception):
@@ -361,10 +365,10 @@ def _load_and_validate(
     sse_poll_interval_secs = raw.get("sse_poll_interval_secs", DEFAULT_SSE_POLL_INTERVAL_SECS)
     if (isinstance(sse_poll_interval_secs, bool)
             or not isinstance(sse_poll_interval_secs, (int, float))
-            or not (0 < sse_poll_interval_secs <= _MAX_SSE_POLL_INTERVAL_SECS)):
+            or not (0 < sse_poll_interval_secs <= MAX_SSE_POLL_INTERVAL_SECS)):
         raise MultiplexConfigError(
             f"boundary-multiplex config at {p}: 'sse_poll_interval_secs' = "
-            f"{sse_poll_interval_secs!r} is not a number in (0, {_MAX_SSE_POLL_INTERVAL_SECS}] "
+            f"{sse_poll_interval_secs!r} is not a number in (0, {MAX_SSE_POLL_INTERVAL_SECS}] "
             f"(design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 1 -- unknown/out-of-domain "
             f"values refuse loudly, before the socket ever binds; omit the key entirely for "
             f"the default, {DEFAULT_SSE_POLL_INTERVAL_SECS!r}).")
@@ -373,10 +377,10 @@ def _load_and_validate(
     max_sse_clients = raw.get("max_sse_clients", DEFAULT_MAX_SSE_CLIENTS)
     if (isinstance(max_sse_clients, bool)
             or not isinstance(max_sse_clients, int)
-            or not (1 <= max_sse_clients <= _MAX_SSE_CLIENTS_CEILING)):
+            or not (1 <= max_sse_clients <= MAX_SSE_CLIENTS_CEILING)):
         raise MultiplexConfigError(
             f"boundary-multiplex config at {p}: 'max_sse_clients' = {max_sse_clients!r} is not "
-            f"an integer in [1, {_MAX_SSE_CLIENTS_CEILING}] (design/"
+            f"an integer in [1, {MAX_SSE_CLIENTS_CEILING}] (design/"
             f"FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 4 -- unknown/out-of-domain values "
             f"refuse loudly, before the socket ever binds; omit the key entirely for the "
             f"default, {DEFAULT_MAX_SSE_CLIENTS!r}).")

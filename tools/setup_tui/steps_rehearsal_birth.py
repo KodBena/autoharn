@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import destination, governed_files
+from tools.setup_tui import destination, feature_facts, governed_files
 from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
 from tools.setup_tui.plan import CommandAct, PlanEntry
 from tools.setup_tui.runner import run_command
@@ -215,7 +215,8 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
     if state.get("features_manifest_path"):
         extra += ["--features-file", state["features_manifest_path"]]
     argv = _new_project_argv(state["_repo_root"], dest, world, db, host, extra=extra)
-    lines = [f"$ {' '.join(argv)}", "(the real birth output streams at commit time; this step "
+    lines = [feature_facts.facts_block(["birth_stamp_secret"]),
+             f"$ {' '.join(argv)}", "(the real birth output streams at commit time; this step "
              "only queues the act.)"]
     state["_plan"].append(PlanEntry(
         screen="birth", item="world birth", lesson="the world's founding scaffold + kernel chain",

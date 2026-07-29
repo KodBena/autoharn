@@ -184,6 +184,7 @@ def derive_live_keys() -> set[str]:
         "fork_target_governed_files",
         "principals_authority",
         "signed_genesis",
+        "birth_stamp_secret",
         "boundary_service", "observability_otelcol", "observability_watchdog",
         "hydration_fork_provenance", "hydration_role_charters",
         "hydration_adr_adoption",
