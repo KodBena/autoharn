@@ -415,6 +415,14 @@ import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX
 # for the full design and the witnessed contextvars-through-threadpool constraint it is built
 # around (ledger row 1498).
 import boundary_diagnostic_log  # noqa: E402
+# design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a (ledger row 643/644, work item
+# ac-read-identity): the read-observer channel for GET requests -- a SIBLING journal to
+# boundary_diagnostic_log above (that one is diagnostic-grade, "no fact may live only here";
+# this one is the spec's own witness half, "who read what"), and a SIBLING to
+# hooks/pretooluse_read_observer.py (that hook journals a Claude Code agent's own filesystem
+# Read calls -- an unrelated producer/consumer/subject entirely). See
+# serving/boundary_read_journal.py's own module docstring for the full reasoning.
+import boundary_read_journal  # noqa: E402
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
 # manifest derivation (`_manifest`, a directory read over kernel/lineage/ via bootstrap/
 # lineage_manifest.py, no DB call) as the ONE home for "what is the ordered kernel/lineage/*.sql
@@ -1385,6 +1393,18 @@ def _apply_minted_actor(payload: dict) -> JSONResponse | None:
 # global is exactly the hazard this project's own CLAUDE.md engineering-responsibility bar names).
 
 
+# design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a (read-path identity + read
+# journaling build): factored out of `_is_authority_bearing_write` below, which used to inline
+# this exact split -- the read journal (see `_read_journal_after_response` further down) needs
+# the identical "strip /d/{deployment}, keep the rest" computation, and ADR-0012 P1 says one
+# home, not two copies that could drift.
+def _deployment_relative_path(path: str) -> str:
+    # Strip the mandatory /d/{deployment} segment (multiplex spec §2) before the shape test --
+    # e.g. "/d/autoharn1/write/ledger" -> "/write/ledger", "/d/autoharn1/artifacts" -> "/artifacts".
+    parts = path.split("/", 3)
+    return "/" + parts[3] if len(parts) > 3 else "/"
+
+
 # The write-shaped routes the anonymous-write refusal (rung a) applies to -- every `/write/*`
 # surface plus the dedicated `/artifacts` POST (Part B's own separate route, not routed through
 # `/write/{surface}` -- see serving/README.md's own endpoint table). A GET is never
@@ -1394,10 +1414,7 @@ def _apply_minted_actor(payload: dict) -> JSONResponse | None:
 def _is_authority_bearing_write(method: str, path: str) -> bool:
     if method != "POST":
         return False
-    # Strip the mandatory /d/{deployment} segment (multiplex spec §2) before the shape test --
-    # e.g. "/d/autoharn1/write/ledger" -> "/write/ledger", "/d/autoharn1/artifacts" -> "/artifacts".
-    parts = path.split("/", 3)
-    rest = "/" + parts[3] if len(parts) > 3 else "/"
+    rest = _deployment_relative_path(path)
     return rest.startswith("/write/") or rest == "/artifacts"
 
 
@@ -3145,7 +3162,33 @@ def sse_saturated(max_clients: int, message: str) -> JSONResponse:
     return JSONResponse(status_code=503, content=body.model_dump())
 
 
-def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
+# design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: the ONE place a GET route
+# builds its row-shaped JSON response AND binds the read journal's own row-count fact --
+# deliberately NOT a body-sniffing pass in the outer middleware (the first-tried shape here):
+# `call_next`'s BaseHTTPMiddleware wrapping always hands the middleware back a StreamingResponse
+# with no static `.body` at all (witnessed live while wiring this build -- even for a single
+# registered middleware, `call_next` captures the downstream ASGI messages into a fresh
+# streaming wrapper; there is no `.body` attribute left to read past that point, and DRAINING
+# the stream to reconstruct one would change every GET route's wire-level transfer framing, an
+# unwanted side effect this shape avoids entirely). Binding the count HERE instead -- where the
+# route handler still holds the real Python `list`/dict/`None` -- needs no re-parsing and
+# touches no framing at all. A bare `list` reports its own `len`; a single JSON object (a
+# row-by-id/stat route) reports `1`; `None` (the not-found sentinel a few routes pass) reports
+# `0`. `boundary_diagnostic_log.bind_read_row_count` is a no-op outside a live request (this
+# project's own direct/unit-shaped call sites), matching `bind_identity`/`bind_deployment`'s own
+# posture.
+def _json_read_response(content: Any, *, status_code: int = 200) -> JSONResponse:
+    if isinstance(content, list):
+        n = len(content)
+    elif content is None:
+        n = 0
+    else:
+        n = 1
+    boundary_diagnostic_log.bind_read_row_count(n)
+    return JSONResponse(status_code=status_code, content=content)
+
+
+def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None) -> FastAPI:
     """Multiplex spec §2: ONE app serves every deployment in `configs`, discriminated by the
     leading `/d/{deployment}` path segment on every route -- no unprefixed routes survive (the
     route table stays closed and single-shaped, not dual-dialect; a single-deployment config is
@@ -3154,7 +3197,15 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
     `_resolve_deployment` FIRST, returning the typed 404 `unknown_deployment` immediately when
     it is not a key of `configs` -- everything past that point is byte-identical to the
     single-deployment predecessor's own handler body (the resolved `cfg` local shadows the
-    parameter name every pre-multiplex query below already used, so no query text changes)."""
+    parameter name every pre-multiplex query below already used, so no query text changes).
+
+    `world_dir` (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a): the directory
+    holding this process's `--config` (`main()` derives it once, from that argv's own parent,
+    and passes it here) -- the SAME directory `serving/ensure_running.py`'s `spawn_and_wait`
+    already writes `service.log` into. `None` for a direct/unit-shaped caller with no such
+    directory (this project's own fixture bank) -- `boundary_read_journal.append_read` is a
+    no-op in that case, never a crash, matching every other "absence is not itself a refusal"
+    posture already established for `REQUEST_CONTEXT`."""
     app = FastAPI(
         title="autoharn ledger boundary service",
         description="The outer declared Port into an autoharn-managed ledger "
@@ -3276,6 +3327,31 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             boundary_diagnostic_log.log_event(
                 boundary_diagnostic_log.Event.REQUEST_END,
                 route=ctx.route, status=status, duration_ms=duration_ms)
+            # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: the read-observer
+            # channel, for every completed GET whose identity resolution actually ran (i.e. not
+            # the malformed-header-refusal early-return above, which returns before
+            # `bind_identity` is ever called and carries no resolved identity to journal in the
+            # first place -- that refusal is already visible on the diagnostic log via its own
+            # `refusal` event). `ctx.resolution_case is not None` is the exact predicate
+            # `boundary_diagnostic_log.log_event` already uses to decide whether to enrich a
+            # record with identity fields -- reused here rather than re-derived. POST is
+            # deliberately excluded (spec §1a scopes this build to reads; the write path's own
+            # evidentiary basis is the kernel's s43 refusal journal, not this one).
+            if (ctx.method == "GET" and ctx.resolution_case is not None
+                    and response is not None):
+                identity: dict[str, Any] = {"channel": ctx.resolution_case}
+                if ctx.resolution_case == "minted":
+                    identity["principal"] = ctx.principal
+                elif ctx.resolution_case == "vendor":
+                    identity["agent"] = (ctx.vendor_stamp or {}).get("vendor_agent")
+                boundary_read_journal.append_read(
+                    world_dir,
+                    deployment=ctx.deployment,
+                    route=ctx.route,
+                    view=_deployment_relative_path(ctx.route),
+                    identity=identity,
+                    row_count=ctx.read_row_count,
+                )
             boundary_diagnostic_log.REQUEST_CONTEXT.reset(token)
 
     @app.exception_handler(PsqlInfraFailure)
@@ -3396,7 +3472,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
                 f"ORDER BY id LIMIT {limit}) t;",
             )
-            return JSONResponse(content=rows)
+            return _json_read_response(rows)
         # `include_superseded=true`: reads the RAW `ledger` table (record semantics, every row
         # ever written, current or superseded -- the same raw-table read `rows_asof` below
         # already uses one route over) rather than the `ledger_current` view, so a superseded
@@ -3416,7 +3492,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"FROM {cfg.schema}.ledger l WHERE l.id > {after_id} "
             f"ORDER BY l.id LIMIT {limit}) t;",
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/rows/{row_id}")
     def row_by_id(deployment: str, row_id: int) -> Response:
@@ -3433,7 +3509,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             cfg, f"SELECT to_jsonb(t) FROM (SELECT * FROM {cfg.schema}.ledger WHERE id = {row_id}) t;")
         if row is None:
             return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
-        return JSONResponse(content=row)
+        return _json_read_response(row)
 
     @app.get("/d/{deployment}/rows/{row_id}/history")
     def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
@@ -3508,7 +3584,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"  ORDER BY l.id LIMIT {limit}"
             f") t;",
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/credited")
     def credited(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3536,7 +3612,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"(SELECT * FROM {cfg.schema}.credited_current WHERE id > {after_id} "
             f"ORDER BY id LIMIT {limit}) t;",
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/standing/principals")
     def standing_principals(deployment: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3571,7 +3647,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"(SELECT * FROM {cfg.schema}.principal_standing_current WHERE id > {after_id} "
             f"ORDER BY id LIMIT {limit}) t;",
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/work/items")
     def work_items(deployment: str, after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
@@ -3638,7 +3714,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"ORDER BY slug LIMIT {limit}) t;",
             extra_v={"after_slug": after_slug},
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/views/{view}")
     def views_view(deployment: str, view: str, after_id: int = 0, after_slug: str = "",
@@ -3726,7 +3802,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                     f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
                     f"ORDER BY {key_col} LIMIT {limit}) t;",
                 )
-                return JSONResponse(content=rows)
+                return _json_read_response(rows)
             # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
             # view's own text key column. A supplied after_id on a slug-keyed view is never
             # silently ignored either (A11 item 1's own precedent).
@@ -3751,7 +3827,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                 f"ORDER BY {key_col} LIMIT {limit}) t;",
                 extra_v={"after_slug": after_slug},
             )
-            return JSONResponse(content=rows)
+            return _json_read_response(rows)
 
         # NON-UNIQUE key: the round-2 atomic-tie-group keyset (ledger rows 153/154 -- round 1's
         # CRITICAL finding fixed the plain-non-unique-key case; round 2's CRITICAL-adjacent
@@ -3808,7 +3884,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             extra = len(rows) - limit
             if extra > MAX_TIE_GROUP_EXTRA_ROWS:
                 return _tie_group_too_large(view, extra)
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/rows/asof/{ts}")
     def rows_asof(deployment: str, ts: str, after_id: int = 0, limit: int = 100) -> Response:
@@ -3858,7 +3934,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             f"ORDER BY l.id LIMIT {limit}) t;",
             extra_v={"asof": parsed.isoformat()},
         )
-        return JSONResponse(content=rows)
+        return _json_read_response(rows)
 
     @app.get("/d/{deployment}/meta", response_model=MetaResponse)
     def meta(deployment: str) -> Response:
@@ -4262,6 +4338,14 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if row is None:
             return JSONResponse(status_code=404, content={
                 "detail": f"no artifact registered with hash {hash!r}."})
+        # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: this route returns raw
+        # bytes, never `_json_read_response` (no JSON envelope -- see this handler's own
+        # docstring), so it must bind the read journal's row-count fact itself, HERE, at the
+        # exact point its sibling `artifact_stat` does (where the handler holds the real `row`).
+        # `1 if row else 0` mirrors `_json_read_response`'s own single-object case -- the 404
+        # path above already returned before this line, matching `artifact_stat`'s own treatment
+        # (that route's 404 also returns before ever calling `_json_read_response`).
+        boundary_diagnostic_log.bind_read_row_count(1 if row else 0)
         raw = base64.b64decode(row["b64"])
         computed = hashlib.sha256(raw).hexdigest()
         if computed != hash:
@@ -4294,7 +4378,7 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         if row is None:
             return JSONResponse(status_code=404, content={
                 "detail": f"no artifact registered with hash {hash!r}."})
-        return JSONResponse(content=row)
+        return _json_read_response(row)
 
     def artifact_put(deployment: str, request: Request, raw_body: bytes = Depends(_bounded_artifact_body)) -> Response:
         """design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part B, route 3: register bytes.
@@ -4510,7 +4594,12 @@ def main(argv: list[str] | None = None) -> int:
             dep_limit=per_dep_limit,
             identity_enforcement=identity_enforcement_by_deployment[name],
         )
-    app = create_app(configs)
+    # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: the world directory for the
+    # read journal is derived ONCE here, from --config's own parent -- the SAME directory
+    # `serving/ensure_running.py`'s `spawn_and_wait` already writes `service.log`/
+    # `boundary-multiplex.toml` into (never re-derived per request, ADR-0012 P1).
+    world_dir = Path(args.config).resolve().parent
+    app = create_app(configs, world_dir=world_dir)
     if args.pidfile:
         # BIND-AS-LOCK, DONE HERE, SYNCHRONOUSLY, BEFORE UVICORN EVER STARTS (design/
         # FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2; round-1 review SEVERE-2 fix). An app-level

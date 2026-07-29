@@ -387,7 +387,11 @@ def main() -> int:
             "known_views", "lineage_head", "boundary_version", "protocol_version",
             "authn_mode", "max_tie_group_extra_rows",
         }
-        new_meta_keys = {"max_sse_clients", "sse_poll_interval_secs"}
+        # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a added a THIRD additive
+        # /meta field past this SSE build's own two -- included here too, so this check keeps
+        # meaning "no field this test does not already know about", not "no field past exactly
+        # the SSE build's two".
+        new_meta_keys = {"max_sse_clients", "sse_poll_interval_secs", "read_identity_journal"}
         check("/meta minus the two new SSE fields is byte-shape-identical to pre-build",
               m_status2 == 200 and isinstance(m_body2, dict)
               and (set(m_body2) - new_meta_keys) == pre_existing_meta_keys,

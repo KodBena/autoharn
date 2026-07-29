@@ -1,0 +1,35 @@
+seen-red/ac-read-identity/red.txt -- RED capture, banked per gates/fixture_census.py's own
+"a gate never seen red is a claim" discipline (ADR-0011).
+
+Captured by running seen-red/ac-read-identity/run_fixtures.py (this fixture's own code,
+unchanged) against the tree BEFORE this build's own changes: `git stash push -u` of
+serving/boundary_read_journal.py (the new module), serving/boundary_service.py,
+serving/boundary_diagnostic_log.py, serving/boundary_models.py, gates/fixture_census.py, and
+seen-red/boundary-sse-events/run_fixtures.py (its /meta byte-shape fixup) -- this fixture's own
+directory (seen-red/ac-read-identity/) and gates/fixture_census.py's own registry entry left
+OUT of the stash, so the proof itself and its registration both stayed in place; only the
+production code they exercise reverted.
+
+Command: env -u PGOPTIONS python3 seen-red/ac-read-identity/run_fixtures.py
+
+Observed (verbatim):
+
+Traceback (most recent call last):
+  File ".../seen-red/ac-read-identity/run_fixtures.py", line 61, in <module>
+    import boundary_read_journal  # noqa: E402  (this build's own new module -- the performance leg calls it directly)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'boundary_read_journal'
+
+Exit code: 1
+
+WHY THIS IS THE RIGHT RED (not an accidental/unrelated failure): design/
+FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1a's own read-observer channel
+(serving/boundary_read_journal.py) does not exist at all on the pre-build tree -- this
+fixture's own leg6 performance measurement calls `boundary_read_journal.append_read` directly,
+so the import itself is the first thing to fail, before a single HTTP request is even made.
+This is exactly the class of RED the ac-read-identity build closes: after the build, the SAME
+fixture, unchanged, passes every one of its six witness legs (leg1 identity-conduit
+byte-identity across anonymous/vendor/minted; leg2 per-channel journal correctness; leg3
+zero-row-content; leg4 /meta advertisement; leg5 POST byte-unchanged with no journal growth;
+leg6 the performance disclosure) GREEN, witnessed against a real scratch WORLD B (s43 head) on
+a dynamic loopback port.

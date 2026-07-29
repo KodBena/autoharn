@@ -139,6 +139,20 @@ class RequestContext:
     # top-level fields: `_psql` only ever needs "is there a vendor stamp, and if so its whole
     # value set", never a single GUC in isolation.
     vendor_stamp: dict[str, str] | None = None
+    # design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a (work item ac-read-identity):
+    # a bare row count for the read journal (serving/boundary_read_journal.py), bound by a GET
+    # route handler at the one place it still holds the real Python value (a list/dict/None)
+    # BEFORE that value is serialized into a response body -- never re-derived by re-parsing an
+    # already-rendered response downstream, which is not even possible for every route past this
+    # module's own middleware boundary (`call_next`'s BaseHTTPMiddleware wrapping always returns
+    # a StreamingResponse with no static `.body` attribute; only `bind_read_row_count`, called
+    # from inside the handler, ever sees the real value). `None` for a route this build does not
+    # instrument (an SSE stream, a capability-metadata route with no row concept) -- never a
+    # fabricated number. NOT part of `EVENT_REQUIRED_FIELDS`/`log_event`'s own merged record
+    # (this diagnostic log's closed 8-event vocabulary is unchanged by this field's addition) --
+    # `serving/boundary_service.py`'s own read-journal middleware code is this field's ONLY
+    # reader.
+    read_row_count: int | None = None
 
 
 def bind_identity(resolution_case: str, *, principal: str | None = None,
@@ -175,6 +189,19 @@ def bind_deployment(deployment: str) -> None:
     ctx = REQUEST_CONTEXT.get()
     if ctx is not None:
         ctx.deployment = deployment
+
+
+def bind_read_row_count(n: int | None) -> None:
+    """design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec1a: mutates the CURRENT
+    request's own `RequestContext.read_row_count` in place -- the SAME `bind_deployment`/
+    `bind_identity` pattern above (mutate the shared object, never `REQUEST_CONTEXT.set()` from
+    inside a threadpool worker). Called from `serving/boundary_service.py`'s own
+    `_json_read_response` helper, itself called from every GET route handler that returns a
+    row-shaped JSON body. A no-op when no request context is bound (a direct, non-HTTP call
+    site -- this project's own fixture bank calling route-adjacent helpers directly)."""
+    ctx = REQUEST_CONTEXT.get()
+    if ctx is not None:
+        ctx.read_row_count = n
 
 
 def current_route() -> str | None:
