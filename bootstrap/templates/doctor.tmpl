@@ -14,7 +14,7 @@ below is a SELECT, an HTTP GET, or an `os.access`/subprocess exit-code read. It 
 "is this world set up right", never changes the answer.
 
 EACH LINE IS PASS/FAIL/SKIP, ONE LINE, ONE DETAIL (house convention: distance-to-clean.tmpl's
-own one-section-one-line shape, reused here across seven independent facts instead of one
+own one-section-one-line shape, reused here across ten independent facts instead of one
 composed debt count). SKIP is a DISTINCT, HONEST verdict from FAIL -- e.g. "no boundary_url
 configured" is not a defect (a freshly-scaffolded world never auto-starts a boundary service;
 the scaffold's own header comment for --boundary-url says so explicitly), so it must not read
@@ -65,8 +65,9 @@ if any(a in ("--help", "-h") for a in sys.argv[1:]):
         "\n"
         "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
         "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
-        "high-water/epoch, ./autoharn led answers a read query, boundary URL, principals registered,\n"
-        "courier principal registered, world_identity populated.\n"
+        "high-water/epoch, owner/access split premise, ./autoharn led answers a read query,\n"
+        "boundary URL, principals registered, courier principal registered, world_identity\n"
+        "populated.\n"
         "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
         "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
         "least one FAIL line. Takes no arguments beyond --help/-h."
@@ -173,6 +174,127 @@ def check_lineage(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     if r2.returncode == 0 and r2.stdout.strip():
         epoch_detail = f", migration_epoch.epoch={r2.stdout.strip()}"
     return _line("lineage high-water/epoch", PASS, f"chain_high_water.max_id={max_id}{epoch_detail}"), PASS
+
+
+def _read_declared_owner_access_split(path: Path) -> bool | None:
+    """Reads the OPTIONAL `owner_access_split` key straight out of deployment.json's raw JSON,
+    deliberately bypassing `deployment_record.DeploymentRecord` -- that module's own
+    `load_deployment` accepts-and-ignores any key it does not know about (its docstring's own
+    "extra keys ... a future consumer adds a field to does not break this loader"), so a key no
+    scaffold writes yet would be silently dropped rather than exposed as an attribute this check
+    could read. This field is FORWARD-LOOKING: a future scaffold change (S2b, named in this
+    check's own docstring) is expected to have `bootstrap/new-project.sh` write
+    `"owner_access_split": true` into deployment.json at birth for every world scaffolded to
+    connect as a non-owning, non-superuser identity by construction. No world scaffolded before
+    that change carries the key -- returns None for those (absent key, unreadable file,
+    unparseable JSON, or a non-bool value), True/False only when the key is present and a JSON
+    boolean. Deliberately NOT added to `DeploymentRecord`/`_REQUIRED_FIELDS` here: that is the
+    future scaffold change's own edit to make, not this read-only check's."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    val = raw.get("owner_access_split")
+    return val if isinstance(val, bool) else None
+
+
+def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """Opus AC suggestion S2a (work item doctor-privilege-premise-check, ledger row 599),
+    adjudicated ADOPT-RESHAPED to three states: does the identity `doctor` itself connects as --
+    no `SET ROLE`, the same bare connection `check_db` above already makes -- hold superuser, and
+    does it own the governed schema (`dep.schema`)? Both are TRUE in an unreformed world (every
+    other `*.tmpl` in this tree, `legacy-pickup.tmpl`/`legacy-distance-to-clean.tmpl`/
+    `verify-chain.tmpl`/`verify-commission.tmpl` alike, connects as an owner/superuser identity
+    and only narrows via an explicit `SET ROLE <dep.role>` for the ONE query it runs -- the
+    connection itself never lost the owning/superuser power, so any bug, typo, or missing
+    `SET ROLE` at a new call site silently runs at full privilege instead of refusing).
+
+    WHY THIS MATTERS, TAUGHT PLAINLY (kept in every rendered line, not just this docstring) --
+    three concrete places a superuser-or-owner CONNECTING identity quietly defeats a protection
+    this project's kernel otherwise relies on:
+      - s17 (`kernel/lineage/s17-stamp-mechanism.sql`): `kern.stamp_secret` is
+        `REVOKE ALL FROM PUBLIC`, no GRANT to the subject role at all -- only a SECURITY DEFINER
+        function may read it, and only to return a boolean, never the secret itself. A
+        superuser, or the schema owner, reads the table directly regardless of that REVOKE
+        (ownership and superuser both bypass ordinary privilege checks in Postgres) -- the ONE
+        protection s17's whole stamp scheme depends on holds only for a non-owning,
+        non-superuser connection.
+      - s43 (`kernel/lineage/s43-typed-verdict-write-boundary.sql`): REVOKEs raw INSERT on the
+        ledger/review_detail tables and routes writes through four boundary functions instead --
+        that file's own commentary names the gap explicitly ("owner/superuser direct DML --
+        named not covered", "The superuser/schema-owner bound stands"). The write boundary is a
+        privilege fence; a connection that owns the fenced tables, or is superuser, was never
+        inside it.
+      - Adopter-built Row-Level Security: Postgres RLS policies are bypassed outright by
+        superusers, and by a table's owner unless that owner opted into `FORCE ROW LEVEL
+        SECURITY` on their own table (and even then, the owner can always turn that back off) --
+        so any RLS an adopter layers on top of this schema is dead weight the moment the
+        connecting identity that reads it is the schema's own owner or a superuser.
+
+    THREE STATES (module docstring's PASS/FAIL/SKIP vocabulary; a fourth word is not invented --
+    ledger row 599's own INFO idea renders here as SKIP, the vocabulary's existing "distinct,
+    honest verdict from FAIL" slot, disclosed rather than silently substituted):
+      PASS -- deployment.json declares `"owner_access_split": true` (see
+              `_read_declared_owner_access_split` above) AND the live connection matches it:
+              non-superuser, does not own `dep.schema`. Declaration and premise agree.
+      FAIL -- deployment.json declares the split but the LIVE premise is broken (superuser, or
+              owns the schema, or both) -- a real alarm: this world claimed the fence stands and
+              it does not.
+      SKIP -- no declaration in deployment.json (every world scaffolded before the S2b change
+              this check's own docstring names, i.e. every world today). Reports the OBSERVED
+              fact (superuser? owns the schema?) and the same s17/s43/RLS teach-text above, plus
+              the forward path: the split becomes checkable, not just observable, once a future
+              scaffold change writes `owner_access_split` at birth -- this world's own premise
+              cannot be fixed in place (runs are linear; a world is reformed by being reborn, not
+              patched)."""
+    r = _psql(dep.host, dep.db,
+              # NOTE: rolsuper is left as a native boolean column, NOT cast to ::text -- psql -tA
+              # renders a native boolean column as the abbreviated 't'/'f' (matched below), whereas
+              # an explicit ::text cast invokes bool_out's SPELLED-OUT 'true'/'false' text instead
+              # (verified live) -- a first cut of this check cast it and always read FALSE
+              # (comparing 'true' against the expected 't'), reporting every world as split-enforced
+              # regardless of the live fact. Fixed here, not papered over with a wider string match.
+              "SELECT current_user, "
+              "(SELECT rolsuper FROM pg_roles WHERE rolname = current_user), "
+              "COALESCE((SELECT pg_get_userbyid(nspowner) FROM pg_namespace "
+              "WHERE nspname = :'schema'), '(no such schema)');",
+              {"schema": dep.schema})
+    if r.returncode != 0:
+        return _line("owner/access split", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    parts = r.stdout.strip().split("|")
+    if len(parts) != 3:
+        return _line("owner/access split", FAIL, f"unexpected query output: {r.stdout!r}"), FAIL
+    connecting_role, is_super_raw, owner = (p.strip() for p in parts)
+    is_super = is_super_raw == "t"
+    owns_schema = owner == connecting_role
+    split_in_force = (not is_super) and (not owns_schema)
+    fact = (f"connecting as '{connecting_role}' ({'superuser' if is_super else 'not superuser'}), "
+            f"schema '{dep.schema}' owned by '{owner}' "
+            f"({'same role -- owns it' if owns_schema else 'a different role'})")
+
+    declared = _read_declared_owner_access_split(DEPLOYMENT_PATH)
+    if declared is True:
+        if split_in_force:
+            return _line("owner/access split", PASS,
+                         f"declared and honored -- {fact}"), PASS
+        return _line("owner/access split", FAIL,
+                     f"deployment.json declares owner_access_split=true but the live premise is "
+                     f"broken -- {fact}. A superuser-or-owner connection bypasses s17's "
+                     f"stamp_secret REVOKE, s43's write-boundary REVOKE, and any adopter-built "
+                     f"RLS alike -- this world claimed the fence stands and it does not."), FAIL
+    teach = (
+        "no owner_access_split declaration in deployment.json (every world scaffolded before "
+        "the S2b scaffold change writes this field at birth) -- the premise above is observed, "
+        "not enforced-and-checked, and cannot be fixed in this world in place (runs are linear; "
+        "reform arrives by rebirth, not a patch). What it means meanwhile: a superuser-or-owner "
+        "connecting identity bypasses s17's stamp_secret REVOKE (kernel/lineage/"
+        "s17-stamp-mechanism.sql), s43's write-boundary REVOKE (kernel/lineage/"
+        "s43-typed-verdict-write-boundary.sql, which itself names 'owner/superuser direct DML' "
+        "as out of scope), and silently defeats any Row-Level Security an adopter layers on top "
+        "(Postgres RLS is bypassed by superusers and by a table's own owner by default)")
+    return _line("owner/access split", SKIP, f"{fact} -- {teach}"), SKIP
 
 
 def check_led(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
@@ -396,7 +518,8 @@ def main() -> int:
     if dep is None:
         skip_reason = "deployment.json did not parse (see line above)"
         for label in ("database reachable", "schema + kern schema exist",
-                      "lineage high-water/epoch", "./autoharn led answers a read query",
+                      "lineage high-water/epoch", "owner/access split",
+                      "./autoharn led answers a read query",
                       "boundary URL", "principals registered", "courier principal registered",
                       "world_identity populated"):
             print(_line(label, SKIP, skip_reason))
@@ -411,13 +534,15 @@ def main() -> int:
     verdicts.append(db_verdict)
 
     if db_verdict == PASS:
-        for line, verdict in (check_namespaces(dep), check_lineage(dep), check_principals(dep),
+        for line, verdict in (check_namespaces(dep), check_lineage(dep),
+                               check_owner_access_split(dep), check_principals(dep),
                                check_courier_registered(dep), check_world_identity(dep)):
             print(line)
             verdicts.append(verdict)
     else:
         skip_reason = "database unreachable (see line above)"
-        for label in ("schema + kern schema exist", "lineage high-water/epoch", "principals registered",
+        for label in ("schema + kern schema exist", "lineage high-water/epoch",
+                      "owner/access split", "principals registered",
                       "courier principal registered", "world_identity populated"):
             print(_line(label, SKIP, skip_reason))
             verdicts.append(SKIP)
