@@ -1,10 +1,3 @@
-<!-- doc-attest-exempt: as-delivered survey record, filed verbatim 2026-07-28 (commission
-row 168 part b, brief COMMISSION-PANEL-GXP-SURFACE-FRESH.md; the INDEPENDENT fresh-eyes
-variant -- its independence clause forbade it both prior survey documents, and it states
-compliance in its own preamble. Opus exception -- to the project's Sonnet-default authoring policy -- maintainer-granted by the request itself).
-ADR-0017 legibility loop (the zero-context-reader standard, law/adr/0017-the-zero-context-reader.md) NOT yet run; pending, same as its siblings. Removal condition:
-the loop's attestation record supersedes this exemption. -->
-
 **Provenance:** produced by the commissioned fresh-eyes surveyor (Opus, 2026-07-28), the
 anchoring-free second variant the maintainer requested alongside the delta survey
 ([PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](PANEL-GXP-SURFACE-UPDATE-2026-07-28.md)). The two are designed to be read against each

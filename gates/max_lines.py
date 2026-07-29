@@ -260,7 +260,16 @@ BASELINE: dict[str, int] = {
     # the census missed it the first time; the now-dead `import subprocess` removed (net cost of
     # the fix, not padding -- the removal partially offsets the added explanatory lines). Written
     # plain, no golfing; witnessed growth.
-    "gates/doc_attestation_presence.py":                905,
+    # Reconciled +65 to 970 (2026-07-29, work item attestation-schema-multiround, row 315):
+    # the multi-round extension -- `_validate_round_summary` (a new, genuinely different
+    # validation shape for a rounds>MAX_ROUNDS escalated record) plus `validate_record`'s new
+    # length-vs-MAX_ROUNDS branch plus the docstring explaining both. Trimmed once already (the
+    # first draft measured 1000; the module docstring's MULTI-ROUND EXTENSION section, the
+    # MAX_ROUNDS comment, and validate_record's inline comments were all cut to their essentials,
+    # full rationale left to design/ORCH-SPEC-DOC-ATTESTATION-2.md's migration note rather than
+    # duplicated here) before this count was measured -- not padding, not golfed further at the
+    # cost of the module being self-explanatory. Witnessed growth.
+    "gates/doc_attestation_presence.py":                970,
     # Reconciled +7 to 820 (design/FABLE-RESERVATION-RESIDUE-SPEC.md §7 amendment,
     # kernel/lineage/s56-reservation-residue.sql): work_review_floor_atoms' `discharged` leg
     # widens to verdict IN ('attest','attest_with_reservations') -- genuinely new discharge
@@ -659,7 +668,11 @@ BASELINE: dict[str, int] = {
     # union-merged at the SSE + birth-steps merge (row 334): both parents' self-
     # referential bumps (782 / 783) collapse to this file's own post-merge actual,
     # re-measured after writing -- the same fixpoint as every prior bump.
-    "gates/max_lines.py":                          784,
+    # bumped 784 -> 797 (2026-07-29, work item attestation-schema-multiround, row 315): this
+    # gate's own BASELINE growing to carry the gates/doc_attestation_presence.py bump (905 -> 970)
+    # this same commit makes, re-measured after writing -- the same self-referential fixpoint as
+    # every prior bump.
+    "gates/max_lines.py":                          797,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

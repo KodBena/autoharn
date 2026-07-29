@@ -27,6 +27,13 @@ exists to protect):
                           (compatibility); an unknown schema is refused fail-closed; and --record
                           refuses an escalated-without-adjudication body AT WRITE TIME (exit 2,
                           nothing appended) while accepting and writing a /2 record with one.
+  MULTI-ROUND         -- doc-attestation/2's multi-round extension (work item
+                          attestation-schema-multiround, design/ORCH-SPEC-DOC-ATTESTATION-2.md
+                          migration note): a well-shaped escalated 3-round record (extended
+                          round/verdict/summary shape) validates; the same rounds>2 list is
+                          refused when escalated is false, when the schema is /1, when it carries
+                          no adjudication, or when an extended round is missing 'summary', has
+                          non-sequential round numbers, carries an extra key, or a bad verdict.
   REPORT-NEVER-FAILS  -- report mode (no args) always exits 0, mirroring gates/doc_shapes.py.
 
 No network, no DB, no cost: pure-stdlib gate, temp files + a monkeypatched REPO_ROOT/LEDGER_PATH
@@ -214,6 +221,57 @@ def main() -> int:
                           "clauses_checked": [["1a"], ["1b"]]}]), False),
         ]
         for label, record, want_clean in v2_cases:
+            issues = mod.validate_record(record)
+            ok = (not issues) if want_clean else bool(issues)
+            print(f"CASE {label}: {'clean' if not issues else str(len(issues)) + ' issue(s)'}"
+                  f" -> {'OK' if ok else 'WRONG'}")
+            if not ok:
+                failures.append(f"{label}: expected {'clean' if want_clean else 'refused'}, got {issues}")
+
+        # --- MULTI-ROUND EXTENSION (work item attestation-schema-multiround, design/
+        # ORCH-SPEC-DOC-ATTESTATION-2.md's migration note) -- doc-attestation/2, escalated:true
+        # only, unlocks a 'rounds' list past MAX_ROUNDS (2), using the extended round/verdict/
+        # summary shape (_validate_round_summary) instead of the full per-finding shape.
+        summary_rounds_3 = [
+            {"round": 1, "verdict": "DEFECT", "summary": "11 DEFECT + 7 NIT; repaired at aaa1111"},
+            {"round": 2, "verdict": "DEFECT", "summary": "6 DEFECT + 8 NIT; repaired at bbb2222"},
+            {"round": 3, "verdict": "DEFECT", "summary": "2 DEFECT + 12 NIT; repaired at closing"},
+        ]
+
+        def _v2multi(escalated, rounds, adjudication=None, schema="doc-attestation/2"):
+            r = {"schema": schema, "doc": "v2sample.md", "content_sha256": v2_hash,
+                 "b_id": "seen-red-v2-multiround-B", "rounds": rounds, "escalated": escalated,
+                 "attested_at": "2026-07-29T00:00:00Z"}
+            if adjudication is not None:
+                r["adjudication"] = adjudication
+            return r
+
+        multiround_cases = [
+            ("rounds>2, escalated:true, /2, well-shaped summaries + adjudication (a valid "
+             "escalated 3-round record passes)",
+             _v2multi(True, summary_rounds_3, adj_ok), True),
+            ("rounds>2, escalated:false (rounds>2 without escalated refused)",
+             _v2multi(False, summary_rounds_3, adj_ok), False),
+            ("rounds>2, escalated:true, NO adjudication (escalated without adjudication refused, "
+             "same seam as the 2-round case)",
+             _v2multi(True, summary_rounds_3), False),
+            ("rounds>2, escalated:true, schema doc-attestation/1 (the extension is /2-only)",
+             _v2multi(True, summary_rounds_3, adj_ok, schema="doc-attestation/1"), False),
+            ("rounds>2, escalated:true, a round missing 'summary'",
+             _v2multi(True, [summary_rounds_3[0], summary_rounds_3[1],
+                              {"round": 3, "verdict": "DEFECT"}], adj_ok), False),
+            ("rounds>2, escalated:true, non-sequential round numbers",
+             _v2multi(True, [summary_rounds_3[0], summary_rounds_3[1],
+                              {"round": 5, "verdict": "DEFECT", "summary": "s"}], adj_ok), False),
+            ("rounds>2, escalated:true, extended round object carries an extra key (closed "
+             "object, same discipline as adjudication)",
+             _v2multi(True, [summary_rounds_3[0], summary_rounds_3[1],
+                              {**summary_rounds_3[2], "phase": "B3"}], adj_ok), False),
+            ("rounds>2, escalated:true, a round with bad verdict value",
+             _v2multi(True, [summary_rounds_3[0], summary_rounds_3[1],
+                              {"round": 3, "verdict": "MAYBE", "summary": "s"}], adj_ok), False),
+        ]
+        for label, record, want_clean in multiround_cases:
             issues = mod.validate_record(record)
             ok = (not issues) if want_clean else bool(issues)
             print(f"CASE {label}: {'clean' if not issues else str(len(issues)) + ' issue(s)'}"
@@ -410,7 +468,9 @@ def main() -> int:
     print("doc-attestation-presence red-specimen: all cases behaved as designed — red on a "
           "missing attestation, refused-at-write on three malformed shapes, green once a "
           "well-shaped record is recorded, the prose-mention/HTML-comment waiver distinction "
-          "holds, and report mode never fails.")
+          "holds, the multi-round extension unlocks rounds>2 only for an escalated /2 record "
+          "(and refuses it otherwise, plus its own malformed extended-round shapes), and report "
+          "mode never fails.")
     return 0
 
 

@@ -47,6 +47,14 @@ CASE V1 legacy record still validates: clean -> OK
 CASE unknown schema refused fail-closed: 1 issue(s) -> OK
 CASE non-string schema (a list) refused, not crash: 1 issue(s) -> OK
 CASE CLEAN round with unhashable clause entries refused, not crash: 1 issue(s) -> OK
+CASE rounds>2, escalated:true, /2, well-shaped summaries + adjudication (a valid escalated 3-round record passes): clean -> OK
+CASE rounds>2, escalated:false (rounds>2 without escalated refused): 1 issue(s) -> OK
+CASE rounds>2, escalated:true, NO adjudication (escalated without adjudication refused, same seam as the 2-round case): 1 issue(s) -> OK
+CASE rounds>2, escalated:true, schema doc-attestation/1 (the extension is /2-only): 1 issue(s) -> OK
+CASE rounds>2, escalated:true, a round missing 'summary': 1 issue(s) -> OK
+CASE rounds>2, escalated:true, non-sequential round numbers: 1 issue(s) -> OK
+CASE rounds>2, escalated:true, extended round object carries an extra key (closed object, same discipline as adjudication): 1 issue(s) -> OK
+CASE rounds>2, escalated:true, a round with bad verdict value: 1 issue(s) -> OK
 CASE V2 null adjudication, non-escalated (treated absent -> clean): clean -> OK
 CASE V2 null adjudication, escalated (treated absent -> refused seam): 1 issue(s) -> OK
 CASE V2 --record escalated-without-adjudication: exit=2 (want 2, nothing appended)
@@ -73,4 +81,4 @@ CASE CLASSIFY (no record -> NO-ATTESTATION): NO-ATTESTATION
 CASE CLASSIFY (record at wrong hash -> STALE): STALE
 CASE CLASSIFY (record at current hash -> ATTESTED): ATTESTED
 CASE RECORDS-FOR-DOC (two hashes, one path): 2 record(s)
-doc-attestation-presence red-specimen: all cases behaved as designed — red on a missing attestation, refused-at-write on three malformed shapes, green once a well-shaped record is recorded, the prose-mention/HTML-comment waiver distinction holds, and report mode never fails.
+doc-attestation-presence red-specimen: all cases behaved as designed — red on a missing attestation, refused-at-write on three malformed shapes, green once a well-shaped record is recorded, the prose-mention/HTML-comment waiver distinction holds, the multi-round extension unlocks rounds>2 only for an escalated /2 record (and refuses it otherwise, plus its own malformed extended-round shapes), and report mode never fails.

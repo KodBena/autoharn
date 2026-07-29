@@ -1,8 +1,5 @@
 # SPEC: doc-attestation/2 — a first-class adjudication field for escalated attestation records
 
-<!-- doc-attest-exempt: doc-tree relocation mechanical edit (work item doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) -- relative link path(s) repointed to a sibling file's new location after a git-mv relocation elsewhere in the tree; no prose rewrite, same disposition as the v1.1.2 release-cut's own markers (commit 543a389). Removal condition: strike this marker and run the real A:B:C loop next time this file is touched for content, not just link repair. -->
-
-
 Audience: orchestrator (+secondary: maintainer — the section below names both: "whoever maintains that gate" and "the maintainer reviewing this change")
 
 ## What this document is, who it is for, and what it decides
@@ -33,7 +30,9 @@ defines `doc-attestation/2`.
 ## The seam this closes
 
 When the discipline was first enforced live (BACKLOG, "First live enforcement of ADR-0017's loop
-— on the orchestrator's own merge", 2026-07-11), the very first escalation exposed a gap the
+— on the orchestrator's own merge", 2026-07-11 — BACKLOG.md was later retired to a pointer stub;
+this entry is recoverable from git history, `git show f101b19^:BACKLOG.md`), the very first
+escalation exposed a gap the
 format's designers had not yet hit: **the attestation record has no field for the escalation
 recipient's adjudication.** An escalated loop still gets a record — ADR-0017 is explicit that
 "recording a DEFECT verdict with `escalated: true` is not a failure to record, it is the honest
@@ -202,7 +201,7 @@ nothing and changes no existing record's validity.
   loud-and-self-correcting signpost, not a silent hazard, so it is **filed** (ADR-0013 Rule 4) as a
   BACKLOG follow-up rather than fixed in-pass — keeping this change small.
 
-## Closure statement (ADR-0000, 2026-07-02 amendment form)
+## Closure statement ([ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md), 2026-07-02 amendment form)
 
 **The invariant.** For every attestation record the gate reads or writes: the record's `schema` is
 a version the gate knows (`doc-attestation/1` or `/2`); and under `/2`, the escalation recipient's
@@ -275,17 +274,79 @@ record's *top-level* key set is not closed (the `/1`-inherited tolerance of unkn
 keys), so a well-shaped record carrying an extra top-level key is admitted — a bounded, declared
 looseness, not a gap in the escalation/adjudication invariant this spec governs.
 
+## Migration note: the multi-round extension (2026-07-29, work item attestation-schema-multiround)
+
+**What changed.** `doc-attestation/2`'s two-round cap (`gates/doc_attestation_presence.py`'s
+`MAX_ROUNDS = 2`, unchanged as a NUMBER) is now escapable, but only in one direction and only for
+one shape: a record whose `rounds` list has MORE than `MAX_ROUNDS` entries is admitted when
+`escalated: true` and `schema: "doc-attestation/2"`; it is refused otherwise, exactly as any
+rounds-list did before this change. Each round past the cap validates against a NEW, narrower
+shape (`_validate_round_summary`) — `round` (sequential from 1) / `verdict` (CLEAN or DEFECT) /
+`summary` (a non-empty string) — in place of the full per-finding `findings`/`clauses_checked`
+payload `_validate_round` still requires for every round at or under the cap. `adjudication`
+(this spec's own field, above) is unchanged and still mandatory whenever `escalated: true`,
+multi-round or not.
+
+**Why.** This project runs escalated-adjudicated review loops that go well past two B→C rounds
+under an explicit higher-authority adjudication — real, closed loops, not hypothetical: a 5-round
+consult ([design/CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md](CONSULT-WORK-ROLE-DOCTRINE-2026-07-28.md)),
+two 3-B-round surveys ([design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md](PANEL-GXP-SURFACE-UPDATE-2026-07-28.md),
+[design/PANEL-GXP-SURFACE-FRESH-2026-07-28.md](PANEL-GXP-SURFACE-FRESH-2026-07-28.md)),
+and a 3-round suite-wide sweep across [user-guide/USER-RECIPES-FAQ.md](../user-guide/USER-RECIPES-FAQ.md) and its eight
+`user-guide/recipes/*.md` children — all closed under what those loops' own records call "the
+kickstart precedent" ([design/PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md](PANEL-GXP-SURFACE-KICKSTART-2026-07-26.md)'s own 2-round loop was
+the first to establish that a coordinator may adjudicate past the ordinary cap). Before this
+change, the schema had no home for a loop like that: `validate_record` refused any `rounds` list
+longer than two outright, with no escape valve, so every one of those loops' outcomes was recorded
+either as a doc-level HTML-comment waiver (the `doc-attest-exempt:` marker convention) naming the
+schema gap by hand, or as
+an ad-hoc extra top-level object (`rounds_full_history`, `status`, `ts`) the gate had never
+validated and would not have caught if it were malformed — an unenforced, unshaped side-channel
+for exactly the audit information this discipline exists to keep typed. This is the identical
+class of defect the original `/2` spec (above) closed for the adjudication field alone: a real
+fact with no first-class home, hiding in prose or in fields the gate does not check.
+
+**Why the round shape is narrower past the cap, deliberately.** ADR-0017's "no verdict without a
+required shape" rule is not relaxed by this extension: an `escalated: true, rounds: []`-shaped
+"umbrella verdict for the whole loop" is still refused (a record with zero per-round detail is no
+record at all). But a per-finding transcript of every one of a 5-round loop's findings is not what
+the audit trail needs past the point the ordinary loop already requires it in full — a one-line
+summary of that round's trend and what got repaired is (see the round-object docstring on
+`_validate_round_summary` for the exact three-field shape, closed the same way `adjudication` is
+closed so it cannot become a second free-text overload home).
+
+**What stayed unchanged, witnessed.** A record with `rounds` at or under `MAX_ROUNDS` validates
+through the exact same `_validate_round` path as before this change, on every schema version and
+escalation state — this extension only ever ADDS a newly-admitted shape for the case that was
+previously refused outright; it never loosens or re-routes anything that already validated. This
+was witnessed directly, not just argued: `gates/doc_attestation_presence.py`'s report mode was run
+against the full existing corpus (272 docs in scope) both immediately before and immediately after
+this change, and the two runs' output diffed **byte-for-byte identical** — every one of the ~20
+already-banked records (`/1` and `/2` alike) validates exactly as it did before. The gate's own
+seen-red specimen ([seen-red/doc-attestation-presence/red-specimen.py](../seen-red/doc-attestation-presence/red-specimen.py)) gained red-first legs for
+the extension's own new refusal arms (rounds>2 without `escalated`; rounds>2 on `/1`; rounds>2
+escalated with no adjudication; a malformed extended round — missing `summary`, non-sequential
+`round`, an extra key, a bad `verdict`) alongside a green leg for a well-shaped escalated 3-round
+record, and the pre-existing cases were re-run unchanged and still pass.
+
+**What this note deliberately does not do.** It does not raise or remove `MAX_ROUNDS` as a number
+— the ordinary, non-escalated loop's two-round cap is exactly as tight as it always was; only an
+HONESTLY escalated loop may exceed it, and it must still carry the mandatory adjudication this
+spec's main body already requires. It does not touch ADR-0017 itself, for the same out-of-scope
+reason the original `/2` spec named above: this is the mechanization, the ADR remains the law.
+
 ## Related
 
 - [ADR-0017 (the zero-context reader)](../law/adr/0017-the-zero-context-reader.md) — the law this
   record format mechanizes; "The fresh-context audit loop" section designs the loop and its
   escalation; Revisit-when #2 is where a future maintainer amendment would cite this spec.
 - [`gates/doc_attestation_presence.py`](../gates/doc_attestation_presence.py) — the gate; its
-  module docstring's "SCHEMA VERSIONS" block is the SSOT of the on-disk format, this spec is its
+  module docstring's "SCHEMA VERSIONS" block is the [SSOT](../GLOSSARY.md#ssot) of the on-disk format, this spec is its
   rationale.
 - [ABC-AUDIT-LOOP-RECIPE.md](../user-guide/ORCH-ABC-AUDIT-LOOP-RECIPE.md) — the operator recipe for running the loop
   and recording a record.
 - [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) — the type-driven fix
   and the closure-statement form used above.
 - BACKLOG.md, "First live enforcement of ADR-0017's loop — on the orchestrator's own merge"
-  (2026-07-11) — where the seam was found and named.
+  (2026-07-11) — where the seam was found and named. BACKLOG.md was later retired to a pointer
+  stub; this entry is recoverable from git history, `git show f101b19^:BACKLOG.md`.
