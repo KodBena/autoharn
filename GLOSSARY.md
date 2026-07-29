@@ -4,7 +4,16 @@
      as gaps (design/PANEL-GXP-SURFACE-UPDATE-2026-07-28.md §4.4; design/
      PANEL-GXP-SURFACE-FRESH-2026-07-28.md C13). No A:B:C loop claimed for this touch; the
      coordinator schedules those. Removal condition: strike this marker and run the real
-     two-round A:B:C loop next time this file is touched for content. -->
+     two-round A:B:C loop next time this file is touched for content.
+
+     ADDITIONAL TOUCH (work item glossary-moot-reservation-term, autoharn3 ledger row 395,
+     2026-07-29): adds the `moot (reservation disposition)` entry, panel-requested (missive row
+     385, on the maintainer's behalf). This is the "next time this file is touched for content"
+     the removal condition above names -- the real two-round A:B:C loop was NOT run for this
+     touch either (single-commission scope, no fresh-context B dispatched); flagged here rather
+     than silently re-widening the existing waiver's stated scope. Still owed to the coordinator's
+     batch. Removal condition unchanged: strike both markers and run the real loop next time this
+     file is touched for content. -->
 
 # Glossary — autoharn's coined vocabulary
 
@@ -464,6 +473,24 @@ inspect the wrong column (`attest_verdict`, the field the s44 model-identity-att
 delta added — see the parenthetical under [typed verdict](#typed-verdict)) and mis-diagnose a
 storage bug — verdict storage was already sound; the defect was semantic (a narrow discharge
 filter), not a storage failure.
+
+<a id="moot"></a>
+### moot (reservation disposition)
+A [`reservations_outstanding`](#reservations_outstanding) entry is dispositioned **moot**, as
+opposed to **fixed**, when the concern it named no longer has a referent in the current
+system — the code, subsystem, or behavior it was about was deleted, replaced, or removed
+entirely, not addressed. The disposition *act* is identical either way and is exactly
+`reservations_outstanding`'s own path (b): "an un-superseded `review` row REGARDING THIS
+review (regards = review_id) carries verdict attest — 'reservation dispositioned', by any
+actor including the original reviewer withdrawing their own concern" (kernel/lineage/
+s56-reservation-residue.sql ELEMENT 2). s56 licenses this withdrawal irrespective of *why* the
+reservation clears — the mechanism does not itself distinguish moot from fixed; that
+distinction lives in the disposing review's `basis` prose, which should say what was
+removed/replaced and why no successor concept carries the same risk. Moot is not itself a new
+kind, column, or CHECK value (s56 adds none for this) — it is a naming convention for that
+basis text, coined here because [`review_verdicts`](#review-verdicts) makes both the
+reservation and its disposition legible and a reader needs the vocabulary to tell "the concern
+was real and was later addressed" (fixed) apart from "there is nothing left to address" (moot).
 
 ### obligation
 A `countersign_obligation` row: the obliged [principal](#principal)'s EVERY row (any kind)
