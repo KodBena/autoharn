@@ -2842,17 +2842,23 @@ class _SseHub:
     the live subscriber set for that deployment's `/events` route.
 
     LIFECYCLE (spec §1 item 1, "one shared watcher per deployment, started lazily on first
-    subscriber, stopped when the last unsubscribes"): `connect()` adds the caller's queue to
-    `subscribers` and starts `_watch_loop` as an asyncio task IFF one is not already running;
-    `disconnect()` removes the queue and, if `subscribers` is now empty, cancels the watcher task
-    and clears the reference -- so a deployment with zero live subscribers holds no running task
-    at all (witnessed via `app.state.sse_hubs`, see seen-red/boundary-sse-events/run_fixtures.py's
-    own in-process leak witness). `self.lock` (an `asyncio.Lock`, this hub is only ever touched
-    from the single uvicorn event loop thread, matching every other asyncio-native piece of this
-    service) serializes the subscribe/unsubscribe/start/stop transitions against each other and
-    against the watcher's own tail check, so two near-simultaneous connects never start two
-    watcher tasks and a connect racing a would-be-final disconnect never leaves a watcher running
-    with zero subscribers or a hole with subscribers and no watcher."""
+    subscriber, stopped when the last unsubscribes"): `connect()` runs its one head-poll `await`
+    FIRST, then adds the caller's queue to `subscribers` and starts `_watch_loop` as an asyncio
+    task IFF one is not already running, with no `await` between those two steps (row-429/
+    sse-subscriber-slot-leak: this ordering makes registration and cancellation-safety
+    inseparable -- a cancellation during the poll never registers the queue at all, so there is
+    nothing for `disconnect()` to clean up); `disconnect()` removes the queue (a no-op if it was
+    never added) and, if `subscribers` is now empty, cancels the watcher task and clears the
+    reference -- so a deployment with zero live subscribers holds no running task at all
+    (witnessed via `app.state.sse_hubs`, see seen-red/boundary-sse-events/run_fixtures.py's own
+    in-process leak witness, and seen-red/boundary-sse-events/run_fixtures.py's cancellation-
+    during-connect leak witness added for this fix). `self.lock` (an `asyncio.Lock`, this hub is
+    only ever touched from the single uvicorn event loop thread, matching every other
+    asyncio-native piece of this service) serializes the subscribe/unsubscribe/start/stop
+    transitions against each other and against the watcher's own tail check, so two
+    near-simultaneous connects never start two watcher tasks and a connect racing a would-be-final
+    disconnect never leaves a watcher running with zero subscribers or a hole with subscribers and
+    no watcher."""
 
     def __init__(self, cfg: "BoundaryConfig") -> None:
         self.cfg = cfg
@@ -2862,31 +2868,47 @@ class _SseHub:
         self.lock = asyncio.Lock()
 
     async def connect(self, queue: "asyncio.Queue[int]") -> int:
-        """Registers `queue` as a live subscriber, starting the watcher lazily if this is the
-        first one, then runs ONE immediate, synchronous poll (spec §1 item 2: "on connect the
-        server immediately emits the current head if it exceeds [the caller's Last-Event-ID]") --
-        this cannot simply trust `self.last_head` as already fresh, because the watcher task just
-        started (or has been sleeping between poll cycles) may not have observed a very recent
-        write yet. A transient poll failure here degrades to the last KNOWN head rather than
-        failing the connection -- `/events` never surfaces a `_psql`-layer failure as anything
-        other than "no new information yet"; a genuinely down kernel is still visible via every
-        OTHER route's own typed `infra_failure`. Returns the (possibly just-updated) head this
-        deployment is known to be at."""
-        async with self.lock:
-            self.subscribers.add(queue)
-            if self.watcher_task is None or self.watcher_task.done():
-                self.watcher_task = asyncio.create_task(self._watch_loop())
+        """Runs ONE immediate, synchronous poll (spec §1 item 2: "on connect the server
+        immediately emits the current head if it exceeds [the caller's Last-Event-ID]") --
+        this cannot simply trust `self.last_head` as already fresh, because the watcher task
+        may not have observed a very recent write yet -- BEFORE registering `queue` as a live
+        subscriber or starting the watcher (row-429/work-item sse-subscriber-slot-leak: this
+        ordering is deliberate and load-bearing, not cosmetic). The poll is the only `await` in
+        this method, hence the only point a caller's cancellation/timeout can land on; running
+        it before registration means a cancellation here simply never registers the queue --
+        nothing to leak, no `finally`/`disconnect()` required to make this call itself safe.
+        Once the poll (or its typed-absorb fallback) has a `head` value, the actual
+        registration + lazy watcher-start happen inside `self.lock` with NO further `await`
+        between acquiring the lock and releasing it (`asyncio.Queue.add`/`asyncio.create_task`
+        are synchronous calls), so once this method starts touching `self.subscribers` it always
+        finishes untouched by cancellation -- either the queue is fully registered and the
+        watcher invariant holds, or the queue was never added at all. A transient poll failure
+        degrades to the last KNOWN head rather than failing the connection -- `/events` never
+        surfaces a `_psql`-layer failure as anything other than "no new information yet"; a
+        genuinely down kernel is still visible via every OTHER route's own typed
+        `infra_failure`. Returns the (possibly just-updated) head this deployment is known to
+        be at."""
         try:
             head = await asyncio.to_thread(_sse_query_head, self.cfg)
         except _SSE_POLL_EXCEPTIONS:
             head = self.last_head
-        if head > self.last_head:
-            self.last_head = head
-        return self.last_head
+        async with self.lock:
+            if head > self.last_head:
+                self.last_head = head
+            self.subscribers.add(queue)
+            if self.watcher_task is None or self.watcher_task.done():
+                self.watcher_task = asyncio.create_task(self._watch_loop())
+            return self.last_head
 
     async def disconnect(self, queue: "asyncio.Queue[int]") -> None:
         """Spec §1 item 1's other half: stops the watcher the instant the LAST subscriber
-        leaves (never lingering, never leaking a task with nothing to serve)."""
+        leaves (never lingering, never leaking a task with nothing to serve). Idempotent and
+        safe to call with a `queue` that was NEVER registered (e.g. `connect()` above never
+        reached the registration step for it) -- `set.discard` is a no-op on a missing member,
+        and the emptiness check below reflects whatever `self.subscribers` actually holds, so
+        calling this defensively from `_stream()`'s own `finally` (belt-and-suspenders on top of
+        `connect()`'s own cancellation-safety above) can never mis-cancel a watcher some OTHER
+        still-registered subscriber still needs."""
         async with self.lock:
             self.subscribers.discard(queue)
             if not self.subscribers and self.watcher_task is not None:
@@ -3790,10 +3812,18 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
         hub = sse_hubs[cfg.name]
 
         async def _stream():
+            # row-429/sse-subscriber-slot-leak: `hub.connect(queue)` now runs INSIDE this
+            # try/finally (it used to run before it, unguarded) -- `connect()` itself is now
+            # cancellation-safe on its own (see its docstring: the one `await` it makes runs
+            # BEFORE registration), but registering here too means a cancellation delivered
+            # anywhere else in this generator's body -- between `connect()` returning and the
+            # `try:` line used to not exist as a gap, but any future edit that adds one is now
+            # guarded structurally rather than by review -- still always reaches `disconnect()`,
+            # which is itself safe to call on a queue `connect()` never actually registered.
             queue: asyncio.Queue[int] = asyncio.Queue()
-            known_head = await hub.connect(queue)
-            last_sent = resume_from
             try:
+                known_head = await hub.connect(queue)
+                last_sent = resume_from
                 if known_head > last_sent:
                     yield f"event: head\ndata: {json.dumps({'head_id': known_head})}\n\n"
                     last_sent = known_head
