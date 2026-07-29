@@ -63,7 +63,7 @@ from tools.configtree import NodeId  # noqa: E402
 from tools.configtree.fields import default_of, get_field_value  # noqa: E402
 from tools.configtree.ids import FieldName, ScopedFieldKey  # noqa: E402
 from tools.setup_tui import boundary_config_values as bcv  # noqa: E402
-from tools.setup_tui import config_file, steps, steps_boundary, steps_courier  # noqa: E402
+from tools.setup_tui import config_file, idtypes, steps, steps_boundary, steps_courier  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
@@ -482,6 +482,41 @@ def case_typed_construction() -> None:
           "SsePollIntervalSecs, MaxSseClients")
 
 
+def case_typed_construction_retrofit() -> None:
+    """Work item setup-tui-bare-types-retrofit (ledger rows 778/789), discharging row 776's own
+    review finding that the module's PRE-EXISTING bare scalars (host/db/schema/kern/role) get the
+    SAME treatment case_typed_construction() above already proves for the five NEW boundary-
+    multiplex values. Same case-f pattern, extended: one RED (out-of-contract value refused at
+    construction, message naming the contract) + one GREEN (valid value round-trips through
+    `.value`/`str()`) pair per new typed home in `tools/setup_tui/idtypes.py`'s "PG* TYPES"
+    section -- PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole."""
+    # PgHost: RED (a shell-metacharacter host, outside probes.valid_hostname's alphabet) + GREEN.
+    try:
+        idtypes.PgHost.parse("evil;host")
+        raise AssertionError("case f (retrofit) RED failed: PgHost accepted a non-hostname value")
+    except idtypes.PgHostError as exc:
+        assert "valid_hostname" in str(exc), exc
+    assert idtypes.PgHost.parse("192.168.122.1").value == "192.168.122.1"
+    assert str(idtypes.PgHost.parse(" db.example.com ")) == "db.example.com"
+
+    # PgDatabase/PgSchema/PgKernSchema/PgRole: same probes.valid_identifier contract, four
+    # DISTINCT classes (this module's own docstring explains why) -- RED + GREEN for each.
+    for cls, label in ((idtypes.PgDatabase, "database name"), (idtypes.PgSchema, "schema"),
+                       (idtypes.PgKernSchema, "kern schema"), (idtypes.PgRole, "role")):
+        try:
+            cls.parse("bad name!")
+            raise AssertionError(f"case f (retrofit) RED failed: {cls.__name__} accepted a "
+                                  f"non-identifier value")
+        except idtypes.PgIdentifierError as exc:
+            assert "valid_identifier" in str(exc) and label in str(exc), exc
+        assert cls.parse("toy_world1").value == "toy_world1"
+        assert str(cls.parse(" toy_world1 ")) == "toy_world1"
+
+    print("case f (retrofit) ok: each of the five NEW typed homes in idtypes.py's \"PG* TYPES\" "
+          "section refuses an out-of-contract value at construction (naming the contract) and "
+          "round-trips a valid one -- PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole")
+
+
 def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-config-extension-")
     try:
@@ -496,6 +531,7 @@ def main() -> int:
         else:
             case_pilot_driven(scratch)
         case_typed_construction()
+        case_typed_construction_retrofit()
         print("ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension "
               "(ledger row 685's audit / row 693), zero residue")
         return 0

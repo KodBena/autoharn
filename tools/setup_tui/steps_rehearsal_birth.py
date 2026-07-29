@@ -12,7 +12,8 @@ from pathlib import Path
 from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
 from tools.setup_tui import destination, feature_facts, governed_files
-from tools.setup_tui.idtypes import DestPath, DestPathError, WorldName, WorldNameError
+from tools.setup_tui.idtypes import (DestPath, DestPathError, PgDatabase, PgHost, PgHostError,
+                                      PgIdentifierError, WorldName, WorldNameError)
 from tools.setup_tui.plan import CommandAct, PlanEntry
 from tools.setup_tui.runner import run_command
 
@@ -30,13 +31,32 @@ def _teardown_argv(repo_root, world, db, host, extra=None):
     return argv + (extra or [])
 
 
+def _typed_validator(label: str, cls):
+    """Live TextField feedback for a `PgHost`/`PgDatabase` field -- delegates to the SAME typed
+    home `rehearsal_submit`/`birth_submit` below construct through (work item
+    setup-tui-bare-types-retrofit, ledger rows 778/789), matching `steps_substrate.py`'s own
+    `_typed_validator` idiom (kept as a small per-file copy, not imported, for the same reason
+    `signed_genesis.py`/`principals_authority.py`'s own near-identical `_validated_dep_fields`
+    stay separate -- see that pair's own comment)."""
+    def v(val: str) -> "str | None":
+        if not val:
+            return None
+        try:
+            cls.parse(val)
+        except ValueError as exc:
+            return str(exc)
+        return None
+    return v
+
+
 def rehearsal_fields(state: dict) -> tuple:
     return (
         ConfirmField(name="run", label="Run rehearsal (scratch birth + teardown + zero-residue "
                      "check)?", default=True),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
-                  required=False),
-        TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
+                  required=False, validator=_typed_validator("host", PgHost)),
+        TextField(name="db", label="Database", default=state.get("db", "toy"), required=False,
+                  validator=_typed_validator("database", PgDatabase)),
         TextField(name="scratch_world", label="Scratch world name (probeworldNNNN)",
                   default=f"probeworld{int(time.time())}", required=False),
         TextField(name="scratch_dir", label="Scratch scaffold directory", required=False),
@@ -52,8 +72,22 @@ def rehearsal_submit(state: dict, answers: dict) -> SectionResult:
         return SectionResult(ok=True, state_updates={"rehearsal_green": False},
                            info_lines=("rehearsal skipped by operator.",))
 
-    host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
-    db = answers["db"].strip() or state.get("db", "toy")
+    # TYPED CONSTRUCTION (work item setup-tui-bare-types-retrofit, ledger rows 778/789,
+    # discharging durable row 26's own "if the consumer is in an existing module, the module is
+    # rewritten" clause): `host`/`db` are the FIRST construction of these two values in the
+    # wizard's own flow (this section's `state_updates` below seed `pghost`/`db` for every later
+    # section, `steps_substrate.py`/`steps_boundary.py` among them) -- constructed through
+    # `idtypes.PgHost`/`PgDatabase`, the SAME typed homes those later sections now construct
+    # through, rather than travelling bare from here on. `str()` unwraps back to a plain scalar
+    # immediately -- the `run_command` argv/`state` dict below are unchanged, byte-identical.
+    try:
+        host = str(PgHost.parse(answers["host"].strip() or state.get("pghost", "192.168.122.1")))
+    except PgHostError as exc:
+        return SectionResult(ok=False, errors={"host": str(exc)})
+    try:
+        db = str(PgDatabase.parse(answers["db"].strip() or state.get("db", "toy")))
+    except PgIdentifierError as exc:
+        return SectionResult(ok=False, errors={"db": str(exc)})
     scratch_world = answers["scratch_world"].strip() or f"probeworld{int(time.time())}"
     scratch_dir = answers["scratch_dir"].strip() or f"/tmp/setup_tui_rehearsal_{scratch_world}"
     repo_root, dry_run = state["_repo_root"], state.get("dry_run", False)
@@ -148,8 +182,9 @@ def birth_fields(state: dict) -> tuple:
                      "(only used if rehearsal was not green)"),
         ConfirmField(name="run", label="Run the real birth now?", default=True),
         TextField(name="host", label="Postgres host", default=state.get("pghost", "192.168.122.1"),
-                  required=False),
-        TextField(name="db", label="Database", default=state.get("db", "toy"), required=False),
+                  required=False, validator=_typed_validator("host", PgHost)),
+        TextField(name="db", label="Database", default=state.get("db", "toy"), required=False,
+                  validator=_typed_validator("database", PgDatabase)),
         TextField(name="world", label="World name", default=state.get("world", ""), shared=True),
         TextField(name="name", label="Project name (deployment.json 'name')", required=False),
     )
@@ -177,8 +212,16 @@ def birth_submit(state: dict, answers: dict) -> SectionResult:
                "operator declined" if touched else "default (never visited/toggled)")
         return SectionResult(ok=True, info_lines=("birth skipped by operator.",))
 
-    host = answers["host"].strip() or state.get("pghost", "192.168.122.1")
-    db = answers["db"].strip() or state.get("db", "toy")
+    # TYPED CONSTRUCTION -- see `rehearsal_submit`'s own comment above (SAME `idtypes.PgHost`/
+    # `PgDatabase` typed homes, this section's own construction site for the two values).
+    try:
+        host = str(PgHost.parse(answers["host"].strip() or state.get("pghost", "192.168.122.1")))
+    except PgHostError as exc:
+        return SectionResult(ok=False, errors={"host": str(exc)})
+    try:
+        db = str(PgDatabase.parse(answers["db"].strip() or state.get("db", "toy")))
+    except PgIdentifierError as exc:
+        return SectionResult(ok=False, errors={"db": str(exc)})
     name = answers["name"].strip() or answers["world"].strip()
     try:
         world_name = WorldName.parse(answers["world"])

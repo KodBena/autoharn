@@ -103,3 +103,40 @@ Cases (a)-(d) need no live Postgres/GPG/boundary-service (every case drives `sub
 via Pilot against synthetic-but-real state, never a live birth), so nothing here is UNEXERCISED
 for lack of HARNESS_PGHOST/EPISTEMIC_PGHOST; case (e) is UNEXERCISED only if `textual` is not
 importable on the running interpreter (witnessed importable, 8.2.8, this build).
+
+ADDENDUM (fix round, review row 776 -- case f, `case_typed_construction`): each of the five NEW
+boundary-multiplex values' typed homes in `boundary_config_values.py` gets one RED (out-of-
+contract value refused at construction) + one GREEN (valid value round-trips) leg -- LogLevel,
+IdentityEnforcementPosture, IdentityEnforcementOverride, SsePollIntervalSecs, MaxSseClients.
+
+FURTHER ADDENDUM (work item setup-tui-bare-types-retrofit, ledger rows 778/789 -- case f
+(retrofit), `case_typed_construction_retrofit`): the module's PRE-EXISTING bare scalars
+(host/db/schema/kern/role, travelling bare through `steps_boundary.py`/`steps_substrate.py`/
+`steps_rehearsal_birth.py`/`signed_genesis.py`/`principals_authority.py`) now get the SAME
+treatment via five new typed homes in `tools/setup_tui/idtypes.py`'s "PG* TYPES" section --
+PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole -- each a thin frozen dataclass over
+`probes.valid_hostname`/`probes.valid_identifier` (contract imported from `probes.py`, never
+copied), one RED (out-of-contract value refused, naming the contract) + one GREEN
+(round-trips through `.value`/`str()`) leg per home, same case-f pattern.
+
+Full transcript (live run, this build, retrofit addendum):
+
+case f ok: each of the five typed homes in boundary_config_values.py refuses an out-of-contract
+value at construction (naming the contract) and round-trips a valid one -- LogLevel,
+IdentityEnforcementPosture, IdentityEnforcementOverride, SsePollIntervalSecs, MaxSseClients
+case f (retrofit) ok: each of the five NEW typed homes in idtypes.py's "PG* TYPES" section
+refuses an out-of-contract value at construction (naming the contract) and round-trips a valid
+one -- PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole
+ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension (ledger row 685's audit /
+row 693), zero residue
+
+The consuming modules' own construction sites (not this fixture's own direct case f/f-retrofit
+calls) are witnessed by the OTHER setup_tui fixture families still passing unmodified after this
+retrofit: setup-tui-config-extension's own cases (a)-(e) above (steps_boundary.py's five
+PRE-EXISTING host/db/schema/kern/role values, now PgHost/PgDatabase/PgRole/PgSchema/
+PgKernSchema-typed, still resolve byte-identical boundary-multiplex.toml/plan argv), plus
+setup-tui-signed-genesis-resume/setup-tui-signed-genesis-key-pinning (signed_genesis.py's
+`_validated_dep_fields`, now PgSchema/PgRole/PgKernSchema-typed) and setup-tui-class-vocabulary-
+drift (principals_authority.py's own near-identical `_validated_dep_fields`, now PgSchema/
+PgRole-typed) -- all re-run green after this retrofit, live transcripts kept in this build's own
+commit message rather than re-pasted here.

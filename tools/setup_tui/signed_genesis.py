@@ -51,7 +51,7 @@ import subprocess
 import tempfile
 import time
 
-from tools.setup_tui import probes
+from tools.setup_tui import idtypes
 from tools.setup_tui.plan import Arg, CallableAct, CommandAct, Hole, WriteAct
 from tools.setup_tui.runner import parse_row_id, served_led_path
 
@@ -100,18 +100,18 @@ def _validated_dep_fields(dest: str) -> dict:
     is exactly the exemption law/adr/0012's 2026-07-18 interpreter-boundary amendment rejects
     ("the input is trusted here does not exempt a site") -- every value is re-checked at the
     splice module's own boundary regardless of provenance, the same discipline
-    `probes.pg_connect`'s own schema check already applies to an operator-typed value."""
+    `probes.pg_connect`'s own schema check already applies to an operator-typed value. TYPED via
+    `idtypes.PgSchema`/`PgRole`/`PgKernSchema` (rows 778/789), not an ad hoc re-derivation; `dep`
+    keeps carrying plain strings -- `_psql_json_rows`'s own f-string splices need no wrapper."""
     path = os.path.join(dest, "deployment.json")
     with open(path, encoding="utf-8") as f:
         dep = json.load(f)
-    for _field in ("schema", "role", "kern"):
+    for _field, _cls in (("schema", idtypes.PgSchema), ("role", idtypes.PgRole), ("kern", idtypes.PgKernSchema)):
         _val = dep.get(_field)
-        if not isinstance(_val, str) or not probes.valid_identifier(_val):
-            raise ValueError(
-                f"deployment.json field {_field!r} = {_val!r} is not a valid SQL identifier "
-                f"([A-Za-z0-9_]+) -- refusing to splice it into SQL text (law/adr/0012's "
-                f"interpreter-boundary rule)"
-            )
+        try:
+            _cls.parse(_val if isinstance(_val, str) else "")
+        except idtypes.PgIdentifierError as exc:
+            raise ValueError(f"deployment.json field {_field!r} = {_val!r}: {exc}") from exc
     return dep
 
 
