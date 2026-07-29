@@ -416,8 +416,9 @@ import boundary_multiplex_config  # noqa: E402  (design/FABLE-BOUNDARY-MULTIPLEX
 # around (ledger row 1498).
 import boundary_diagnostic_log  # noqa: E402
 # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route reuses bootstrap/migrate_core.py's OWN
-# manifest parser (`_manifest`, pure text parsing over new-project.sh, no DB call) as the ONE home
-# for "what is the ordered kernel/lineage/*.sql birth chain" (ADR-0012 P1) -- see `_lineage_head`
+# manifest derivation (`_manifest`, a directory read over kernel/lineage/ via bootstrap/
+# lineage_manifest.py, no DB call) as the ONE home for "what is the ordered kernel/lineage/*.sql
+# birth chain" (ADR-0012 P1) -- see `_lineage_head`
 # below for why the DB-touching half of migrate_core's own head-detection is deliberately NOT
 # reused (it would reopen an unbounded, non-admission-gated psql call inside this otherwise fully
 # disciplined service).
@@ -1793,8 +1794,8 @@ def _classify_psql_exit(cp: subprocess.CompletedProcess[str]) -> None:
 def _lineage_head(cfg: BoundaryConfig) -> str | None:
     """design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md's /meta route, mechanism item 3: "the
     deployment's kernel lineage head". Walks `bootstrap/migrate_core.py`'s OWN ordered manifest
-    (`_manifest()`, parsed from `new-project.sh`'s birth-chain `psql -f` invocation -- reused, not
-    re-derived, ADR-0012 P1) and runs each entry's `kernel/lineage/<name>.detect.sql` sibling IN
+    (`_manifest()`, derived from the kernel/lineage/ directory via bootstrap/lineage_manifest.py
+    -- reused, not re-derived, ADR-0012 P1) and runs each entry's `kernel/lineage/<name>.detect.sql` sibling IN
     ORDER, returning the LAST entry (basename minus `.sql`) whose detect confirmed `t`, stopping
     at the first non-`t` result (or the first manifest entry with no `.detect.sql` sibling at
     all -- a lineage-authoring defect this route has no business turning into a 500 for; it just

@@ -115,24 +115,28 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _staged_read import read_source_text, run_git  # noqa: E402  (gates/_staged_read.py, shared home)
+from _staged_read import read_source_text  # noqa: E402  (gates/_staged_read.py, shared home)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bootstrap"))
+from lineage_manifest import (  # noqa: E402  (bootstrap/lineage_manifest.py, shared home)
+    DELTA_RE, MIN_N, git_tracked_lineage_deltas,
+)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCAFFOLD = os.path.join(ROOT, "bootstrap", "new-project.sh")
 
-# A plain delta file: sNN-<slug>.sql, exactly one dot. Companions (.detect.sql etc.) have a
-# second dot before the final .sql and are excluded by requiring no further '.' in <slug>.
-DELTA_RE = re.compile(r"^s(\d+)-[A-Za-z0-9_-]+\.sql$")
+# DELTA_RE (a plain delta file: sNN-<slug>.sql, exactly one dot -- companions like .detect.sql
+# have a second dot before the final .sql and are excluded by requiring no further '.' in <slug>)
+# and MIN_N (the consolidated apply loop this gate polices starts at s20 -- s10-s14/s17-s19 are
+# pre-consolidation / transitively-applied-elsewhere, see NAMING SPACE) are now imported from
+# bootstrap/lineage_manifest.py -- the ONE shared home for this selection rule (migrate_core.py's
+# `_manifest()` imports the same constants; migrate-manifest-glob-drift fix, work item 430,
+# closed the two independently-drifting copies this gate's own docstring above already warns
+# against). MIN_N is still cross-checked below against the scaffold's own `_LINEAGE_APPLY_MIN_N`
+# threshold CONSTANT in the shell text -- that check is about the SHELL agreeing with this
+# module's law, not about two Python copies agreeing with each other, and stays unchanged.
 
 # Principled exclusions -- see the module docstring's NAMING SPACE section. Keyed by basename.
 EXCLUDE_FILES: set[str] = set()
-# The consolidated apply loop this gate polices starts at s20 (high_watermark_1.sql + s20..).
-# s10-s14 and s17-s19 are pre-consolidation / transitively-applied-elsewhere -- see NAMING SPACE.
-# This is this gate's own asserted law for the loop's lower bound; the generator-contract check
-# below cross-checks the scaffold's own threshold CONSTANT against this same value (never two
-# independently-drifting numbers pretending to agree by luck -- the exact class this gate exists
-# to close).
-MIN_N = 20
 
 # --- Generator-contract anchors (bootstrap/new-project.sh's generation loop) ------------------
 # Each entry: (label, compiled anchored regex). re.MULTILINE, `^\s*` allows leading indentation
@@ -163,26 +167,12 @@ THRESHOLD_CONST_RE = re.compile(r'^\s*_LINEAGE_APPLY_MIN_N=(\d+)\s*$', re.MULTIL
 
 def tracked_lineage_deltas() -> list[str]:
     """Every git-tracked kernel/lineage/sNN-<slug>.sql delta basename (N >= MIN_N), sorted by N.
-    Routed through `_staged_read.run_git` (not a bare subprocess call) for the same GIT_DIR-
-    inheritance robustness every other converted gate in this chain now shares."""
-    r = run_git(["-C", ROOT, "ls-files", "kernel/lineage/"],
-                capture_output=True, text=True, check=True)
-    out = []
-    for line in r.stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        base = os.path.basename(line)
-        m = DELTA_RE.match(base)
-        if not m:
-            continue
-        if base in EXCLUDE_FILES:
-            continue
-        if int(m.group(1)) < MIN_N:
-            continue
-        out.append(base)
-    out.sort(key=lambda b: int(DELTA_RE.match(b).group(1)))
-    return out
+    The enumeration+filter+sort itself is bootstrap/lineage_manifest.py's shared
+    `git_tracked_lineage_deltas()` (routed through `_staged_read.run_git`, not a bare subprocess
+    call, for the same GIT_DIR-inheritance robustness every other converted gate in this chain
+    shares); EXCLUDE_FILES stays this gate's own extension point, applied as a post-filter."""
+    deltas = git_tracked_lineage_deltas(Path(ROOT), min_n=MIN_N)
+    return [b for b in deltas if b not in EXCLUDE_FILES]
 
 
 def narrative_files(text: str) -> set[str]:
