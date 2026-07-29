@@ -1,0 +1,69 @@
+== scaffolding classic world s72fxpre (chain ends s71-row-level-scope-policies.sql, NO s72) ==
+=== REGRESSION-DETECT-ABSENT ===
+  [ok] s72-stamp-binding-conjunct.detect.sql on the s71-head world (no s72 applied): 'f' (expected f)
+
+=== REGRESSION-ORDINARY-WRITE-UNAFFECTED ===
+  [ok] an ordinary note write on the s71-head (pre-s72) world -- ACCEPTED, unaffected by this delta's mere existence -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding classic world s72fxmain (chain ends s72-stamp-binding-conjunct.sql) ==
+=== REGRESSION-DETECT-PRESENT ===
+  [ok] s72-stamp-binding-conjunct.detect.sql on the s72-head world: 't' (expected t)
+
+=== UNARMED-BYTE-IDENTICAL-UNSTAMPED-ACCEPTED ===
+  [ok] an UNSTAMPED principal_role_bound write, before ANY class is nominated -- ACCEPTED, byte-identical to s71-head behavior (conjunct c is a total no-op with an empty stamp_binding_classes) -- verdict={'row_id': 6, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-STAMP-BIND-UNENTITLED-REFUSED ===
+  [ok] a chainless, roleless principal (outsider) attempting to bind ITS OWN stamp is REFUSED on conjunct (b) -- stamp_binding is authority-bearing, unconditionally -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s60/s62/s64/s70/s72, factored acceptance predicate conjunct b, this row's own act class) — act class 'stamp_binding' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b; design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§5 for scope_binding/stamp_binding); actor 3's authority chain (transitive reachability over in-force acts-for/dispatched-by relations, honoring every hop's expiry/scope conditions, kernel/lineage/s64-principal-stamps-delegation-conditions.sql) does not reach this world's genesis principal for this act class. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you, and (if any upstream edge is scoped) confirm this act class is among that edge's delegation_scope_classes — or have a severed/expired link repaired (suspension/revocation/expiry severs a chain PROSPECTIVELY only; past accepted acts through that link stay credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).", 'sqlstate': 'P0001', 'refusal_id': 8, 'disposition': 'refused'}
+
+=== GREEN-STAMP-BIND-ENTITLED-ACCEPTED ===
+  [ok] the genesis-chained actor (author) binds itself to stamp_agent 'main' -- ACCEPTED -- verdict={'row_id': 9, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-STAMP-BIND-RENDERED-IN-VIEW ===
+  [ok] principal_stamp_bindings renders the bound agent for author -- row: 'main'
+
+=== GREEN-NOMINATE-CLASS-UNENTITLED-REFUSED ===
+  [ok] a chainless principal (outsider) attempting to NOMINATE a class is REFUSED -- stamp_binding_class_configured is itself authority-bearing (conjunct b) -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s60/s62/s64/s70/s72, factored acceptance predicate conjunct b, this row's own act class) — act class 'stamp_binding_class_configured' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b; design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§5 for scope_binding/stamp_binding); actor 3's authority chain (transitive reachability over in-force acts-for/dispatched-by relations, honoring every hop's expiry/scope conditions, kernel/lineage/s64-principal-stamps-delegation-conditions.sql) does not reach this world's genesis principal for this act class. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you, and (if any upstream edge is scoped) confirm this act class is among that edge's delegation_scope_classes — or have a severed/expired link repaired (suspension/revocation/expiry severs a chain PROSPECTIVELY only; past accepted acts through that link stay credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).", 'sqlstate': 'P0001', 'refusal_id': 11, 'disposition': 'refused'}
+
+=== GREEN-NOMINATE-CLASS-ENTITLED-ACCEPTED ===
+  [ok] the genesis-chained actor nominates principal_role_bound -- ACCEPTED -- verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-NOMINATE-CLASS-RENDERED-IN-VIEW ===
+  [ok] stamp_binding_classes now nominates principal_role_bound -- row: 'principal_role_bound'
+
+=== ARMED-UNSTAMPED-WRITE-REFUSED ===
+  [ok] once principal_role_bound is NOMINATED, an UNSTAMPED write in that class is REFUSED (conjunct c) even from the genesis-chained actor -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s72, factored acceptance predicate conjunct c, principal_role_bound) — act class 'principal_role_bound' is nominated for the stamp-binding conjunct (this world's configured stamp_binding_classes, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec5 item 5); this write's own interception stamp (verified=f, agent=<NULL>) does not resolve to an in-force principal_stamp_bound row naming actor 1 as bound to that agent string. Remedy: an unstamped or unverified write can never satisfy this conjunct — route the write through the intercepted path; a verified write from an agent this actor has not bound needs the actor's own genesis-chained delegator to bind it first: ./autoharn led ledger-write --kind principal_stamp_bound --principal-subject 1 --stamp-binding-agent <the-agent-string-this-invocation-actually-stamps-as> --principal-binding-active true (kernel/lineage/s72-stamp-binding-conjunct.sql). See this delta's own header CORRECTION 1/2 for which act classes 'main'-only binding actually secures.", 'sqlstate': 'P0001', 'refusal_id': 14, 'disposition': 'refused'}
+
+=== ARMED-WRONG-AGENT-STAMPED-REFUSED ===
+  [ok] a VERIFIED stamp whose agent ('agent-a47950d7504b5b166', the ephemeral-dispatched-agent shape) is NOT bound to author is REFUSED -- row 601's own 'excludes... subagent-stamped writes' correction, witnessed directly -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s72, factored acceptance predicate conjunct c, principal_role_bound) — act class 'principal_role_bound' is nominated for the stamp-binding conjunct (this world's configured stamp_binding_classes, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec5 item 5); this write's own interception stamp (verified=t, agent=agent-a47950d7504b5b166) does not resolve to an in-force principal_stamp_bound row naming actor 1 as bound to that agent string. Remedy: an unstamped or unverified write can never satisfy this conjunct — route the write through the intercepted path; a verified write from an agent this actor has not bound needs the actor's own genesis-chained delegator to bind it first: ./autoharn led ledger-write --kind principal_stamp_bound --principal-subject 1 --stamp-binding-agent <the-agent-string-this-invocation-actually-stamps-as> --principal-binding-active true (kernel/lineage/s72-stamp-binding-conjunct.sql). See this delta's own header CORRECTION 1/2 for which act classes 'main'-only binding actually secures.", 'sqlstate': 'P0001', 'refusal_id': 16, 'disposition': 'refused'}
+
+=== ARMED-FORGED-AGENT-STRING-UNVERIFIED-REFUSED ===
+  [ok] an UNVERIFIED stamp (bogus HMAC) merely claiming stamp_agent='main' is REFUSED -- either by set_stamp itself (s17's own 'did not validate' raise, one layer upstream of conjunct c) or by conjunct (c)'s own stamp_verified check -- exc=None, verdict={'row_id': None, 'message': 'Ledger policy: the write stamp did not validate (fabricated, replayed, or stale). Ledger writes are stamped by the tool interception, not typed by the writer — route this write through the intercepted psql path; do not hand-set app.vendor_*.', 'sqlstate': 'P0001', 'refusal_id': 18, 'disposition': 'refused'}
+
+=== ARMED-CORRECT-AGENT-STAMPED-ACCEPTED ===
+  [ok] a VERIFIED stamp whose agent ('main') IS bound to author -- ACCEPTED -- verdict={'row_id': 19, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== ARMED-NON-NOMINATED-CLASS-UNAFFECTED ===
+  [ok] an UNSTAMPED write in a class NEVER nominated ('note') is unaffected by this world's own armed conjunct over principal_role_bound -- ACCEPTED -- verdict={'row_id': 20, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== STAMP-SEVERANCE-CROSS-KIND-REFUSED ===
+  [ok] a chainless actor (outsider) superseding the LIVE principal_stamp_bound row with an UNRELATED kind (note) is REFUSED via the target-class conjunct -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s60/s62/s64/s70/s72, factored acceptance predicate conjunct b, the class of row 9, which this write supersedes) — act class 'stamp_binding' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b; design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§5 for scope_binding/stamp_binding); actor 3's authority chain (transitive reachability over in-force acts-for/dispatched-by relations, honoring every hop's expiry/scope conditions, kernel/lineage/s64-principal-stamps-delegation-conditions.sql) does not reach this world's genesis principal for this act class. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you, and (if any upstream edge is scoped) confirm this act class is among that edge's delegation_scope_classes — or have a severed/expired link repaired (suspension/revocation/expiry severs a chain PROSPECTIVELY only; past accepted acts through that link stay credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).", 'sqlstate': 'P0001', 'refusal_id': 22, 'disposition': 'refused'}
+
+=== STAMP-UNBIND-ACCEPTED ===
+  [ok] author unbinds (retracts) its own stamp binding -- ACCEPTED -- verdict={'row_id': 23, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== STAMP-UNBIND-REMOVES-FROM-VIEW ===
+  [ok] after the unbind, author has ZERO ('main') rows in principal_stamp_bindings -- rows=0
+
+== scaffolding classic world s72fxbirth (chain ends s72-stamp-binding-conjunct.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s72 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta's two new, un-nominated act-class tokens -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=6 == sequence=6
+
+=== AGREE-sql-asp-work-differential ===
+  [ok] judge output (s72fxmain): ['AGREE']
+
+NOTE: no differential covers conjunct (c) itself (the stamp-binding requirement) or the stamp_binding/stamp_binding_class_configured act classes' own family -- engine/ledger_edb.py exports no stamp-binding facts and engine/lp/ledger_entitlement.lp derives no stamp-binding-specific predicate. UNEXERCISED, flagged as the engine-side follow-on this delta's own header names, never silently claimed AGREE for that family.
+
+ALL GREEN

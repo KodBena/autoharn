@@ -234,7 +234,12 @@ BASELINE: dict[str, int] = {
     # (`=` or `<>`) instead of assuming `=`, since the kind-disposition coupling's own four-member
     # vocabulary needs the inequality form (three of four members mean NULL, not one) -- witnessed
     # growth from two new manifest entries plus one classifier capability, not unnoticed growth.
-    "gates/kind_shape_manifest_gate.py":           1775,
+    # bumped 1775 -> 1807 (s72, kernel/lineage/s72-stamp-binding-conjunct.sql, work item
+    # ac-s3-stamp-binding): one new MANIFEST row (stamp_binding_agent, two-way) plus three
+    # widened MANIFEST rows' own reason text (principal_subject, principal_binding_active,
+    # entitlement_act_class) plus the CHAIN append comment -- witnessed growth from one new
+    # manifest entry and three widened entries, not unnoticed growth.
+    "gates/kind_shape_manifest_gate.py":           1807,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -372,7 +377,11 @@ BASELINE: dict[str, int] = {
     # Reconciled at the s62+TUI coupled merge (2026-07-26): both parents' bump
     # comments kept verbatim above; the union is the measured merged file. Same
     # merge-union ratchet-crossing class as the reconciliations above.
-    "gates/ledger_reader_allowlist.py":            666,
+    # bumped 666 -> 680 (s72, kernel/lineage/s72-stamp-binding-conjunct.sql, work item
+    # ac-s3-stamp-binding): CHAIN += s72, two new declared-clean view entries (principal_stamp_
+    # bindings, stamp_binding_classes) plus a comment noting the re-issued act-class functions
+    # register no NEW allowlist entry -- witnessed growth, not unnoticed.
+    "gates/ledger_reader_allowlist.py":            680,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -556,7 +565,10 @@ BASELINE: dict[str, int] = {
     # main's ac-read-identity/setup-tui-config-extension rows) re-measures to 455 -- the same
     # merge-union ratchet-crossing class as every reconciliation above.
     # merge reconciliation 456 -> 457 (mint x s71: both REGISTRY rows kept in the resolved hunk).
-    "gates/fixture_census.py":                     457,
+    # bumped 457 -> 458 (kernel/lineage/s72-stamp-binding-conjunct.sql, work item
+    # ac-s3-stamp-binding): one new REGISTRY row (seen-red/s72-stamp-binding-conjunct/
+    # run_fixtures.py) -- the same additive-census-row class as every prior bump above.
+    "gates/fixture_census.py":                     458,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -716,7 +728,12 @@ BASELINE: dict[str, int] = {
     # every prior bump, re-measured after writing.
     # merge reconciliation (mint 840 x s71 833, both sides' comments kept above): re-measured
     # after resolving this very hunk.
-    "gates/max_lines.py":                          849,
+    # bumped 849 -> 866 (s72, kernel/lineage/s72-stamp-binding-conjunct.sql, work item
+    # ac-s3-stamp-binding): this gate's own BASELINE growing to carry the four bump comments this
+    # same commit adds (fixture_census.py 457 -> 458, kind_shape_manifest_gate.py 1775 -> 1807,
+    # ledger_reader_allowlist.py 666 -> 680, and this row itself) -- the same self-referential
+    # fixpoint as every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          866,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

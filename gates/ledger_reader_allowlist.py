@@ -87,7 +87,21 @@ CHAIN = [
     "s67-refusal-digest-bound.sql", "s68-typed-absence-dispositions.sql", "s69-role-coherence-refusals.sql",
     "s70-scope-binding.sql",
     "s71-row-level-scope-policies.sql",
+    "s72-stamp-binding-conjunct.sql",
 ]
+# s72 (kernel/lineage/s72-stamp-binding-conjunct.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
+# FLOW-SPEC.md sec5 item 5) extends this SAME gate's scratch CHAIN. It ships TWO new views
+# (principal_stamp_bindings, stamp_binding_classes), both factored through ledger_current
+# exclusively -- no raw `ledger` FROM/JOIN/INTO of their own, classifying clean under the
+# no-raw-access default, mirroring s70's principal_scopes/s60's entitlement_class_roles one axis
+# over. It re-issues entitlement_act_class_of/entitlement_act_class_of_target/entitlement_
+# enforce_class (each gaining two branches/tokens, no new raw read -- the milestone_closure
+# branch's own pre-existing raw `ledger` read, already declared above at entitlement_act_class_
+# of's entry, is untouched text) and validate_entitlement (already ALLOWLISTED above as a
+# write-boundary BEFORE INSERT trigger -- its ONE new read, `SELECT 1 FROM stamp_binding_classes
+# WHERE act_class = v_act_class`, is a current-truth-factored view read, no NEW raw-ledger access
+# of its own; its OTHER new read, `SELECT 1 FROM principal_stamp_bindings WHERE subject =
+# NEW.actor AND agent = NEW.stamp_agent`, is likewise current-truth-factored).
 # s71 (kernel/lineage/s71-row-level-scope-policies.sql, design/FABLE-ACCESS-CONTROL-AND-
 # INFORMATION-FLOW-SPEC.md sec2/sec5 item 6, "the RLS slot") extends this SAME gate's scratch
 # CHAIN. It ships ONE new function, scope_row_visible -- its own body's FROM clause reads ONLY
