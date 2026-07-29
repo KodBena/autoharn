@@ -4,6 +4,8 @@ FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger rows 1463/1467/1468/1471). Two subc
 
     dispatch mint <name> <commission-row-id>[,<commission-row-id>...] [--depth N]
                   [--purpose <why>] [--independent-verification] [--deployment <path>]
+                  [--scope-surface <name> ...] [--scope-exclude <family>:<value> ...]
+                  [--scope-disclosure-mode marked|hash_stub|full]
     dispatch close <name> [<reason...>] [--deployment <path>]
 
 TARGET SCOPING (fresh-context review CRITICAL, ledger rows 1525/1526 -- the live-deployment
@@ -25,13 +27,19 @@ principal_relation_asserted), because NO existing CLI surface exposes s64's five
 condition columns yet (`led principal relate` predates s64 and has no flags for them; s64's own
 header states plainly that hooks/dispatch-mechanics were explicitly out of ITS scope) -- this is
 that missing surface, built here, not a raw-SQL workaround (still POSTs through the served
-boundary, still through kernel.ledger_write, still s43-gated); (3) emits the stamp material for
+boundary, still through kernel.ledger_write, still s43-gated); (3) OPTIONALLY -- design/
+FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §5 item 4, ledger rows 639/815, the moment any
+`--scope-*` flag is named -- binds a `principal_scope_bound` row (kernel/lineage/
+s70-scope-binding.sql) to the delegate, same POST /write/ledger surface (flag shapes and the
+typed-value contract, closed vocabularies/no-bare-types SSOT, live in `tools/dispatch_scope.py`;
+NO `--scope-*` flag means NO row, BYTE-IDENTICAL to before); (4) emits the stamp material for
 the child session's own environment -- `export AUTOHARN_MINTED_PRINCIPAL=<id>` and `export
 LED_ACTOR=<name>` -- ready to paste into (or `eval`'d by) a dispatch preamble.
 
-POSTURE (work item 605): a freshly minted delegate holds no role and no `acts-for` edge --
-only the `dispatched-by` edge step (2) writes, with no scope caveat (this CLI has no `--scope`;
-`--depth 0` bounds only further re-delegation, not what the delegate itself may do). Today's
+POSTURE (work item 605): a freshly minted delegate holds no role and no `acts-for` edge -- the
+`dispatched-by` edge step (2) writes alone, with no scope caveat of ITS OWN (`--depth 0` bounds
+only further re-delegation, not what the delegate itself may do; a scope binding is a SEPARATE,
+optional step (3) above, never implied by step (2)). Today's
 authority-bearing act-class set is EIGHT tokens: s60's own six -- principal_registered,
 principal_role_bound, standing_lifecycle, milestone_closure, gate_edge_supersession,
 entitlement_class_configured (kernel/lineage/s60-entitlement-enforcement.sql, Element 8) --
@@ -86,8 +94,10 @@ authors the edge, never the delegate" -- there is no anonymous-dispatcher defaul
 `led`'s own generic write path, because this act is authority-bearing by construction).
 
 NO KERNEL/HOOKS CHANGE: this tool writes ordinary ledger rows through the existing served
-boundary and existing kernel functions; it mints no new mechanism, installs no hook (the
-SessionEnd retirement hook stays parked, per the spec's own §4), and never touches raw SQL.
+boundary and existing kernel functions -- including scope-minting: `principal_scope_bound`'s
+three columns (kernel/lineage/s70-scope-binding.sql) are already POST-able through `kernel.
+ledger_write`'s existing generic payload-key check once a world's kernel carries s70; no new
+mechanism, no hook, no raw SQL.
 
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
@@ -103,6 +113,8 @@ sys.path.insert(0, str(HERE / "serving"))
 sys.path.insert(0, str(HERE / "filing"))
 import boundary_cli_client as bcc  # noqa: E402
 import ensure_running as er  # noqa: E402
+sys.path.insert(0, str(HERE / "tools"))
+from dispatch_scope import SCOPE_EXCLUSION_FAMILIES, bind_scope, extract_scope_flags  # noqa: E402
 
 PROG = "dispatch"
 
@@ -209,6 +221,14 @@ def _sweep_unclosed(cfg: bcc.ServedConfig, dispatcher_id: int, by_id: dict[int, 
 
 
 def cmd_mint(argv: list[str]) -> int:
+    # --scope-* flags extracted FIRST by their own SSOT (tools/dispatch_scope.py); residual argv
+    # then parses exactly as pre-this-delta.
+    try:
+        argv, scope_spec = extract_scope_flags(argv)
+    except ValueError as e:
+        print(f"{PROG} mint: REFUSED -- {e}", file=sys.stderr)
+        return 2
+
     positional: list[str] = []
     depth = 0
     purpose: str | None = None
@@ -251,8 +271,11 @@ def cmd_mint(argv: list[str]) -> int:
     if len(positional) != 2:
         print(f"usage: {PROG} mint <name> <commission-row-id>[,<commission-row-id>...] "
               f"[--depth N] [--purpose <why>] [--independent-verification] "
-              f"[--deployment <path>]", file=sys.stderr)
+              f"[--scope-surface <name> ...] [--scope-exclude <family>:<value> ...] (family in "
+              f"{{{', '.join(SCOPE_EXCLUSION_FAMILIES)}}}) [--scope-disclosure-mode "
+              f"marked|hash_stub|full] [--deployment <path>]", file=sys.stderr)
         return 2
+
     name, commission_ids_raw = positional
     try:
         commission_ids = [int(x) for x in commission_ids_raw.split(",") if x]
@@ -323,7 +346,14 @@ def cmd_mint(argv: list[str]) -> int:
               f"session until this is resolved.", file=sys.stderr)
         return rc
 
-    # Step 3: emit the stamp material for the child session's environment (spec §3, verbatim).
+    # Step 3 (OPTIONAL -- no --scope-* flag means scope_spec is None, skipping this entirely,
+    # byte-identical to pre-s70 behavior; "DISPATCH-TIME SCOPE MINTING" above).
+    if scope_spec is not None:
+        rc = bind_scope(cfg, PROG, dispatcher_id, delegate_id, name, scope_spec)
+        if rc != 0:
+            return rc
+
+    # Step 4: emit the stamp material for the child session's environment (spec §3, verbatim).
     print(f"# dispatch-mechanics mint: '{name}' (principal id {delegate_id}), "
           f"depth={depth}, commission row(s) {commission_ids}")
     print(f"export AUTOHARN_MINTED_PRINCIPAL={delegate_id}")

@@ -555,7 +555,7 @@ BASELINE: dict[str, int] = {
     # unions with main's 454 above; the post-merge file (carrying both the s70 REGISTRY row and
     # main's ac-read-identity/setup-tui-config-extension rows) re-measures to 455 -- the same
     # merge-union ratchet-crossing class as every reconciliation above.
-    "gates/fixture_census.py":                     455,
+    "gates/fixture_census.py":                     456,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -702,7 +702,12 @@ BASELINE: dict[str, int] = {
     # ac-read-identity + setup-tui-config-extension merge) collapse, plus the fixture_census.py
     # 454 -> 455 reconciliation directly above and this entry's own settling -- the same
     # self-referential fixpoint as every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          827,
+    # bumped 827 -> 840 (ac-dispatch-scope-mint build, rows 639/815): this gate's own BASELINE
+    # growing to carry the two entries this same commit bumps/adds (gates/fixture_census.py, one
+    # new REGISTRY row for the dispatch-time scope-minting fixture, 455 -> 456; tools/
+    # dispatch_mechanics.py, NEW to BASELINE below) -- the same self-referential fixpoint as
+    # every prior bump, re-measured after writing.
+    "gates/max_lines.py":                          840,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only
@@ -739,6 +744,14 @@ BASELINE: dict[str, int] = {
     # capability-missing LayerSpec raises RegistryError at validation (the closure spec §4
     # negative-control leg) before this bump was taken; see build report.
     "engine/lp_registry.py":                       469,
+    # NEW to BASELINE, 430 (ac-dispatch-scope-mint build, design/FABLE-ACCESS-CONTROL-AND-
+    # INFORMATION-FLOW-SPEC.md §5 item 4, rows 639/815): dispatch mint's own --scope-surface/
+    # --scope-exclude/--scope-disclosure-mode flags plus the fourth "bind a principal_scope_
+    # bound row" dispatch step -- the new typed-value machinery (ScopeExclusion/ScopeBindingSpec
+    # /extract_scope_flags/bind_scope) is factored OUT into tools/dispatch_scope.py (204 lines,
+    # its own new file, under the ceiling), so this row is the residual CLI-wiring growth alone,
+    # not unfactored bloat.
+    "tools/dispatch_mechanics.py":                 430,
 }
 
 
