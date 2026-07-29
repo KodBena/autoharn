@@ -511,7 +511,9 @@ SPECS: tuple[JudgmentSpec, ...] = (
                                     "carry the kernel second witness",
         complexity_class="C",
         fixtures=("verify_review_fixpoint.py both-polarity (GREEN fresh attest; RED delta-review/"
-                  "undisposed/self-attest)",),
+                  "undisposed/self-attest; session-aware distinctness — s21's (stamp_session, "
+                  "stamp_agent) PAIR rule — CROSS-1 same-agent/different-session GREEN, PRESERVED-1/2 "
+                  "same-session compatibility)",),
         promotion_stage="P2",
     ),
     JudgmentSpec(

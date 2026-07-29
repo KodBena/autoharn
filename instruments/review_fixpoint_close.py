@@ -13,7 +13,16 @@ at e-series grain), round-ceiling (hard cap on total rounds including dirty ones
 RED-honest, never auto-attested). Single-letter/abbreviated spellings are retired (same-spelling-drift).
 e18's phase, retroactively: confirmation-depth=1, panel-width=2, round-ceiling=1.
 
-  review_fixpoint_close.py <target> <final_artifact_id> [<author_stamp>=main]
+SESSION-AWARE (kernel/lineage/s21-session-aware-distinctness.sql): the author identity is now the
+(session, agent) PAIR, threaded through as two optional trailing args below — an `author_stamp` with no
+`author_session` degrades fail-safe (a missing session half is NEVER distinct, s21's rule; see
+`review_fixpoint.py`'s `Invocation.same_as`), never fail-open into agent-only comparison. If the target's
+`ledger` table itself has no `stamp_session` column (s21 not applied to that schema — true of every
+pre-s21 historical target: e15..e18), this line REFUSES loudly rather than silently falling back to
+agent-only reads (ADR-0015 Rule 4) — the target's `led show`/schema needs s21 (or a later lineage that
+folds it in) before this line can compute session-aware distinctness there.
+
+  review_fixpoint_close.py <target> <final_artifact_id> [<author_stamp>=main] [<author_session>]
 """
 from __future__ import annotations
 
@@ -22,12 +31,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ledger_target import resolve  # noqa: E402
-from review_fixpoint import FpRow, review_fixpoint_verdict  # noqa: E402
+from review_fixpoint import FpRow, Invocation, review_fixpoint_verdict  # noqa: E402
 
 # a refuse-verdict review-finding counts disposed iff a later revision row supersedes it (the unit's only
 # disposal idiom at this tier); GREEN's join (iii) reads this flag.
 _SQL = """
-SELECT l.id, l.kind, l.regards, rd.verdict, l.stamp_agent,
+SELECT l.id, l.kind, l.regards, rd.verdict, l.stamp_session, l.stamp_agent,
        EXISTS (SELECT 1 FROM {rel} s WHERE s.supersedes = l.id) AS superseded
 FROM {rel} l LEFT JOIN {detail} rd ON rd.ledger_id = l.id
 ORDER BY l.id;
@@ -39,13 +48,21 @@ def main(argv: list[str]) -> int:
         print(__doc__, file=sys.stderr)
         return 2
     target, final_id = argv[0], int(argv[1])
-    author = argv[2] if len(argv) > 2 else "main"
+    author_stamp = argv[2] if len(argv) > 2 else "main"
+    author_session = argv[3] if len(argv) > 3 else None
+    author = Invocation.of(author_session, author_stamp)
     t = resolve(target)
-    rows = [FpRow(int(r[0]), r[1], int(r[2]) if r[2] else None, r[3] or None, r[4] or "",
-                  disposed=(r[5] == "t"))
+    if not t.has_col("stamp_session"):
+        print(f"# review_fixpoint[{target}]: target's ledger has no stamp_session column (s21 not applied "
+              f"to this schema) — refusing rather than silently computing agent-only distinctness "
+              f"(kernel/lineage/s21-session-aware-distinctness.sql's fail-safe rule).", file=sys.stderr)
+        return 2
+    rows = [FpRow(id=int(r[0]), kind=r[1], regards=(int(r[2]) if r[2] else None), verdict=(r[3] or None),
+                  stamp_session=(r[4] or None), stamp_agent=(r[5] or ""), disposed=(r[6] == "t"))
             for r in t.rows(_SQL.format(rel=t.rel(), detail=t.rel("review_detail")))]
     status, detail = review_fixpoint_verdict(rows, author, final_id)
-    print(f"# review_fixpoint[{target}] final_artifact={final_id} author_stamp={author}")
+    print(f"# review_fixpoint[{target}] final_artifact={final_id} "
+          f"author=(session={author_session!r}, agent={author_stamp!r})")
     print(f"  [{status}] {detail}")
     return 0 if status == "GREEN" else 1
 
