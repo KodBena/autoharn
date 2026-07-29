@@ -63,12 +63,13 @@ if any(a in ("--help", "-h") for a in sys.argv[1:]):
     print(
         "usage: doctor\n"
         "\n"
-        "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP line per fact:\n"
+        "doctor -- is this world set up right? One witnessed PASS/FAIL/SKIP/INFO line per fact:\n"
         "deployment.json parses, database reachable, schema+kern namespaces exist, lineage\n"
-        "high-water/epoch, ./autoharn led answers a read query, boundary URL, principals registered,\n"
-        "courier principal registered, world_identity populated.\n"
+        "high-water/epoch, owner/access identity split, ./autoharn led answers a read query,\n"
+        "boundary URL, principals registered, courier principal registered, world_identity\n"
+        "populated.\n"
         "Read-only throughout -- issues no INSERT/UPDATE/DELETE and writes no file. Exit 0 iff\n"
-        "zero FAIL lines (SKIP is a distinct, honest verdict, never a failure); exit 1 iff at\n"
+        "zero FAIL lines (SKIP/INFO are distinct, honest verdicts, never a failure); exit 1 iff at\n"
         "least one FAIL line. Takes no arguments beyond --help/-h."
     )
     sys.exit(0)
@@ -94,6 +95,14 @@ except ImportError as _e:
 PASS = "PASS"
 FAIL = "FAIL"
 SKIP = "SKIP"
+INFO = "INFO"  # a DISTINCT, honest verdict from SKIP -- ledger row 599 (doctor-privilege-premise-
+               # check, Opus AC suggestion S2a, ADOPT-RESHAPED): "reshaped to THREE states to
+               # protect the 0-FAIL signal" -- a pre-S2b world's owner/access split is not merely
+               # not-applicable-here (SKIP's meaning) nor an active defect (FAIL's meaning); it is
+               # an unfixable-within-this-linear-run fact worth surfacing without ever counting
+               # against the 0-FAIL healthy signal (runs-are-linear: there is no live-world delta
+               # that could fix an already-born world's ownership in place -- only a future birth
+               # carries the split).
 
 
 def _line(label: str, verdict: str, detail: str) -> str:
@@ -382,6 +391,83 @@ def check_world_identity(dep: deployment_record.DeploymentRecord) -> tuple[str, 
                  f"world_identity (world_name) VALUES ('<this-world's-own-name>');\""), FAIL
 
 
+def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
+    """S2b (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §2; ledger row 600, work
+    item ac-scaffold-identity-split) + this check's own adjudication (ledger row 599,
+    doctor-privilege-premise-check, Opus AC suggestion S2a, ADOPT-RESHAPED): THREE states, chosen
+    specifically to protect the 0-FAIL healthy signal --
+
+      INFO: `deployment.json` does not declare `owner_access_split` -- a world scaffolded before
+            this delta (or a classic --schema/--kern/--role target this scaffold never birthed at
+            all). Not a defect: the premise is UNFIXABLE within a linear run (runs-are-linear --
+            no live-world delta rewrites an already-born world's ownership in place); the only fix
+            is a future birth. Teaches what the gap means for s43's write boundary (SECURITY
+            DEFINER functions execute as whatever this world's DDL-applying identity happened to
+            be at birth, likely the same shared, LOGIN-capable identity used to birth every other
+            world in this database), s17's stamp secret (no worse off -- it was never granted to
+            the access role either way), and any future RLS (row 600's own note: RLS policies are
+            only real once the connecting role is not the object owner).
+
+      PASS: declared true AND independently CONFIRMED against the live catalog -- this check does
+            NOT trust the flag blindly (deployment.json is scaffold-emitted, not adversarial, but
+            a stale or hand-edited file should never manufacture a false PASS): schema and kern
+            schema share one owner, that owner cannot log in and is not itself a superuser, and
+            the granted access role holds NO membership in it (`pg_has_role(role, owner, 'USAGE')`
+            = false -- row 600's own correctness point: an owner-member connecting role could
+            bypass its own REVOKEs).
+
+      FAIL: declared true but the catalog CONTRADICTS it -- a post-split world whose premise
+            silently broke (a hand-edit, a partial re-scaffold, a manual GRANT of owner membership
+            to the access role). A real alarm, not routine.
+    """
+    label = "owner/access identity split"
+    if not getattr(dep, "owner_access_split", None):
+        return _line(label, INFO,
+                     "deployment.json does not declare owner_access_split -- this world predates "
+                     "the S2b three-identity split (ledger row 600) or was never scaffold-born; "
+                     "unfixable within a linear run (no live-world delta rewrites ownership in "
+                     "place) -- a future --new-world/--profile tracker birth carries the split. "
+                     "Meanwhile: s43's SECURITY DEFINER functions execute as this world's original "
+                     "DDL-applying identity (typically the shared superuser used to birth every "
+                     "world in this database, not a role scoped to this one); s17's stamp secret "
+                     "is unaffected either way (never granted to the access role); a future RLS "
+                     "policy here would not yet be meaningful (row 600: RLS needs a non-owner "
+                     "connecting role)."), INFO
+    r = _psql(dep.host, dep.db,
+              'SELECT n.nspname, n.nspowner::regrole::text, r.rolcanlogin, r.rolsuper, '
+              'pg_has_role(:\'role\', n.nspowner, \'USAGE\') '
+              'FROM pg_namespace n JOIN pg_roles r ON r.oid = n.nspowner '
+              'WHERE n.nspname IN (:\'schema\', :\'kern\') ORDER BY n.nspname;',
+              {"schema": dep.schema, "kern": dep.kern, "role": dep.role})
+    if r.returncode != 0:
+        return _line(label, FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
+    rows = [ln.split("|") for ln in r.stdout.strip().splitlines() if ln]
+    if len(rows) != 2:
+        return _line(label, FAIL,
+                     f"declared true but expected 2 namespace rows ('{dep.schema}', '{dep.kern}'), "
+                     f"found {len(rows)} -- catalog does not match the declaration"), FAIL
+    owners = {row[1] for row in rows}
+    problems: list[str] = []
+    if len(owners) != 1:
+        problems.append(f"schema and kern have DIFFERENT owners ({', '.join(sorted(owners))})")
+    owner_name = next(iter(owners)) if len(owners) == 1 else "<mismatched>"
+    for nspname, _owner, rolcanlogin, rolsuper, role_is_member in rows:
+        if rolcanlogin == "t":
+            problems.append(f"owner '{owner_name}' (owns {nspname}) CAN LOG IN -- expected NOLOGIN")
+        if rolsuper == "t":
+            problems.append(f"owner '{owner_name}' (owns {nspname}) IS a superuser -- expected a plain role")
+        if role_is_member == "t":
+            problems.append(f"access role '{dep.role}' IS a member of owner '{owner_name}' "
+                             f"(pg_has_role USAGE true) -- it could bypass its own REVOKEs")
+    if problems:
+        return _line(label, FAIL,
+                     f"declared true but the live catalog CONTRADICTS it: {'; '.join(problems)} -- "
+                     f"a real alarm (S2b's premise broke after birth), not routine"), FAIL
+    return _line(label, PASS,
+                 f"schema '{dep.schema}' + kern '{dep.kern}' both owned by NOLOGIN, non-superuser "
+                 f"'{owner_name}'; access role '{dep.role}' holds no membership in it"), PASS
+
+
 def main() -> int:
     print("### doctor -- is this world set up right?")
     print(f"    ({PROJECT_ROOT})")
@@ -396,7 +482,8 @@ def main() -> int:
     if dep is None:
         skip_reason = "deployment.json did not parse (see line above)"
         for label in ("database reachable", "schema + kern schema exist",
-                      "lineage high-water/epoch", "./autoharn led answers a read query",
+                      "lineage high-water/epoch", "owner/access identity split",
+                      "./autoharn led answers a read query",
                       "boundary URL", "principals registered", "courier principal registered",
                       "world_identity populated"):
             print(_line(label, SKIP, skip_reason))
@@ -422,6 +509,19 @@ def main() -> int:
             print(_line(label, SKIP, skip_reason))
             verdicts.append(SKIP)
 
+    # owner/access identity split (S2b, ledger row 600 / row 599): the INFO branch reads only
+    # deployment.json (no DB needed), so it runs regardless of db_verdict; the PASS/FAIL catalog
+    # confirmation needs a live connection, so a declared-true world with an unreachable database
+    # gets SKIP (downstream of the already-reported "database reachable" FAIL above), not a second
+    # FAIL for the same root cause (this file's own house convention, see module docstring).
+    if getattr(dep, "owner_access_split", None) and db_verdict != PASS:
+        print(_line("owner/access identity split", SKIP, "database unreachable (see line above)"))
+        verdicts.append(SKIP)
+    else:
+        oas_line, oas_verdict = check_owner_access_split(dep)
+        print(oas_line)
+        verdicts.append(oas_verdict)
+
     led_line, led_verdict = check_led(dep)
     print(led_line)
     verdicts.append(led_verdict)
@@ -432,7 +532,9 @@ def main() -> int:
 
     print()
     fail_count = verdicts.count(FAIL)
+    info_count = verdicts.count(INFO)
     print(f"TOTAL: {fail_count} FAIL, {verdicts.count(PASS)} PASS, {verdicts.count(SKIP)} SKIP"
+          + (f", {info_count} INFO" if info_count else "")
           + ("  (0 FAIL = healthy)" if fail_count == 0 else ""))
     return 0 if fail_count == 0 else 1
 

@@ -716,6 +716,14 @@ elif [ "$PROFILE" = "tracker" ]; then
 fi
 [ -n "$DB" ] && [ -n "$HOST" ] && [ -n "$SCHEMA" ] && [ -n "$KERN" ] && [ -n "$ROLE" ] || usage
 
+# OWNER: the S2b three-identity split's non-login owner role (design/FABLE-ACCESS-CONTROL-AND-
+# INFORMATION-FLOW-SPEC.md §2; ledger row 600, work item ac-scaffold-identity-split). Derived from
+# SCHEMA -- never SCHEMA itself, never ROLE -- the same "derive, never require" posture as SCHEMA/
+# KERN/ROLE above; no override flag exists for it (nothing yet needs to name it independently, and
+# adding an unused knob is its own hazard). Only meaningful when a FULL kernel birth actually runs
+# below (FULL_LINEAGE, decided further down) -- this variable is otherwise unused.
+OWNER="${SCHEMA}_owner"
+
 # --- STRICT CHARACTER ALLOWLIST on every name that becomes SQL text ----------------------------
 # ADR-0012's 2026-07-18 amendment ("The interpreter boundary -- a value never crosses as program
 # text") + ADR-0000's same-day Rule 2(a) amendment (ledger row 1637: this exact raw-interpolation-
@@ -728,13 +736,14 @@ fi
 # is the SAME allowlist, checked before ANY SQL is built, covering both --new-world's own derivation
 # and a hand-picked --schema/--kern/--role override alike (a caller can pass either, and both reach
 # the identical downstream SQL sites).
-for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+for _name in "$SCHEMA" "$KERN" "$ROLE" "$OWNER"; do
     case "$_name" in
         ''|*[!A-Za-z0-9_]*)
             echo "new-project.sh: REFUSED -- '$_name' contains characters outside the allowlist" >&2
-            echo "                for a schema/kernel/role name (letters, digits, underscore only)." >&2
-            echo "                This applies to --new-world-derived names and to --schema/--kern/" >&2
-            echo "                --role overrides alike. Nothing was touched." >&2
+            echo "                for a schema/kernel/role/owner name (letters, digits, underscore" >&2
+            echo "                only). This applies to --new-world-derived names and to --schema/" >&2
+            echo "                --kern/--role overrides alike (OWNER is itself derived from SCHEMA," >&2
+            echo "                never separately supplied). Nothing was touched." >&2
             exit 1
             ;;
     esac
@@ -750,6 +759,11 @@ unset _name
 FULL_LINEAGE=0
 [ -n "$NEW_WORLD" ] && FULL_LINEAGE=1
 [ "$PROFILE" = "tracker" ] && FULL_LINEAGE=1
+# Top-level default (set -u is active below) -- classic --schema/--kern/--role mode never enters
+# the FULL_LINEAGE branch that would otherwise set this, but the unconditional deployment.json
+# write further down reads it regardless of mode; a classic-mode scaffold applies no kernel DDL
+# at all, so the S2b split plainly does not apply and this stays false for it.
+OWNER_ACCESS_SPLIT=false
 if [ -n "$NEW_WORLD" ]; then
     WORLD_LABEL="$NEW_WORLD"
 else
@@ -1105,6 +1119,16 @@ if [ "$FULL_LINEAGE" -eq 1 ]; then
     # runs its own idempotent existence checks (already provisioned / already registered), so
     # deployment.json, the verb shims, and the principals still re-derive correctly either way.
     SKIP_LINEAGE_APPLY=0
+    # OWNER_ACCESS_SPLIT: whether THIS run performs (or, on a skipped re-run, previously
+    # performed) the S2b three-identity split below -- becomes deployment.json's own
+    # `owner_access_split` declaration. Defaults false; set true only inside the fresh-lineage-
+    # apply branch further down. When lineage apply is SKIPPED (an already-migrated schema, the
+    # `--profile tracker --force` re-derive case immediately below), this run makes no ownership
+    # change at all -- so the flag must carry forward whatever this deployment's EXISTING
+    # deployment.json already declared (a pre-S2b world re-run through --force must not start
+    # falsely claiming the split; a post-S2b world re-run through --force must not lose the
+    # declaration it already earned), never a blind reset to false.
+    OWNER_ACCESS_SPLIT=false
     if [ "$PROFILE" = "tracker" ]; then
         _tracker_kernel_exists="$(printf '%s\n' "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = :'kern');" \
             | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)"
@@ -1116,6 +1140,20 @@ if [ "$FULL_LINEAGE" -eq 1 ]; then
             echo "   OR REPLACE VIEW cannot drop columns intermediate deltas already added). --force"
             echo "   here re-derives deployment.json + the verb shims + the boundary config + the"
             echo "   principals only; it does not touch existing kernel structure or ledger rows."
+            if [ -f "$DEPLOYMENT" ]; then
+                _prior_oas="$("$PY" -c "
+import json
+try:
+    with open('$DEPLOYMENT', encoding='utf-8') as f:
+        d = json.load(f)
+    print('true' if d.get('owner_access_split') else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null)"
+                [ "$_prior_oas" = "true" ] && OWNER_ACCESS_SPLIT=true
+                echo "   owner_access_split carried forward from existing deployment.json: $OWNER_ACCESS_SPLIT"
+                unset _prior_oas
+            fi
         fi
         unset _tracker_kernel_exists
     fi
@@ -1226,6 +1264,100 @@ if [ "$SKIP_LINEAGE_APPLY" -ne 1 ]; then
     unset _lineage_apply_sorted _lineage_apply_desc _LINEAGE_APPLY_MIN_N _entry
 
     echo "   kernel applied (schema $SCHEMA + kernel schema $KERN + role $ROLE, s20 + s21 + s22 + s23 + s24 + s25 + s26 + s27 + s28 + s29 + s30 + s31 + s32 + s33 + s34 + s35 + s36 + s37 + s38 + s39 + s40 + s41 + s42 + s43 + s44 + s45 + s46 + s47 + s48 + s49 + s50 + s51 + s52 + s53 + s54 + s55 + s56 + s57 + s58 + s59 + s60 + s61 + s62 + s63 included -- s29's migration_epoch naturally seeds 0 on this empty ledger, see that file's own AMENDMENT header; s30 needs no epoch machinery of its own, HISTORY: safe; s40's own birth acts run below, after the seeds; s45 licenses principal_binding_active on the two standing-lifecycle kinds and is honored by the standing declarations below, which now carry the flag; s56/s57 are view-only/new-write-path respectively, neither needs a birth-sequence act of its own; s58's kernel.world_identity is left empty by this run (a future world's own birth act, s58's own header) -- missive writes refuse loudly, fail-safe, until an operator populates it; s59 is view-only; s60's own birth sequence (role bind + default act-class map) runs below, gated on the entitlement_act_class column this delta adds; s61 needs no birth act (key bindings are operator acts); s62 needs no birth act (genesis's first edges pass chain-to-genesis trivially); s63 needs no birth act of its own (a same-function re-issue, no new columns/kinds))"
+
+    # S2b THREE-IDENTITY SPLIT (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §2;
+    # ledger row 600, work item ac-scaffold-identity-split). Every relation/sequence/function the
+    # lineage apply above just created is, at this point, owned by whichever identity ran THIS
+    # script's own psql connection (the invoking superuser -- no -U was given anywhere above, so
+    # it is the operator's own connecting identity, peer/trust-authenticated, per this cluster's
+    # existing convention -- see kernel/lineage/s15-schema.sql's own header, "Run as the schema
+    # owner (bork)"). Row 600's REJECTED shape is the granted access role ($ROLE) owning the
+    # schema; that is NOT what happens today (the access role is merely GRANTed privileges by the
+    # lineage files, never CREATE SCHEMA'd as), but neither is today's shape the RATIFIED one: the
+    # owner today is the shared, LOGIN-capable superuser identity, not a role scoped to this world
+    # and confined to birth-time use. This block closes that gap, WITHOUT editing any frozen
+    # kernel/lineage/*.sql file (CLAUDE.md: nobody edits kernel/lineage without a Fable-authored,
+    # maintainer-ratified spec -- this spec is that ratified basis, but the delta it authorizes is
+    # scoped to THIS scaffold script, not the lineage files themselves): it REASSIGNS ownership of
+    # every object the lineage apply just created, from the invoking superuser to a freshly
+    # created, NON-LOGIN owner role ($OWNER) -- never granting that role membership to $ROLE, and
+    # never granting $ROLE membership in it, so pg_has_role($ROLE, $OWNER, 'USAGE') stays false
+    # (row 600's own correctness point: an owner-member connecting role could bypass its own
+    # REVOKEs). ALTER ... OWNER TO does not touch existing GRANTs (an ACL entry is independent of
+    # ownership), so every `GRANT ... TO :role` the lineage files already issued -- while the
+    # objects were still owned by the invoker -- survives this reassignment unchanged; SECURITY
+    # DEFINER functions (s17/s27/s40/s43/s44/s45/s51/s57/s58, ...) now execute as $OWNER instead of
+    # as the invoker, which is the load-bearing change s43 Element 8's own session_user-keyed
+    # set_actor() (re-issued at s43, unaffected by this reassignment) was already written to
+    # tolerate: attribution keys on session_user (the real login identity), never on current_user
+    # (which SECURITY DEFINER changes to the function's owner) -- so this split changes WHO OWNS,
+    # never WHAT IS GRANTED or WHO IS ATTRIBUTED. Scoped to exactly the two namespaces this run
+    # just created (never a blanket `REASSIGN OWNED BY`, which would also reassign every OTHER
+    # world's objects this same invoking identity happens to own in a shared database -- this
+    # project's own provisioning convention, bootstrap/provision-db.sh's header comment, is one
+    # shared db / one schema pair per project, so a blanket reassign is a real collateral-damage
+    # hazard, not a hypothetical one). Future births only (runs-are-linear): this whole block sits
+    # inside the same `if [ "$SKIP_LINEAGE_APPLY" -ne 1 ]` guard as the lineage apply itself, so a
+    # `--profile tracker --force` re-run against an ALREADY-migrated schema never re-enters here
+    # (SKIP_LINEAGE_APPLY=1 short-circuits the entire enclosing block) -- no existing world's
+    # ownership is ever touched by this script.
+    echo "-- $WORLD_LABEL: S2b three-identity split -- creating non-login owner role '$OWNER' and reassigning schema/kern ownership to it (ledger row 600) --"
+    psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v owner="$OWNER" <<'SQL'
+SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'owner') AS need_owner \gset
+\if :need_owner
+CREATE ROLE :"owner" NOLOGIN;
+\endif
+SQL
+    psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v schema="$SCHEMA" -v kern="$KERN" -v owner="$OWNER" <<'SQL'
+SELECT set_config('birth.owner', :'owner', false),
+       set_config('birth.schema', :'schema', false),
+       set_config('birth.kern', :'kern', false);
+DO $reassign$
+DECLARE
+    r         record;
+    v_owner   text := current_setting('birth.owner');
+    v_schema  text := current_setting('birth.schema');
+    v_kern    text := current_setting('birth.kern');
+    v_relkind text;
+BEGIN
+    EXECUTE format('ALTER SCHEMA %I OWNER TO %I', v_schema, v_owner);
+    EXECUTE format('ALTER SCHEMA %I OWNER TO %I', v_kern, v_owner);
+    -- Sequences LINKED to a serial/identity/GENERATED column (pg_depend deptype 'a'/'i') take
+    -- their owner FROM that column's table automatically -- Postgres itself REFUSES an explicit
+    -- `ALTER SEQUENCE ... OWNER TO` on one ("cannot change owner of sequence ...  linked to
+    -- table ..."), witnessed live against this exact schema (every bigserial PK sequence here,
+    -- e.g. kernel.principal_id_seq). Excluded from this loop for that reason -- their ownership
+    -- already followed the table's ALTER above; only a genuinely STANDALONE sequence (e.g.
+    -- kernel.refusal_seq, s43's own hand-created sequence, not a column's serial backing) needs
+    -- its own explicit reassignment.
+    FOR r IN
+        SELECT n.nspname, c.relname, c.relkind
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN (v_schema, v_kern) AND c.relkind IN ('r','v','m','p')
+        UNION ALL
+        SELECT n.nspname, c.relname, c.relkind
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN (v_schema, v_kern) AND c.relkind = 'S'
+          AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                          WHERE d.objid = c.oid AND d.deptype IN ('a', 'i'))
+    LOOP
+        v_relkind := CASE r.relkind
+            WHEN 'r' THEN 'TABLE' WHEN 'p' THEN 'TABLE' WHEN 'v' THEN 'VIEW'
+            WHEN 'm' THEN 'MATERIALIZED VIEW' WHEN 'S' THEN 'SEQUENCE' END;
+        EXECUTE format('ALTER %s %I.%I OWNER TO %I', v_relkind, r.nspname, r.relname, v_owner);
+    END LOOP;
+    FOR r IN
+        SELECT p.oid::regprocedure::text AS sig
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname IN (v_schema, v_kern)
+    LOOP
+        EXECUTE format('ALTER FUNCTION %s OWNER TO %I', r.sig, v_owner);
+    END LOOP;
+END
+$reassign$;
+SQL
+    echo "   owner role '$OWNER' now owns schema '$SCHEMA', kernel schema '$KERN', and every relation/sequence/function within them (SECURITY DEFINER functions now execute as this role); role '$ROLE' holds no membership in it and owns nothing"
+    OWNER_ACCESS_SPLIT=true
 fi
 
     # _psql_in: SQL text is always fed on stdin, never via -c -- psql's :'var'/:"var" bind-variable
@@ -1622,15 +1754,16 @@ TRACKERTOML
 fi
 
 echo "-- deployment.json --"
-"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" "$NAME" "$BOUNDARY_URL" "$BOUNDARY_DEPLOYMENT" <<PYEOF
+"$PY" - "$DEPLOYMENT" "$DB" "$HOST" "$SCHEMA" "$KERN" "$ROLE" "$NAME" "$BOUNDARY_URL" "$BOUNDARY_DEPLOYMENT" "$OWNER_ACCESS_SPLIT" <<PYEOF
 import sys
 sys.path.insert(0, "$AUTOHARN_ROOT/filing")
 from deployment_record import DeploymentRecord, write_deployment
 
-path, db, host, schema, kern, role, name, boundary_url, boundary_deployment = sys.argv[1:10]
+path, db, host, schema, kern, role, name, boundary_url, boundary_deployment, owner_access_split = sys.argv[1:11]
 write_deployment(path, DeploymentRecord(
     db=db, host=host, schema=schema, kern=kern, role=role, name=name or None,
-    boundary_url=boundary_url or None, boundary_deployment=boundary_deployment or None))
+    boundary_url=boundary_url or None, boundary_deployment=boundary_deployment or None,
+    owner_access_split=(owner_access_split == "true") or None))
 print(f"wrote {path}")
 if not boundary_url or not boundary_deployment:
     print("   (boundary_url/boundary_deployment not supplied -- the rebased led/pickup/"
