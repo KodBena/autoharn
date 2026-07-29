@@ -99,6 +99,20 @@ _REQUIRED_FIELDS: tuple[str, ...] = ("db", "host", "schema", "kern", "role")
 # shims (serving/boundary_cli_client.py) are the ones that refuse loudly when either is absent,
 # exactly the posture `name`'s own comment describes for `judge`.
 
+# `owner_access_split` is OPTIONAL, the SAME "extra field a future consumer adds" shape as the
+# three fields above -- design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §2, ledger row
+# 600, work item ac-scaffold-identity-split: `bootstrap/new-project.sh` sets this `true` on a
+# FRESH birth that carries the S2b three-identity split (a non-login owner role owning the schema/
+# kern schema/every SECURITY DEFINER function, distinct from and un-member'd by the granted access
+# `role`). Absent/`None`/`False` all mean "not declared" (a pre-S2b world, or a world whose
+# scaffold predates this field) -- `bootstrap/templates/doctor.tmpl`'s owner-split check (ledger
+# row 599, work item doctor-privilege-premise-check) is the one CONSUMER: it reads this
+# declaration as the fast path and then independently CONFIRMS it against the live catalog
+# (`pg_namespace.nspowner`, `pg_roles.rolcanlogin`/`rolsuper`, `pg_has_role`) rather than trusting
+# the flag blindly -- a declared-true world whose catalog disagrees is a real FAIL, not a silently
+# accepted claim. `_REQUIRED_FIELDS` is unchanged (every existing deployment.json, and every OTHER
+# consumer of this module, stays valid with the key absent).
+
 
 class DeploymentError(Exception):
     """A deployment.json is missing, unreadable, unparseable, or missing/malformed a required
@@ -139,6 +153,8 @@ class DeploymentRecord:
                               # field exists and why it is not one of the five required ones.
     boundary_url: str | None = None          # OPTIONAL -- see the comment above _REQUIRED_FIELDS
     boundary_deployment: str | None = None   # OPTIONAL -- see the same comment
+    owner_access_split: bool | None = None   # OPTIONAL -- see the comment below, same "extra
+                                              # field a future consumer adds" shape as the two above
 
     def __post_init__(self) -> None:
         """ADR-0012 interpreter-boundary Port: `schema`/`kern`/`role` are refused here, at
@@ -208,9 +224,16 @@ def load_deployment(path: str | Path) -> DeploymentRecord:
             f"deployment record at {p} has a non-string or empty value for optional field "
             f"'boundary_deployment' (omit the key entirely for 'not set', or give it a "
             f"non-empty string)")
+    owner_access_split = raw.get("owner_access_split")
+    if owner_access_split is not None and not isinstance(owner_access_split, bool):
+        raise DeploymentError(
+            f"deployment record at {p} has a non-boolean value for optional field "
+            f"'owner_access_split' (omit the key entirely for 'not declared', or give it a "
+            f"JSON boolean -- true/false)")
     return DeploymentRecord(db=raw["db"], host=raw["host"], schema=raw["schema"],
                              kern=raw["kern"], role=raw["role"], name=name,
-                             boundary_url=boundary_url, boundary_deployment=boundary_deployment)
+                             boundary_url=boundary_url, boundary_deployment=boundary_deployment,
+                             owner_access_split=owner_access_split)
 
 
 def write_deployment(path: str | Path, record: DeploymentRecord) -> None:
@@ -225,4 +248,10 @@ def write_deployment(path: str | Path, record: DeploymentRecord) -> None:
     for optional_field in ("name", "boundary_url", "boundary_deployment"):
         if data.get(optional_field) is None:
             data.pop(optional_field, None)
+    # owner_access_split is written ONLY when explicitly True (never a bare `false` key) -- the
+    # declaration is meaningful exactly once, at the birth that earns it; every other case (never
+    # set, or explicitly False) means "not declared" and is indistinguishable on disk, matching
+    # the field's own docstring ("Absent/None/False all mean not declared").
+    if not data.get("owner_access_split"):
+        data.pop("owner_access_split", None)
     p.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")

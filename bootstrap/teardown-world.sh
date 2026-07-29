@@ -129,6 +129,15 @@ done
 [ -n "$SCHEMA" ] || SCHEMA="$WORLD"
 [ -n "$KERN" ] || KERN="${WORLD}_kernel"
 [ -n "$ROLE" ] || ROLE="${WORLD}_rw"
+# OWNER: the S2b three-identity split's non-login owner role (bootstrap/new-project.sh, ledger
+# row 600, work item ac-scaffold-identity-split) -- derived from SCHEMA the exact same way that
+# scaffold derives it, never separately overridable (no --owner flag exists there either). A
+# hazard-in-reach fix: without this, a split-born world's teardown left the owner role orphaned
+# (witnessed live: a scratch birth + teardown left `<schema>_owner` behind, owning nothing after
+# its schema/kern were CASCADE-dropped, but never itself dropped). Gated on existing below (step
+# 3) -- a world scaffolded before S2b landed simply has no such role, and this script does not
+# invent one to "clean up".
+OWNER="${SCHEMA}_owner"
 
 # --- 0. STRICT CHARACTER ALLOWLIST on every name that becomes SQL text -------------------------
 # Defense-in-depth alongside the psql -v bind-variable interpolation used below (see RESOLVE and
@@ -138,7 +147,7 @@ done
 # --role override) -- refusing early keeps this script's own catalog/DROP text boring and
 # reviewable, independent of how well psql's quoting holds up. Checked for all three, since
 # --schema/--kern/--role are operator-supplied overrides with no other check on them.
-for _name in "$SCHEMA" "$KERN" "$ROLE"; do
+for _name in "$SCHEMA" "$KERN" "$ROLE" "$OWNER"; do
     case "$_name" in
         ''|*[!A-Za-z0-9_]*)
             echo "teardown-world.sh: REFUSED -- '$_name' contains characters outside the" >&2
@@ -196,13 +205,15 @@ _psql_in() { printf '%s\n' "$1"; }
 HAVE_SCHEMA=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'schema';" | _psql -v schema="$SCHEMA" -tA)
 HAVE_KERN=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'kern';" | _psql -v kern="$KERN" -tA)
 HAVE_ROLE=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'role';" | _psql -v role="$ROLE" -tA)
+HAVE_OWNER=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'owner';" | _psql -v owner="$OWNER" -tA)
 
-if [ "$HAVE_SCHEMA" = "0" ] && [ "$HAVE_KERN" = "0" ] && [ "$HAVE_ROLE" = "0" ]; then
+if [ "$HAVE_SCHEMA" = "0" ] && [ "$HAVE_KERN" = "0" ] && [ "$HAVE_ROLE" = "0" ] && [ "$HAVE_OWNER" = "0" ]; then
     echo "teardown-world.sh: REFUSED -- '$WORLD' resolves to NOTHING in $DB@$HOST: no schema" >&2
-    echo "                   '$SCHEMA', no kernel schema '$KERN', no role '$ROLE'. Either it was" >&2
-    echo "                   already torn down, it was never scaffolded under this derivation," >&2
-    echo "                   or --schema/--kern/--role need to be given explicitly to match a" >&2
-    echo "                   non-default scaffold call. Nothing to do; nothing touched." >&2
+    echo "                   '$SCHEMA', no kernel schema '$KERN', no role '$ROLE', no owner role" >&2
+    echo "                   '$OWNER'. Either it was already torn down, it was never scaffolded" >&2
+    echo "                   under this derivation, or --schema/--kern/--role need to be given" >&2
+    echo "                   explicitly to match a non-default scaffold call. Nothing to do;" >&2
+    echo "                   nothing touched." >&2
     exit 1
 fi
 
@@ -220,6 +231,10 @@ fi
 if [ "$HAVE_ROLE" != "0" ]; then
     PLAN_N=$((PLAN_N + 1))
     echo "  $PLAN_N. DROP ROLE ${ROLE};   -- granted role (exists)"
+fi
+if [ "$HAVE_OWNER" != "0" ]; then
+    PLAN_N=$((PLAN_N + 1))
+    echo "  $PLAN_N. DROP ROLE ${OWNER};   -- S2b non-login owner role (exists, ledger row 600)"
 fi
 if [ -n "$DIR" ]; then
     echo "  +. rm -rf ${DIR}   -- scaffolded deployment directory (--dir given explicitly)"
@@ -261,18 +276,25 @@ if [ "$HAVE_ROLE" != "0" ]; then
     _psql_in 'DROP ROLE :"role";' | _psql -v ON_ERROR_STOP=1 -v role="$ROLE" -q
     echo "   dropped role ${ROLE}"
 fi
+if [ "$HAVE_OWNER" != "0" ]; then
+    # Dropped LAST, after the schemas it owns are already gone (CASCADE above) -- DROP ROLE
+    # refuses if the role still owns anything.
+    _psql_in 'DROP ROLE :"owner";' | _psql -v ON_ERROR_STOP=1 -v owner="$OWNER" -q
+    echo "   dropped owner role ${OWNER}"
+fi
 
 # --- 7. VERIFY zero residue via a fresh catalog query --------------------------------------------
 # Same -v bind-variable discipline as RESOLVE (step 3) -- no raw interpolation here either.
 RESIDUE_SCHEMA=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'schema';" | _psql -v schema="$SCHEMA" -tA)
 RESIDUE_KERN=$(_psql_in "SELECT count(*) FROM pg_namespace WHERE nspname = :'kern';" | _psql -v kern="$KERN" -tA)
 RESIDUE_ROLE=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'role';" | _psql -v role="$ROLE" -tA)
-if [ "$RESIDUE_SCHEMA" != "0" ] || [ "$RESIDUE_KERN" != "0" ] || [ "$RESIDUE_ROLE" != "0" ]; then
+RESIDUE_OWNER=$(_psql_in "SELECT count(*) FROM pg_roles WHERE rolname = :'owner';" | _psql -v owner="$OWNER" -tA)
+if [ "$RESIDUE_SCHEMA" != "0" ] || [ "$RESIDUE_KERN" != "0" ] || [ "$RESIDUE_ROLE" != "0" ] || [ "$RESIDUE_OWNER" != "0" ]; then
     echo "teardown-world.sh: RESIDUE DETECTED after teardown -- schema='$RESIDUE_SCHEMA'" >&2
-    echo "                   kern='$RESIDUE_KERN' role='$RESIDUE_ROLE' (counts, expect all 0)." >&2
-    echo "                   The drop plan executed but the catalogs still show objects for" >&2
-    echo "                   '$WORLD'. Investigate by hand before re-running -- this is a" >&2
-    echo "                   loud failure, not a silent partial success." >&2
+    echo "                   kern='$RESIDUE_KERN' role='$RESIDUE_ROLE' owner='$RESIDUE_OWNER'" >&2
+    echo "                   (counts, expect all 0). The drop plan executed but the catalogs" >&2
+    echo "                   still show objects for '$WORLD'. Investigate by hand before" >&2
+    echo "                   re-running -- this is a loud failure, not a silent partial success." >&2
     exit 1
 fi
 echo "-- verified: zero residue for '$WORLD' in $DB@$HOST --"
