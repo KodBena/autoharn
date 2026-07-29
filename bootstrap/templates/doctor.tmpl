@@ -204,12 +204,15 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
     """Opus AC suggestion S2a (work item doctor-privilege-premise-check, ledger row 599),
     adjudicated ADOPT-RESHAPED to three states: does the identity `doctor` itself connects as --
     no `SET ROLE`, the same bare connection `check_db` above already makes -- hold superuser, and
-    does it own the governed schema (`dep.schema`)? Both are TRUE in an unreformed world (every
-    other `*.tmpl` in this tree, `legacy-pickup.tmpl`/`legacy-distance-to-clean.tmpl`/
-    `verify-chain.tmpl`/`verify-commission.tmpl` alike, connects as an owner/superuser identity
-    and only narrows via an explicit `SET ROLE <dep.role>` for the ONE query it runs -- the
-    connection itself never lost the owning/superuser power, so any bug, typo, or missing
-    `SET ROLE` at a new call site silently runs at full privilege instead of refusing).
+    does it hold the governed schema OWNER's privileges (`dep.schema`) -- either BY BEING the
+    owner, or by INHERITING them through role membership (`pg_has_role(..., 'USAGE')`, see the
+    query's own comment below for why membership, not name equality, is the right test)? Both are
+    TRUE in an unreformed world (every other `*.tmpl` in this tree, `legacy-pickup.tmpl`/
+    `legacy-distance-to-clean.tmpl`/`verify-chain.tmpl`/`verify-commission.tmpl` alike, connects
+    as an owner/superuser identity and only narrows via an explicit `SET ROLE <dep.role>` for the
+    ONE query it runs -- the connection itself never lost the owning/superuser power, so any bug,
+    typo, or missing `SET ROLE` at a new call site silently runs at full privilege instead of
+    refusing).
 
     WHY THIS MATTERS, TAUGHT PLAINLY (kept in every rendered line, not just this docstring) --
     three concrete places a superuser-or-owner CONNECTING identity quietly defeats a protection
@@ -238,17 +241,21 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
     honest verdict from FAIL" slot, disclosed rather than silently substituted):
       PASS -- deployment.json declares `"owner_access_split": true` (see
               `_read_declared_owner_access_split` above) AND the live connection matches it:
-              non-superuser, does not own `dep.schema`. Declaration and premise agree.
+              non-superuser, holds no owner-equivalent privilege on `dep.schema` (neither the
+              owner itself nor an INHERITing member of the owning role). Declaration and premise
+              agree.
       FAIL -- deployment.json declares the split but the LIVE premise is broken (superuser, or
-              owns the schema, or both) -- a real alarm: this world claimed the fence stands and
-              it does not.
+              holds owner-equivalent privilege on the schema -- directly or via role membership --
+              or both) -- a real alarm: this world claimed the fence stands and it does not.
       SKIP -- no declaration in deployment.json (every world scaffolded before the S2b change
-              this check's own docstring names, i.e. every world today). Reports the OBSERVED
-              fact (superuser? owns the schema?) and the same s17/s43/RLS teach-text above, plus
-              the forward path: the split becomes checkable, not just observable, once a future
-              scaffold change writes `owner_access_split` at birth -- this world's own premise
-              cannot be fixed in place (runs are linear; a world is reformed by being reborn, not
-              patched)."""
+              this check's own docstring names, i.e. every world today), OR an explicit
+              `"owner_access_split": false` (this world does not claim the split -- worded
+              distinctly from the absent-key case, not folded into the same "no declaration"
+              text). Reports the OBSERVED fact (superuser? owner-equivalent on the schema?) and
+              the same s17/s43/RLS teach-text above, plus the forward path: the split becomes
+              checkable, not just observable, once a future scaffold change writes
+              `owner_access_split` at birth -- this world's own premise cannot be fixed in place
+              (runs are linear; a world is reformed by being reborn, not patched)."""
     r = _psql(dep.host, dep.db,
               # NOTE: rolsuper is left as a native boolean column, NOT cast to ::text -- psql -tA
               # renders a native boolean column as the abbreviated 't'/'f' (matched below), whereas
@@ -256,23 +263,46 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
               # (verified live) -- a first cut of this check cast it and always read FALSE
               # (comparing 'true' against the expected 't'), reporting every world as split-enforced
               # regardless of the live fact. Fixed here, not papered over with a wider string match.
+              #
+              # OWNERSHIP FIX (fresh-context review of commit 6b2668c9, empirically reproduced):
+              # a first cut compared the schema owner's NAME to current_user by string equality --
+              # but Postgres ownership-equivalent privilege (the ability to bypass a REVOKE ALL,
+              # ALTER, etc.) is not "same role name", it is ROLE MEMBERSHIP: a LOGIN role created
+              # `IN ROLE ownergroup`, where `ownergroup` (NOLOGIN) owns the schema, inherits
+              # ownergroup's privileges by default (INHERIT is the default role attribute) and
+              # reads straight through a `REVOKE ALL FROM PUBLIC` on a table ownergroup owns --
+              # verified live (privtest_member LOGIN IN ROLE privtest_ownergroup SELECTed a
+              # REVOKE-ALL'd table privtest_ownergroup owns; privtest_unrelated, a same-shape LOGIN
+              # role with no membership, got `permission denied`). `pg_has_role(user, role,
+              # 'USAGE')` is the catalog predicate Postgres's own ownership/ACL checks use
+              # internally for this "inherited privileges of role" question (as opposed to
+              # 'MEMBER', which ignores the NOINHERIT attribute) -- it reads true for the owner
+              # itself, any INHERITing (in)direct member, and false for an unrelated role,
+              # matching the three polarities verified live above plus the direct-owner case.
               "SELECT current_user, "
               "(SELECT rolsuper FROM pg_roles WHERE rolname = current_user), "
               "COALESCE((SELECT pg_get_userbyid(nspowner) FROM pg_namespace "
-              "WHERE nspname = :'schema'), '(no such schema)');",
+              "WHERE nspname = :'schema'), '(no such schema)'), "
+              "COALESCE((SELECT pg_has_role(current_user, nspowner, 'USAGE') FROM pg_namespace "
+              "WHERE nspname = :'schema'), false);",
               {"schema": dep.schema})
     if r.returncode != 0:
         return _line("owner/access split", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
     parts = r.stdout.strip().split("|")
-    if len(parts) != 3:
+    if len(parts) != 4:
         return _line("owner/access split", FAIL, f"unexpected query output: {r.stdout!r}"), FAIL
-    connecting_role, is_super_raw, owner = (p.strip() for p in parts)
+    connecting_role, is_super_raw, owner, has_owner_privs_raw = (p.strip() for p in parts)
     is_super = is_super_raw == "t"
-    owns_schema = owner == connecting_role
+    owns_schema = has_owner_privs_raw == "t"
     split_in_force = (not is_super) and (not owns_schema)
+    if not owns_schema:
+        own_detail = "a genuinely unrelated role"
+    elif owner == connecting_role:
+        own_detail = "same role -- owns it"
+    else:
+        own_detail = f"holds owner '{owner}''s privileges via role membership (pg_has_role USAGE)"
     fact = (f"connecting as '{connecting_role}' ({'superuser' if is_super else 'not superuser'}), "
-            f"schema '{dep.schema}' owned by '{owner}' "
-            f"({'same role -- owns it' if owns_schema else 'a different role'})")
+            f"schema '{dep.schema}' owned by '{owner}' ({own_detail})")
 
     declared = _read_declared_owner_access_split(DEPLOYMENT_PATH)
     if declared is True:
@@ -284,9 +314,14 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
                      f"broken -- {fact}. A superuser-or-owner connection bypasses s17's "
                      f"stamp_secret REVOKE, s43's write-boundary REVOKE, and any adopter-built "
                      f"RLS alike -- this world claimed the fence stands and it does not."), FAIL
+    if declared is False:
+        decl_clause = ("deployment.json explicitly declares owner_access_split=false (this world "
+                       "does not claim the split is enforced)")
+    else:
+        decl_clause = ("no owner_access_split declaration in deployment.json (every world "
+                       "scaffolded before the S2b scaffold change writes this field at birth)")
     teach = (
-        "no owner_access_split declaration in deployment.json (every world scaffolded before "
-        "the S2b scaffold change writes this field at birth) -- the premise above is observed, "
+        f"{decl_clause} -- the premise above is observed, "
         "not enforced-and-checked, and cannot be fixed in this world in place (runs are linear; "
         "reform arrives by rebirth, not a patch). What it means meanwhile: a superuser-or-owner "
         "connecting identity bypasses s17's stamp_secret REVOKE (kernel/lineage/"
