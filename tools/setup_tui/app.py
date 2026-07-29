@@ -38,7 +38,7 @@ import sys
 import textwrap
 
 from tools.configtree.measure import MEASURE
-from tools.setup_tui import config_file, config_seam, durable_decisions, steps
+from tools.setup_tui import config_file, config_seam, durable_decisions, idtypes, steps
 from tools.setup_tui.checklist import Checklist
 from tools.setup_tui.plan import Plan
 
@@ -116,8 +116,24 @@ def _run_from_config(args: argparse.Namespace) -> int:
     except config_file.ConfigError as exc:
         print(_wrap(str(exc)), file=sys.stderr)
         return 1
-    host = str(config_file.get(doc, "substrate.host", "192.168.122.1"))
-    db = str(config_file.get(doc, "substrate.db", "toy"))
+    # TYPED CONSTRUCTION (review row 832, discharging work item setup-tui-bare-types-retrofit's
+    # own PG* typed homes for THIS birth site too): `host`/`db` are constructed through
+    # `idtypes.PgHost`/`PgDatabase` -- the ONE typed home per value, the same idiom
+    # `steps_substrate.py`'s own `submit` uses -- rather than a bare `str()` straight from the
+    # config document. `.value`/`str()` is unwrapped back to a plain scalar immediately below,
+    # exactly like every other call site downstream of `config_seam.check_world_and_dest`
+    # already expects.
+    try:
+        host = str(idtypes.PgHost.parse(str(config_file.get(doc, "substrate.host",
+                                                              "192.168.122.1"))))
+    except idtypes.PgHostError as exc:
+        print(_wrap(str(exc)), file=sys.stderr)
+        return 1
+    try:
+        db = str(idtypes.PgDatabase.parse(str(config_file.get(doc, "substrate.db", "toy"))))
+    except idtypes.PgIdentifierError as exc:
+        print(_wrap(str(exc)), file=sys.stderr)
+        return 1
     refusal = config_seam.check_world_and_dest(world=args.world, dest=args.dest_dir, host=host,
                                                 db=db)
     if refusal:

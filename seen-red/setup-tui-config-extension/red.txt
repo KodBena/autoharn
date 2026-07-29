@@ -140,3 +140,41 @@ setup-tui-signed-genesis-resume/setup-tui-signed-genesis-key-pinning (signed_gen
 drift (principals_authority.py's own near-identical `_validated_dep_fields`, now PgSchema/
 PgRole-typed) -- all re-run green after this retrofit, live transcripts kept in this build's own
 commit message rather than re-pasted here.
+
+ADDENDUM (review row 832, fresh-context review of the retrofit above): the review found ONE
+remaining birth site the retrofit missed -- `tools/setup_tui/app.py`'s `_run_from_config` built
+bare host/db strings via `str()` straight from the config document and passed them to
+`config_seam.check_world_and_dest` before any typed construction, unlike every sibling call site
+(`steps_substrate.py`'s own `submit`). Fixed at the exact site (the `host = str(...)`/`db =
+str(...)` lines immediately above the `check_world_and_dest` call): both now construct through
+`idtypes.PgHost.parse`/`PgDatabase.parse` first, unwrapping to `str()` for the same downstream
+call, matching the sibling idiom exactly. New leg `case_from_config_typed_construction_site`
+added to this file.
+
+RED (pre-fix, `tools/setup_tui/app.py` stashed back to review row 832's own defect, live run):
+
+    AssertionError: check_world_and_dest was reached with a host that should have been refused
+    at construction, before this call
+
+    (raised by a stub installed in place of config_seam.check_world_and_dest that raises if
+    called at all -- proving the pre-fix code reached the live-Postgres-probing call with an
+    invalid host 'evil;host' instead of refusing at construction)
+
+GREEN (post-fix, live run, full family):
+
+case f ok: each of the five typed homes in boundary_config_values.py refuses an out-of-contract
+value at construction (naming the contract) and round-trips a valid one -- LogLevel,
+IdentityEnforcementPosture, IdentityEnforcementOverride, SsePollIntervalSecs, MaxSseClients
+case f (retrofit) ok: each of the five NEW typed homes in idtypes.py's "PG* TYPES" section
+refuses an out-of-contract value at construction (naming the contract) and round-trips a valid
+one -- PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole
+case (review row 832) ok: app.py's _run_from_config now constructs host/db through
+idtypes.PgHost/PgDatabase before calling config_seam.check_world_and_dest -- an invalid host
+REFUSES at construction (naming probes.valid_hostname's contract) without ever reaching
+check_world_and_dest / attempting a live Postgres probe, and a valid host/db reaches
+check_world_and_dest with the byte-identical plain strings the config file named
+ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension (ledger row 685's audit /
+row 693), zero residue
+
+Gates re-run clean after this change: setup_tui_purity_gate, no_lazy_imports, max_lines,
+fixture_census (all rc=0).

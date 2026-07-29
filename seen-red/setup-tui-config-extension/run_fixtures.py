@@ -43,7 +43,9 @@ importable (mirrors every sibling setup_tui fixture's own guard).
 Lazy imports are banned (CLAUDE.md, 2026-07-02)."""
 from __future__ import annotations
 
+import argparse
 import asyncio
+import io
 import json
 import os
 import shutil
@@ -63,7 +65,7 @@ from tools.configtree import NodeId  # noqa: E402
 from tools.configtree.fields import default_of, get_field_value  # noqa: E402
 from tools.configtree.ids import FieldName, ScopedFieldKey  # noqa: E402
 from tools.setup_tui import boundary_config_values as bcv  # noqa: E402
-from tools.setup_tui import config_file, idtypes, steps, steps_boundary, steps_courier  # noqa: E402
+from tools.setup_tui import app, config_file, config_seam, idtypes, steps, steps_boundary, steps_courier  # noqa: E402
 from tools.setup_tui.checklist import Checklist  # noqa: E402
 from tools.setup_tui.plan import Plan  # noqa: E402
 
@@ -517,6 +519,96 @@ def case_typed_construction_retrofit() -> None:
           "round-trips a valid one -- PgHost, PgDatabase, PgSchema, PgKernSchema, PgRole")
 
 
+def case_from_config_typed_construction_site(scratch: str) -> None:
+    """Review row 832 fresh-context finding: `app.py`'s `_run_from_config` built bare host/db
+    strings via `str()` straight from the config document and passed them to `config_seam.
+    check_world_and_dest` BEFORE any typed construction -- unlike every sibling call site
+    (`steps_substrate.py`'s own `submit`), which constructs through `idtypes.PgHost`/
+    `PgDatabase` first. Fixed at the exact birth site (`app.py`'s `_run_from_config`, the
+    `host = str(...)`/`db = str(...)` lines just above the `check_world_and_dest` call): host/db
+    are now constructed through `idtypes.PgHost.parse`/`PgDatabase.parse` before
+    `check_world_and_dest` is ever invoked.
+
+    RED: an invalid host in the config file REFUSES AT CONSTRUCTION, naming the contract
+    (`probes.valid_hostname`), and never reaches `check_world_and_dest` at all -- proven by a
+    stub that raises if called, so this case needs no live Postgres.
+
+    GREEN: a valid host/db proceeds IDENTICALLY -- reaches `check_world_and_dest` with the SAME
+    plain strings the config file named, byte-for-byte (a second stub captures the call and
+    returns a refusal immediately, so this case exercises only the construction site, not the
+    full downstream flow already witnessed by case (i) in seen-red/setup-tui-config-file)."""
+    exemplar_text = open(os.path.join(REPO, "bootstrap", "templates", "known-good-blank.toml"),
+                         encoding="utf-8").read()
+
+    orig_check = config_seam.check_world_and_dest
+
+    # --- RED: shell-metacharacter host, outside probes.valid_hostname's alphabet. ---
+    red_text = exemplar_text.replace('host = "192.168.122.1"', 'host = "evil;host"')
+    assert red_text != exemplar_text, ("fixture's own host= replacement did not match the "
+                                        "exemplar -- update the pattern, the exemplar moved")
+    red_path = os.path.join(scratch, "from-config-typed-red.toml")
+    with open(red_path, "w", encoding="utf-8") as f:
+        f.write(red_text)
+
+    called = {"count": 0}
+
+    def _stub_should_not_be_called(**_kwargs):
+        called["count"] += 1
+        raise AssertionError("check_world_and_dest was reached with a host that should have "
+                              "been refused at construction, before this call")
+
+    config_seam.check_world_and_dest = _stub_should_not_be_called
+    try:
+        args = argparse.Namespace(from_config=red_path, world="sentinel-typed-red",
+                                   dest_dir=os.path.join(scratch, "dest-red"), dry_run=True,
+                                   accept_unverified_genesis=False)
+        buf = io.StringIO()
+        old_stderr = sys.stderr
+        sys.stderr = buf
+        try:
+            rc = app._run_from_config(args)
+        finally:
+            sys.stderr = old_stderr
+        assert rc == 1, f"expected refusal exit code 1, got {rc}"
+        assert called["count"] == 0, "check_world_and_dest was reached despite the bad host"
+        stderr_text = buf.getvalue()
+        assert "valid_hostname" in stderr_text, stderr_text
+    finally:
+        config_seam.check_world_and_dest = orig_check
+
+    # --- GREEN: the untouched exemplar's valid host/db -- proceeds to check_world_and_dest with
+    # the EXACT plain strings the config file names (byte-identical to pre-fix behavior). ---
+    green_path = os.path.join(scratch, "from-config-typed-green.toml")
+    with open(green_path, "w", encoding="utf-8") as f:
+        f.write(exemplar_text)
+
+    captured: dict = {}
+
+    def _stub_capture(*, world, dest, host, db):
+        captured["world"], captured["dest"], captured["host"], captured["db"] = world, dest, host, db
+        return "stub refusal (this case only checks the construction site, not the full flow)"
+
+    config_seam.check_world_and_dest = _stub_capture
+    try:
+        args = argparse.Namespace(from_config=green_path, world="sentinel-typed-green",
+                                   dest_dir=os.path.join(scratch, "dest-green"), dry_run=True,
+                                   accept_unverified_genesis=False)
+        rc = app._run_from_config(args)
+    finally:
+        config_seam.check_world_and_dest = orig_check
+    assert rc == 1, f"expected the stub's own refusal exit code 1, got {rc}"
+    assert captured.get("host") == "192.168.122.1", captured
+    assert captured.get("db") == "toy", captured
+    assert isinstance(captured["host"], str) and isinstance(captured["db"], str)
+
+    print("case (review row 832) ok: app.py's _run_from_config now constructs host/db through "
+          "idtypes.PgHost/PgDatabase before calling config_seam.check_world_and_dest -- an "
+          "invalid host REFUSES at construction (naming probes.valid_hostname's contract) "
+          "without ever reaching check_world_and_dest / attempting a live Postgres probe, and a "
+          "valid host/db reaches check_world_and_dest with the byte-identical plain strings the "
+          "config file named")
+
+
 def main() -> int:
     scratch = tempfile.mkdtemp(prefix="setup-tui-config-extension-")
     try:
@@ -532,6 +624,7 @@ def main() -> int:
             case_pilot_driven(scratch)
         case_typed_construction()
         case_typed_construction_retrofit()
+        case_from_config_typed_construction_site(scratch)
         print("ALL CASES OK (or honestly UNEXERCISED) -- setup-tui-config-extension "
               "(ledger row 685's audit / row 693), zero residue")
         return 0
