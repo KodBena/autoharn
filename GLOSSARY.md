@@ -33,7 +33,16 @@
      the +A:B:C loop after this build lands, in a blind round this build's own context must not
      poison. Flagged here rather than silently re-widening the existing waiver's stated scope.
      Removal condition unchanged: strike all markers and run the real loop next time this file
-     is touched for content. -->
+     is touched for content.
+
+     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, addendum round, 2026-07-29): the batch's
+     final delta, s72 (stamp-binding conjunct, merge a218a1b4), merged to main after this
+     section was first written -- adds the `stamp-binding conjunct (s72) / principal_stamp_
+     bound` entry (tenth/eleventh authority-bearing tokens, empty-by-default, the ephemeral-
+     dispatched-agent fork reported not resolved) and updates this section's own intro to name
+     s72 alongside s70/s71. Same no-self-attestation posture as the touch immediately above --
+     still owed to the coordinator's batch. Removal condition unchanged: strike all markers and
+     run the real loop next time this file is touched for content. -->
 
 # Glossary — autoharn's coined vocabulary
 
@@ -971,7 +980,7 @@ The terms below entered the vocabulary with the access-control batch
 ([design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)):
 scopes as a first-class, ledgered visibility predicate, layered on top of the
 [entitlement](#entitlement) machinery above. **Runs-are-linear caveat, stated once here rather
-than in every entry below:** the kernel deltas this section documents (s70, s71) ride
+than in every entry below:** the kernel deltas this section documents (s70, s71, and s72) ride
 `bootstrap/new-project.sh`'s `LINEAGE_CHAIN` for the NEXT `--new-world` scaffold; they are NOT
 applied to autoharn3 or any other already-born world. The serving-layer enforcement (the
 boundary scope filter) and the CLI minting surface (`dispatch mint --scope-*`) ARE live on
@@ -1051,6 +1060,36 @@ never a silent skip. On a world predating s70 the scope predicates trivially agr
 once a world scope-binds a principal for real. Source:
 [`engine/ledger_floor.py`](engine/ledger_floor.py); [`engine/lp_registry.py`](engine/lp_registry.py);
 [`design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md`](design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md).
+
+<a id="stamp-binding-conjunct"></a>
+### stamp-binding conjunct (s72) / `principal_stamp_bound`
+The access-control batch's final delta, `kernel/lineage/s72-stamp-binding-conjunct.sql` —
+**future birth only, same caveat as [scope binding](#scope-binding) above; NOT applied to
+autoharn3.** RBAC's authenticated input (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
+SPEC.md §5 item 5): entitlement (s60) answers "does this principal hold the required
+role/chain"; this conjunct additionally answers "was THIS write actually produced by an
+invocation this principal is on record as controlling." Two new kinds, the TENTH and ELEVENTH
+authority-bearing tokens: `principal_stamp_bound` (binds a principal to a `stamp_agent`
+identity string, e.g. `main`) and `stamp_binding_class_configured` (nominates which act class
+the conjunct governs, s60's `entitlement_class_configured` shape one axis over). **Empty by
+default** — no act class is nominated at birth, so the conjunct is a total no-op everywhere
+until a deployment arms it; a fresh world's ordinary writes stay byte-identical to pre-s72.
+Once armed over a class, a write in that class must carry a kernel-VERIFIED interception stamp
+(never a bare string match) whose `stamp_agent` resolves to an in-force `principal_stamp_bound`
+row naming the acting principal — refused otherwise (`conjunct c`), verbatim example in
+[`seen-red/s72-stamp-binding-conjunct/red.txt`](seen-red/s72-stamp-binding-conjunct/red.txt).
+**Disclosed limits:** binding is on `stamp_agent` alone, never the `(stamp_session,
+stamp_agent)` pair s21 uses for cross-session distinctness — single-trust-domain semantics,
+every session's `main` thread admitted as one voice, by design, not oversight. **The
+ephemeral-dispatched-agent fork is reported, not resolved:** a dispatched subagent's
+`stamp_agent` is a harness-minted id, unbindable in advance, so arming this conjunct over
+`milestone_closure`/`gate_edge_supersession` (routinely closed by a dispatched subagent) would
+refuse every legitimate subagent close; a dispatch-time/first-verified-use binding path is
+named for **trust-protocol-v2**, not built here. No ASP twin exists for this conjunct — `judge`'s
+[entitlement floor](#entitlement-floor) does not cover stamp-binding facts. Source:
+[`kernel/lineage/s72-stamp-binding-conjunct.sql`](kernel/lineage/s72-stamp-binding-conjunct.sql);
+[design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
+§5 item 5.
 
 <!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
      doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated

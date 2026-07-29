@@ -7,7 +7,18 @@
      self-attestation: the coordinator runs the +A:B:C loop after this build lands, in a blind
      round this build's own context must not poison. No A:B:C loop claimed for this touch.
      Removal condition: strike this marker and run the real two-round A:B:C loop the next time
-     this file is touched for content. -->
+     this file is touched for content.
+
+     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, addendum round, 2026-07-29): the batch's
+     final delta, s72 (stamp-binding conjunct, merge a218a1b4), merged to main after §7 was
+     first written -- adds a new "s72 -- the stamp-binding conjunct" subsection to §7 (same
+     next-birth-chain posture as s70/s71) and extends the closing "distinction this batch
+     exists to serve" section to name s72's write-side half of the same guarantee. Evidence for
+     s72 is the merged fixture's own banked ALL-GREEN transcript (seen-red/s72-stamp-binding-
+     conjunct/red.txt), cited rather than re-run against a fresh scratch world -- disclosed
+     in-place at that subsection. Same no-self-attestation posture as the touch immediately
+     above. Removal condition unchanged: strike this marker and run the real two-round A:B:C
+     loop the next time this file is touched for content. -->
 
 # Access control in autoharn — delegation, taint, license boundaries, and reviewer read zoning
 
@@ -962,6 +973,56 @@ world scaffolded after this batch landed; a live world never gets a retroactive 
 but have nothing to enforce on a world whose kernel predates s70 (`principal_scopes` simply
 doesn't exist there yet, and the filter degrades to the open scope rather than erroring).
 
+### s72 — the stamp-binding conjunct: RBAC's authenticated input
+
+**Added 2026-07-29, the batch's final delta — same next-birth-chain caveat as s70/s71, stated
+again because it is easy to assume the batch stopped at the boundary filter.**
+`kernel/lineage/s72-stamp-binding-conjunct.sql` is **not applied to autoharn3** either; it
+rides the same `LINEAGE_CHAIN` a future `--new-world` scaffold carries. Where scope binding
+(s70/s71) answers "what may this principal's reads see," s72 answers a different question
+entitlement's own actor/role/chain machinery (s60) cannot: "was THIS PARTICULAR WRITE actually
+produced by an invocation this principal is on record as controlling" — a forger who merely
+knows a genesis-chained actor's numeric id can already satisfy entitlement's role/chain
+conjuncts; s72 additionally requires the write to carry a kernel-VERIFIED interception stamp
+(never a mere string match) whose `stamp_agent` resolves to an in-force `principal_stamp_bound`
+row naming that exact actor.
+
+**Empty by default — no behavior change until a world arms it.** Two new kinds,
+`principal_stamp_bound` (binds a principal to a `stamp_agent` string, e.g. `main`) and
+`stamp_binding_class_configured` (nominates which act class this conjunct governs, s60's own
+configuration shape one axis over). Zero classes are nominated at birth; the conjunct is a
+total no-op for every act class until a deployment writes a `stamp_binding_class_configured`
+row naming one.
+
+**Two limits disclosed in the delta's own header, worth carrying into any adoption decision:**
+
+- **Binding is on `stamp_agent` ALONE, never the `(stamp_session, stamp_agent)` pair** s21 uses
+  for cross-session distinctness — single-trust-domain semantics, stated as such rather than
+  papered over. Binding a principal to `main` admits every governed session's own `main`
+  thread as that principal's authenticated voice; that is the shape of the guarantee, not a
+  gap in it, for a solo-operator world. It secures orchestrator-only act classes cleanly
+  (`principal_registered`, `principal_role_bound`, `standing_lifecycle`,
+  `entitlement_class_configured`, plus s72's own two self-protecting tokens); it does **not**
+  secure `milestone_closure`/`gate_edge_supersession` (see below).
+- **The ephemeral-dispatched-agent fork is reported, not resolved.** A dispatched subagent's
+  `stamp_agent` is a harness-minted id, unknowable in advance — it can never be bound to a
+  principal ahead of time. Arming this conjunct over `milestone_closure` or
+  `gate_edge_supersession` (routinely closed by the dispatched subagent that was assigned the
+  work, not the orchestrator's main thread) with only `main`-bound principals available would
+  refuse every legitimate subagent close. A dispatch-time/first-verified-use binding path is
+  named as the fix — explicitly deferred to **trust-protocol-v2**, not built here, per the
+  adjudicating row's own STOP-and-report instruction rather than picked silently under this
+  build's time budget.
+
+A restarting orchestrator hitting a refusal on an armed world sees, verbatim (banked fixture,
+`seen-red/s72-stamp-binding-conjunct/red.txt`): *"entitlement refused (s72, factored acceptance
+predicate conjunct c, `<class>`) ... this write's own interception stamp (verified=`<t/f>`,
+agent=`<agent>`) does not resolve to an in-force `principal_stamp_bound` row naming actor `<id>`
+as bound to that agent string."* **Not re-witnessed live for this addendum** — cited from the
+merged fixture's own banked, ALL-GREEN transcript (commit `a218a1b4`) rather than re-run against
+a fresh scratch world; see [ORCH-CAPABILITIES.md item 47](../ORCH-CAPABILITIES.md) for which
+choice was made and why.
+
 ### Worked example — witnessed live, this session, on a throwaway scratch world
 
 Scratch world `docsacsweep` (schema/kernel/role `docsacsweep`/`docsacsweep_kernel`/
@@ -1117,9 +1178,16 @@ rationale for their being there. What this batch buys, once s70/s71 land in a bo
 dispatch that mints a reviewer principal can, in the same act, bind a scope excluding the
 commissioning lineage — the work item's opener/decision rows, the finding rows that motivated
 the review — so the reviewer's own reads *cannot* return the rationale, however careless the
-brief, and the read journal witnesses what was and wasn't read. **What this does NOT yet
-guarantee:** identity channels remain same-user-forgeable until trust-protocol-v2's key
-binding (durable row 31 stands — every principal here is one operator's own; scopes partition
-context, not trust) — read this plainly rather than oversold. See
+brief, and the read journal witnesses what was and wasn't read. s72's stamp-binding conjunct
+adds the write-side half of the same story, once armed: entitlement's role/chain conjuncts
+answer "is this actor authorized," s72 additionally answers "did this actor's own bound
+invocation actually produce this write" — RBAC's authenticated input, closing the gap where a
+forger who merely knows a genesis-chained actor's numeric id could otherwise satisfy
+entitlement alone. **What this does NOT yet guarantee:** identity channels remain
+same-user-forgeable until trust-protocol-v2's key binding (durable row 31 stands — every
+principal here is one operator's own; scopes partition context, not trust) — and s72's own
+binding is deliberately single-trust-domain (every session's `main` thread is one voice) with
+the ephemeral-dispatched-agent fork reported, not resolved, until that same trust-protocol-v2
+work lands a dispatch-time binding path. Read this plainly rather than oversold. See
 [design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](../design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
 §3/§4 for the full closure statement and its quantification universe.

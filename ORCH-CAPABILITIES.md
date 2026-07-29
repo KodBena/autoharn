@@ -11,7 +11,16 @@
      Flagged here per this marker's own stated removal condition, rather than silently
      stretching "mechanical edit" to cover new prose, or silently striking a waiver this build
      has no authority to discharge. Removal condition unchanged: strike this marker and run the
-     real A:B:C loop next time this file is touched for content. -->
+     real A:B:C loop next time this file is touched for content.
+
+     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, addendum round, 2026-07-29): the batch's
+     final delta, s72 (stamp-binding conjunct, merge a218a1b4), merged to main after items
+     43-46 were already written -- adds item 47 (the stamp-binding conjunct), evidence being
+     the merged fixture's own banked ALL-GREEN transcript (seen-red/s72-stamp-binding-
+     conjunct/red.txt), cited rather than re-run. Same no-self-attestation posture as the touch
+     immediately above -- still owed to the coordinator's batch. Removal condition unchanged:
+     strike this marker and run the real A:B:C loop next time this file is touched for
+     content. -->
 
 
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
@@ -1558,6 +1567,35 @@ run. `engine/ledger_floor.py` now derives the SAME five predicates in SQL
 `docsacsweep`*: `./autoharn judge --layer entitlement` printed `AGREE asp=171 sql=171 atoms;
 Δasp=[] Δsql=[]` — a genuine two-producer agreement over this scratch world's own s60-through-
 s71 entitlement/scope substrate, not a NO-FLOOR skip.
+
+**47. The stamp-binding conjunct — s72, the batch's final delta (`kernel/lineage/
+s72-stamp-binding-conjunct.sql`, merge `a218a1b4` — build `f635ecce` + citation fix `1ded1cd2`;
+addendum pass, 2026-07-29, after items 43-46 above were already written).** RBAC's
+authenticated input (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §5 item 5):
+entitlement (s60) checks role/chain; this conjunct additionally checks that the write itself
+carries a kernel-VERIFIED interception stamp resolving to an in-force `principal_stamp_bound`
+row naming the acting principal — the tenth/eleventh authority-bearing tokens
+(`principal_stamp_bound`, `stamp_binding_class_configured`). **Same future-birth-only posture
+as s70/s71 — NOT applied to autoharn3.** Empty by default: zero act classes nominated at
+birth, so the conjunct is a total no-op and a fresh world's ordinary writes are byte-identical
+to pre-s72, until a deployment arms it. **The ephemeral-dispatched-agent fork is reported, not
+resolved** (row 601's own STOP-and-report instruction, honored): a dispatched subagent's
+`stamp_agent` is unbindable in advance, so arming `milestone_closure`/`gate_edge_supersession`
+under this conjunct with only `main`-bound principals would refuse every legitimate subagent
+close; a dispatch-time/first-verified-use binding path is named for trust-protocol-v2, not
+built. *Evidence: the merged fixture's own banked transcript*
+([`seen-red/s72-stamp-binding-conjunct/red.txt`](seen-red/s72-stamp-binding-conjunct/red.txt),
+landed at commit `a218a1b4`) — **ALL GREEN**, cited rather than re-run for this addendum: an
+unstamped write, a verified-but-wrong-agent write (the ephemeral-dispatched-agent shape,
+`agent-a47950d7504b5b166`), and a forged-HMAC write claiming `agent=main` are each refused
+(three distinct legs, verbatim refusal text quoted); the correctly-bound `main`-stamped write
+is accepted; a non-nominated class stays unaffected; `verify-chain` stays INTACT through every
+refusal (oracle count 6 == sequence 6); `judge` AGREE on the work-item layer. **Not witnessed
+by this pass directly** — same reason and same limit as items 41/42/44 (the scratch worlds
+these fixtures ran against are gone by design; this addendum did not scaffold a fresh one). No
+ASP twin exists for this conjunct at all — `judge`'s entitlement floor (item 46) does not cover
+stamp-binding facts, disclosed in the delta's own header as UNEXERCISED, never claimed AGREE
+for that family.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 
