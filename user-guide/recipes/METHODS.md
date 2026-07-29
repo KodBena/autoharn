@@ -1,13 +1,3 @@
-<!-- doc-attest-exempt: the +A:B:C loop RAN and closed on this suite 2026-07-28 (A-side
-pre-review + three blind suite-wide rounds, DEFECT trend 11-6-2, every DEFECT repaired,
-coordinator adjudication on the record at ledger row 313; per-file doc-attestation/2
-records with the full round history are appended to the attestations jsonl the same
-day). This waiver marker persists ONLY because the record schema's own two-round cap
-(gates/doc_attestation_presence.py refuses rounds>2 and umbrella verdicts) cannot yet
-represent a three-round adjudicated loop -- filed as work item
-attestation-schema-multiround; strike this marker when the schema can carry the loop
-that actually ran. -->
-
 # Methods — recipes
 
 *Factored out of [`user-guide/USER-RECIPES-FAQ.md`](../USER-RECIPES-FAQ.md) at commit

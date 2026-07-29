@@ -18,10 +18,12 @@ two things only:
   2. SHAPE — the record has the structure ADR-0017's "B's verdict has a required shape, or it
      is no verdict" rule demands: a DEFECT round carries per-finding `file`/`line`/`quote`/
      `repair`; a CLEAN round enumerates all four Rule-1 clauses; the round count is within the
-     ADR's two-round cap; a still-DEFECT final round is marked `escalated: true` (the
-     non-converging-review-loop typed event, not a silent third round). Under doc-attestation/2
-     the shape additionally binds the escalation recipient's `adjudication` (SCHEMA VERSIONS
-     below): required-and-well-shaped when `escalated: true`, forbidden otherwise.
+     ADR's two-round cap, UNLESS the record is doc-attestation/2 with `escalated: true`, in which
+     case it may carry more (MULTI-ROUND EXTENSION below); a still-DEFECT final round is marked
+     `escalated: true` (the non-converging-review-loop typed event, not a silent third round).
+     Under doc-attestation/2 the shape additionally binds the escalation recipient's
+     `adjudication` (SCHEMA VERSIONS below): required-and-well-shaped when `escalated: true`,
+     forbidden otherwise.
 
 It NEVER reads what B concluded to decide pass/fail — a DEFECT-with-escalated-true record is
 just as "present and well-shaped" as a CLEAN one, and the gate is satisfied by either. This is
@@ -90,6 +92,18 @@ which ADR-0017 never promised to catch (identity/authorship is not policed) — 
 it, so the claim is scoped to honest records, not asserted as adversarially unrepresentable.
 `adjudication` is self-declared free text the gate checks for PRESENCE and SHAPE only, never for
 whether the disposition was RIGHT — identical posture to `b_id` and to B's own verdict.
+
+MULTI-ROUND EXTENSION — doc-attestation/2 only, `escalated: true` only (work item
+attestation-schema-multiround; full rationale in design/ORCH-SPEC-DOC-ATTESTATION-2.md's
+"Migration note"). Real escalated-adjudicated loops run past the two-round cap (a 5-round
+consult, 3-B-round surveys, a 3-round suite sweep) and were previously unrepresentable. Fix,
+additive only: a `rounds` list longer than `MAX_ROUNDS` is admitted ONLY for a `/2` record with
+`escalated: true` (refused otherwise); each round past the cap validates via
+`_validate_round_summary` (round/verdict/summary) instead of the full findings/clauses_checked
+shape — one line per round, not a per-finding transcript. `adjudication` stays mandatory,
+unchanged. Rounds at or under the cap validate through the exact unchanged `_validate_round`
+path — byte-identical for every record already in the ledger, witnessed by a pre/post-change
+report-mode diff over the full corpus.
 
 MIGRATION, honestly (ADR-0017 Exceptions; ADR-0013): the ~20 existing /1 records are valid history
 and are NEVER rewritten — they remain point-in-time records of loops that ran under /1, and the
@@ -307,6 +321,9 @@ WAIVER_TOKEN = "doc-attest-exempt:"
 
 RULE1_CLAUSES = {"1a", "1b", "1c", "1d"}
 MAX_ROUNDS = 2  # ADR-0017's two-round B->C cap before the non-converging-review-loop escalation.
+# Multi-round extension (work item attestation-schema-multiround, module docstring above +
+# design/ORCH-SPEC-DOC-ATTESTATION-2.md): a `/2` record with `escalated: true` may exceed this via
+# `_validate_round_summary`; rounds <= MAX_ROUNDS are unaffected (see `validate_record` below).
 
 # doc-attestation SCHEMA VERSIONS (design/ORCH-SPEC-DOC-ATTESTATION-2.md). /2 adds a first-class
 # `adjudication` object for escalated records, replacing the b_id free-text convention the seam
@@ -645,6 +662,34 @@ def _validate_round(rnd: Any, idx: int) -> list[str]:
     return issues
 
 
+def _validate_round_summary(rnd: Any, idx: int) -> list[str]:
+    """The EXTENDED round shape (doc-attestation/2's multi-round extension) -- used only for a
+    round past MAX_ROUNDS in an escalated record (see `validate_record`'s dispatch; rounds within
+    the cap always use `_validate_round`, unchanged). Closed to exactly three fields, same
+    discipline as `_validate_adjudication`: `round` (sequential from 1), `verdict` (CLEAN/DEFECT),
+    `summary` (a non-empty string standing in for the full findings/clauses_checked payload)."""
+    where = f"rounds[{idx}]"
+    if not isinstance(rnd, dict):
+        return [f"{where}: not an object"]
+    issues = []
+    if rnd.get("round") != idx + 1:
+        issues.append(f"{where}: 'round' must be {idx + 1} (rounds are sequential from 1)")
+    verdict = rnd.get("verdict")
+    if verdict not in ("CLEAN", "DEFECT"):
+        issues.append(f"{where}: 'verdict' must be CLEAN or DEFECT, got {verdict!r}")
+    summary = rnd.get("summary")
+    if not isinstance(summary, str) or not summary.strip():
+        issues.append(f"{where}: 'summary' is not a non-empty string (the extended round shape "
+                       f"for a rounds>{MAX_ROUNDS} escalated record needs a one-round summary in "
+                       f"place of the full findings/clauses_checked payload)")
+    unknown = sorted(k for k in rnd if k not in ("round", "verdict", "summary"))
+    if unknown:
+        issues.append(f"{where}: unexpected field(s) {unknown} — the extended round object is "
+                       f"exactly round/verdict/summary, no more (same closed-object discipline as "
+                       f"'adjudication')")
+    return issues
+
+
 def _validate_adjudication(adj: Any, escalated: bool) -> list[str]:
     """doc-attestation/2 only (design/ORCH-SPEC-DOC-ATTESTATION-2.md). Structural, never a judgment on
     whether the adjudication was RIGHT — same posture as the rest of the gate. Two typed states,
@@ -712,12 +757,32 @@ def validate_record(rec: dict) -> list[str]:
     if not re.fullmatch(r"[0-9a-f]{64}", str(rec["content_sha256"])):
         issues.append("'content_sha256' is not a 64-hex sha256 digest")
     rounds = rec["rounds"]
-    if not isinstance(rounds, list) or not (1 <= len(rounds) <= MAX_ROUNDS):
-        issues.append(f"'rounds' must be a list of 1..{MAX_ROUNDS} entries (ADR-0017's two-round "
-                       f"B->C cap) — got {len(rounds) if isinstance(rounds, list) else type(rounds).__name__}")
+    if not isinstance(rounds, list) or len(rounds) < 1:
+        issues.append(f"'rounds' must be a non-empty list — got "
+                       f"{'an empty list' if isinstance(rounds, list) else type(rounds).__name__}")
         return issues
-    for i, rnd in enumerate(rounds):
-        issues.extend(_validate_round(rnd, i))
+    if len(rounds) <= MAX_ROUNDS:
+        # Unchanged, byte-for-byte, from before the multi-round extension (any schema/escalation
+        # state) -- see the module docstring's MULTI-ROUND EXTENSION section.
+        for i, rnd in enumerate(rounds):
+            issues.extend(_validate_round(rnd, i))
+    else:
+        # Multi-round extension: refused unless this is an escalated /2 record.
+        if rec["schema"] != SCHEMA_V2:
+            issues.append(f"'rounds' has {len(rounds)} entries but schema {rec['schema']!r} caps "
+                           f"at {MAX_ROUNDS} rounds (ADR-0017's two-round B->C cap) — only "
+                           f"{SCHEMA_V2} with 'escalated: true' may exceed it (the multi-round "
+                           f"extension, design/ORCH-SPEC-DOC-ATTESTATION-2.md)")
+            return issues
+        if rec.get("escalated") is not True:
+            issues.append(f"'rounds' has {len(rounds)} entries (> {MAX_ROUNDS}) but 'escalated' "
+                           f"is not true — a rounds>{MAX_ROUNDS} record is refused unless the "
+                           f"loop actually escalated (ADR-0017's non-converging-review-loop; the "
+                           f"multi-round extension only unlocks past the cap FOR an escalated "
+                           f"record, it does not lift the cap generally)")
+            return issues
+        for i, rnd in enumerate(rounds):
+            issues.extend(_validate_round_summary(rnd, i))
     if issues:
         return issues
     final_verdict = rounds[-1]["verdict"]
