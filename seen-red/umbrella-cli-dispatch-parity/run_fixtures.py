@@ -183,6 +183,10 @@ _EXPECTED_VERBS = {
     # thirteenth autoharn-repo-specific verb, same footing as fixture-sweep/migrate/attest-tags
     # -- mint-and-dispatch / close-and-retire a delegate principal for a sub-agent commission.
     "dispatch",
+    # stamp-run (work item human-countersign-stamp-path, ledger rows 619/667/672): a fourteenth
+    # autoharn-repo-specific verb, same footing as dispatch/fixture-sweep/migrate/attest-tags --
+    # mints an operator/unattended interception stamp and execs a wrapped command carrying it.
+    "stamp-run",
 }
 
 # Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
@@ -229,6 +233,9 @@ _USAGE_MARKERS = {
     # docstring (printed verbatim by `main`'s bare --help/-h/no-args path) opens with this exact
     # line -- distinctive, no other verb's own output could contain it.
     "dispatch": "dispatch_mechanics -- the scripted `./autoharn dispatch` verb (design/",
+    # stamp-run: tools/stamp_run.py's own docstring (printed verbatim by `main`'s --help path)
+    # opens with this exact line -- distinctive, no other verb's own output could contain it.
+    "stamp-run": "stamp_run -- the CLI logic behind `autoharn stamp-run -- <command...>` (work item",
 }
 
 # Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates
