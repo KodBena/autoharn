@@ -153,7 +153,23 @@ BEGIN
   IF v_principal_raw !~ '^[0-9]+$' THEN
     RETURN true;
   END IF;
-  v_principal := v_principal_raw::bigint;
+
+  -- OUT-OF-RANGE-NUMERAL PATH (fix round, adjudication row 890): the regex above accepts ANY
+  -- run of digits, including one that is a purely numeral value too large for bigint (e.g. 25
+  -- nines) -- v_principal_raw::bigint would then RAISE numeric_value_out_of_range from INSIDE
+  -- this policy predicate, the exact query-wide-error DoS lever the MALFORMED-GUC PATH comment
+  -- above names as the reason this function fails open rather than raises. A digit-only string
+  -- passing the regex is not yet a guarantee it fits bigint, so the cast itself is wrapped in
+  -- its own exception handler: ANY error the cast raises (out-of-range being the one this GUC
+  -- can actually produce, since the regex already rules out a non-numeral) is treated exactly
+  -- like the non-numeral case one step up -- fail OPEN, never raise. This keeps the disclosed
+  -- guarantee ("a malformed GUC fails open, never raises") true for the WHOLE input space, not
+  -- merely the non-numeral subset of it.
+  BEGIN
+    v_principal := v_principal_raw::bigint;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN true;
+  END;
 
   -- UNARMED PATH 2: the bound principal holds NO in-force principal_scopes row (s70's own
   -- fail-safe default, the open scope) -- every row passes.
@@ -201,9 +217,10 @@ END; $fn$;
 COMMENT ON FUNCTION :"schema".scope_row_visible(:"schema".ledger) IS
   'kernel/lineage/s71-row-level-scope-policies.sql (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
    FLOW-SPEC.md §2): true iff the CURRENT SESSION (per the app.scope_principal GUC, unauthenticated
-   at this layer -- see this delta''s own header LIMIT) is unarmed (no GUC, no bound scope, or a
-   bound scope with no exclusions) OR the candidate row does not match any exclusion family the
-   bound principal''s in-force principal_scopes row carries. SECURITY DEFINER so its own internal
+   at this layer -- see this delta''s own header LIMIT) is unarmed (no GUC, a GUC that is not a
+   valid in-range bigint -- non-numeral or numeral-but-overflowing, both fail open, never raise --
+   no bound scope, or a bound scope with no exclusions) OR the candidate row does not match any
+   exclusion family the bound principal''s in-force principal_scopes row carries. SECURITY DEFINER so its own internal
    read of principal_scopes (itself ledger_current-factored, hence raw-ledger-backed) runs as the
    TABLE OWNER, bypassing this delta''s own RLS policy rather than recursing through it -- see
    header WHY. Called ONLY from this delta''s own ledger_scope_read policy.';
@@ -324,13 +341,17 @@ COMMENT ON POLICY ledger_scope_read ON :"schema".ledger IS
 --     nothing, rather than refusing at write time (that refusal, if any is wanted for THIS
 --     specific mismatch class, is s70''s own write-time CHECK surface, not this delta''s read-time
 --     one).
---   - A MALFORMED app.scope_principal VALUE FAILS OPEN (Element 1''s own MALFORMED-GUC PATH),
---     never raises -- named as a deliberate LIMIT, not an oversight: a policy expression that
---     raises turns a bad GUC into a query-wide error for every read that role attempts, which
---     this delta judges a worse failure mode (an availability hazard on a read path) than the
---     narrower information-exposure a fail-open malformed value could theoretically create (and
---     even that exposure is bounded to "no filtering applied", i.e. today''s pre-delta behavior,
---     never MORE than today).
+--   - A MALFORMED app.scope_principal VALUE FAILS OPEN (Element 1''s own MALFORMED-GUC PATH AND
+--     OUT-OF-RANGE-NUMERAL PATH, fix round adjudication row 890), never raises -- named as a
+--     deliberate LIMIT, not an oversight: a policy expression that raises turns a bad GUC into a
+--     query-wide error for every read that role attempts, which this delta judges a worse
+--     failure mode (an availability hazard on a read path) than the narrower information-
+--     exposure a fail-open malformed value could theoretically create (and even that exposure is
+--     bounded to "no filtering applied", i.e. today''s pre-delta behavior, never MORE than
+--     today). "Malformed" is read over the WHOLE input space here, not merely non-numeral
+--     strings: a purely-numeral value that overflows bigint (e.g. 25 nines) passes the regex
+--     guard but is caught by the cast''s own exception handler and fails open identically --
+--     the fix-round finding this LIMIT was widened to close.
 --   - The superuser/table-owner bypass (unforced, Element 2''s own header) is the standing
 --     s26..s70 disclosed bound, restated: owner-side direct DML/DQL is out of this delta''s reach.
 --   - In a solo world, every scope binding is authored by machinery the one operator controls --

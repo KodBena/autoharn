@@ -38,6 +38,15 @@ WORLD MAIN (s71 head, CLASSIC scaffold -- split, per 0e2eda39's now-unconditiona
                                      exactly that row, no other.
   MALFORMED-GUC-FAILS-OPEN             -- app.scope_principal set to a non-numeral value reads
                                      the full, unfiltered count (fail OPEN, never a hard error).
+  OVERFLOW-GUC-FAILS-OPEN              -- app.scope_principal set to a purely-numeral value that
+                                     overflows bigint (25 nines) reads the full, unfiltered count
+                                     (fail OPEN, never a hard error) -- fix round, adjudication row
+                                     890: a numeral-only string passes the non-numeral regex guard
+                                     but v_principal_raw::bigint then RAISES from inside the RLS
+                                     policy predicate, a query-wide error on every read this role
+                                     attempts, unless the cast itself is guarded. RED-FIRST: this
+                                     leg observes the raise (a psql_as_role RuntimeError) against
+                                     the unfixed delta, GREEN once the cast is wrapped.
   SPLIT-OWNER-BYPASSES-POLICY          -- SET ROLE to the split's own non-login $OWNER (a
                                      superuser session can SET ROLE to any role) reads every row
                                      regardless of an armed, excluding GUC bound to that identity
@@ -476,6 +485,31 @@ def main() -> int:  # noqa: C901
               f"a non-numeral app.scope_principal ('not-a-number') reads {role_malformed} rows, "
               f"the owner's OWN fresh full count {owner_full_count_3} -- fails OPEN, never a "
               f"hard error", failures)
+
+        # ---- OVERFLOW-GUC-FAILS-OPEN (fix round, adjudication row 890): a PURELY-NUMERAL value
+        # that overflows bigint (25 nines) -- passes the '^[0-9]+$' regex guard (it IS all
+        # digits) but is not a valid bigint. Against the UNFIXED delta, ::bigint RAISES from
+        # inside the policy predicate, surfacing here as a psql_as_role RuntimeError (a query-
+        # wide error, the exact DoS lever the finding names) rather than a row count -- caught
+        # explicitly so this leg reports RED with the observed error text instead of aborting
+        # the whole fixture run. Fixed, it reads the same fresh full count as every other
+        # fail-open path above. ----
+        owner_full_count_4 = psql_tuples(f"SELECT count(*) FROM {world_main}.ledger;")
+        overflow_numeral = "9" * 25
+        try:
+            role_overflow = psql_as_role(
+                f"{world_main}_rw",
+                f"SET app.scope_principal = '{overflow_numeral}';\n"
+                f"SELECT count(*) FROM {world_main}.ledger;")
+            check("OVERFLOW-GUC-FAILS-OPEN", role_overflow == owner_full_count_4,
+                  f"a purely-numeral, bigint-overflowing app.scope_principal ('{overflow_numeral}') "
+                  f"reads {role_overflow} rows, the owner's OWN fresh full count "
+                  f"{owner_full_count_4} -- fails OPEN, never a hard error", failures)
+        except RuntimeError as exc:
+            check("OVERFLOW-GUC-FAILS-OPEN", False,
+                  f"a purely-numeral, bigint-overflowing app.scope_principal "
+                  f"('{overflow_numeral}') RAISED instead of failing open -- query-wide error "
+                  f"observed: {exc}", failures)
 
         # ---- WRITE-PATH-UNAFFECTED ----
         v_after = bw_call(world_main, "ledger_write",

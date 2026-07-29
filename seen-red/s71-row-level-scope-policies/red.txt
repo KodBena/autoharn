@@ -36,6 +36,9 @@
 === MALFORMED-GUC-FAILS-OPEN ===
   [ok] a non-numeral app.scope_principal ('not-a-number') reads 12 rows, the owner's OWN fresh full count 12 -- fails OPEN, never a hard error
 
+=== OVERFLOW-GUC-FAILS-OPEN ===
+  [ok] a purely-numeral, bigint-overflowing app.scope_principal ('9999999999999999999999999') reads 12 rows, the owner's OWN fresh full count 12 -- fails OPEN, never a hard error
+
 === WRITE-PATH-UNAFFECTED ===
   [ok] an ordinary write via the owner-run SECURITY DEFINER path after RLS is enabled and a policy is armed -- still ACCEPTED (writes never run as :role, s43's own REVOKE; no INSERT/UPDATE/DELETE policy exists on this table at all) -- verdict={'row_id': 13, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
 
