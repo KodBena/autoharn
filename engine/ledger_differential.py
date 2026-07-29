@@ -54,13 +54,16 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import lp_registry
 from clingo_run import run_clingo
-from ledger_edb import PGHOST, DefeatParseError, export, export_defeat, export_work, resolve
-from ledger_floor import (DEFEAT_PREDS, defeat_floor_atoms, floor_atoms, work_item_floor_atoms,
+from ledger_edb import (PGHOST, SURFACE_VOCABULARY, DefeatParseError, ScopeExclusionParseError,
+                        export, export_defeat, export_entitlement, export_work, resolve)
+from ledger_floor import (DEFEAT_PREDS, ENTITLEMENT_PREDS, defeat_floor_atoms,
+                          entitlement_floor_atoms, floor_atoms, work_item_floor_atoms,
                           work_review_floor_atoms)
 
 HERE = Path(__file__).resolve().parent
@@ -301,6 +304,34 @@ def run_sql_defeat(name: str, edb_text: str) -> ProducerRun:
     return ProducerRun("sql:floor(defeat)", atoms=atoms, record=rec)
 
 
+def run_sql_entitlement(name: str, edb_text: str, surfaces: tuple[str, ...],
+                        now_epoch: int) -> ProducerRun:
+    """The SQL floor for the 'entitlement' layer (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-
+    SPEC.md): entitlement_floor_atoms, restricted to ENTITLEMENT_PREDS. QUARANTINES on a target
+    the registry's own capability probe declares incapable (the s60 marker column) -- the SAME
+    reason string the bare auto-detect path prints (design/FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-
+    SPEC.md's two-paths-agree discipline)."""
+    capable, reason = lp_registry.LAYERS["entitlement"].capability(name)
+    if not capable:
+        return ProducerRun("sql:floor(entitlement)", quarantine=reason)
+    t = resolve(name)
+    try:
+        atoms = entitlement_floor_atoms(name, list(surfaces), now_epoch)
+        atoms = {a for a in atoms if a.split("(", 1)[0] in ENTITLEMENT_PREDS}
+    except Exception as e:  # noqa: BLE001
+        return ProducerRun("sql:floor(entitlement)",
+                           quarantine=f"SQL entitlement floor failed: {type(e).__name__}: {e}")
+    rec = DerivationRecord(
+        engine="postgres", version=_pg_version(t.db),
+        config=["ledger_floor.py::entitlement_floor_atoms"],
+        input_basis=f"live-db rows read directly ({t.db}.{t.schema}.ledger[/ledger_current]); "
+                    f"surfaces={list(surfaces)}; now_epoch={now_epoch}",
+        input_hash=_ledger_snapshot_hash(name),
+        program_hash=_sha((HERE / "ledger_floor.py").read_text(encoding="utf-8")),
+        output_hash=_sha("\n".join(sorted(atoms))), target=name, ts=_now())
+    return ProducerRun("sql:floor(entitlement)", atoms=atoms, record=rec)
+
+
 import belief_differential  # noqa: E402 -- 'belief' glue module (max_lines headroom, its own docstring); placed HERE (module scope) since it imports ProducerRun/etc back
 
 
@@ -330,12 +361,21 @@ def layer_capability(name: str, layer: str) -> tuple[bool, str]:
 
 
 def run_layer_differential(name: str, layer: str = "work", *,
-                           program_names: list[str] | None = None) -> DifferentialResult:
+                           program_names: list[str] | None = None,
+                           now_epoch: int | None = None) -> DifferentialResult:
     """Differential one target on a NAMED layer (engine/lp_registry.py's LAYERS). `program_names`
     defaults to the layer's own full, registry-declared stack (always valid by construction); a
     caller passing an INCOMPLETE list here (the red-polarity seam -- see the seen-red fixture this
     delta ships) hits `lp_registry.require_layer_stack`'s typed refusal (`RegistryError`) BEFORE
     any clingo invocation -- never a silent empty grounding (the F7 hazard this closes).
+
+    `now_epoch` (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1a): the 'entitlement'
+    layer's single-home wall-clock cursor for the s64 delegation_expiry comparison, injected into
+    BOTH export_entitlement (the ASP producer's EDB) and entitlement_floor_atoms (the SQL floor)
+    so an edge expiring between the two reads can never manufacture a false DIVERGE_DEFECT (the
+    same class `ledger_support_scratch.py`'s NOW_EPOCH already fixed one layer over). Defaults to
+    `int(time.time())` computed ONCE, here, when the caller (this module's own `main`) does not
+    already hold a value it wants echoed into a `--retain`ed edb_text; unused by every other layer.
 
     THE FLOOR-DISPOSITION CHECK below (closure spec §2 items 2/4) replaces the former
     `if layer not in _LAYER_FLOOR_PREDS: raise NotImplementedError(...)` -- deleted, not kept
@@ -377,6 +417,29 @@ def run_layer_differential(name: str, layer: str = "work", *,
             asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in preds}
         sql = run_sql_work(name, edb_text)
     elif layer == "belief": asp, sql = belief_differential.run_belief_layer(name, paths, preds)  # noqa: E701 spec §2.2 item 3
+    elif layer == "entitlement":
+        # design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1a/§3 P-5-style: a malformed
+        # scope_exclusions payload raises in export_entitlement's OWN Python parser
+        # (ScopeExclusionParseError) -- caught here, both producers QUARANTINED with the same
+        # reason, never a one-sided failure (the P-5 "both producers fail identically" shape
+        # export_defeat's own parse already established, applied here for the SAME reason).
+        eff_now = now_epoch if now_epoch is not None else int(time.time())
+        try:
+            edb_text = export(name).edb_text() + "\n" + export_entitlement(name, eff_now).edb_text()
+        except ScopeExclusionParseError as e:
+            qr = f"malformed scope_exclusions (§1b): {e}"
+            asp = ProducerRun("asp:clingo", quarantine=qr)
+            sql = ProducerRun("sql:floor(entitlement)", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        except Exception as e:  # noqa: BLE001
+            qr = f"EDB export failed: {type(e).__name__}: {e}"
+            asp = ProducerRun("asp:clingo", quarantine=qr)
+            sql = ProducerRun("sql:floor(entitlement)", quarantine=qr)
+            return DifferentialResult(target=name, asp=asp, sql=sql)
+        asp = run_asp(name, edb_text, programs=paths)
+        if asp.quarantine is None:
+            asp.atoms = {a for a in asp.atoms if a.split("(", 1)[0] in preds}
+        sql = run_sql_entitlement(name, edb_text, SURFACE_VOCABULARY, eff_now)
     else:  # "defeat" -- §3 P-5: a malformed v1 attestation raises in EACH producer's OWN
         # independent parse (export_defeat's Python parser for ASP; defeat_floor_atoms' SQL
         # parser for the floor). Building the shared edb_text calls export_defeat() first, so a
@@ -474,12 +537,12 @@ def main(argv: list[str] | None = None) -> int:
                          "SQL floors, over export_work's EDB), 'defeat' (+ ledger_support.lp/"
                          "ledger_defeat.lp vs defeat_floor_atoms, over export_defeat's EDB -- FABLE-DEFEAT-PIPELINE-SPEC.md §7), "
                          "'belief' (+ ledger_belief.lp vs belief_floor_atoms, over export_belief's EDB -- FABLE-BELIEF-SUBSTRATE-SPEC.md §2), "
-                         "or 'entitlement' (+ ledger_entitlement.lp; capability-detected via the s60 "
-                         "entitlement_act_class marker column, but NO SQL floor is wired yet -- "
-                         "see lp_registry.LAYERS['entitlement'].floor's declared reason -- so an "
-                         "incapable target QUARANTINES same as any other layer, and a CAPABLE "
-                         "target REFUSES with a typed no-floor error rather than silently passing; "
-                         "FABLE-JUDGE-LAYER-CAPABILITY-CLOSURE-SPEC.md §2 item 3). "
+                         "or 'entitlement' (+ ledger_entitlement.lp vs entitlement_floor_atoms, over "
+                         "export_entitlement's EDB -- FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md; "
+                         "capability-detected via the s60 entitlement_act_class marker column; a "
+                         "pre-s70-but-s60-capable target is ADJUDICATED under the everyone-open "
+                         "degrade, expecting AGREE, per that spec's 'one semantics, not a "
+                         "capability split' ruling). "
                          "`judge` forwards this flag unchanged.")
     args = ap.parse_args(argv)
     targets = args.targets or ["s10", "s11", "s12", "s13", "nla"]
@@ -522,6 +585,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  [--] {name:6} {'NO-FLOOR':18} layer={layer!r} declared: {floor.reason}")
                     continue
             edb_text = ""
+            now_epoch = None
             if layer == "tnow":
                 edb_text = export(name).edb_text()
                 res = run_differential(name, edb_text=edb_text)
@@ -532,9 +596,22 @@ def main(argv: list[str] | None = None) -> int:
                     elif layer == "defeat":
                         edb_text = export(name).edb_text() + "\n" + export_defeat(name).edb_text()
                     elif layer == "belief": edb_text = belief_differential.belief_edb_text(name)  # noqa: E701
+                    elif layer == "entitlement":
+                        # THE THIRD NAMED CONSUMER SURFACE (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-
+                        # ASP-TWIN-SPEC.md §1a): before this build this if-chain had NO
+                        # 'entitlement' branch at all (the layer was NoFloor, never reached here on
+                        # the auto-detect path), so `--retain` would have silently banked an EMPTY
+                        # edb.lp for a now-non-refusing layer -- fixed here, same commit as the
+                        # floor itself. `now_epoch` is computed ONCE, here, and threaded into
+                        # run_layer_differential below so the retained edb_text and the ACTUAL
+                        # comparison share the identical wall-clock cursor (never two independent
+                        # `time.time()` reads that could straddle a delegation_expiry boundary).
+                        now_epoch = int(time.time())
+                        edb_text = (export(name).edb_text() + "\n"
+                                   + export_entitlement(name, now_epoch).edb_text())
                 except Exception as e:  # noqa: BLE001 -- e.g. a parse error; run_layer_differential
                     pass                # re-derives and QUARANTINES properly; edb_text stays "" for --retain
-                res = run_layer_differential(name, layer)
+                res = run_layer_differential(name, layer, now_epoch=now_epoch)
             if args.drop_record and res.asp.record is not None:
                 res.asp.record = None  # simulate a lost witness
             print_result(res)

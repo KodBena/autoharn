@@ -142,3 +142,61 @@ reaches_genesis_scoped(X,C) :-
     reaches_genesis_scoped(Y,C).
 
 #show reaches_genesis_scoped/2.
+
+% ===========================================================================
+% s70 EXTENSION (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-
+% INFORMATION-FLOW-SPEC.md §1b/§1c, design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1c):
+% the scope-visibility predicates, BESIDE reaches_genesis/reaches_genesis_scoped above, never
+% folded into them -- this file's own precedent, one layer over (the s62/s64 extensions above
+% each added rules beside the prior stratum, never edited it; reaches_genesis/1 and
+% reaches_genesis_scoped/2's own rules are UNTOUCHED, byte-identical, by this addition).
+%
+% EDB (engine/ledger_edb.py's export_entitlement(), s70 addition -- purely additive, every family
+% above is UNCHANGED):
+%   scope_binding_row(P).   P holds a CURRENT in-force principal_scope_bound row (principal_scopes'
+%                           own row existence, supersession-aware) -- ROW EXISTENCE, not surface
+%                           count, is what arms a scope (see scope_armed/1 below): a binding with
+%                           NULL/empty scope_surfaces still arms, fail-closed.
+%   scope_bound(P,S).       One fact per element of P's bound scope_surfaces array.
+%   scope_disclosure(P,M).  P's bound scope_disclosure_mode, when declared (NULL emits no fact on
+%                           either producer -- absence of a declared tier is absence).
+%   surface(S).             The closed route/view vocabulary, injected from the SAME single home
+%                           (serving/boundary_service.py's VIEW_REGISTRY) both producers read.
+% (scope_exclusion/3 is ALSO exported but has no #show/derivation here -- the deferred row-level
+% exclusion derivation, see this file's own header LIMITS note below.)
+% ---------------------------------------------------------------------------
+#defined scope_binding_row/1.
+#defined scope_bound/2.
+#defined scope_disclosure/2.
+#defined surface/1.
+#defined scope_exclusion/3.
+
+% scope_armed(P): FAIL-CLOSED arming -- a principal with an in-force binding is scoped even when
+% the binding's scope_surfaces is NULL/empty (a representable s70 state: binding row present, zero
+% surfaces, exclusions present). Such a binding grants nothing rather than everything -- the
+% serving filter MUST key on this SAME row-existence predicate (spec §1c).
+scope_armed(P) :- scope_binding_row(P).
+
+% open_scope(P): the fail-safe default as a rule -- on any world with zero scope facts (including
+% every pre-s70 world, and every s70-capable-but-unarmed principal), every principal derives
+% open_scope. Byte-identical-unarmed-world guarantee, a one-line consequence of negation-as-
+% failure over scope_armed/1 (never re-testing scope_binding_row/1 directly here).
+open_scope(P) :- principal(P), not scope_armed(P).
+
+% may_read_surface(P,S): named at its honest granularity -- SURFACE visibility only. Row-level
+% exclusion behavior is deliberately NOT derived this increment (see this file's own header
+% LIMITS note); the name says so.
+may_read_surface(P,S) :- open_scope(P), surface(S).
+may_read_surface(P,S) :- scope_bound(P,S).
+
+#show open_scope/1.
+#show may_read_surface/2.
+#show scope_disclosure/2.
+
+% DEFERRED DERIVATION, NAMED (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1c/§3): NO
+% ASP twin for row-level exclusion denial. scope_exclusion/3 facts are exported from day one, but
+% no derived per-row denial predicate exists here -- deriving it deductively would require
+% exporting the ROW UNIVERSE per principal, a differential that scales with ledger size rather
+% than principal count (a sizing commitment that deserves its own decision, not a smuggled O(rows)
+% default). Until lifted, the boundary filter's row-level behavior is witnessed by its OWN fixture
+% family; this twin binds SURFACE granularity only.

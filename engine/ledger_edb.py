@@ -41,15 +41,32 @@ Closure statement (ADR-0000 2026-07-02 amendment):
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 
 import targets
+import atom_quote
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "filing"))
 from pghost_resolve import resolve_pghost  # noqa: E402  (filing/pghost_resolve.py, the ONE home -- never a literal host default)
+
+# design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1b: surface/1's closed vocabulary lives
+# in the SERVING layer's registry module (serving/boundary_service.py's VIEW_REGISTRY -- the
+# closed route/view registry every one of that file's own comments names "registry" growth by
+# growth), never in any database and never re-derived here. ONE home: THIS is the one import that
+# reads it; engine/ledger_differential.py imports SURFACE_VOCABULARY from here (never re-imports
+# serving itself) so the exporter and the SQL floor are handed the identical list from the same
+# origin (the floor itself never imports serving -- it receives the list as a plain parameter,
+# per the spec's own text: "the floor cannot read it and must be handed it through the same
+# single home the exporter uses").
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "serving"))
+from boundary_service import VIEW_REGISTRY  # noqa: E402
+
+SURFACE_VOCABULARY: tuple[str, ...] = tuple(sorted(VIEW_REGISTRY))
 
 PGHOST = resolve_pghost("HARNESS_PGHOST", "EPISTEMIC_PGHOST")  # row 1383: was EPISTEMIC_PGHOST-only, now matches every other caller's precedence
 FS, RS = "\x1f", "\x1e"
@@ -720,7 +737,66 @@ def export_defeat(name: str) -> EdbExport:
     return exp
 
 
-def export_entitlement(name: str) -> EdbExport:
+class ScopeExclusionParseError(RuntimeError):
+    """Raised when a scope_exclusions jsonb payload violates the kernel CHECK's own admitted shape
+    (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1b) -- the DefeatParseError-style
+    typed refusal of the WHOLE export, never a skip-and-continue (ADR-0002); the differential
+    reads QUARANTINED, the same "both producers fail identically" shape export_defeat's own P-5
+    parse carries. On a real target this is UNREACHABLE: kernel/lineage/s70-scope-binding.sql's
+    own scope_exclusions_shape CHECK already refuses any other shape at write time. It fires only
+    when the witness plan stages a kernel-impossible payload on a scratch schema with that CHECK
+    deliberately dropped first (spec §4's RED leg -- "the CHECK binds superusers too")."""
+
+
+_SCOPE_EXCLUSION_FAMILIES = frozenset({"kind-class", "thread", "work-item-lineage", "rows"})
+
+
+def _parse_scope_exclusions(pid: int, raw: str) -> list[tuple[str, str]]:
+    """Decompose ONE principal's scope_exclusions jsonb array into (family, rendered-key-term)
+    pairs -- Python-side, never spliced as ASP program text (ADR-0000's value/program amendment).
+    One pair per entry for the three scalar families (kind-class, thread, work-item-lineage); one
+    pair per (entry, member) for 'rows' (spec §1b: "one fact per (entry, member)" -- 'rows' admits
+    an ARRAY of numeral ids). Family tokens are the KERNEL CHECK's own literal vocabulary
+    (kernel/lineage/s70-scope-binding.sql's scope_exclusions_shape_ok), refused loudly on anything
+    else -- never a prose rename, never a silently-dropped unknown entry."""
+    try:
+        entries = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ScopeExclusionParseError(
+            f"principal {pid}: scope_exclusions is not valid JSON: {e}") from e
+    if not isinstance(entries, list):
+        raise ScopeExclusionParseError(
+            f"principal {pid}: scope_exclusions is not a JSON array: {raw!r}")
+    out: list[tuple[str, str]] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"family", "value"}:
+            raise ScopeExclusionParseError(
+                f"principal {pid}: scope_exclusions entry is not a closed {{family,value}} "
+                f"object: {entry!r}")
+        fam, val = entry["family"], entry["value"]
+        if fam not in _SCOPE_EXCLUSION_FAMILIES:
+            raise ScopeExclusionParseError(
+                f"principal {pid}: scope_exclusions family {fam!r} outside the kernel CHECK's "
+                f"closed vocabulary {sorted(_SCOPE_EXCLUSION_FAMILIES)}")
+        if fam == "rows":
+            if not isinstance(val, list) or not val:
+                raise ScopeExclusionParseError(
+                    f"principal {pid}: 'rows' family value must be a non-empty array: {val!r}")
+            for member in val:
+                if not isinstance(member, int) or isinstance(member, bool) or member < 0:
+                    raise ScopeExclusionParseError(
+                        f"principal {pid}: 'rows' member {member!r} is not a non-negative "
+                        f"integer numeral id")
+                out.append((fam, str(int(member))))  # a bare integer term, never quoted
+        else:
+            if not isinstance(val, str) or not val.strip():
+                raise ScopeExclusionParseError(
+                    f"principal {pid}: {fam!r} value must be a non-empty string: {val!r}")
+            out.append((fam, atom_quote.atom_term(val)))
+    return out
+
+
+def export_entitlement(name: str, now_epoch: int | None = None) -> EdbExport:
     """Export the entitlement-layer EDB (principal/1, acts_for_edge/2, genesis/1,
     principal_active/1) for a target, read-only, capability-gated -- the independent SECOND
     derivation input for engine/lp/ledger_entitlement.lp's reaches_genesis/1, the SQL twin of
@@ -732,7 +808,17 @@ def export_entitlement(name: str) -> EdbExport:
 
     s62 (row 1385) adds a seventh SQL-side act class (delegation_lifecycle, gating acts-for
     rows) but needs no exporter change -- every in-force edge lands in acts_for_edge/2
-    regardless of which class gated its write; a refused self-assertion is never committed."""
+    regardless of which class gated its write; a refused self-assertion is never committed.
+
+    `now_epoch` (design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1a): the single-home
+    wall-clock cursor the differential injects into BOTH producers for the s64 delegation_expiry
+    comparison, replacing this function's own former export-time `now()` -- the exact class
+    `ledger_floor.support_floor_atoms(name, now_epoch)` already fixed (an edge expiring between
+    two independently-timed reads would otherwise manufacture a false DIVERGE_DEFECT). Defaults to
+    the wall clock at call time (`int(time.time())`) so every PRE-EXISTING caller (the s60/s64
+    seen-red fixtures, which call this with one positional arg) is unaffected."""
+    if now_epoch is None:
+        now_epoch = int(time.time())
     t = resolve(name)
     exp = EdbExport(target=t)
     rel = t.rel()
@@ -829,7 +915,7 @@ def export_entitlement(name: str) -> EdbExport:
                 f"WHERE lc.kind = 'principal_relation_asserted' "
                 f"AND lc.principal_relation IN ('acts-for', 'dispatched-by') "
                 f"AND lc.principal_binding_active "
-                f"AND (lc.delegation_expiry IS NULL OR lc.delegation_expiry > now()) "
+                f"AND (lc.delegation_expiry IS NULL OR lc.delegation_expiry > to_timestamp({int(now_epoch)})) "
                 f"ORDER BY lc.id;"):
             # delegation_edge(X,Y): the s64 scoped closure's OWN edge relation -- a superset of
             # acts_for_edge/2 (which stays 'acts-for'-only, byte-identical, so the s60/s62
@@ -855,6 +941,80 @@ def export_entitlement(name: str) -> EdbExport:
         exp.counts["edge_scope_class"] = n_sc
         exp.counts["edge_unscoped"] = n_un
         exp.counts["delegation_edge"] = n_de
+
+    # s70 (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
+    # FLOW-SPEC.md §1b/§1c, design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md §1b): FOUR new,
+    # PURELY ADDITIVE fact families for ledger_entitlement.lp's scope predicates --
+    # scope_binding_row/1, scope_bound/2, scope_exclusion/3, scope_disclosure/2. Every family above
+    # (through the s64 block) is UNCHANGED, so ./judge's existing reaches_genesis/1 and
+    # reaches_genesis_scoped/2 comparisons are untouched by this addition. Capable only when the
+    # three s70 columns exist -- a pre-s70 (but s60/s64-capable) target emits none of the four,
+    # declared EXCLUDED with reason (I12), never a silent empty; per the spec's "one semantics,
+    # not a capability split" ruling, BOTH producers then degrade IDENTICALLY to everyone-open
+    # (ledger_entitlement.lp's own #defined guards on scope_binding_row/1 etc., and
+    # entitlement_floor_atoms' matching has_col gate), so the differential still ADJUDICATES
+    # (expects AGREE) rather than skipping, exactly as the layer's ONE capability probe (the s60
+    # marker column) already governs.
+    #
+    # surface/1 is DELIBERATELY NOT gated on has_s70 (a hazard caught live building this delta,
+    # scratch-witnessed: gating it here made the pre-s70 degrade world emit ZERO may_read_surface
+    # atoms on the ASP side while the SQL floor -- which reads `surfaces` as a plain injected
+    # parameter, never from a column -- still emitted the full open-scope cross product, a
+    # manufactured DIVERGE_DEFECT that had nothing to do with any real defect). The surface
+    # vocabulary lives in the SERVING layer's registry, never in any database column, so its
+    # availability does not depend on the target's kernel lineage at all -- it is capable (and
+    # produced) on EVERY target.
+    exp.capabilities.append(Capability(
+        "surface", produced=True, capable=True,
+        reason="the closed surface vocabulary (serving/boundary_service.py's VIEW_REGISTRY) is a "
+               "Python-side constant, not a database fact -- always producible, independent of "
+               "kernel lineage"))
+    n_surf = 0
+    for s in SURFACE_VOCABULARY:
+        exp.facts.append(f"surface({atom_quote.atom_term(s)}).")
+        n_surf += 1
+    exp.counts["surface"] = n_surf
+
+    has_s70 = (t.has_col("scope_surfaces") and t.has_col("scope_exclusions")
+               and t.has_col("scope_disclosure_mode"))
+    for fam in ("scope_binding_row", "scope_bound", "scope_exclusion", "scope_disclosure"):
+        exp.capabilities.append(Capability(
+            fam, produced=has_s70, capable=has_s70,
+            reason="scope_surfaces + scope_exclusions + scope_disclosure_mode (s70) present -- "
+                   "emitted"
+            if has_s70 else
+            "no s70 scope_surfaces/scope_exclusions/scope_disclosure_mode columns -- capability "
+            "absent (this family is s70-specific, not merely s60/s62/s64-capable)"))
+    if has_s70:
+        n_sbr = n_sb = n_sx = n_sd = 0
+        for subj, surfaces_raw, exclusions_raw, mode in t.rows(
+                f"SELECT lc.principal_subject, lc.scope_surfaces, lc.scope_exclusions, "
+                f"lc.scope_disclosure_mode FROM {t.schema}.ledger_current lc "
+                f"WHERE lc.kind = 'principal_scope_bound' AND lc.principal_binding_active "
+                f"ORDER BY lc.id;"):
+            pid = int(subj)
+            # scope_binding_row(P): row EXISTENCE, not surface count -- what arms a scope
+            # (fail-closed: emitted even when scope_surfaces is NULL/empty, spec §1c).
+            exp.facts.append(f"scope_binding_row({pid}).")
+            n_sbr += 1
+            if surfaces_raw:  # text[] literal, e.g. "{view_a,view_b}" -- parsed Python-side,
+                               # never spliced as program text (ADR-0000's value/program rule).
+                for m in surfaces_raw.strip("{}").split(","):
+                    if m:
+                        exp.facts.append(f"scope_bound({pid},{atom_quote.atom_term(m)}).")
+                        n_sb += 1
+            if exclusions_raw:  # jsonb array of {family,value} objects (§1b's decomposition).
+                for fam_name, key_term in _parse_scope_exclusions(pid, exclusions_raw):
+                    exp.facts.append(
+                        f"scope_exclusion({pid},{atom_quote.atom_term(fam_name)},{key_term}).")
+                    n_sx += 1
+            if mode:  # NULL disclosure mode emits NO fact on either side (spec §1b/§1c: absence
+                      # of a declared tier is absence, mirroring the kernel's own no-implicit-
+                      # default stance -- the floor mirrors the same rule).
+                exp.facts.append(f"scope_disclosure({pid},{atom_quote.atom_term(mode)}).")
+                n_sd += 1
+        exp.counts["scope_binding_row"], exp.counts["scope_bound"] = n_sbr, n_sb
+        exp.counts["scope_exclusion"], exp.counts["scope_disclosure"] = n_sx, n_sd
 
     return exp
 

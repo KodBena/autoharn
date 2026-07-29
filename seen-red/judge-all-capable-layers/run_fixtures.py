@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -82,6 +83,29 @@ CHAIN_COMMON = [
 CHAIN_A = CHAIN_COMMON  # s40 head -- pre-s41 (WORLD PRE)
 CHAIN_B = CHAIN_COMMON + ["s41-principal-bindings-and-relations.sql"]  # s41 head (WORLD ALL)
 
+# design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md: the entitlement layer's floor is no
+# longer NoFloor (rows 802/803 closed) -- WORLD ENT below needs a chain reaching s60 (the layer's
+# OWN capability probe) so the bare auto-detect path's "NO-FLOOR" skip line (this fixture's own
+# pre-existing assertions never exercised, since WORLD ALL stops at s41, pre-s60) is replaced by a
+# REAL verdict line. Past s43 (this chain crosses it), the direct-INSERT `birth_acts()` this file's
+# other two worlds use is refused (s43 revokes raw INSERT) -- this world instead uses the
+# kernel.ledger_write()/registration_write() call pattern seen-red/s70-scope-binding/
+# run_fixtures.py's own `bw_call`/`birth_via_boundary` already establish, duplicated here (the
+# SAME per-fixture chain-list duplication convention CHAIN_A/CHAIN_B/CHAIN_COMMON above already
+# use, not a shared import -- each seen-red fixture is its own standalone witness).
+CHAIN_ENT = CHAIN_B + [
+    "s42-row-hash-full-coverage.sql", "s43-typed-verdict-write-boundary.sql",
+    "s44-model-identity-attestation.sql", "s45-standing-lifecycle.sql",
+    "s46-credited-views.sql", "s47-claim-on-closed-refusal.sql",
+    "s48-review-witness-existence.sql", "s49-journaler-overflow-guard.sql",
+    "s50-defeat-input-raw-domain.sql", "s51-artifact-store.sql",
+    "s52-artifact-witness-check.sql", "s53-belief-substrate.sql",
+    "s54-belief-views.sql", "s55-dispatch-grain-independence.sql",
+    "s56-reservation-residue.sql", "s57-obligation-revocation-event.sql",
+    "s58-missive-substrate.sql", "s59-missive-views.sql",
+    "s60-entitlement-enforcement.sql",
+]
+
 
 def sh(args: list[str], **kw) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, **kw)
@@ -100,6 +124,16 @@ def teardown(world: str) -> None:
         f"DROP SCHEMA IF EXISTS {world} CASCADE; DROP SCHEMA IF EXISTS {world}_kernel CASCADE; "
         f"DROP OWNED BY {world}_rw;"])
     sh(["psql", "-h", PGHOST, "-d", PGDB, "-c", f"DROP ROLE IF EXISTS {world}_rw;"])
+
+
+def psql_tuples(sql: str) -> str:
+    """Read-only tuples-only psql, used by `birth_via_boundary` (WORLD ENT) -- the SAME helper
+    seen-red/s70-scope-binding/run_fixtures.py's own `psql_tuples` duplicates per this fixture's
+    own per-file convention."""
+    cp = sh(["psql", "-h", PGHOST, "-d", PGDB, "-tAq", "-v", "ON_ERROR_STOP=1", "-c", sql])
+    if cp.returncode != 0:
+        raise RuntimeError(f"psql failed: {cp.stdout[-500:]} {cp.stderr[-500:]}")
+    return cp.stdout.strip()
 
 
 def scaffold_classic(world: str, chain: list[str]) -> Path:
@@ -127,6 +161,55 @@ def scaffold_classic(world: str, chain: list[str]) -> Path:
         "-c", f"INSERT INTO {kern}.chain_genesis (seed) VALUES ('{genesis_hex}') "
               f"ON CONFLICT (only_one) DO NOTHING;"])
     return world_dir
+
+
+def bw_call(world: str, fn: str, payload: dict) -> dict:
+    """Call a kernel write-boundary function directly via psql (bypassing the served
+    boundary_service, which this lightweight fixture never stands up) -- the SAME helper seen-red/
+    s70-scope-binding/run_fixtures.py's own `bw_call` uses, duplicated per this fixture's own
+    per-file convention (see CHAIN_ENT's own comment)."""
+    S, K, R = world, f"{world}_kernel", f"{world}_rw"
+    pj = json.dumps(payload).replace("'", "''")
+    r = sh(["psql", "-h", PGHOST, "-d", PGDB, "-v", "ON_ERROR_STOP=1", "-f", "/dev/stdin"],
+           input=f"SET ROLE {R};\nSET search_path = {S}, {K};\n"
+                 f"SELECT to_jsonb(v) FROM {K}.{fn}('{pj}'::jsonb) v;\n")
+    if r.returncode != 0:
+        raise RuntimeError(f"NON-VERDICT: {r.stderr.strip()[-800:]}")
+    lines = [ln for ln in r.stdout.splitlines() if ln.strip().startswith("{")]
+    if not lines:
+        raise RuntimeError(f"NO VERDICT LINE: stdout={r.stdout!r} stderr={r.stderr!r}")
+    return json.loads(lines[-1])
+
+
+def birth_via_boundary(world: str) -> str:
+    """A post-s43 world's birth sequence, routed through the write boundary (s43 revokes raw
+    INSERT) -- byte-identical in shape to seen-red/s70-scope-binding/run_fixtures.py's own
+    `birth_via_boundary`."""
+    K = f"{world}_kernel"
+    author = psql_tuples(f"SELECT id FROM {K}.principal WHERE name='author';")
+    login_role = psql_tuples("SELECT session_user;")
+    for fn, payload in [
+        ("ledger_write", {"kind": "principal_registered",
+                          "statement": "author registered (fixture genesis exception)",
+                          "actor": author, "principal_subject": author,
+                          "principal_purpose": "fixture connection principal"}),
+        ("ledger_write", {"kind": "principal_standing_declared",
+                          "statement": f"role {world}_rw -> author", "actor": author,
+                          "principal_subject": author, "principal_db_role": f"{world}_rw",
+                          "principal_binding_active": "true"}),
+        ("ledger_write", {"kind": "principal_standing_declared",
+                          "statement": f"login role {login_role} -> author (dual declaration)",
+                          "actor": author, "principal_subject": author,
+                          "principal_db_role": login_role,
+                          "principal_binding_active": "true"}),
+        ("registration_write", {"name": "write-boundary", "agent_class": "tool",
+                                "actor": author,
+                                "purpose": "judge-all-capable-layers WORLD ENT birth"}),
+    ]:
+        v = bw_call(world, fn, payload)
+        if v["disposition"] != "accepted":
+            raise RuntimeError(f"birth act refused: {v}")
+    return author
 
 
 def birth_acts(world: str) -> None:
@@ -259,12 +342,52 @@ def world_pre_s41_check(failures: list[str], tmps: list[Path]) -> None:
     teardown(world)
 
 
+def world_entitlement_capable_check(failures: list[str], tmps: list[Path]) -> None:
+    """design/FABLE-ENGINE-ENTITLEMENT-SCOPE-ASP-TWIN-SPEC.md: the layer's NEW non-refusing path
+    -- a target capable of 'entitlement' (the s60 marker column) now gets a REAL verdict line on
+    the bare auto-detect path, never the pre-this-build 'NO-FLOOR' skip (which this fixture's
+    OTHER two worlds could never exercise, since WORLD ALL stops at s41, pre-s60)."""
+    world = "s60jaclent"
+    teardown(world)
+    print(f"== scaffolding classic world {world} (chain ends {CHAIN_ENT[-1]}) -- WORLD ENT ==")
+    wdir = scaffold_classic(world, CHAIN_ENT)
+    tmps.append(wdir.parent)
+    birth_via_boundary(world)
+
+    exit_code, out = run_bare_judge(world)
+    print(out)
+    no_floor_lines = [ln for ln in out.splitlines()
+                      if "layer='entitlement'" in ln and "NO-FLOOR" in ln]
+    # the per-target result line for a RUN layer looks like "  [OK ] <name> AGREE ..." and sits
+    # inside the '## layer=...' section for that layer -- slice between the entitlement header
+    # and the next header (or EOF) rather than guessing from bare substring membership.
+    lines = out.splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln == "## layer='entitlement'")
+    section = []
+    for ln in lines[start + 1:]:
+        if ln.startswith("## layer="):
+            break
+        section.append(ln)
+    section_result = [ln for ln in section if ln.strip().startswith("[") and world in ln]
+    check("WORLD-ENT-entitlement-no-longer-no-floor",
+          not no_floor_lines and len(section_result) == 1 and "AGREE" in section_result[0],
+          f"no_floor_lines={no_floor_lines}; section_result={section_result}",
+          failures)
+    check("WORLD-ENT-bare-run-stays-green",
+          exit_code == 0,
+          f"exit={exit_code} (a real AGREE on the entitlement layer must not turn the bare run red)",
+          failures)
+
+    teardown(world)
+
+
 def main() -> int:
     failures: list[str] = []
     tmps: list[Path] = []
     try:
         world_all_capable_check(failures, tmps)
         world_pre_s41_check(failures, tmps)
+        world_entitlement_capable_check(failures, tmps)
     finally:
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)
