@@ -1,0 +1,51 @@
+== scaffolding --profile tracker acdscopefx (LINEAGE_CHAIN's own current tail) ==
+=== TRACKER-PROFILE-SCAFFOLD ===
+  [ok] bootstrap/new-project.sh --profile tracker --name acdscopefx -- exit=0 deployment.json present=True
+
+=== PRECONDITION-S70-PRESENT ===
+  [ok] s70-scope-binding.detect.sql on this fresh --new-world scratch deployment: 't' (expected t -- s70 is already this tree's LINEAGE_CHAIN tail; no per-delta apply act needed by this fixture)
+
+deployment: schema=acdscopefx boundary_url=http://127.0.0.1:8420 boundary_deployment=acdscopefx
+=== CLI-MINT-NO-SCOPE-ACCEPTED ===
+  [ok] mint with no --scope-* flag -- exit=0 stdout="led: row 14 written.\nled: row 15 written.\n# dispatch-mechanics mint: 'reviewer-plain' (principal id 6), depth=0, commission row(s) [1]\nexport AUTOHARN_MINTED_PRINCIPAL=6\nexport LED_ACTOR=reviewer-plain\n" stderr='dispatch: boundary at http://127.0.0.1:8420 was unreachable -- spawned it (pid 261293, logs at /tmp/acdscopefx-seenred-mpizo9y4/acdscopefx/service.log); proceeding.\n'
+
+=== CLI-MINT-NO-SCOPE-STAMP-MATERIAL ===
+  [ok] stamp material emitted unchanged -- stdout="led: row 14 written.\nled: row 15 written.\n# dispatch-mechanics mint: 'reviewer-plain' (principal id 6), depth=0, commission row(s) [1]\nexport AUTOHARN_MINTED_PRINCIPAL=6\nexport LED_ACTOR=reviewer-plain\n"
+
+=== CLI-MINT-NO-SCOPE-BYTE-IDENTICAL ===
+  [ok] no principal_scope_bound row was written for a plain (no --scope-*) mint -- rows=0 (expected 0 -- fail-safe-additive, no-op-when-unarmed)
+
+=== CLI-MINT-WITH-SCOPE-ACCEPTED ===
+  [ok] mint --scope-surface x2 --scope-exclude x2 --scope-disclosure-mode marked -- exit=0 stdout="led: row 16 written.\nled: row 17 written.\nled: row 18 written.\n# dispatch-mechanics mint: 'reviewer-blind' (principal id 7), depth=0, commission row(s) [1]\nexport AUTOHARN_MINTED_PRINCIPAL=7\nexport LED_ACTOR=reviewer-blind\n" stderr="dispatch: NOTE -- 1 previously dispatched principal(s) still show 'active' standing (never retired by `dispatch close`): ['reviewer-plain']. This is informational only (spec §3's own residue-sweep, not a refusal) -- close them with `./autoharn dispatch close <name>` when their session is genuinely done.\n"
+
+=== CLI-MINT-WITH-SCOPE-RENDERED-IN-VIEW ===
+  [ok] principal_scopes renders the CLI-minted binding, through the served boundary -- row: '{ledger_current,work_item_current}|[{"value": "ac-dispatch-scope-mint", "family": "work-item-lineage"}, {"value": "decision", "family": "kind-class"}]|marked'
+
+=== CLI-MALFORMED-FAMILY-CLIENT-REFUSED ===
+  [ok] mint --scope-exclude bogus-family:... -- exit=2 stderr="dispatch mint: REFUSED -- 'bogus-family' is not a scope-exclusion family (closed vocabulary: kind-class, thread, work-item-lineage, rows -- kernel/lineage/s70-scope-binding.sql's scope_exclusions_shape_ok)\n" (expected exit 2, message naming the closed 4-member vocabulary)
+
+=== CLI-MALFORMED-FAMILY-NEVER-REGISTERED ===
+  [ok] the CLI refused before EVEN registering the delegate principal (client-side parse happens before any write) -- rows=0
+
+led: row 19 written.
+=== KERNEL-BACKSTOP-PROBE-DELEGATE-REGISTERED ===
+  [ok] probe delegate registration -- rc=0
+
+=== KERNEL-CHECK-BACKSTOP-MALFORMED-FAMILY-REFUSED ===
+  [ok] a hand-built payload with an out-of-vocabulary family, posted THROUGH THE SAME served write surface the verb itself calls but bypassing this CLI's own typed constructor -- REFUSED by the kernel's OWN scope_exclusions_shape CHECK independently -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_exclusions_shape"', 'sqlstate': '23514', 'refusal_id': 21, 'disposition': 'refused'}
+
+=== CLI-MINT-SCOPE-DISCLOSURE-MODES ===
+  [ok] marked/hash_stub/full each independently selectable and rendered -- [('marked', True), ('hash_stub', True), ('full', True)]
+
+=== KERNEL-BACKSTOP-REFUSAL-JOURNALED ===
+  [ok] the kernel CHECK backstop refusal above journaled as a committed write_refused row (s43) -- count=1
+
+=== VERIFY-CHAIN-INTACT ===
+  [ok] ./autoharn verify-chain after every write above -- exit=0
+verify-chain: INTACT -- 29 row(s) walked, head id=30 hash=bd261cb0d5cfdc51ef5aaac5382d9a37044e2f301f29885bb5c601e1639eb07f
+verify-chain: TAIL-COVERAGE-CONFIRMED -- witness max_id=30 agrees with walked max_id=30 (secondary corroboration: ledger_id_seq.last_value=30, explain-not-fail -- nextval() is non-transactional and does not roll back on an aborted insert, so this figure alone would false-positive on any world that ever rolled back a write)
+verify-chain: REFUSAL-ORACLE-CONFIRMED -- 1 journaled write_refused row(s) == sequence count 1 (kernel.refusal_seq, the rollback-proof counter -- s43's completeness witness)
+
+
+
+ALL GREEN
