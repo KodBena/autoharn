@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""seen-red/boundary-sse-events/run_fixtures.py -- S1-S10, design/
+"""seen-red/boundary-sse-events/run_fixtures.py -- S1-S11 (S11 added for work item
+sse-subscriber-slot-leak, ledger row 429), design/
 FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §3 witness plan (work item boundary-sse-events, ledger row
 169). Real infra, no mocks: two CLASSIC-scaffolded worlds (WORLD_PRE shape -- s42-headed, no
 s43 boundary functions needed; `GET /events` only ever touches `ledger`'s own `max(id)`, never a
@@ -437,6 +438,57 @@ def main() -> int:
         check("S10b a second subscribe/unsubscribe cycle behaves identically (no residue)",
               before2 and during2 and after2,
               f"second cycle: before={before2} during={during2} after={after2}", failures)
+
+        # ---------------------------------------------------------------------------------
+        # S11: work item sse-subscriber-slot-leak (ledger row 429) -- the actual defect this
+        # commission fixes, IN-PROCESS: `connect()`'s own one `await` (the head-poll,
+        # `_sse_query_head` run via `asyncio.to_thread`) is monkeypatched slow enough to
+        # reliably hold a `connect()` task suspended there, then the task is CANCELLED mid-poll
+        # (the exact shape of a client aborting/timing out while its own SSE connection is
+        # still establishing -- pre-fix this landed the cancellation AFTER `queue` was already
+        # added to `hub.subscribers`, leaking the slot for process lifetime; a live hub was
+        # witnessed at exactly this state, 16/16 slots held by dead connections). Asserts BOTH
+        # that the queue was never left registered (the leak proper) AND that no watcher task
+        # was left running for a subscriber set that (from this cycle's own perspective) should
+        # be empty -- pre-fix, `during`-style registration leaves `watcher_task` running
+        # forever too, since `disconnect()` (the only thing that ever stops it) is never called
+        # for a queue nobody knows to disconnect.
+        # ---------------------------------------------------------------------------------
+        async def _cancel_during_connect_cycle() -> tuple[bool, bool]:
+            orig_query_head = boundary_service._sse_query_head
+
+            def _slow_query_head(cfg):
+                time.sleep(1.5)
+                return orig_query_head(cfg)
+
+            boundary_service._sse_query_head = _slow_query_head
+            try:
+                q: "asyncio.Queue[int]" = asyncio.Queue()
+                task = asyncio.ensure_future(hub.connect(q))
+                await asyncio.sleep(0.1)  # let connect() enter the to_thread poll
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                await asyncio.sleep(0)
+                leaked_registration = q in hub.subscribers
+                leaked_watcher = hub.watcher_task is not None and not hub.watcher_task.done()
+                return leaked_registration, leaked_watcher
+            finally:
+                boundary_service._sse_query_head = orig_query_head
+                if hub.watcher_task is not None:
+                    hub.watcher_task.cancel()
+                    hub.watcher_task = None
+                hub.subscribers.clear()
+
+        leaked_registration, leaked_watcher = asyncio.run(_cancel_during_connect_cycle())
+        check("S11 cancellation mid-connect() never leaks the subscriber slot (row 429)",
+              not leaked_registration and not leaked_watcher,
+              f"cancelled hub.connect(q) while suspended in its own head-poll await; "
+              f"leaked_registration={leaked_registration} leaked_watcher={leaked_watcher} "
+              f"(both must be False -- a True here reproduces the live defect: a dead "
+              f"connection holding a subscriber slot for process lifetime)", failures)
 
     finally:
         for p in procs:
