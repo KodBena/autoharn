@@ -26,9 +26,14 @@
 ||| because the SUBSTRATE is -- see the "PRESERVED, ON PURPOSE" list in this header.
 ||| Beauty that would erase one of those facts is a regression, not a cleanup.
 |||
-||| AS-OF: kernel chain through s69 (this pass pays down the prior LAGGING note per
-||| gates/idris_model_freshness.py's own instruction: drop the suffix only once the semantics
-||| genuinely catch up -- s69's three refusals are all rendered below, so the suffix is retired).
+||| AS-OF: kernel chain through s69 (LAGGING: s70 -- kernel/lineage/s70-scope-binding.sql,
+||| design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b/§1c, ratified basis ledger row
+||| 639 -- is NOT YET transcribed here; the s70 completion round (ledger rows 732/794) pays down
+||| that delta's lineage/ASP-differential delivery, not this categorical model's own authoring
+||| budget -- a future pass owes this model the ninth entitlement token (scope_binding),
+||| principal_scope_bound's kind-shape, and the principal_scopes derived view (fail-safe-default:
+||| absence of a bound row is the OPEN scope), per this gate's own honest-lag discharge path,
+||| never a silent AS-OF bump ahead of the real transcription).
 ||| THE s69 PASS (design/FABLE-S69-ROLE-COHERENCE-REFUSALS-SPEC.md, kernel/lineage/
 ||| s69-role-coherence-refusals.sql, ledger row 201): MODEL-VISIBLE, all three refusals -- each
 ||| an additive, decidable, single-hop check over facts this model already carried the shape for.

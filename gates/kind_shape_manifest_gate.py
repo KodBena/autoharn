@@ -181,7 +181,26 @@ CHAIN = [
     "s66-forged-stamp-journal-totality.sql",
     "s67-refusal-digest-bound.sql",
     "s68-typed-absence-dispositions.sql",
+    "s69-role-coherence-refusals.sql",
+    "s70-scope-binding.sql",
 ]
+# s69 (kernel/lineage/s69-role-coherence-refusals.sql) extends this SAME gate's scratch CHAIN and
+# ships ZERO new columns/kinds/CHECKs (its own HISTORY section: "zero columns, zero kinds, zero
+# views added or altered") -- four re-issued trigger BODIES, invisible to this gate's constraint
+# classifier by construction -- no MANIFEST change, verified live by running this gate against
+# the extended chain and reading the SAME 69 MANIFEST rows as the s68 head.
+# s70 (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
+# SPEC.md sec1b/sec1c, ratified ledger row 639) extends this SAME gate's scratch CHAIN and ships
+# THREE new kind-scoped columns (scope_surfaces, scope_exclusions, scope_disclosure_mode), each
+# licensed ONLY on a fresh (principal_binding_active=true) principal_scope_bound row -- the s64
+# ELIGIBILITY-ONE-WAY idiom, three new ELIGIBILITY_ONE_WAY_MANIFEST rows below (mirroring s64's
+# own five delegation_* rows' shape, one kind + one eligibility clause, GENERATED the same way).
+# It ALSO widens TWO existing two-way MANIFEST rows by one kind each: principal_subject_kind_
+# shape (eight kinds -> nine, principal_scope_bound joins) and principal_binding_active_kind_
+# shape (six kinds -> seven, principal_scope_bound joins) -- both rows' own `kinds` tuples are
+# updated in place below (an EDIT, not a new row, mirroring s45's own identical "ROW UPDATE, not
+# a new MANIFEST entry" precedent for the same constraint one delta over).
+
 # s66 (kernel/lineage/s66-forged-stamp-journal-totality.sql) re-issues ONLY kernel.set_stamp (a
 # trigger function, not a kind-shape CHECK) -- zero MANIFEST changes, named. s67 (kernel/lineage/
 # s67-refusal-digest-bound.sql) widens refusal_payload_digest_kind_shape from mandatory-two-way
@@ -495,14 +514,17 @@ MANIFEST = [
          kinds=("principal_registered", "principal_suspended", "principal_revoked",
                 "principal_standing_declared",
                 "principal_relation_asserted", "principal_role_bound", "principal_key_bound",
-                "principal_competence_granted"),
+                "principal_competence_granted", "principal_scope_bound"),
          arity="two-way", mechanism="CHECK", constraint="principal_subject_kind_shape",
-         defining_delta="s40-principal-identity-events.sql",
+         defining_delta="s40-principal-identity-events.sql "
+                         "(kinds widened to nine by s70-scope-binding.sql)",
          reason="the principal an identity/binding event is ABOUT (distinct from actor) -- "
                 "mandatory on every principal_* kind, forbidden elsewhere; two-way is safe "
                 "because every licensed kind is born in the same family (vacuous ADD CONSTRAINT "
-                "validation). ONE constraint, re-issued wider by s41 (never patched by a second "
-                "constraint) -- this row tracks the re-issued, eight-kind head shape."),
+                "validation). ONE constraint, re-issued wider by s41 then s70 (never patched by "
+                "a second constraint) -- this row tracks the re-issued, NINE-kind head shape "
+                "(principal_scope_bound joins, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-"
+                "FLOW-SPEC.md sec1b)."),
     dict(column="principal_purpose", kinds=("principal_registered",),
          arity="two-way", mechanism="CHECK", constraint="principal_purpose_kind_shape",
          defining_delta="s40-principal-identity-events.sql",
@@ -520,11 +542,13 @@ MANIFEST = [
     dict(column="principal_binding_active",
          kinds=("principal_relation_asserted", "principal_role_bound", "principal_key_bound",
                 "principal_competence_granted",
-                "principal_standing_declared", "principal_suspended"),
+                "principal_standing_declared", "principal_suspended",
+                "principal_scope_bound"),
          arity="two-way", mechanism="CHECK", constraint="principal_binding_active_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql "
-                         "(kinds widened to six by s45-standing-lifecycle.sql)",
-         reason="the identity/value discriminator, now of SIX kinds (true = assertion, "
+                         "(kinds widened to six by s45-standing-lifecycle.sql, to seven by "
+                         "s70-scope-binding.sql)",
+         reason="the identity/value discriminator, now of SEVEN kinds (true = assertion, "
                 "false = retraction restating identity fields only) -- mandatory via this CHECK "
                 "on exactly those kinds, never a column-level NOT NULL (basis C10); vacuous "
                 "validation, each kind's licensing born in the delta that licenses it. s45 "
@@ -532,12 +556,13 @@ MANIFEST = [
                 "STANDING-LIFECYCLE-SPEC.md) widens the four s41 binding kinds to six, adding "
                 "principal_standing_declared (false = an unbind, restating BOTH principal_"
                 "db_role and principal_subject) and principal_suspended (false = a lift, "
-                "restating principal_subject) -- ONE re-issue of this same CHECK, never a "
-                "second patching constraint (ADR-0012 P1, the principal_subject_kind_shape "
-                "precedent). principal_revoked is DELIBERATELY ABSENT -- that absence IS s45's "
-                "ratified 'terminal by type'. Its inactive-needs-supersedes and mandatory-iff-"
-                "active companions carry no kind test (value CHECKs, out of scope by the "
-                "classifier's first test)."),
+                "restating principal_subject); s70 (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-"
+                "FLOW-SPEC.md sec1b) widens six to seven, adding principal_scope_bound -- ONE "
+                "re-issue of this same CHECK each time, never a second patching constraint "
+                "(ADR-0012 P1, the principal_subject_kind_shape precedent). principal_revoked "
+                "is DELIBERATELY ABSENT -- that absence IS s45's ratified 'terminal by type'. "
+                "Its inactive-needs-supersedes and mandatory-iff-active companions carry no "
+                "kind test (value CHECKs, out of scope by the classifier's first test)."),
     dict(column="principal_object", kinds=("principal_relation_asserted",),
          arity="two-way", mechanism="CHECK", constraint="principal_object_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql",
@@ -1037,6 +1062,30 @@ ELIGIBILITY_ONE_WAY_MANIFEST = [
          reason=_S64_DELEGATION_REASON)
     for _col in ("delegation_redelegate_depth", "delegation_must_countersign", "delegation_expiry",
                  "delegation_scope_classes", "delegation_purpose")
+]
+
+# s70 (kernel/lineage/s70-scope-binding.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-
+# SPEC.md sec1b): three MORE eligibility-one-way columns, sharing a DIFFERENT eligibility clause
+# (one kind, principal_scope_bound, rather than a two-relation-value IN-list -- s64's own
+# eligibility narrows a single kind BY relation value; s70's narrows the SAME single kind by
+# nothing further, since scope_surfaces/scope_exclusions/scope_disclosure_mode are legal on
+# EVERY fresh, active principal_scope_bound row, never a sub-slice of it) -- the eligibility
+# clause here is simply the active-not-retraction test, `principal_binding_active IS TRUE`.
+_S70_SCOPE_ELIGIBILITY = "(principal_binding_active IS TRUE)"
+_S70_SCOPE_REASON = (
+    "s70 Element 2's own header: the column is legal ONLY on a principal_scope_bound row whose "
+    "principal_binding_active is TRUE (a FRESH bind, not a retraction restating identity fields "
+    "only) -- narrower than 'this kind or not', so ONE-WAY alone would under-license: a "
+    "retraction row of the same kind is NOT eligible to carry these columns either. Also "
+    "OPTIONAL even on an eligible row (task's own text, 'additive, nullable') -- an eligible row "
+    "may legally bind ZERO of the three."
+)
+ELIGIBILITY_ONE_WAY_MANIFEST += [
+    dict(column=_col, kind="principal_scope_bound",
+         eligibility=_canon_eligibility(_S70_SCOPE_ELIGIBILITY),
+         constraint=f"{_col}_kind_shape", defining_delta="s70-scope-binding.sql",
+         reason=_S70_SCOPE_REASON)
+    for _col in ("scope_surfaces", "scope_exclusions", "scope_disclosure_mode")
 ]
 ELIGIBILITY_ONE_WAY_BY_COLUMN = {row["column"]: row for row in ELIGIBILITY_ONE_WAY_MANIFEST}
 assert len(ELIGIBILITY_ONE_WAY_BY_COLUMN) == len(ELIGIBILITY_ONE_WAY_MANIFEST), \

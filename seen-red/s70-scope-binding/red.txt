@@ -1,0 +1,72 @@
+== scaffolding classic world s70fxpre (chain ends s69-role-coherence-refusals.sql, NO s70) ==
+=== REGRESSION-DETECT-ABSENT ===
+  [ok] s70-scope-binding.detect.sql on the s69-head world (no s70 applied): 'f' (expected f)
+
+=== REGRESSION-ORDINARY-WRITE-UNAFFECTED ===
+  [ok] an ordinary note write on the s69-head (pre-s70) world -- ACCEPTED, unaffected by this delta's mere existence -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding classic world s70fxmain (chain ends s70-scope-binding.sql) ==
+=== REGRESSION-DETECT-PRESENT ===
+  [ok] s70-scope-binding.detect.sql on the s70-head world: 't' (expected t)
+
+=== OPEN-SCOPE-DEFAULT-FOR-NEVER-BOUND ===
+  [ok] a principal (author, id 1) with no principal_scope_bound row of its own has ZERO rows in principal_scopes -- the structural, fail-safe open-scope default (an absent row, never an explicit 'unrestricted' marker) -- rows=0
+
+=== GREEN-SCOPE-BIND-UNENTITLED-REFUSED ===
+  [ok] a chainless, roleless principal (outsider) attempting to bind ITS OWN scope is REFUSED on conjunct (b) -- scope_binding is authority-bearing, unconditionally -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s60/s62/s64/s70, factored acceptance predicate conjunct b, this row's own act class) — act class 'scope_binding' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b; design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b for scope_binding); actor 3's authority chain (transitive reachability over in-force acts-for/dispatched-by relations, honoring every hop's expiry/scope conditions, kernel/lineage/s64-principal-stamps-delegation-conditions.sql) does not reach this world's genesis principal for this act class. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you, and (if any upstream edge is scoped) confirm this act class is among that edge's delegation_scope_classes — or have a severed/expired link repaired (suspension/revocation/expiry severs a chain PROSPECTIVELY only; past accepted acts through that link stay credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).", 'sqlstate': 'P0001', 'refusal_id': 7, 'disposition': 'refused'}
+
+=== GREEN-SCOPE-BIND-ENTITLED-ACCEPTED ===
+  [ok] the genesis-chained actor (author) binds a scope to itself -- ACCEPTED (conjunct b: author trivially chain-reaches genesis, the s60 Element 6 base case) -- verdict={'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== GREEN-SCOPE-BIND-RENDERED-IN-VIEW ===
+  [ok] principal_scopes renders the bound scope for author -- row: '{ledger_current,work_item_current}|marked'
+
+=== GREEN-SCOPE-SEVERANCE-CROSS-KIND-REFUSED ===
+  [ok] a chainless actor (outsider) superseding the LIVE principal_scope_bound row with an UNRELATED kind (note) is REFUSED via the target-class conjunct (entitlement_act_class_of_target classifies the target as scope_binding) -- verdict={'row_id': None, 'message': "Ledger policy: entitlement refused (s60/s62/s64/s70, factored acceptance predicate conjunct b, the class of row 8, which this write supersedes) — act class 'scope_binding' is authority-bearing (design/FABLE-ENTITLEMENT-ENFORCEMENT-SPEC.md §1.1b; design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.3; design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md §1b for scope_binding); actor 3's authority chain (transitive reachability over in-force acts-for/dispatched-by relations, honoring every hop's expiry/scope conditions, kernel/lineage/s64-principal-stamps-delegation-conditions.sql) does not reach this world's genesis principal for this act class. Remedy: this is NOT a write you can perform on yourself — have your DELEGATOR run, on your behalf: ./autoharn led principal relate <delegator-principal-name> acts-for <a-principal-already-chain-connected-to-genesis>, covering you, and (if any upstream edge is scoped) confirm this act class is among that edge's delegation_scope_classes — or have a severed/expired link repaired (suspension/revocation/expiry severs a chain PROSPECTIVELY only; past accepted acts through that link stay credited, kernel/lineage/s45-standing-lifecycle.sql's I5 asymmetry).", 'sqlstate': 'P0001', 'refusal_id': 10, 'disposition': 'refused'}
+
+=== HAPPY-SCOPE-REBIND-BY-ENTITLED ===
+  [ok] author (entitled) rotates its OWN scope binding -- ACCEPTED -- verdict={'row_id': 11, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-SCOPE-REBIND-RENDERS-ROTATED-PAYLOAD ===
+  [ok] principal_scopes now renders the ROTATED disclosure mode ('hash_stub'), not the original ('marked') -- supersession-aware, s31's own uniform retraction
+
+=== HAPPY-SCOPE-UNBIND-ACCEPTED ===
+  [ok] author unbinds (retracts) its own scope -- ACCEPTED -- verdict={'row_id': 12, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== HAPPY-SCOPE-UNBIND-RESTORES-OPEN-DEFAULT ===
+  [ok] after the unbind, author has ZERO rows in principal_scopes -- restored to the OPEN scope default, structurally (not a lingering 'unrestricted' marker row) -- rows=0
+
+=== MALFORMED-DISCLOSURE-MODE-REFUSED ===
+  [ok] scope_disclosure_mode='bogus' -- REFUSED (closed 3-member CHECK) -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_disclosure_mode_vocabulary"', 'sqlstate': '23514', 'refusal_id': 14, 'disposition': 'refused'}
+
+=== MALFORMED-EXCLUSIONS-BAD-FAMILY-REFUSED ===
+  [ok] scope_exclusions family outside the closed four-member vocabulary -- REFUSED -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_exclusions_shape"', 'sqlstate': '23514', 'refusal_id': 16, 'disposition': 'refused'}
+
+=== MALFORMED-EXCLUSIONS-ROWS-NOT-NUMERIC-REFUSED ===
+  [ok] scope_exclusions 'rows' family carrying a non-numeral element -- REFUSED -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_exclusions_shape"', 'sqlstate': '23514', 'refusal_id': 18, 'disposition': 'refused'}
+
+=== MALFORMED-EXCLUSIONS-NOT-ARRAY-REFUSED ===
+  [ok] scope_exclusions not a jsonb ARRAY at all (a bare object) -- REFUSED -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_exclusions_shape"', 'sqlstate': '23514', 'refusal_id': 20, 'disposition': 'refused'}
+
+=== MALFORMED-EXCLUSIONS-EXTRA-KEY-REFUSED ===
+  [ok] scope_exclusions element carrying a THIRD key beyond {family,value} -- REFUSED -- verdict={'row_id': None, 'message': 'new row for relation "ledger" violates check constraint "scope_exclusions_shape"', 'sqlstate': '23514', 'refusal_id': 22, 'disposition': 'refused'}
+
+=== WELL-FORMED-ALL-THREE-DISCLOSURE-MODES-ACCEPTED ===
+  [ok] marked/hash_stub/full each independently accepted -- [('marked', 'accepted'), ('hash_stub', 'accepted'), ('full', 'accepted')]
+
+=== REFUSALS-JOURNAL-AS-WRITE-REFUSED ===
+  [ok] every s70 refusal above journals as a committed write_refused row -- 7 refusal ids, 7 found as write_refused rows
+
+== scaffolding classic world s70fxbirth (chain ends s70-scope-binding.sql, fresh birth) ==
+=== ZERO-FRICTION-BIRTH-accepted ===
+  [ok] a fresh world's own s40/s43/s70 birth sequence, then an ordinary note write -- ACCEPTED, no extra friction from this delta's ninth act-class token (no birth-sequence act of its own, Element 8's own note) -- verdict={'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== VERIFY-CHAIN-INTACT-THROUGH-REFUSALS ===
+  [ok] ./autoharn verify-chain after every refusal above -- exit=0, INTACT+ORACLE-CONFIRMED in output=True, oracle count=7 == sequence=7
+
+=== AGREE-sql-asp-work-differential ===
+  [ok] judge output (s70fxmain): ['AGREE', 'asp []', 'sql []']
+
+NOTE: no differential covers principal_scopes' own family (scope_surfaces/scope_exclusions/scope_disclosure_mode) -- engine/ledger_edb.py exports no scope facts and engine/lp/ledger_entitlement.lp derives no scope-specific predicate. UNEXERCISED, flagged as the engine-side follow-on this delta's own header names, never silently claimed AGREE for that family.
+
+ALL GREEN
