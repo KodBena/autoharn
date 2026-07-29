@@ -88,6 +88,23 @@ stated honestly: LISTEN/NOTIFY push (future delta, named slot); production CORS 
 this spec's problem, restated as unowned); the panel's client-side consumption
 (theirs).
 
+## Post-build note (ledger row 554, hub-shutdown-drain-hang — honest divergence disclosure)
+
+This spec's own §1 item 5 and §2 say the SSE build "adds NOTHING to the restart path" / "no
+change to `service restart`". A later build (work item hub-shutdown-drain-hang, row 554)
+touches `serving/boundary_service.py`'s own shutdown machinery anyway — a small `uvicorn.Server`
+subclass that force-wakes any still-open SSE stream at SIGTERM time, plus a finite
+`timeout_graceful_shutdown` backstop — because the STOCK uvicorn shutdown path was silently NOT
+delivering the behavior this spec already declared correct: item 5's own words, "SSE connections
+die with it [restart] — that is correct behavior." Stock uvicorn 0.51 does not force-close a
+still-streaming response on SIGTERM (it only disables keep-alive and then waits, with no default
+timeout, for the connection to end on its own) — so a live SSE connection at restart time hung
+the WHOLE drained restart indefinitely (witnessed live, row 554), never merely "dying with it."
+The fix corrects that underlying gap; it does not add restart semantics, grace, or draining FOR
+SSE (none was added — SSE still dies at restart, exactly as this spec says it should) — it makes
+the already-stated intent actually hold. Surfaced here per this project's own letter-vs-spirit
+discipline rather than left as a silent divergence between this doc's text and the shipped code.
+
 ## License
 
 Public Domain (The Unlicense).

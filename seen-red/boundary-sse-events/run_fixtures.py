@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""seen-red/boundary-sse-events/run_fixtures.py -- S1-S11 (S11 added for work item
-sse-subscriber-slot-leak, ledger row 429), design/
+"""seen-red/boundary-sse-events/run_fixtures.py -- S1-S12 (S11 added for work item
+sse-subscriber-slot-leak, ledger row 429; S12 added for work item hub-shutdown-drain-hang,
+ledger row 554), design/
 FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §3 witness plan (work item boundary-sse-events, ledger row
 169). Real infra, no mocks: two CLASSIC-scaffolded worlds (WORLD_PRE shape -- s42-headed, no
 s43 boundary functions needed; `GET /events` only ever touches `ledger`'s own `max(id)`, never a
@@ -489,6 +490,54 @@ def main() -> int:
               f"leaked_registration={leaked_registration} leaked_watcher={leaked_watcher} "
               f"(both must be False -- a True here reproduces the live defect: a dead "
               f"connection holding a subscriber slot for process lifetime)", failures)
+
+        # ---------------------------------------------------------------------------------
+        # S12: work item hub-shutdown-drain-hang (ledger row 554) -- the actual defect this
+        # commission fixes. S9 above (this file's own predecessor) deliberately punted on
+        # exactly this: "uvicorn's own SIGTERM graceful-drain TIMING for an in-flight streaming
+        # response is a separate, pre-existing property... reviewed in its own right" -- that
+        # review never happened for THIS specific interaction (a live SSE connection open at
+        # SIGTERM time), and the live 06:52 restart hung on precisely it: SIGTERM (never
+        # SIGKILL, S9's own lever) with a genuinely OPEN `curl -N /events` connection, zero
+        # ordinary inflight requests. Pre-fix, this hung the process for >120s (witnessed
+        # directly against this exact repo state, scratch hub, `env -u PGOPTIONS`, real SIGTERM
+        # -- py-spy unavailable in the investigating sandbox; confirmed instead via an
+        # in-process `asyncio.all_tasks()` debug probe on an instrumented copy of this module
+        # showing the request task/connection never clearing `uvicorn.server.ServerState`).
+        # A fresh server is needed (S9 killed the shared one; the byte-identity legs above
+        # stopped their own proc2).
+        # ---------------------------------------------------------------------------------
+        s12_proc, s12_port = bs_fixtures.start_server(cfg_path)
+        procs.append(s12_proc)
+        s12_base = f"http://127.0.0.1:{s12_port}/d/{world_a}"
+        if not bs_fixtures.wait_health(s12_base):
+            tail = bs_fixtures.stop_server(s12_proc)
+            raise RuntimeError(f"S12 server never became healthy: {tail[-2000:]}")
+        s12_curl, s12_log = curl_subscribe(s12_base + "/events", max_time=30)
+        time.sleep(1.0)  # let the SSE connection genuinely establish (past hub.connect()'s poll)
+        s12_t0 = time.monotonic()
+        s12_proc.terminate()  # SIGTERM on POSIX -- the drained-restart signal, never SIGKILL
+        try:
+            s12_proc.wait(timeout=10.0)
+            s12_elapsed = time.monotonic() - s12_t0
+            s12_drained = True
+        except subprocess.TimeoutExpired:
+            s12_elapsed = time.monotonic() - s12_t0
+            s12_drained = False
+        procs.remove(s12_proc)
+        stop_curl(s12_curl, s12_log)
+        # 10s bound (not the spec's own "under a second" operator-facing ask -- that is
+        # witnessed directly against the real module in the commission's own scratch session,
+        # not re-derived here) is deliberately generous margin over CI/scheduling jitter while
+        # still being utterly incompatible with the pre-fix defect (which did not resolve in
+        # 120s of direct waiting) -- this leg's job is to keep the regression RED-reachable
+        # (`git stash` the fix, re-run, watch this fail) and GREEN today, not to pin the exact
+        # sub-second figure.
+        check("S12 SIGTERM with a LIVE SSE connection open drains promptly (row 554)",
+              s12_drained and s12_elapsed < 10.0,
+              f"drained={s12_drained} elapsed={s12_elapsed:.2f}s after SIGTERM with one open "
+              f"`curl -N /events` connection and zero ordinary inflight requests (bound: 10.0s "
+              f"-- pre-fix this did not resolve even after 120s of direct waiting)", failures)
 
     finally:
         for p in procs:

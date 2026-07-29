@@ -2783,6 +2783,57 @@ spec names only the poll interval and the client cap, below, as operator tunable
 protocol-hygiene constant every stream needs identically, not an operational bound an operator
 would ever have reason to widen."""
 
+_SSE_SHUTDOWN_SENTINEL = object()
+"""Ledger row 554 (work item hub-shutdown-drain-hang): a distinct singleton, never a real head
+id (real head ids are positive kernel row ids -- `ledger.id`'s own domain), pushed onto every
+ALREADY-REGISTERED live subscriber queue by `_BoundaryUvicornServer.shutdown` (below) as soon as
+this process begins shutting down. `_stream()`'s own read loop (inside `create_app`) checks for
+this object identity and breaks immediately on it -- the same code path an ordinary
+head-advancement event takes, minus the `yield`. ROOT CAUSE this closes (reproduced on a scratch
+hub, `env -u PGOPTIONS`, real SIGTERM, py-spy unavailable in this sandbox so witnessed via an
+in-process `asyncio.all_tasks()` debug probe instead, plus a committed red-first regression leg,
+seen-red/boundary-sse-events/run_fixtures.py's own S12): spec §1 item 5 states plainly that a
+restart's SIGTERM should simply kill every open SSE connection ("connections die at restart ON
+PURPOSE -- nothing needs graceful SSE draining"), but the STOCK uvicorn 0.51 shutdown path does
+not actually do that for a connection whose ASGI response is still in progress --
+`uvicorn.protocols.http.httptools_impl.HttpToolsProtocol.shutdown` only closes the transport
+`if self.cycle is None or self.cycle.response_complete`; for a still-streaming SSE response
+(never `response_complete` by construction -- it only ends when THIS generator returns) it
+takes the OTHER branch, `self.cycle.keep_alive = False`, and leaves the connection running.
+`uvicorn.server.Server.shutdown` then awaits `_wait_tasks_to_complete()` (which loops on
+`server_state.connections`/`server_state.tasks` being empty) wrapped in `asyncio.wait_for(...,
+timeout=self.config.timeout_graceful_shutdown)` -- and this codebase's own `uvicorn.Config(...)`
+construction (`main()`, below) never set `timeout_graceful_shutdown`, so it defaulted to `None`,
+i.e. NO timeout at all. `_wait_tasks_to_complete` only escapes early via `self.force_exit`,
+which uvicorn's own `handle_exit` sets ONLY on a SECOND `SIGINT` -- never on plain `SIGTERM`,
+and `libexec/autoharn-service`'s `restart` verb (the one the live incident actually used) only
+ever sends `SIGTERM`, then (only if the operator explicitly passes `--force-kill` after its own
+bounded refusal) `SIGKILL` -- never a second `SIGINT` through uvicorn's own signal machinery, so
+this raw hang was never self-healing on `restart`'s own path (`stop`'s separate 5s-then-auto-
+SIGKILL posture is a different verb with a different, already-bounded contract -- not what this
+fix is about). Net effect: one live SSE connection open at SIGTERM time blocked the drained
+restart INDEFINITELY -- witnessed live: a scratch hub with a still-open `curl -N .../events`
+connection did not exit even after 120s of waiting past SIGTERM (vs. ~0.2s for a genuinely idle
+hub, with or without a PRIOR, already-disconnected SSE probe -- that half of the incident
+report's own suspect list, the watcher/keepalive LOOP, was cleared: both `hub.connect`'s
+lazy-start and `hub.disconnect`'s empty-subscribers stop already ran correctly and left no
+lingering watcher task in every variant tried). This sentinel fix makes every ALREADY-CONNECTED
+SSE stream react to shutdown promptly, matching spec §1 item 5's own stated intent, rather than
+depending on uvicorn's generic (and here, unbounded) connection-close machinery at all.
+RESIDUAL, DISCLOSED (fresh-context review finding): a connection whose handler is suspended
+inside `_SseHub.connect()`'s own one `await` (the immediate catch-up poll, BEFORE `queue` is
+added to `hub.subscribers`) at the exact instant the broadcast below runs is NOT yet a
+subscriber and so does not receive this sentinel -- it falls through to the finite
+`_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S` backstop instead of the fast path. This window is narrow
+(bounded by `main_loop`'s own 0.1s `should_exit` poll cadence plus one `_sse_query_head` poll,
+ordinarily milliseconds) and its worst case is now bounded (the backstop), never unbounded (the
+pre-fix defect) -- narrowing it further was not pursued here since doing so would cost either
+unconditional extra shutdown latency on the always-idle common path (this ticket's own `under a
+second` requirement) or a second broadcast pass gated on evidence of live traffic, and the
+residual is already a bounded-not-infinite gap, not the ticket's defect class. See
+`_BoundaryUvicornServer.shutdown`'s own docstring for the other half (the defensive, finite
+backstop bound) and `PSQL_EXEC_TIMEOUT_S`, above, for why that backstop's value is what it is."""
+
 # The two SSE tunables (spec §1 items 1/4), DEFAULT-set from boundary_multiplex_config's own
 # defaults, overridden once at startup (`main()`) via the `configure_*` functions below --
 # construction-time-defense-in-depth, the SAME pattern `configure_identity_enforcement`/
@@ -2939,6 +2990,72 @@ class _SseHub:
                         q.put_nowait(head)
         except asyncio.CancelledError:
             pass
+
+
+_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S = PSQL_EXEC_TIMEOUT_S + 5.0
+"""Row 554 (hub-shutdown-drain-hang) defensive backstop -- see `_BoundaryUvicornServer.shutdown`'s
+own docstring for the PRIMARY fix (an immediate SSE-stream wake, not a wait). This is belt-and-
+suspenders on top of that: stock `uvicorn.Config(...)` defaults `timeout_graceful_shutdown` to
+`None`, i.e. NO bound at all, on the internal `asyncio.wait_for(self._wait_tasks_to_complete(),
+timeout=...)` uvicorn's own `Server.shutdown` runs -- meaning ANY future long-lived connection
+class this service ever grows (not just SSE, and not just a case this file's own code can
+foresee) would reproduce the exact same indefinite-hang hazard the SSE stream did, with no floor
+under it at all. Bounding it here, finite, means the WORST case is now "uvicorn force-cancels
+remaining tasks after this many seconds", never "forever, only `--force-kill` gets you out."
+Sized at `PSQL_EXEC_TIMEOUT_S` (the longest a single, genuinely-slow ordinary request's own psql
+call is ever allowed to run) plus a small margin -- long enough that a real in-flight write
+still gets its full drain, short enough to be a meaningfully finite floor rather than a
+nominal one that never actually bites in practice."""
+
+
+class _BoundaryUvicornServer(uvicorn.Server):
+    """Row 554 (work item hub-shutdown-drain-hang): the ONE override this subclass makes --
+    `shutdown()`, below -- is the PRIMARY fix for a real, witnessed drain hang (see
+    `_SSE_SHUTDOWN_SENTINEL`'s own docstring for the full root-cause trace). `main()` constructs
+    THIS class instead of a bare `uvicorn.Server`/`uvicorn.run()` on both its own code paths
+    (the `--pidfile` branch and the plain one) -- same `uvicorn.Config`, same `.run(...)` call
+    shape, nothing else about startup/serving changes; this is a narrow override, not a
+    reimplementation."""
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        """Runs BEFORE `uvicorn.Server.shutdown`'s own (unmodified, via `super()`) connection-
+        drain wait -- design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 5 states plainly that a
+        restart's SIGTERM should simply end every open SSE connection ("connections die at
+        restart ON PURPOSE -- nothing needs graceful SSE draining"), but stock uvicorn 0.51 does
+        NOT actually do that for a connection whose ASGI response is still streaming (see
+        `_SSE_SHUTDOWN_SENTINEL`'s docstring for the exact mechanism witnessed: `httptools_impl.
+        HttpToolsProtocol.shutdown` only closes the transport once `response_complete`, which an
+        open SSE stream never is until ITS OWN generator returns) -- so without this override, a
+        single live SSE connection at SIGTERM time blocked the ENTIRE drained restart
+        indefinitely (witnessed: >120s, no exit, on a scratch hub with one open `curl -N`
+        subscriber and zero ordinary inflight requests; the same scratch hub drained in ~0.2s
+        both fully idle and after a PRIOR, already-disconnected SSE probe -- so the leaked-
+        watcher-task branch of the original suspect list was cleared, not the actual cause).
+
+        Fix: broadcast `_SSE_SHUTDOWN_SENTINEL` to every live subscriber queue on every
+        deployment's `_SseHub`, right here, before ever awaiting uvicorn's own generic task-wait
+        -- each open `_stream()` generator (inside `create_app`) wakes on its very next queue
+        read (bounded by that read's own `SSE_KEEPALIVE_INTERVAL_S`-second `wait_for`, already
+        in progress or about to start) and exits its loop immediately, exactly as if the client
+        itself had disconnected. Ordinary (non-SSE) in-flight requests are never registered on
+        any `_SseHub` and are completely untouched by this loop -- `super().shutdown(...)`,
+        called immediately after, still drains them exactly as stock uvicorn always has.
+        `getattr(..., "sse_hubs", {})` (never a bare `.sse_hubs`) is deliberate: `create_app`
+        is the ONLY place that ever sets this attribute, and every real caller of THIS class
+        does route through it, but a future test harness constructing a bare `FastAPI()` by
+        hand for some other purpose should degrade to "nothing to broadcast to", never an
+        `AttributeError` crash mid-shutdown.
+
+        Covers every ALREADY-REGISTERED subscriber -- see `_SSE_SHUTDOWN_SENTINEL`'s own
+        docstring, "RESIDUAL, DISCLOSED", for the one connection state this broadcast cannot
+        reach (a handler still inside `_SseHub.connect()`'s own pre-registration poll at this
+        exact instant) and why `_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S` below is the deliberate
+        backstop for that narrow, bounded gap rather than a second broadcast pass here."""
+        sse_hubs: dict[str, "_SseHub"] = getattr(self.config.app.state, "sse_hubs", {})
+        for hub in sse_hubs.values():
+            for queue in list(hub.subscribers):
+                queue.put_nowait(_SSE_SHUTDOWN_SENTINEL)
+        await super().shutdown(sockets=sockets)
 
 
 def sse_saturated(max_clients: int, message: str) -> JSONResponse:
@@ -3821,6 +3938,10 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
             # `try:` line used to not exist as a gap, but any future edit that adds one is now
             # guarded structurally rather than by review -- still always reaches `disconnect()`,
             # which is itself safe to call on a queue `connect()` never actually registered.
+            # row-554/hub-shutdown-drain-hang: `queue` also carries `_SSE_SHUTDOWN_SENTINEL`
+            # (never a real head id -- see that name's own docstring) -- the type hint below
+            # stays documentation-only (Python does not enforce it at runtime; widening it to
+            # `int | object` would just restate this same comment in typing form).
             queue: asyncio.Queue[int] = asyncio.Queue()
             try:
                 known_head = await hub.connect(queue)
@@ -3837,6 +3958,12 @@ def create_app(configs: dict[str, BoundaryConfig]) -> FastAPI:
                     except asyncio.TimeoutError:
                         yield ": keepalive\n\n"
                         continue
+                    # row-554: the shutdown broadcast (`_BoundaryUvicornServer.shutdown`) --
+                    # spec §1 item 5, "connections die at restart ON PURPOSE" -- exit NOW,
+                    # never yielding another event; checked by identity, never `>`, since this
+                    # sentinel is not an int and a real head id is never this exact object.
+                    if new_head is _SSE_SHUTDOWN_SENTINEL:
+                        break
                     if new_head > last_sent:
                         yield f"event: head\ndata: {json.dumps({'head_id': new_head})}\n\n"
                         last_sent = new_head
@@ -4404,12 +4531,29 @@ def main(argv: list[str] | None = None) -> int:
         # Hand the ALREADY-BOUND socket to uvicorn (the same `sockets=` pathway uvicorn's own
         # multi-worker/gunicorn integration uses) -- asyncio's own `create_server` calls
         # `sock.listen()` on it; uvicorn never re-binds host/port when a socket is supplied.
-        uvicorn.Server(uvicorn.Config(
+        # Row 554: `_BoundaryUvicornServer`, not a bare `uvicorn.Server` -- see that class's own
+        # docstring (the SSE-shutdown-hang fix); `timeout_graceful_shutdown` is the defensive
+        # backstop `_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S`'s own docstring explains.
+        _BoundaryUvicornServer(uvicorn.Config(
             app, host=args.host, port=args.port,
+            timeout_graceful_shutdown=_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S,
             log_config=_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP)).run(sockets=[sock])
         return 0
-    uvicorn.run(app, host=args.host, port=args.port,
-                log_config=_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP)
+    # Row 554: same `_BoundaryUvicornServer` substitution as the --pidfile branch above --
+    # `uvicorn.run(...)` is a convenience wrapper around exactly this Server-construct-then-run
+    # shape (it builds a plain `uvicorn.Server` internally and offers no way to swap the class),
+    # so this branch is spelled out rather than calling it, to carry the same fix. `try/except
+    # KeyboardInterrupt: pass` matches `uvicorn.run()`'s own behavior (a manual operator run in
+    # an interactive terminal, Ctrl-C, exits quietly rather than printing a traceback) --
+    # everything else (host/port bind, no pre-bound socket, no pidfile) is unchanged.
+    _no_pidfile_server = _BoundaryUvicornServer(uvicorn.Config(
+        app, host=args.host, port=args.port,
+        timeout_graceful_shutdown=_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S,
+        log_config=_UVICORN_LOG_CONFIG_WITH_ISO_TIMESTAMP))
+    try:
+        _no_pidfile_server.run()
+    except KeyboardInterrupt:
+        pass
     return 0
 
 
