@@ -29,6 +29,34 @@ boundary, still through kernel.ledger_write, still s43-gated); (3) emits the sta
 the child session's own environment -- `export AUTOHARN_MINTED_PRINCIPAL=<id>` and `export
 LED_ACTOR=<name>` -- ready to paste into (or `eval`'d by) a dispatch preamble.
 
+POSTURE (work item 605): a freshly minted delegate holds no role and no `acts-for` edge --
+only the `dispatched-by` edge step (2) writes, with no scope caveat (this CLI has no `--scope`;
+`--depth 0` bounds only further re-delegation, not what the delegate itself may do). Today's
+authority-bearing act-class set is EIGHT tokens: s60's own six -- principal_registered,
+principal_role_bound, standing_lifecycle, milestone_closure, gate_edge_supersession,
+entitlement_class_configured (kernel/lineage/s60-entitlement-enforcement.sql, Element 8) --
+plus delegation_lifecycle (s62's SEVENTH) and independent_verification_delegation (s64's
+EIGHTH, kernel/lineage/s64-principal-stamps-delegation-conditions.sql). This leaves an
+ordinarily-scaffolded world's delegate refused on all eight -- but the MECHANISM is not what
+it first looks like. Conjunct (a)'s default role map covers five of s60's six
+(entitlement_class_configured is deliberately excluded, s60 Element 8) and requires role
+`authority`, which the delegate holds none of -- a per-world, RECONFIGURABLE gate, not a
+property of `dispatched-by` itself. The other three tokens carry no conjunct-(a) gate by
+default and rest on conjunct (b) alone. Pre-s64, conjunct (b) walks `acts-for` chains only, so
+a bare `dispatched-by` edge conveys no reach there either. Once s64 lands (Element 7), conjunct
+(b) walks `dispatched-by` EXACTLY like `acts-for`: unscoped, it is a full, monotone SUBSET
+pass-through of whatever the DISPATCHER itself can reach (design/FABLE-PRINCIPAL-STAMPS-SPEC.md
+§2.2, "grant-subset monotonicity" -- default is the whole set, never zero by construction).
+WITNESSED against a scratch s64-chained world (this build's own probe, not committed):
+binding a plain dispatched-by delegate the dispatcher's OWN role was, alone, enough for
+`principal_registered` to be ACCEPTED -- conjunct (b) did not refuse it. So today's refusal
+rests on this world's role-gate configuration, not on `dispatched-by` withholding authority by
+construction. More authority: the DISPATCHER relates the delegate in (it cannot relate itself,
+that act is itself authority-bearing): `./led principal relate <delegate-name> acts-for
+<delegator-name>`. No flag here scopes an edge DOWN -- worth a follow-up item before trusting
+"minted = authority-less" past these caveats. (Separately, unedited: s60's own conjunct-b text
+names a self-directed remedy, "your principal" runs it -- a known frozen-record inaccuracy.)
+
 DEFAULTS (ledger row 1471 sub-item 4c, binding at this build): `--depth` defaults to 0
 (no-redelegate ALWAYS on a leaf brief) -- depth-N is an explicit, named opt-in at this verb's own
 surface, never a default. `--independent-verification` sets `delegation_purpose =
