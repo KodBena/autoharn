@@ -2817,9 +2817,21 @@ connection did not exit even after 120s of waiting past SIGTERM (vs. ~0.2s for a
 hub, with or without a PRIOR, already-disconnected SSE probe -- that half of the incident
 report's own suspect list, the watcher/keepalive LOOP, was cleared: both `hub.connect`'s
 lazy-start and `hub.disconnect`'s empty-subscribers stop already ran correctly and left no
-lingering watcher task in every variant tried). This sentinel fix makes every ALREADY-CONNECTED
-SSE stream react to shutdown promptly, matching spec §1 item 5's own stated intent, rather than
-depending on uvicorn's generic (and here, unbounded) connection-close machinery at all.
+lingering watcher task in every variant tried). This sentinel fix wakes every subscriber PARKED
+ON ITS QUEUE -- every `_stream()` generator blocked in a `queue.get`-shaped read waiting for the
+next event -- matching spec §1 item 5's own stated intent for that case, rather than depending on
+uvicorn's generic (and here, unbounded) connection-close machinery at all. This is narrower than
+"every already-connected stream": a subscriber whose request task is instead blocked further down
+the stack inside uvicorn's own `flow.drain()` (a stalled or slow reader on the other end of the
+TCP connection, or a closed TCP receive window, backing up the ASGI `send()` this generator's own
+`yield` is suspended in) is NOT parked on the queue and so never observes this `put_nowait` --
+`queue.put_nowait` reaches a task waiting to receive FROM the queue; it cannot reach one already
+past that point and stuck writing TO the socket. A backpressure-blocked writer is instead bounded
+by `_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S`'s finite backstop -- an honest residue, alongside the
+separately-disclosed pre-registration-race residue below. (Waking a `flow.drain`-blocked task
+cleanly is not pursued here: the case is already bounded by the backstop, and the plumbing to
+reach into uvicorn's own flow-control internals is not worth the complexity for a bounded gap.)
+
 RESIDUAL, DISCLOSED (fresh-context review finding): a connection whose handler is suspended
 inside `_SseHub.connect()`'s own one `await` (the immediate catch-up poll, BEFORE `queue` is
 added to `hub.subscribers`) at the exact instant the broadcast below runs is NOT yet a
@@ -3000,11 +3012,43 @@ suspenders on top of that: stock `uvicorn.Config(...)` defaults `timeout_gracefu
 timeout=...)` uvicorn's own `Server.shutdown` runs -- meaning ANY future long-lived connection
 class this service ever grows (not just SSE, and not just a case this file's own code can
 foresee) would reproduce the exact same indefinite-hang hazard the SSE stream did, with no floor
-under it at all. Bounding it here, finite, means the WORST case is now "uvicorn force-cancels
-remaining tasks after this many seconds", never "forever, only `--force-kill` gets you out."
+under it at all. Bounding it here, finite, means the WORST case at THIS layer is now "uvicorn
+force-cancels remaining tasks after this many seconds", never "forever, only `--force-kill` gets
+you out" -- but this layer is the SECOND of two, not the operator's actual bound; read both
+before trusting the number:
+
+THE LAYERED TIMEOUT STORY, honestly stated:
+
+(a) THE OPERATOR BOUND, and the one that actually fires first in practice: `libexec/
+autoharn-service`'s `restart` verb (`_DEFAULT_DRAIN_TIMEOUT_S = 30.0`, `--drain-timeout`
+overridable, no upper bound) polls the OS pid for exit and, on timeout, refuses to escalate
+unasked -- only an explicit `--force-kill` re-run sends `SIGKILL`. This is the normal path: an
+operator waiting past their own drain window chooses, explicitly, to either wait longer or force
+the issue. This in-process constant is NOT that bound and does not replace it -- it fires INSIDE
+the child process, on a completely separate clock, and by construction (`+ 5.0` margin) is sized
+to still be running when `restart`'s own default 30s window closes, so the OPERATOR's own refusal
+is what an operator watching a stuck restart actually sees first, not this backstop.
+
+(b) THIS BACKSTOP is last-resort, reached only if an operator's own verb window has ALREADY
+closed and they chose to keep waiting anyway (or set `--drain-timeout` past `PSQL_EXEC_TIMEOUT_S
++ 5.0`) rather than force-kill. It is not a true worst-case bound under saturation: `_psql`'s own
+`_KERNEL_CALL_SEMAPHORE` (`MAX_INFLIGHT_KERNEL_CALLS = 24`) gates kernel calls, but a plain-`def`
+handler is dispatched to Starlette's shared ASGI threadpool BEFORE it ever reaches that gate --
+and anyio's `to_thread.run_sync` queues on its own `CapacityLimiter` (default 40 tokens) at THAT
+point, ahead of and independent of the 24-slot kernel-call admission bound this file otherwise
+relies on. A request queued in the threadpool dispatch when this backstop fires has not yet
+started its own `PSQL_EXEC_TIMEOUT_S`-bounded work at all; this constant's derivation assumes the
+task is already running its bounded psql phase, which is not guaranteed under threadpool
+saturation. The accepted trade, stated plainly: this backstop can force-cancel a queued-but-
+legitimate request in that saturated case, and that is judged acceptable against the alternative
+it replaces -- the witnessed, reproduced-live, genuinely UNBOUNDED hang (row 554) that existed
+before this fix, which had no floor at all. A finite bound with a disclosed, narrow overclaim
+residue is still strictly better than no bound.
+
 Sized at `PSQL_EXEC_TIMEOUT_S` (the longest a single, genuinely-slow ordinary request's own psql
-call is ever allowed to run) plus a small margin -- long enough that a real in-flight write
-still gets its full drain, short enough to be a meaningfully finite floor rather than a
+call is ever allowed to run, once it IS running) plus a small margin -- long enough that a real
+in-flight write still gets its full drain in the common (non-saturated) case, short enough to be
+a meaningfully finite floor rather than a
 nominal one that never actually bites in practice."""
 
 
@@ -3046,11 +3090,16 @@ class _BoundaryUvicornServer(uvicorn.Server):
         hand for some other purpose should degrade to "nothing to broadcast to", never an
         `AttributeError` crash mid-shutdown.
 
-        Covers every ALREADY-REGISTERED subscriber -- see `_SSE_SHUTDOWN_SENTINEL`'s own
-        docstring, "RESIDUAL, DISCLOSED", for the one connection state this broadcast cannot
-        reach (a handler still inside `_SseHub.connect()`'s own pre-registration poll at this
-        exact instant) and why `_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S` below is the deliberate
-        backstop for that narrow, bounded gap rather than a second broadcast pass here."""
+        Wakes every subscriber PARKED ON ITS QUEUE (every ALREADY-REGISTERED subscriber whose
+        `_stream()` generator is blocked in the queue read this `put_nowait` targets) -- see
+        `_SSE_SHUTDOWN_SENTINEL`'s own docstring for the two connection states this broadcast
+        cannot reach, both disclosed there: a subscriber whose request task is instead blocked in
+        uvicorn's own `flow.drain()` (a stalled/slow reader, backpressure-blocked writer) never
+        observes this `put_nowait` and is bounded by the backstop instead; and a handler still
+        inside `_SseHub.connect()`'s own pre-registration poll at this exact instant ("RESIDUAL,
+        DISCLOSED" there) is not yet a subscriber at all. `_UVICORN_GRACEFUL_SHUTDOWN_TIMEOUT_S`
+        below is the deliberate backstop for both narrow, bounded gaps rather than a second
+        broadcast pass here."""
         sse_hubs: dict[str, "_SseHub"] = getattr(self.config.app.state, "sse_hubs", {})
         for hub in sse_hubs.values():
             for queue in list(hub.subscribers):

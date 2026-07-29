@@ -88,7 +88,11 @@ stated honestly: LISTEN/NOTIFY push (future delta, named slot); production CORS 
 this spec's problem, restated as unowned); the panel's client-side consumption
 (theirs).
 
-## Post-build note (ledger row 554, hub-shutdown-drain-hang — honest divergence disclosure)
+## Amendments (dated; Fable-authored; each names its trigger)
+
+**A1 (2026-07-29) — hub-shutdown-drain-hang, honest divergence disclosure.** Trigger: the
+witnessed 06:52 drain hang (ledger row 554) — a live SSE connection open at SIGTERM blocked an
+entire drained `service restart` indefinitely.
 
 This spec's own §1 item 5 and §2 say the SSE build "adds NOTHING to the restart path" / "no
 change to `service restart`". A later build (work item hub-shutdown-drain-hang, row 554)
