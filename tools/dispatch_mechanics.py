@@ -29,6 +29,31 @@ boundary, still through kernel.ledger_write, still s43-gated); (3) emits the sta
 the child session's own environment -- `export AUTOHARN_MINTED_PRINCIPAL=<id>` and `export
 LED_ACTOR=<name>` -- ready to paste into (or `eval`'d by) a dispatch preamble.
 
+POSTURE (work item 605): a freshly minted delegate holds no role and no `acts-for` edge --
+only the `dispatched-by` edge step (2) writes, with no scope caveat (this CLI has no `--scope`;
+`--depth 0` bounds only further re-delegation, not what the delegate itself may do). On an
+ordinarily-scaffolded world this leaves it refused on all six s60 authority-bearing classes
+(kernel/lineage/s60-entitlement-enforcement.sql) -- but the MECHANISM is not what it first
+looks like. Five of those six are refused by conjunct (a): the birth sequence's default map
+requires role `authority` and the delegate holds none -- a per-world, RECONFIGURABLE gate, not
+a property of `dispatched-by` itself. The sixth, `delegation_lifecycle`, has no such role gate
+and rests on conjunct (b) alone. Pre-s64, conjunct (b) walks `acts-for` only, so a bare
+`dispatched-by` edge conveys no reach there either. Once s64 lands
+(kernel/lineage/s64-principal-stamps-delegation-conditions.sql, Element 7), conjunct (b) walks
+`dispatched-by` EXACTLY like `acts-for`: unscoped, it is a full, monotone SUBSET pass-through of
+whatever the DISPATCHER itself can reach (design/FABLE-PRINCIPAL-STAMPS-SPEC.md §2.2,
+"grant-subset monotonicity" -- default is the whole set, never zero by construction).
+WITNESSED against a scratch s64-chained world (this build's own probe, not a committed
+fixture): binding a plain dispatched-by delegate the dispatcher's OWN role was, alone, enough
+for `principal_registered` to be ACCEPTED -- conjunct (b) did not refuse it. So today's refusal
+rests on this world's role-gate configuration, not on `dispatched-by` withholding authority by
+construction. More authority: the DISPATCHER relates the delegate in (it cannot relate itself,
+that act is itself authority-bearing): `./led principal relate <delegate-name> acts-for
+<delegator-name>`. No flag here scopes an edge DOWN -- worth a follow-up item before trusting
+"minted = authority-less" past these caveats. (Separately, unedited:
+kernel/lineage/s60-entitlement-enforcement.sql's own conjunct-b text names a self-directed
+remedy, "your principal" runs it -- a known frozen-record inaccuracy, next kernel batch.)
+
 DEFAULTS (ledger row 1471 sub-item 4c, binding at this build): `--depth` defaults to 0
 (no-redelegate ALWAYS on a leaf brief) -- depth-N is an explicit, named opt-in at this verb's own
 surface, never a default. `--independent-verification` sets `delegation_purpose =
