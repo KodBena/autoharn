@@ -567,6 +567,16 @@ unchanged, byte-identical. `"enforce"` refuses it with typed HTTP 403
 `anonymous_write_refused` — the maintainer flips this at rollout, once the CLI forwarding below
 is demonstrably working.
 
+**Per-deployment override** (work item identity-enforcement-split-flip, ledger row 619). A
+`[deployments.NAME]` table may ALSO carry its own `identity_enforcement` key, overriding the
+top-level default for that deployment only — a two-speed rollout (one deployment enforcing while
+the rest stay on grace) needs no second hub, and no deployment need flip on the same day. Absent
+at BOTH the top level and inside `[deployments.NAME]` = `"grace"`, exactly today's behavior,
+byte-identical. An invalid value at either location refuses loudly at config validation, naming
+both valid values and both key locations. `GET /d/{deployment}/health`'s own
+`identity_enforcement` field always reports THAT deployment's resolved, effective posture (its
+own override if it has one, else the hub-wide default) — never the hub-wide default alone.
+
 **CLI forwarding** (`serving/boundary_cli_client.py`): every rebased shim call reads the vendor
 stamp back out of its OWN `PGOPTIONS` env var (the exact string `hooks/stamp_intercept.py`
 already exports onto a wired Bash command) and the minted-principal id out of

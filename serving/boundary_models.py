@@ -106,16 +106,19 @@ class HealthResponse(BaseModel):
                     "forecloses a future multi-principal trust tier, it is simply not built yet).")
     identity_enforcement: str = Field(
         # No module-level default (unlike authn_mode, a fixed process-wide constant): this value
-        # varies PER DEPLOYMENT (grace/enforce, operator-configured), so `health()` below always
-        # supplies it explicitly from the live `_identity_enforcement_posture` -- a default here
-        # importing boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT would also reopen an
-        # import cycle (boundary_multiplex_config -> boundary_diagnostic_log -> boundary_models),
-        # witnessed live at import time, not merely theorized.
+        # varies PER DEPLOYMENT (grace/enforce, operator-configured -- either the hub-wide default
+        # or a per-deployment [deployments.NAME] override, row 619), so `health()` below always
+        # supplies it explicitly from the live `cfg.identity_enforcement` (this deployment's own
+        # `BoundaryConfig` attribute) -- a default here importing
+        # boundary_multiplex_config.DEFAULT_IDENTITY_ENFORCEMENT would also reopen an import cycle
+        # (boundary_multiplex_config -> boundary_diagnostic_log -> boundary_models), witnessed
+        # live at import time, not merely theorized.
         description="row 173/row 318's promised field, ADDITIVE: this deployment's EFFECTIVE "
                     "identity_enforcement posture ('grace' or 'enforce', design/"
-                    "FABLE-DISPATCH-MECHANICS-SPEC.md §3), read from the SAME multiplex-TOML-"
-                    "configured value the write path enforces against (_identity_enforcement_"
-                    "posture, set once at startup) -- never a second, drifting copy. Distinct from "
+                    "FABLE-DISPATCH-MECHANICS-SPEC.md §3), read from the SAME resolved value "
+                    "(this deployment's own BoundaryConfig.identity_enforcement, row 619's "
+                    "per-deployment override already folded in) the write path enforces against "
+                    "-- never a second, drifting copy. Distinct from "
                     "authn_mode (above): authn_mode names the AUTHENTICATION TIER this build "
                     "supports at all ('single-operator', v1's only value, unchanged by config); "
                     "identity_enforcement names whether THIS deployment currently REFUSES an "
