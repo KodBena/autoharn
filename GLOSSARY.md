@@ -13,7 +13,17 @@
      touch either (single-commission scope, no fresh-context B dispatched); flagged here rather
      than silently re-widening the existing waiver's stated scope. Still owed to the coordinator's
      batch. Removal condition unchanged: strike both markers and run the real loop next time this
-     file is touched for content. -->
+     file is touched for content.
+
+     ADDITIONAL TOUCH (work item identity-enforcement-split-flip, autoharn3 ledger row 619/638,
+     2026-07-29): the "minted delegate" entry's `identity_enforcement` clauses were stale against
+     that round's own commit (572354f6) -- the module-state name it cited was deleted and the
+     "NOT surfaced on /health" claim was reversed by that same commit -- corrected in place to the
+     current per-deployment-resolved/BoundaryConfig/health-reports-effective-posture truth,
+     touching only those clauses. No A:B:C loop run for this touch either (single-clause factual
+     correction, stack-review-flagged); still owed to the coordinator's batch. Removal condition
+     unchanged: strike all markers and run the real loop next time this file is touched for
+     content. -->
 
 # Glossary — autoharn's coined vocabulary
 
@@ -806,15 +816,16 @@ run on every boundary HTTP request — **minted** (a `dispatch`ed sub-agent's st
 header `x-autoharn-minted-principal` — this case governs when both are present), **vendor**
 (an interactive operator session's own vendor stamp — `x-autoharn-vendor-
 session|agent|ts|hmac|invocation` — with no minted principal), or **anonymous** (neither).
-`grace`/`enforce` (`boundary-multiplex.toml`'s per-deployment `identity_enforcement` key,
-default `grace`) governs whether an anonymous write is accepted or 403-refused
-(`AnonymousWriteRefused`) — held as module state (`_identity_enforcement_posture`,
-`serving/boundary_service.py`), consulted at write time. **Correction to the 2026-07-28 GxP
-survey's own §2 claim:** this posture is NOT surfaced on `/health` today — `HealthResponse.
-authn_mode` (`serving/boundary_models.py`) is a SEPARATE, unconditionally hardcoded constant
-(`AUTHN_MODE = "single-operator"`) that never reflects `identity_enforcement`; a panel cannot
-today read a deployment's grace/enforce posture from any served response, a disclosed gap, not
-a built affordance. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md)
+`grace`/`enforce` (`boundary-multiplex.toml`'s `identity_enforcement` key, top-level hub default,
+optionally overridden per-deployment inside a `[deployments.NAME]` table) governs whether an
+anonymous write is accepted or 403-refused (`AnonymousWriteRefused`) — resolved once at config
+load through the one constructing home for the value, `IdentityEnforcementPosture.parse()`
+(`serving/boundary_multiplex_config.py`), into each deployment's own
+`BoundaryConfig.identity_enforcement` (`serving/boundary_service.py`), consulted per request at
+write time. `HealthResponse.identity_enforcement` (`serving/boundary_models.py`, distinct from
+the separate, unconditionally hardcoded `authn_mode` constant) reports each deployment's own
+EFFECTIVE posture — a panel CAN read a deployment's grace/enforce posture straight off that
+deployment's own `/health` response. Source: [design/FABLE-DISPATCH-MECHANICS-SPEC.md](design/FABLE-DISPATCH-MECHANICS-SPEC.md)
 §2–3 (header names, `IdentityHeaderInvalid`/`AnonymousWriteRefused` refusal codes);
 `serving/boundary_multiplex_config.py`; `serving/boundary_service.py`.
 
