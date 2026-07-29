@@ -184,7 +184,16 @@ CHAIN = [
     "s69-role-coherence-refusals.sql",
     "s70-scope-binding.sql",
     "s71-row-level-scope-policies.sql",
+    "s72-stamp-binding-conjunct.sql",
 ]
+# s72 (kernel/lineage/s72-stamp-binding-conjunct.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
+# FLOW-SPEC.md sec5 item 5, ledger rows 601/639) extends this SAME gate's scratch CHAIN and ships
+# ONE new kind-scoped column (stamp_binding_agent, an IDENTITY field mandatory on BOTH a fresh
+# assertion and a retraction of the new principal_stamp_bound kind -- s41 D-1's identity-field
+# shape, unlike s70's optional value-field siblings), plus widens entitlement_act_class_kind_
+# shape (a third licensed kind, stamp_binding_class_configured) and principal_subject_kind_shape/
+# principal_binding_active_kind_shape (one more kind each, principal_stamp_bound) -- both
+# already-tracked MANIFEST rows below, re-issued wider, never a second competing row.
 # s69 (kernel/lineage/s69-role-coherence-refusals.sql) extends this SAME gate's scratch CHAIN and
 # ships ZERO new columns/kinds/CHECKs (its own HISTORY section: "zero columns, zero kinds, zero
 # views added or altered") -- four re-issued trigger BODIES, invisible to this gate's constraint
@@ -524,17 +533,18 @@ MANIFEST = [
          kinds=("principal_registered", "principal_suspended", "principal_revoked",
                 "principal_standing_declared",
                 "principal_relation_asserted", "principal_role_bound", "principal_key_bound",
-                "principal_competence_granted", "principal_scope_bound"),
+                "principal_competence_granted", "principal_scope_bound", "principal_stamp_bound"),
          arity="two-way", mechanism="CHECK", constraint="principal_subject_kind_shape",
          defining_delta="s40-principal-identity-events.sql "
-                         "(kinds widened to nine by s70-scope-binding.sql)",
+                         "(kinds widened to nine by s70-scope-binding.sql, to ten by "
+                         "s72-stamp-binding-conjunct.sql)",
          reason="the principal an identity/binding event is ABOUT (distinct from actor) -- "
                 "mandatory on every principal_* kind, forbidden elsewhere; two-way is safe "
                 "because every licensed kind is born in the same family (vacuous ADD CONSTRAINT "
-                "validation). ONE constraint, re-issued wider by s41 then s70 (never patched by "
-                "a second constraint) -- this row tracks the re-issued, NINE-kind head shape "
-                "(principal_scope_bound joins, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-"
-                "FLOW-SPEC.md sec1b)."),
+                "validation). ONE constraint, re-issued wider by s41, then s70, then s72 (never "
+                "patched by a second constraint) -- this row tracks the re-issued, TEN-kind head "
+                "shape (principal_stamp_bound joins, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-"
+                "FLOW-SPEC.md sec5 item 5)."),
     dict(column="principal_purpose", kinds=("principal_registered",),
          arity="two-way", mechanism="CHECK", constraint="principal_purpose_kind_shape",
          defining_delta="s40-principal-identity-events.sql",
@@ -553,12 +563,12 @@ MANIFEST = [
          kinds=("principal_relation_asserted", "principal_role_bound", "principal_key_bound",
                 "principal_competence_granted",
                 "principal_standing_declared", "principal_suspended",
-                "principal_scope_bound"),
+                "principal_scope_bound", "principal_stamp_bound"),
          arity="two-way", mechanism="CHECK", constraint="principal_binding_active_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql "
                          "(kinds widened to six by s45-standing-lifecycle.sql, to seven by "
-                         "s70-scope-binding.sql)",
-         reason="the identity/value discriminator, now of SEVEN kinds (true = assertion, "
+                         "s70-scope-binding.sql, to eight by s72-stamp-binding-conjunct.sql)",
+         reason="the identity/value discriminator, now of EIGHT kinds (true = assertion, "
                 "false = retraction restating identity fields only) -- mandatory via this CHECK "
                 "on exactly those kinds, never a column-level NOT NULL (basis C10); vacuous "
                 "validation, each kind's licensing born in the delta that licenses it. s45 "
@@ -567,12 +577,16 @@ MANIFEST = [
                 "principal_standing_declared (false = an unbind, restating BOTH principal_"
                 "db_role and principal_subject) and principal_suspended (false = a lift, "
                 "restating principal_subject); s70 (design/FABLE-ACCESS-CONTROL-AND-INFORMATION-"
-                "FLOW-SPEC.md sec1b) widens six to seven, adding principal_scope_bound -- ONE "
-                "re-issue of this same CHECK each time, never a second patching constraint "
-                "(ADR-0012 P1, the principal_subject_kind_shape precedent). principal_revoked "
-                "is DELIBERATELY ABSENT -- that absence IS s45's ratified 'terminal by type'. "
-                "Its inactive-needs-supersedes and mandatory-iff-active companions carry no "
-                "kind test (value CHECKs, out of scope by the classifier's first test)."),
+                "FLOW-SPEC.md sec1b) widens six to seven, adding principal_scope_bound; s72 "
+                "(design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec5 item 5) widens "
+                "seven to eight, adding principal_stamp_bound (false = a retraction, restating "
+                "BOTH principal_subject and stamp_binding_agent -- both identity fields, unlike "
+                "s70's optional value-field siblings) -- ONE re-issue of this same CHECK each "
+                "time, never a second patching constraint (ADR-0012 P1, the principal_subject_"
+                "kind_shape precedent). principal_revoked is DELIBERATELY ABSENT -- that absence "
+                "IS s45's ratified 'terminal by type'. Its inactive-needs-supersedes and "
+                "mandatory-iff-active companions carry no kind test (value CHECKs, out of scope "
+                "by the classifier's first test)."),
     dict(column="principal_object", kinds=("principal_relation_asserted",),
          arity="two-way", mechanism="CHECK", constraint="principal_object_kind_shape",
          defining_delta="s41-principal-bindings-and-relations.sql",
@@ -866,18 +880,36 @@ MANIFEST.append(dict(column="missive_regards", kinds=("missive_disposed",), arit
                             "ledger(id) for structural existence; the KIND correlation (must be "
                             "missive_received) is validate_missive_regards' own cross-row check, "
                             "AMENDMENT 1's dedicated trigger."))
-MANIFEST.append(dict(column="entitlement_act_class", kinds=("entitlement_class_configured",),
+MANIFEST.append(dict(column="entitlement_act_class",
+                     kinds=("entitlement_class_configured", "stamp_binding_class_configured"),
                      arity="two-way", mechanism="CHECK",
                      constraint="entitlement_act_class_kind_shape",
-                     defining_delta="s60-entitlement-enforcement.sql",
-                     reason="identity field, mandatory on the one kind that carries it, "
+                     defining_delta="s60-entitlement-enforcement.sql "
+                                     "(kinds widened to two by s72-stamp-binding-conjunct.sql)",
+                     reason="identity field, mandatory on either kind that carries it, "
                             "forbidden elsewhere. Free text, no enum -- the kernel-computed "
                             "vocabulary of act-class strings a configuration row can USEFULLY "
                             "match lives in entitlement_act_class_of(), not a value CHECK (the "
-                            "s36 decision_grade free-text-token precedent, one axis over)."))
+                            "s36 decision_grade free-text-token precedent, one axis over). s72 "
+                            "(design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md sec5 item "
+                            "5) widens the licensed set to two kinds -- REUSED across two "
+                            "configuration axes ('this class requires this role' and 'this class "
+                            "requires a bound stamp'), never a second 'which act class' column "
+                            "(ADR-0012 P1)."))
 # s62 (kernel/lineage/s62-delegation-lifecycle-gating.sql, row 1385) extends this CHAIN
 # (s59's own "view/function-only, zero MANIFEST change" precedent): it CREATE-OR-REPLACEs
 # entitlement_act_class_of/validate_entitlement, zero new columns/kinds/CHECKs -- no MANIFEST row.
+MANIFEST.append(dict(column="stamp_binding_agent", kinds=("principal_stamp_bound",),
+                     arity="two-way", mechanism="CHECK",
+                     constraint="stamp_binding_agent_kind_shape",
+                     defining_delta="s72-stamp-binding-conjunct.sql",
+                     reason="the bound stamp_agent STRING (s17's own hook-injected invocation-"
+                            "identity value) -- an IDENTITY field (s41 D-1), mandatory on the "
+                            "one kind that carries it, BOTH on a fresh assertion and a "
+                            "retraction (unlike s70's scope_surfaces/scope_exclusions/scope_"
+                            "disclosure_mode, which are optional VALUE fields even when "
+                            "eligible), forbidden elsewhere -- two-way is safe because the kind "
+                            "is born in this same delta (vacuous ADD CONSTRAINT validation)."))
 MANIFEST_BY_COLUMN = {row["column"]: row for row in MANIFEST}
 assert len(MANIFEST_BY_COLUMN) == len(MANIFEST), "duplicate column in MANIFEST -- SSOT violated"
 
