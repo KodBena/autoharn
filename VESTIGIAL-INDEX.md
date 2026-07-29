@@ -716,3 +716,16 @@ wrong: `design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md` (cited pervasive
   `design/ORCH-WATCHDOG-LIVENESS.md` (cited by `tools/watchdog_liveness.py`). Zero live citations
   outside plain-text mentions (not markdown links) in two other design docs and a migration
   manifest.
+- **`design/FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md`** →
+  `vestigial_documentation/design/FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md` (2026-07-29 sweep,
+  ledger rows 971/975). First-round access-control consult, superseded the next day by the
+  still-living `design/FABLE-CONSULT-ACCESS-CONTROL-DEPTH-2026-07-22.md`; its one recommendation
+  (commission the R1 audit) was executed as the still-living `design/AUDIT-AC-IA-POSTURE-2026-07-21.md`,
+  and the whole arc was ratified into `design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md`
+  (ledger row 639). Zero inbound links from live surfaces at move time.
+- **`design/SPEC-DOC-ATTESTATION-2.commission.json`**, **`.conformance.txt`**, **`.report.json`** →
+  `vestigial_documentation/design/` (2026-07-29 sweep, ledger rows 971/975). The succession-drill
+  ceremony triplet for ORCH-SPEC-DOC-ATTESTATION-2: commission, conformance verdict ("CONFORMANT:
+  every item WITNESSED or REFUSED_AS_EXPECTED"), and report (all seven verdicts WITNESSED). The
+  drill completed 2026-07-15; the spec it exercised, `design/ORCH-SPEC-DOC-ATTESTATION-2.md`,
+  remains live (cited by `gates/doc_attestation_presence.py`). Zero inbound links at move time.

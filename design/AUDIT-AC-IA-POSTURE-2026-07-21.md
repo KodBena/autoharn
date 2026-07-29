@@ -1,3 +1,6 @@
+<!-- doc-attest-exempt: point-in-time dated audit record (2026-07-21); the only post-audit
+     touch is a mechanical provenance-link repoint (2026-07-29, ledger rows 975/977) after
+     its link target moved to vestigial_documentation/ -- no content changed. -->
 # AUDIT-AC-IA-POSTURE-2026-07-21 — NIST SP 800-53 Rev 5.2.0 AC and IA families, control-by-control
 
 
@@ -6,7 +9,7 @@ Audience: maintainer, orchestrator, and any future auditor picking up the NIST S
 registry thread for the AC/IA families specifically.
 
 **Provenance.** Commissioned by the maintainer, verbatim: *"Please start the audit (R1) that
-the consult recommended."* R1 is [design/FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md](FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md)
+the consult recommended."* R1 is [design/FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md, since archived](../vestigial_documentation/design/FABLE-CONSULT-ACCESS-CONTROL-2026-07-21.md)
 §5 ("commission the registry-rooted NIST 800-53 completeness audit for the AC and IA families
 now"), itself answering [law/STANDARDS-REGISTRY.md](../law/STANDARDS-REGISTRY.md)'s pending
 line and [ADR-0000](../law/adr/0000-the-alpha-and-the-omega-type-driven-design.md) Revisit #4's
