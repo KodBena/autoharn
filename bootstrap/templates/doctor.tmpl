@@ -176,7 +176,7 @@ def check_lineage(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
     return _line("lineage high-water/epoch", PASS, f"chain_high_water.max_id={max_id}{epoch_detail}"), PASS
 
 
-def _read_declared_owner_access_split(path: Path) -> bool | None:
+def _read_declared_owner_access_split(path: Path) -> tuple[bool | None, bool]:
     """Reads the OPTIONAL `owner_access_split` key straight out of deployment.json's raw JSON,
     deliberately bypassing `deployment_record.DeploymentRecord` -- that module's own
     `load_deployment` accepts-and-ignores any key it does not know about (its docstring's own
@@ -186,18 +186,30 @@ def _read_declared_owner_access_split(path: Path) -> bool | None:
     check's own docstring) is expected to have `bootstrap/new-project.sh` write
     `"owner_access_split": true` into deployment.json at birth for every world scaffolded to
     connect as a non-owning, non-superuser identity by construction. No world scaffolded before
-    that change carries the key -- returns None for those (absent key, unreadable file,
-    unparseable JSON, or a non-bool value), True/False only when the key is present and a JSON
-    boolean. Deliberately NOT added to `DeploymentRecord`/`_REQUIRED_FIELDS` here: that is the
-    future scaffold change's own edit to make, not this read-only check's."""
+    that change carries the key.
+
+    Returns `(declared, malformed)`: `declared` is True/False when the key is present and a JSON
+    boolean, else None (absent key, unreadable file, unparseable JSON, non-object JSON, OR a
+    present-but-non-boolean value -- e.g. `"owner_access_split": "yes"`). `malformed` is True
+    ONLY for that last case (key present, not a boolean) -- review fix on commit a02ef0d: the
+    first cut folded a malformed present value into the same "no declaration" wording an absent
+    key gets, losing the distinction between "this world never addressed the question" and "this
+    world's deployment.json has a broken value for it" -- the caller renders the two differently
+    (still both SKIP; the words differ). Deliberately NOT added to
+    `DeploymentRecord`/`_REQUIRED_FIELDS` here: that is the future scaffold change's own edit to
+    make, not this read-only check's."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None
+        return None, False
     if not isinstance(raw, dict):
-        return None
-    val = raw.get("owner_access_split")
-    return val if isinstance(val, bool) else None
+        return None, False
+    if "owner_access_split" not in raw:
+        return None, False
+    val = raw["owner_access_split"]
+    if isinstance(val, bool):
+        return val, False
+    return None, True
 
 
 def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[str, str]:
@@ -279,32 +291,55 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
               # 'MEMBER', which ignores the NOINHERIT attribute) -- it reads true for the owner
               # itself, any INHERITing (in)direct member, and false for an unrelated role,
               # matching the three polarities verified live above plus the direct-owner case.
+              #
+              # MEMBER, queried SEPARATELY from USAGE (re-review MINOR, confirmed defensible as a
+              # disclosed design call, not a bug in the verdict): a NOINHERIT member (MEMBER=true,
+              # USAGE=false) does NOT currently hold the owner's privileges -- ordinary catalog
+              # reads/writes go through its own grants, same as an unrelated role -- but it is one
+              # `SET ROLE` away from them with NO re-authentication (unlike an unrelated role,
+              # which cannot SET ROLE to the owner at all). The verdict (owns_schema, USAGE-based)
+              # is UNCHANGED by this; only the rendered fact-string now names this middle case
+              # honestly instead of collapsing it into "genuinely unrelated".
               "SELECT current_user, "
               "(SELECT rolsuper FROM pg_roles WHERE rolname = current_user), "
               "COALESCE((SELECT pg_get_userbyid(nspowner) FROM pg_namespace "
               "WHERE nspname = :'schema'), '(no such schema)'), "
               "COALESCE((SELECT pg_has_role(current_user, nspowner, 'USAGE') FROM pg_namespace "
+              "WHERE nspname = :'schema'), false), "
+              "COALESCE((SELECT pg_has_role(current_user, nspowner, 'MEMBER') FROM pg_namespace "
               "WHERE nspname = :'schema'), false);",
               {"schema": dep.schema})
     if r.returncode != 0:
         return _line("owner/access split", FAIL, _first_line(r.stderr) or f"exit {r.returncode}"), FAIL
     parts = r.stdout.strip().split("|")
-    if len(parts) != 4:
+    if len(parts) != 5:
         return _line("owner/access split", FAIL, f"unexpected query output: {r.stdout!r}"), FAIL
-    connecting_role, is_super_raw, owner, has_owner_privs_raw = (p.strip() for p in parts)
+    connecting_role, is_super_raw, owner, has_usage_raw, has_member_raw = (p.strip() for p in parts)
     is_super = is_super_raw == "t"
-    owns_schema = has_owner_privs_raw == "t"
+    has_usage = has_usage_raw == "t"
+    has_member = has_member_raw == "t"
+    owns_schema = has_usage
     split_in_force = (not is_super) and (not owns_schema)
-    if not owns_schema:
-        own_detail = "a genuinely unrelated role"
+    # Re-review fix, item 2: pg_has_role is ALWAYS true for a superuser regardless of any actual
+    # grant/membership (superuser bypasses the role graph entirely) -- attributing the bypass to
+    # "role membership" in that case would misname the mechanism (there may be no membership at
+    # all). Superuser status is checked FIRST and wins the attribution; membership/ownership
+    # wording only applies to a non-superuser connection.
+    if is_super:
+        own_detail = "irrelevant -- superuser bypasses ownership/ACL checks outright"
     elif owner == connecting_role:
         own_detail = "same role -- owns it"
-    else:
+    elif has_usage:
         own_detail = f"holds owner '{owner}''s privileges via role membership (pg_has_role USAGE)"
+    elif has_member:
+        own_detail = (f"a member of owner '{owner}' without INHERIT -- privileges reachable via "
+                      f"SET ROLE, not currently held")
+    else:
+        own_detail = "a genuinely unrelated role"
     fact = (f"connecting as '{connecting_role}' ({'superuser' if is_super else 'not superuser'}), "
             f"schema '{dep.schema}' owned by '{owner}' ({own_detail})")
 
-    declared = _read_declared_owner_access_split(DEPLOYMENT_PATH)
+    declared, malformed = _read_declared_owner_access_split(DEPLOYMENT_PATH)
     if declared is True:
         if split_in_force:
             return _line("owner/access split", PASS,
@@ -317,6 +352,10 @@ def check_owner_access_split(dep: deployment_record.DeploymentRecord) -> tuple[s
     if declared is False:
         decl_clause = ("deployment.json explicitly declares owner_access_split=false (this world "
                        "does not claim the split is enforced)")
+    elif malformed:
+        decl_clause = ("deployment.json carries a malformed owner_access_split declaration "
+                       "(non-boolean) -- not honored as a declaration either way, treated the "
+                       "same as absent")
     else:
         decl_clause = ("no owner_access_split declaration in deployment.json (every world "
                        "scaffolded before the S2b scaffold change writes this field at birth)")
