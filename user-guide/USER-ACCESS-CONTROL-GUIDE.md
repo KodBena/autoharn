@@ -1,25 +1,3 @@
-<!-- doc-attest-exempt: work item docs-ac-batch-sweep (2026-07-29) -- adds the currency note
-     near the top, the corrections in place at §4's "served GET surface is unauthenticated"
-     paragraph and §5 item 4, and the new §7 ("The general medium: scope binding, scope
-     filtering, and the entitlement floor") documenting the access-control batch (merges
-     5c580ef0/3ca32ca3/94b4839d/e1b02f4d/dc643dfb), with a live witness run against a
-     throwaway scratch world. This build's own commissioning brief explicitly forbids
-     self-attestation: the coordinator runs the +A:B:C loop after this build lands, in a blind
-     round this build's own context must not poison. No A:B:C loop claimed for this touch.
-     Removal condition: strike this marker and run the real two-round A:B:C loop the next time
-     this file is touched for content.
-
-     ADDITIONAL TOUCH (work item docs-ac-batch-sweep, addendum round, 2026-07-29): the batch's
-     final delta, s72 (stamp-binding conjunct, merge a218a1b4), merged to main after §7 was
-     first written -- adds a new "s72 -- the stamp-binding conjunct" subsection to §7 (same
-     next-birth-chain posture as s70/s71) and extends the closing "distinction this batch
-     exists to serve" section to name s72's write-side half of the same guarantee. Evidence for
-     s72 is the merged fixture's own banked ALL-GREEN transcript (seen-red/s72-stamp-binding-
-     conjunct/red.txt), cited rather than re-run against a fresh scratch world -- disclosed
-     in-place at that subsection. Same no-self-attestation posture as the touch immediately
-     above. Removal condition unchanged: strike this marker and run the real two-round A:B:C
-     loop the next time this file is touched for content. -->
-
 # Access control in autoharn — delegation, taint, license boundaries, and reviewer read zoning
 
 This page answers one commission (`./autoharn led show 1410` from the main checkout, and its

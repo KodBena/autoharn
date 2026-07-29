@@ -1,11 +1,3 @@
-<!-- doc-attest-exempt: work item docs-ac-batch-sweep (2026-07-29) -- adds one short pointer
-     under the existing "Entitlement enforcement and work gating (s60)" entry, to USER-ACCESS-
-     CONTROL-GUIDE.md §7's new scope-binding material. This build's own commissioning brief
-     explicitly forbids self-attestation: the coordinator runs the +A:B:C loop after this build
-     lands, in a blind round this build's own context must not poison. No A:B:C loop claimed for
-     this touch. Removal condition: strike this marker and run the real two-round A:B:C loop the
-     next time this file is touched for content. -->
-
 # Can I do that? — recipes FAQ for operators
 
 This page is written for an operator of a scaffolded project who wants to know whether the
