@@ -54,6 +54,7 @@ courier	pull missives from each counterpart world's outbound feed and record rec
 service	ensure-running control: status|start|stop|restart the boundary service this world depends on
 fixture-sweep	read-only live re-execution sweep over every gates/fixture_census.py family (autoharn-repo-specific, not scaffolded into worlds)
 dispatch	mint-and-dispatch or close-and-retire a delegate principal for a sub-agent commission (autoharn-repo-specific, not scaffolded into worlds)
+stamp-run	mint an operator/unattended interception stamp and exec a wrapped command carrying it (bare-terminal and cron identity path)
 EOF
 }
 
@@ -68,7 +69,7 @@ _print_help() {
     echo "verbs:"
     _dispatch_table | awk -F'\t' '{printf "  %-20s %s\n", $1, $2}'
     echo
-    echo "The thirteen-verb-plus-service roster above is generated from this dispatcher's own dispatch"
+    echo "The fourteen-verb-plus-service roster above is generated from this dispatcher's own dispatch"
     echo "table -- it cannot drift from what actually runs (design/FABLE-AUTOHARN-UMBRELLA-CLI-"
     echo "SPEC.md §1). For a verb's own full usage, run 'autoharn <verb> --help'."
 }
