@@ -33,6 +33,7 @@ new Python (ledger row 1105): every function signature below carries its return-
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -251,12 +252,24 @@ def spawn_and_wait(world_dir: Path, url: str, port: int, boundary_deployment: st
     argv_child = [py, "-m", "serving.boundary_service", "--config", str(toml_path),
                   "--port", str(port), "--pidfile", str(pidfile)]
     log_fh = open(log_path, "ab")
+    # ROW 481 FIX: PGOPTIONS is the ONLY carrier of app.vendor_* GUCs (boundary_cli_client.py's
+    # own _PGOPTIONS_VENDOR_RE, hooks/stamp_intercept.py) -- if this spawning session's own shell
+    # happens to have PGOPTIONS set (e.g. hand-testing, or a stamped invocation of `autoharn
+    # service start/restart` itself), an inherited Popen env would hand the boundary hub CHILD a
+    # connection-level vendor stamp frozen at spawn instant. Witnessed live: /proc/<hub-pid>/environ
+    # carried app.vendor_ts identical to the hub's own spawn time, so writes arriving WITHOUT their
+    # own vendor headers rode that phantom stamp -- refused as stale once old (rows 462/468), but
+    # briefly VALID (a laundering window) immediately post-restart. Scrubbed unconditionally, not
+    # only when a check finds it set, so the child's environment is structurally clean regardless
+    # of what the parent invocation happened to carry.
+    child_env = dict(os.environ)
+    child_env.pop("PGOPTIONS", None)
     # Detached child (row 1154: no systemd/D-Bus anywhere) -- start_new_session=True is the
     # portable stdlib equivalent of setsid, so this child survives this invocation's own exit;
     # stdout/stderr redirected to a per-world log file, never inherited.
     proc = subprocess.Popen(
         argv_child, cwd=str(AUTOHARN_ROOT), stdin=subprocess.DEVNULL,
-        stdout=log_fh, stderr=log_fh, start_new_session=True,
+        stdout=log_fh, stderr=log_fh, start_new_session=True, env=child_env,
     )
     log_fh.close()
     # BIND-AS-LOCK RACE, STRUCTURAL RESOLUTION (spec §2; round-1 review SEVERE-2 fix): wait for
