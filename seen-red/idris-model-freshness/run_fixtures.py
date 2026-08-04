@@ -16,7 +16,7 @@ Cases:
   warn-lagging-downgrade -- synthetic AS-OF s3 (declared) < synthetic lineage head s5 (actual),
                              but the AS-OF line carries an explicit LAGGING marker -> exit 0
                              (WARN, not a failure) — proves the honest-lag escape hatch works.
-  green-clean             -- REAL file content (design/Autoharn.idr, current bytes) copied
+  green-clean             -- REAL file content (model/Autoharn.idr, current bytes) copied
                              verbatim, paired with a synthetic lineage dir whose head is
                              DELIBERATELY set to match the real file's own declared s32 -- proves
                              the gate's clean path (declared == actual, real elaboration passes)
@@ -43,7 +43,7 @@ os.environ["AUTOHARN_FIXTURE_SANDBOX"] = "1"
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 GATE = REPO / "gates" / "idris_model_freshness.py"
-REAL_IDR = REPO / "design" / "Autoharn.idr"
+REAL_IDR = REPO / "model" / "Autoharn.idr"
 
 
 def run_gate(idr_file: Path, lineage_dir: Path) -> subprocess.CompletedProcess:

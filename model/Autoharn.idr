@@ -433,7 +433,9 @@
 |||   THIS REFRESH (2026-07-15, later) -- supersedes v1 IN PLACE per a fresh-context
 |||     refinement consultation (design/ORCH-IDRIS-REFINEMENT-CONSULT-2026-07-15.md,
 |||     verdict REFINE-AND-LOWER), folding in its checked fragments
-|||     design/RefKernel.idr (R1-R9) and design/RefUniverse.idr (kind-universe pattern).
+|||     design/RefKernel.idr (R1-R9) and design/RefUniverse.idr (kind-universe pattern) --
+|||     both discarded 2026-07-29 (maintainer ruling, ledger row 982) once their fragments had
+|||     folded in here; git history preserves both files.
 |||     What changed: (1) R7 -- v1 transcribed the pre-s31 "closes"-CTE blind spot as the
 |||     kernel's live behavior; kernel/lineage/s31-supersession-uniform-retraction.sql
 |||     (ratified the same day) fixed that blind spot in the substrate, so v1 was one
@@ -468,9 +470,9 @@
 ||| each spelling out its own fields" -- is one indirection shallower to read top-to-
 ||| bottom than a kind tag plus a separate lookup table. The two forms are checked
 ||| equivalent (RefUniverse.idr, banked alongside this file as the consultation's
-||| checked fragment, kept for a reader who wants the universe rendering, or who is
-||| about to add many more kinds and would rather edit one manifest than extend one
-||| GADT). If the kind vocabulary starts growing fast, revisit this call -- the
+||| checked fragment at the time -- discarded 2026-07-29, maintainer ruling, ledger row 982;
+||| git history preserves it, this note is now historical rather than a pointer to a live
+||| file). If the kind vocabulary starts growing fast, revisit this call -- the
 ||| refinement consult's own finding is that the universe form scales additively where
 ||| the GADT does not.
 |||
@@ -3807,8 +3809,8 @@ failing
 
 -- R7a GREEN/Refl: raw and in-force readings AGREE while nothing is retracted
 -- (the pre-s31 raw reading is not modeled separately in this refresh -- see
--- RefKernel.idr's hasCloseRaw for the side-by-side divergence proof this
--- refresh's header narrates).
+-- RefKernel.idr's hasCloseRaw (discarded 2026-07-29, ledger row 982; git history
+-- preserves it) for the side-by-side divergence proof this refresh's header narrates).
 r7a : hasCloseCur Autoharn.worldA "a" = True
 r7a = Refl
 

@@ -6,7 +6,8 @@ leaves overconfidence no judgment surface), restarted fresh after the maintainer
 first brief's action-flavored sections had anchored it; the maintainer then instructed it
 directly to install the Idris toolchain (left installed on the host, deliberately, for the
 maintainer's own use) and machine-check the model. The checked artifact is
-[Autoharn.idr](../../design/Autoharn.idr) (493 lines, elaborates under %default total, Idris 2 v0.7.0,
+`Autoharn.idr` (then at `design/Autoharn.idr`, moved 2026-08-04 to `model/Autoharn.idr`,
+ledger rows 1019/1020; point-in-time record, path left as cited at the time) (493 lines, elaborates under %default total, Idris 2 v0.7.0,
 zero holes, zero postulates; three green fixtures + three failing-block refusal polarities
 checked inside the file). Disposition (maintainer, ledgered): categorical documentation of
 what exists; nothing is settled; kludgy-where-true is a first-class finding.

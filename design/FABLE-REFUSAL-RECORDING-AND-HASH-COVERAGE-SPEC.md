@@ -818,7 +818,7 @@ C12 Fable-only ruling was scoped "for this specific migration" and did not autom
 here, so the question was put to the maintainer fresh; he assigned Fable for this family too,
 inside the freeze window, on the stakes-and-availability grounds row 1462 records. The
 going-forward Sonnet default is unchanged for later families. The Idris model
-([design/Autoharn.idr](Autoharn.idr)) parity obligation follows the s40/s41 basis's Axis A item
+([model/Autoharn.idr](../model/Autoharn.idr)) parity obligation follows the s40/s41 basis's Axis A item
 16 rule: the commissioned parity pass closes the whole outstanding gap through s43 or the
 freshness gate stays honest about the lag. Where this spec fixes a choice (the four-function
 boundary and its payload contract; the SQLSTATE classes; the `write-boundary` principal; digest

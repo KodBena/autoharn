@@ -811,7 +811,7 @@ def main() -> int:
         gid = sh([sys.executable, str(REPO / "gates" / "idris_model_freshness.py")])
         check("idris-freshness-warn-not-red", gid.returncode == 0,
               f"gates/idris_model_freshness.py exit={gid.returncode} (LAGGING-disclosed WARN, "
-              f"not a RED failure -- design/Autoharn.idr honestly names the s45 model gap)",
+              f"not a RED failure -- model/Autoharn.idr honestly names the s45 model gap)",
               failures)
 
     finally:

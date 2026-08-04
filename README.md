@@ -61,7 +61,7 @@ Autoharn's "kernel" — the Postgres schema this whole guide deploys and migrate
 `kern` settings under [Configuration](#configuration) below) — is, at its core, one append-only
 ledger table plus the rules that govern which rows may be written to it: for example, the rule
 that a "work item" (one unit of tracked work) may only be marked closed once every other work
-item it depends on has itself closed. [`design/Autoharn.idr`](design/Autoharn.idr) renders those
+item it depends on has itself closed. [`model/Autoharn.idr`](model/Autoharn.idr) renders those
 rules as one machine-checked file a reader can walk top to bottom, instead of piecing the picture
 together from `kernel/lineage/*.sql` (the directory of dated SQL files that actually define the
 kernel) by hand. Its own header explains how to read an Idris file even if you don't know the

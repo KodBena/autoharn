@@ -383,7 +383,7 @@ header for the full account.)*
   not the terminal, successor (MODERATE, a future teaching-quality pass); Element 3's
   `search_path` widening is now disclosed in-file (MINOR, ledger row 253). The Idris model is
   refreshed in step with the chain on its own cadence, not necessarily same-commit with a kernel
-  delta — see [`design/Autoharn.idr`](design/Autoharn.idr)'s own AS-OF/LAGGING banner for current
+  delta — see [`model/Autoharn.idr`](model/Autoharn.idr)'s own AS-OF/LAGGING banner for current
   standing rather than trusting a number hand-copied here (this document's own "Staying current"
   warning, below, applies to that banner too).
 

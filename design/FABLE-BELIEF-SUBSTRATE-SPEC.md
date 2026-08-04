@@ -494,7 +494,7 @@ regardless, because it mints vocabulary.
   change reserved, named as the layering.
 - **s48/s51/s52 evidence custody:** the witness/universe token checks reuse those mechanisms
   verbatim; a belief's witness can point at bytes that cannot silently change.
-- **Idris model:** `design/Autoharn.idr` parity per the standing obligation discipline — the
+- **Idris model:** `model/Autoharn.idr` parity per the standing obligation discipline — the
   build closes the whole outstanding lag through this family or the freshness gate stays
   honest about the remainder (the s40 Axis-A-16 posture).
 

@@ -2,7 +2,9 @@
 
 Point-in-time consultation record, banked verbatim below the rule. Provenance: a fourth
 fresh-context Fable-eyes pass, commissioned by the maintainer on his own hunch that
-[Autoharn.idr](../../design/Autoharn.idr) could be stricter/more polymorphic and that a refined model
+`Autoharn.idr` (then at `design/Autoharn.idr`, moved 2026-08-04 to `model/Autoharn.idr`,
+ledger rows 1019/1020; point-in-time record, path left as cited at the time) could be
+stricter/more polymorphic and that a refined model
 might lower back into a cleaner implementation; the categorical consult was supplied as
 context WITH NO WEIGHT per his instruction. All refinement fragments were machine-checked
 (Idris 2 v0.7.0, %default total): `RefKernel.idr` (R1-R9 + Refl semantic

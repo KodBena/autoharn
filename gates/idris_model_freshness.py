@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""idris_model_freshness — currency gate for design/Autoharn.idr (ledger item
-`idris-model-freshness-gate`). design/Autoharn.idr is CATEGORICAL DOCUMENTATION of the kernel
+"""idris_model_freshness — currency gate for model/Autoharn.idr (ledger item
+`idris-model-freshness-gate`). model/Autoharn.idr is CATEGORICAL DOCUMENTATION of the kernel
 (its own header: "never the source of truth -- the kernel ... governs, always"). Documentation
 that silently drifts behind the substrate it describes is exactly ADR-0011's "invisible-at-
 authoring, visible-only-in-aggregate defect": nobody notices a stale model until a reader trusts
@@ -53,7 +53,7 @@ which is not the same claim as "elaboration failed").
 ELABORATION MECHANICS: the target file is copied into a fresh temp directory UNDER ITS OWN
 MODULE-DECLARING NAME (`Autoharn.idr`, matching `module Autoharn` inside it -- Idris refuses a
 module/filename mismatch) before `--check` runs there, so the check never writes a `build/`
-directory into the tracked `design/` tree and a synthetic/mutated copy (as the seen-red negative
+directory into the tracked `model/` tree and a synthetic/mutated copy (as the seen-red negative
 controls use) never collides with the real file's name.
 
 CLI (leading optional flags, either order, either or both -- the doc_attestation_presence.py
@@ -81,7 +81,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-IDR_FILE = REPO_ROOT / "design" / "Autoharn.idr"
+IDR_FILE = REPO_ROOT / "model" / "Autoharn.idr"
 LINEAGE_DIR = REPO_ROOT / "kernel" / "lineage"
 IDRIS2_FALLBACK = Path("/home/bork/.local/idris2/bin/idris2")
 
@@ -144,7 +144,7 @@ def derive_actual_head(lineage_dir: Path) -> int:
 
 def run_elaboration(idr_file: Path, idris2_bin: Path) -> tuple[bool, str]:
     """True/output for `idris2 --check` on a copy of idr_file, named after its own module
-    (`Autoharn.idr`) in a scratch temp dir -- never run in place (keeps `design/` free of build
+    (`Autoharn.idr`) in a scratch temp dir -- never run in place (keeps `model/` free of build
     artifacts) and never under a mismatched name (Idris refuses module/filename mismatch, which
     would read as a false elaboration failure unrelated to the file's real content)."""
     with tempfile.TemporaryDirectory(prefix="idris-model-freshness-") as tmp:

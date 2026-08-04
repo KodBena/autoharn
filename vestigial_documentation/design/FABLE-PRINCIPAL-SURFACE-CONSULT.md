@@ -857,6 +857,7 @@ read in full); [`bootstrap/templates/led.tmpl`](../../bootstrap/templates/led.tm
 `attest-tags` operator verb; [`design/MAINT-GPG-TRUST-LAYER.md`](../../design/MAINT-GPG-TRUST-LAYER.md);
 [`law/briefs/safety-critical-logging/BRIEF.md`](../../law/briefs/safety-critical-logging/BRIEF.md);
 [`law/STANDARDS-REGISTRY.md`](../../law/STANDARDS-REGISTRY.md);
-[`design/Autoharn.idr`](../../design/Autoharn.idr); `AUTOHARN_BACKFLOW.md` (cited as a named artifact, not a
+`design/Autoharn.idr` (moved 2026-08-04 to `model/Autoharn.idr`, ledger rows 1019/1020;
+point-in-time record, path left as cited at the time); `AUTOHARN_BACKFLOW.md` (cited as a named artifact, not a
 resolving link — see §0); and, read read-only via direct SQL query, the panel deployment's own
 ledger rows 407/408, 415, 1306–1343, 1406–1417, and 1691–1769.

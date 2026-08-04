@@ -685,7 +685,7 @@ wrong: `design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md` (cited pervasive
   this sweep's scope to edit code prose).
 - **`design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md`** →
   `vestigial_documentation/design/FABLE-AUTOHARN-IDR-CONSULT-2026-07-18.md`. A banked, point-in-time
-  Fable consult on `design/Autoharn.idr`'s correspondence and lowering opportunities. Its own
+  Fable consult on `model/Autoharn.idr`'s correspondence and lowering opportunities. Its own
   adjudication note (ledger row 1644) records the one actionable finding (the s47 correctness gap)
   fixed same-day, and the remaining items "filed as candidates for the maintainer, not acted on" —
   i.e. any further action lives in the ledger/tracker, not this document. Zero live citations
