@@ -3,4 +3,4 @@
 	url = https://github.com/KodBena/makespan-scheduler.git
 [submodule "tools/autoharn-panel"]
 	path = tools/autoharn-panel
-	url = https://github.com/KodBena/autoharn-panel.git
+	url = https://github.com/KodBena/autoharn-gui.git
