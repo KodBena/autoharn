@@ -49,6 +49,7 @@ now opens the recipe file that section moved to at the split.
 - [CLI quality-of-life: row-id echo and `judge` auto-layer detection](recipes/CLI-AND-BOUNDARY.md#cli-quality-of-life-row-id-echo-and-judge-auto-layer-detection)
 - [`led` help tokens, `--json` payload mode, and `work list`'s default filter (led.tmpl trio)](recipes/CLI-AND-BOUNDARY.md#led-help-tokens---json-payload-mode-and-work-lists-default-filter-ledtmpl-trio)
 - [Ledger-wide as-of read and inspection-copy export (`asof-export`)](recipes/THE-RECORD.md#ledger-wide-as-of-read-and-inspection-copy-export-asof-export)
+- [Exporting the setup TUI's config schema for external consumers (`./autoharn setup-schema`)](recipes/SETUP-AND-SCAFFOLD.md#exporting-the-setup-tuis-config-schema-for-external-consumers-autoharn-setup-schema)
 - [Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)](recipes/SETUP-AND-SCAFFOLD.md#deployments-can-self-serve-the-harness-changelog-orchlog-wrapper-at-scaffold)
 - [Verifying tags, signed commissions, and documentation debt (`attest-tags`, `verify-commission`, `attest-doc`, `distance-to-clean`)](recipes/EVIDENCE-AND-TRUST.md#verifying-tags-signed-commissions-and-documentation-debt-attest-tags-verify-commission-attest-doc-distance-to-clean)
 - [Recusal and independent RCA (a conflict-of-interest method harvested downstream)](recipes/METHODS.md#recusal-and-independent-rca-a-conflict-of-interest-method-harvested-downstream)
@@ -165,6 +166,16 @@ Three small `led` usability changes, all in `led.tmpl`. Full recipe: [recipes/CL
 ## Ledger-wide as-of read and inspection-copy export (`asof-export`)
 
 Reconstructing the whole ledger's in-force state as of a past moment. Full recipe: [recipes/THE-RECORD.md](recipes/THE-RECORD.md#ledger-wide-as-of-read-and-inspection-copy-export-asof-export).
+
+<!-- doc-attest-exempt: this index line is new prose, Sonnet-authored 2026-08-06 alongside the
+full recipe section it points to (work item setup-schema-consumption-channel, ledger rows
+1031/1063/1068); no live A:B:C loop has run on it yet and this marker does not claim one did.
+Removal condition: strike this marker and run the real A:B:C loop next time this line is
+touched for its own prose content. -->
+
+## Exporting the setup TUI's config schema for external consumers (`./autoharn setup-schema`)
+
+Byte-verbatim export of `tools/setup_tui/data/config_schema.toml`, with provenance. Full recipe: [recipes/SETUP-AND-SCAFFOLD.md](recipes/SETUP-AND-SCAFFOLD.md#exporting-the-setup-tuis-config-schema-for-external-consumers-autoharn-setup-schema).
 
 ## Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)
 

@@ -353,6 +353,69 @@ setup surface's own scripted smoke fixture, hostile/malformed inputs),
 seen-red/setup-tui-dry-run-parity (deleted 2026-07-22, design/FABLE-SETUP-TUI-REBUILD-SPEC.md wholesale rebuild) (WDR1
 byte-identical tree/ledger, WDR2 argv parity dry-vs-live, both needing real infra).
 
+<!-- doc-attest-exempt: this whole "Exporting the setup TUI's config schema" section is new
+prose, Sonnet-authored 2026-08-06 under work item setup-schema-consumption-channel (ledger
+rows 1031/1063/1068, brief design/BRIEF-B1-SETUP-SCHEMA-VERB-2026-08-04.md). Every example
+output is real, witnessed this session against this checkout; no live A:B:C loop has run on
+this section yet and this marker does not claim one did. Removal condition: strike this
+marker and run the real A:B:C loop next time this section is touched for its own prose
+content, not just a byte-preserving move. -->
+
+## Exporting the setup TUI's config schema for external consumers (`./autoharn setup-schema`)
+
+**I want to build `--from-config`/`--initial-config` TOML for the setup TUI from outside this
+checkout (a sibling project doing local dev, or a CI/build pipeline that only has a pinned
+autoharn commit) — where do I get the schema, and how do I know I got the right one?**
+`tools/setup_tui/data/config_schema.toml` (loaded by `tools/setup_tui/config_file.py`) is the
+single authority for that schema (work item setup-schema-consumption-channel, ledger rows
+1031/1063/1068) — never copy it by hand or reconstruct it from the screens' own field lists,
+since a hand-copy or reconstruction drifts from the authority the moment either side changes.
+`./autoharn setup-schema` is the sanctioned, layout-independent access point: run it against a
+sibling checkout for local dev, or against a pinned commit of this repo for CI/build — the
+verb's own contract, not this repo's tree layout, is what an external consumer depends on
+(ledger row 1063's own channel decision). **Format/path changes to the schema file itself are
+announced by missive before landing**; this verb's contract (below) is the stable surface.
+
+Two modes, so the byte-verbatim export is never polluted by the provenance obligation:
+
+- **Default** — the schema file's bytes, byte-verbatim, on stdout: `./autoharn setup-schema >
+  config_schema.toml` gives you an exact copy of the authority file, nothing injected. A
+  provenance line (source path, sha256, repo HEAD commit) still prints to **stderr**,
+  unconditionally, so you see what you got even while redirecting stdout to a file.
+- **`--provenance`** — a separate sidecar mode: a small JSON object (`source_path`, `sha256`,
+  `repo_commit`, `read_at`) on stdout, no schema bytes at all — the machine-readable channel for
+  a CI/build consumer checking a pinned checkout's schema for drift.
+
+A missing or unreadable schema file refuses loudly on stderr with a nonzero exit — never empty
+stdout with exit 0.
+
+WITNESSED this session, against this checkout:
+```
+$ ./autoharn setup-schema > /tmp/setup-schema-out.toml
+setup-schema: source=tools/setup_tui/data/config_schema.toml sha256=b0bb1c8a46aa6de79a94927a8c1d26debe39f6772321335c0c744a7733c362a6 repo_commit=97efb7d8aad344ff42f16a8d90d89cc7e3ea8569 read_at=2026-08-06T04:32:58Z
+$ diff -q /tmp/setup-schema-out.toml tools/setup_tui/data/config_schema.toml
+(no output -- byte-identical)
+$ sha256sum tools/setup_tui/data/config_schema.toml
+b0bb1c8a46aa6de79a94927a8c1d26debe39f6772321335c0c744a7733c362a6  tools/setup_tui/data/config_schema.toml
+$ ./autoharn setup-schema --provenance
+{
+  "source_path": "tools/setup_tui/data/config_schema.toml",
+  "sha256": "b0bb1c8a46aa6de79a94927a8c1d26debe39f6772321335c0c744a7733c362a6",
+  "repo_commit": "97efb7d8aad344ff42f16a8d90d89cc7e3ea8569",
+  "read_at": "2026-08-06T04:32:59Z"
+}
+```
+And the refusal path, witnessed by temporarily renaming the authority file out of the way and
+restoring it immediately after (`git status --porcelain` confirmed clean before and after):
+```
+$ mv tools/setup_tui/data/config_schema.toml /tmp/config_schema.toml.bak
+$ ./autoharn setup-schema; echo "exit=$?"
+setup-schema: REFUSED -- schema file not found at /home/bork/w/vdc/1/autoharn/tools/setup_tui/data/config_schema.toml (expected relative path: tools/setup_tui/data/config_schema.toml). The setup TUI's config_schema.toml is the single authority (ledger row 1063); if this checkout is missing it, the checkout itself is broken -- nothing was printed to stdout.
+exit=1
+$ mv /tmp/config_schema.toml.bak tools/setup_tui/data/config_schema.toml
+```
+Full usage: `./autoharn setup-schema --help`.
+
 ## Deployments can self-serve the harness changelog (`orchlog` wrapper at scaffold)
 
 This section is for operators of scaffolded deployments: new scaffolds now include an

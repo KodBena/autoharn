@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""setup-schema -- read-only export verb for the setup-TUI config schema (work item
+setup-schema-consumption-channel, ledger row 1031; channel decision row 1063; dispatch brief
+design/BRIEF-B1-SETUP-SCHEMA-VERB-2026-08-04.md, rows 1063/1068).
+
+WHAT THIS DOES: `tools/setup_tui/data/config_schema.toml` stays the single authority for the
+setup TUI's `--from-config`/`--initial-config` closed schema (that file's own header, ADR-0012
+P1 -- one home, not re-derived per caller). External consumers of the schema (a sibling
+checkout doing local dev; a CI/build pipeline against a pinned autoharn commit) must never
+depend on THIS repo's tree layout to find that file -- this verb is the one sanctioned,
+layout-independent access point, per the orchestrator's ratified channel decision (ledger row
+1063): "a new read-only export verb `./autoharn setup-schema` prints it byte-verbatim to
+stdout with provenance (path + content hash + repo commit) as the layout-independent access
+point."
+
+TWO MODES, chosen so the byte-verbatim contract is never compromised by the provenance
+obligation (row 1063 asks for both, but a single stdout stream cannot honor "byte-verbatim, no
+header" and "carries provenance" at once -- ADR-0000 Rule 2(a): the type that forecloses the
+class is a MODE distinction, not a text convention layered onto one stream):
+
+  default          -- the schema file's bytes, byte-verbatim, on stdout. Suitable for
+                       `./autoharn setup-schema > config_schema.toml`: nothing is injected
+                       into stdout in this mode, ever -- a consumer piping this verb's stdout
+                       gets an identical copy of the authority file, not a copy-plus-header. A
+                       provenance line (source path, sha256, repo HEAD commit) is still printed
+                       to STDERR in this mode, unconditionally -- so an operator watching their
+                       terminal while redirecting stdout to a file still sees what they got,
+                       without a single byte of it reaching the redirected file.
+  --provenance     -- a SEPARATE sidecar mode: prints ONLY a small JSON object (source path,
+                       sha256, repo HEAD commit, read timestamp) to stdout -- no schema bytes at
+                       all. This is the machine-readable channel for a CI/build consumer that
+                       wants to check "did the pinned checkout's schema change" without parsing
+                       a stderr line meant for human eyes.
+
+REFUSAL: if the schema file is missing or unreadable, this verb refuses loudly on stderr,
+teaches the expected path, and exits nonzero -- NEVER empty stdout with exit 0 (row 1063's own
+"never empty stdout with exit 0" -- a silent-empty success would be indistinguishable from "the
+schema is legitimately empty" to a consumer that only checks the exit code).
+
+PROVENANCE TYPE (CLAUDE.md/ledger row 26, "no bare types": every value gets a named type with a
+single constructing home enforcing its contract): `SchemaProvenance` below is that one home --
+constructed ONLY via `.read()`, which is the single place the source path is opened, hashed, and
+paired with the repo HEAD commit, so the default-mode stderr line and the --provenance JSON body
+are guaranteed to describe the exact same bytes (never two independent reads that could
+observe two different states of the file).
+
+Lazy imports are banned (CLAUDE.md, 2026-07-02): everything below imports at module load.
+"""
+from __future__ import annotations
+
+import datetime
+import hashlib
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+# Relocated-verb path convention (design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md, ledger rows
+# 1151-1183): this file lives at libexec/autoharn/setup-schema, two levels below the repo root,
+# same climb attest-tags's own module docstring/_REPO_ROOT already use for the same reason.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_REPO_ROOT / "filing"))
+import fixture_sandbox  # noqa: E402  (filing/fixture_sandbox.py, design/FABLE-FIXTURE-SANDBOX-
+# RUNTIME-FORECLOSURE-SPEC.md §2 -- the Python-side twin of libexec/autoharn/
+# _fixture_sandbox_preamble.sh; every repo-root Python verb entry point calls this first.)
+
+# THE single authority (row 1063's own words) -- one named constant, not re-spelled at each use
+# site below (ADR-0012 P1).
+SCHEMA_REL_PATH = Path("tools/setup_tui/data/config_schema.toml")
+
+
+@dataclass(frozen=True)
+class SchemaProvenance:
+    """The provenance triple row 1063 asks for (source path, content hash, repo HEAD commit) --
+    construct ONLY via `.read()` (never call the dataclass constructor directly from outside
+    this module); `__post_init__` still guards every construction path so nothing can produce a
+    value with an empty hash or empty commit, matching the project's established
+    `__post_init__`-guards-every-construction-path idiom (see e.g.
+    serving/boundary_multiplex_config.py's `IdentityEnforcementPosture`)."""
+
+    source_path: Path
+    sha256_hex: str
+    repo_commit: str
+    read_at: str  # UTC ISO-8601, second precision -- "at read time" per row 1063's own phrasing
+    content: bytes
+
+    def __post_init__(self) -> None:
+        if len(self.sha256_hex) != 64 or any(c not in "0123456789abcdef" for c in self.sha256_hex):
+            raise ValueError(f"SchemaProvenance: {self.sha256_hex!r} is not a lowercase-hex "
+                              "sha256 digest")
+        if not self.repo_commit:
+            raise ValueError("SchemaProvenance: repo_commit must not be empty")
+
+    def as_json_dict(self) -> dict:
+        return {
+            "source_path": str(self.source_path),
+            "sha256": self.sha256_hex,
+            "repo_commit": self.repo_commit,
+            "read_at": self.read_at,
+        }
+
+    def as_stderr_line(self) -> str:
+        return (f"setup-schema: source={self.source_path} sha256={self.sha256_hex} "
+                f"repo_commit={self.repo_commit} read_at={self.read_at}")
+
+    @classmethod
+    def read(cls, repo_root: Path) -> "SchemaProvenance":
+        """The ONE site that opens the schema file, reads its bytes, hashes them, and resolves
+        the repo HEAD commit -- raises FileNotFoundError / OSError on a missing/unreadable file
+        rather than returning a partial/empty provenance (ADR-0002: fail loud at the read, not
+        downstream when a caller notices an empty sha256)."""
+        abs_path = repo_root / SCHEMA_REL_PATH
+        content = abs_path.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        commit = _repo_head_commit(repo_root)
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return cls(source_path=SCHEMA_REL_PATH, sha256_hex=digest, repo_commit=commit,
+                    read_at=now, content=content)
+
+
+def _repo_head_commit(repo_root: Path) -> str:
+    r = subprocess.run(["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+                        capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        # Honest degraded value, never fabricated -- a schema export from a non-git checkout (a
+        # tarball, a pinned CI artifact with .git stripped) still has bytes and a hash; it just
+        # cannot name a commit. Named explicitly rather than silently omitted (ADR-0000 2026-07-
+        # 02 amendment: an axis not covered is NAMED as not covered).
+        return "UNKNOWN (git rev-parse HEAD failed: not a git checkout, or git unavailable)"
+    return r.stdout.strip()
+
+
+_HELP_TEXT = """\
+usage: setup-schema [--provenance]
+
+Exports tools/setup_tui/data/config_schema.toml -- the single authority for the setup TUI's
+--from-config/--initial-config closed schema -- as the sanctioned, layout-independent access
+point for external consumers (a sibling checkout doing local dev; a CI/build pipeline against
+a pinned autoharn commit). Format/path changes to the schema file itself are announced by
+missive before landing (ledger row 1063); this verb's OWN contract (byte-verbatim default
+mode, --provenance sidecar mode) is the stable surface an external consumer depends on instead
+of this repo's tree layout.
+
+  (no flags)      the schema file's bytes, byte-verbatim, on stdout -- suitable for
+                   `./autoharn setup-schema > config_schema.toml`. No header or provenance
+                   text is ever injected into stdout in this mode. A provenance line (source
+                   path, sha256, repo HEAD commit) is still printed to STDERR, unconditionally,
+                   so an operator redirecting stdout to a file still sees what they got.
+
+  --provenance     sidecar mode: prints ONLY a small JSON object (source_path, sha256,
+                   repo_commit, read_at) to stdout -- no schema bytes. For a build/CI consumer
+                   checking a pinned checkout's schema for drift without parsing a stderr line.
+
+  --help, -h       show this message and exit (never reads the schema file, never touches git)
+
+PINNED-CHECKOUT CONSUMPTION POSTURE (ledger row 1063): an external consumer -- dev: a sibling
+checkout of this repo; build/CI: this verb run from a pinned commit of this repo -- runs
+`./autoharn setup-schema` (or the --provenance sidecar) against THAT checkout rather than
+reading tools/setup_tui/data/config_schema.toml by a hand-assembled path; the verb, not the
+tree layout, is the contract external tooling depends on.
+
+Missing or unreadable schema file: this verb refuses loudly on stderr and exits nonzero --
+never empty stdout with exit 0.
+"""
+
+
+def main(argv: list[str]) -> int:
+    # EXEMPTION, narrow and precedented (attest-tags' own identical exemption; ./autoharn's own
+    # _fixture_sandbox_gate comment): a bare --help/-h never touches the schema file or git, so
+    # it is exempt from the fixture-sandbox marker check exactly like every other repo-root
+    # verb's own --help.
+    if argv not in (["--help"], ["-h"]):
+        fixture_sandbox.check("libexec/autoharn/setup-schema " + " ".join(argv))
+
+    provenance_mode = False
+    for a in argv:
+        if a in ("--help", "-h"):
+            sys.stdout.write(_HELP_TEXT)
+            return 0
+        elif a == "--provenance":
+            provenance_mode = True
+        else:
+            print(f"setup-schema: unrecognized argument: {a}", file=sys.stderr)
+            print("Run 'setup-schema --help' for usage. Nothing was read.", file=sys.stderr)
+            return 2
+
+    try:
+        prov = SchemaProvenance.read(_REPO_ROOT)
+    except FileNotFoundError:
+        print(f"setup-schema: REFUSED -- schema file not found at "
+              f"{_REPO_ROOT / SCHEMA_REL_PATH} (expected relative path: {SCHEMA_REL_PATH}). "
+              "The setup TUI's config_schema.toml is the single authority (ledger row 1063); "
+              "if this checkout is missing it, the checkout itself is broken -- nothing was "
+              "printed to stdout.", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"setup-schema: REFUSED -- could not read {_REPO_ROOT / SCHEMA_REL_PATH} "
+              f"({e.__class__.__name__}: {e}). Nothing was printed to stdout.", file=sys.stderr)
+        return 1
+
+    if provenance_mode:
+        print(json.dumps(prov.as_json_dict(), indent=2))
+        return 0
+
+    print(prov.as_stderr_line(), file=sys.stderr)
+    sys.stdout.buffer.write(prov.content)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

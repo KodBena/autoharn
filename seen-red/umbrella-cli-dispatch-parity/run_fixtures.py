@@ -187,6 +187,12 @@ _EXPECTED_VERBS = {
     # autoharn-repo-specific verb, same footing as dispatch/fixture-sweep/migrate/attest-tags --
     # mints an operator/unattended interception stamp and execs a wrapped command carrying it.
     "stamp-run",
+    # setup-schema (work item setup-schema-consumption-channel, ledger rows 1031/1063/1068): a
+    # fifteenth autoharn-repo-specific verb, same footing as stamp-run/dispatch/fixture-sweep/
+    # migrate/attest-tags -- read-only export of tools/setup_tui/data/config_schema.toml with
+    # provenance (path+hash+commit) as the layout-independent access point for external
+    # consumers.
+    "setup-schema",
 }
 
 # Round-3 review fix: per-verb identity MARKERS, one literal substring per verb, each verified
@@ -236,6 +242,9 @@ _USAGE_MARKERS = {
     # stamp-run: tools/stamp_run.py's own docstring (printed verbatim by `main`'s --help path)
     # opens with this exact line -- distinctive, no other verb's own output could contain it.
     "stamp-run": "stamp_run -- the CLI logic behind `autoharn stamp-run -- <command...>` (work item",
+    # setup-schema: this file's own docstring opens with this exact line -- distinctive, no
+    # other verb's own output could contain it.
+    "setup-schema": "usage: setup-schema [--provenance]",
 }
 
 # Round-4 review SEVERE fix. THE SIBLING-PAIR CLASS: several relocated verbs have TWO templates
