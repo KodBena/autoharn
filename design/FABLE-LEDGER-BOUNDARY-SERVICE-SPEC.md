@@ -655,6 +655,31 @@ test) refuses on the typed structure axis, never a bare `RecursionError`; (ii) t
 full suite stays green end to end (no regression at the HTTP layer, where behavior
 is unchanged by construction).
 
+**A14 (2026-08-06) — the principal-name annotation join: §5's first named exception,
+adjudicated.** Trigger: the unanchored wave review of commit `c47dd507` (review row 1176)
+found that `_annotate_actor_names` — the opt-in `?annotate_names=true` `_name`-sibling
+annotation serving the actor-id → principal-name join server-side (work item
+principal-name-served-join, FRESH2 C8, maintainer-promoted row 1102) — is the service's
+first self-authored SQL join, while §5's letter claims the discipline unconditionally and
+names `serving/audit_served.py` as what makes it checkable. Adjudication, Fable-authored:
+
+1. **The join is RATIFIED as built, as a named exception to §5's letter that honors its
+   spirit.** §5's discipline exists so the service never MINTS truth — no caching, no
+   default-filling, no paraphrase. The annotation reads `kernel.principal.name`,
+   kernel-owned truth the service already serves elsewhere, and joins it beside an id it
+   already serves, opt-in, additive, with typed absence (`null`, never an invented or
+   empty-string name) for unregistered actors. Disclosure, not fabrication. The
+   alternative — every client re-implementing the join client-side — was the witnessed
+   defect the item exists to close.
+2. **The exception is CLOSED, not open-ended:** self-authored joins remain otherwise
+   forbidden; any future one requires its own dated amendment here, adjudicated the same
+   way. One exception with a name is discipline; a precedent silently generalized is not.
+3. **The checkability gap is a real defect and is dispatched, not waived:**
+   `audit_served.py` gains named coverage of the annotation path (differential including
+   the `_name` fields against a direct read of the same join), and a committed fixture
+   exercises the join and its refusal (unsupported view → typed 422). Until that lands,
+   §5's "made checkable" claim is honest only with this paragraph's disclosure.
+
 ## License
 
 Public Domain (The Unlicense).
