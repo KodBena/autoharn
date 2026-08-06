@@ -150,3 +150,25 @@ vocabulary change
 ([FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md](FABLE-SETUP-TUI-CHECKLIST-SPLIT-SPEC.md)'s
 scope). The screens' copy rework beyond the new FOREIGN mode belongs to the
 strategy's Track 2.1/2.2 (typed UI elements and prompt-text extraction).
+
+## Amendment A1 — 2026-08-06: `legacy/led` retired as a behavioral marker
+
+*(Dated append, Fable-authored, additive — the body above stands verbatim. Trigger: the
+legacy scaffold-emission removal, commit fd341960 under the maintainer's standing ruling
+("I refused to push until legacy was GONE completely", autoharn4 rows 160/161/164); its
+builder's own flag: every legacy-free newborn now misclassifies AUTOHARN_PARTIAL, and the
+signed-genesis step REFUSES on its `legacy/led` hard-check — an impossible precondition for
+every world born after fd341960.)*
+
+The behavioral marker set changes in one place and one way: wherever this spec's body reads
+`legacy/led` as the third marker beside the sentinel and `deployment.json`, the marker is now
+**the world-local `./autoharn` dispatcher** — the one-surface identity every scaffolded world
+carries by construction (umbrella-CLI spec §6) and the honest answer to "does an autoharn
+world live here." For worlds born before fd341960, `legacy/led` remains ACCEPTED as a
+transitional equivalent of the dispatcher marker (either satisfies the third slot; both
+present is ordinary for the pre-removal era) — acceptance, never a requirement, and never
+emitted anew. Every consumer of the marker set follows: `classify_destination` and its shell
+mirror, the signed-genesis step's scaffolded-world check, and `principals_authority.py`'s
+probe. The parity fixture family witnesses both eras: a legacy-free newborn classifies
+AUTOHARN_COMPLETE and signed-genesis proceeds; a pre-removal-shaped tree still classifies;
+FOREIGN/PARTIAL detection is unchanged.
