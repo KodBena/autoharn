@@ -428,6 +428,20 @@ usage() {
     echo "          exactly when its own fork-target screen recorded the operator's typed" >&2
     echo "          acknowledgment. Has no effect on AUTOHARN_COMPLETE/AUTOHARN_PARTIAL, which" >&2
     echo "          keep the existing deployment.json-exists / --force gate above)" >&2
+    echo "         (--succeeds <predecessor-world> -- design/BRIEF-SUCCESSION-CARRY-AND-SCAFFOLD-" >&2
+    echo "          HARDENING-2026-08-06.md, ledger rows 17/22/50/126-128: ONLY combinable with" >&2
+    echo "          --new-world. After this run's own birth sequence succeeds, carries the named" >&2
+    echo "          predecessor's durable-graded standing decisions and open work items (with" >&2
+    echo "          in-force dependency edges between carried items) into the newborn, each" >&2
+    echo "          re-asserted with 're-asserted from <predecessor> ...' provenance -- a direct" >&2
+    echo "          schema read against <predecessor-world>/<predecessor-world>_kernel on the SAME" >&2
+    echo "          --host/--db (never the boundary HTTP service, which may not be running at birth" >&2
+    echo "          time). REFUSES the WHOLE birth (deployment.json is never written) if the" >&2
+    echo "          predecessor is unreachable, a read comes back incomplete, or any carried write" >&2
+    echo "          is refused -- see bootstrap/succession_carry.py. --succession-opt-out" >&2
+    echo "          '<reason>' skips the carry deliberately, recording the opt-out and its reason" >&2
+    echo "          as the newborn's own first ledger row instead -- requires --succeeds (naming" >&2
+    echo "          which predecessor's carry is being declined, not merely omitting it silently))" >&2
     exit 2
 }
 
@@ -533,6 +547,13 @@ MAKESPAN_TIER="off"
 _VENDOR_SKILLS_GIVEN=0
 _PANEL_EXTENSION_GIVEN=0
 _MAKESPAN_TIER_GIVEN=0
+# SUCCEEDS/SUCCESSION_OPT_OUT (design/BRIEF-SUCCESSION-CARRY-AND-SCAFFOLD-HARDENING-2026-08-06.md,
+# ledger rows 17/22/50/126-128) -- default empty/unset so every existing caller (every world
+# scaffolded before this build) keeps today's shape byte-for-byte: the carry is opt-IN, named
+# explicitly by the caller, never guessed from the directory's own prior deployment.json (many
+# predecessor worlds could share one DB; auto-detection would be a silent guess, ADR-0002).
+SUCCEEDS=""
+SUCCESSION_OPT_OUT=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --db) DB="$2"; shift 2 ;;
@@ -555,9 +576,44 @@ while [ $# -gt 0 ]; do
         --no-vendored-skills) VENDOR_SKILLS=0; _VENDOR_SKILLS_GIVEN=1; shift ;;
         --panel-extension) PANEL_EXTENSION=1; _PANEL_EXTENSION_GIVEN=1; shift ;;
         --makespan-tier) MAKESPAN_TIER="$2"; _MAKESPAN_TIER_GIVEN=1; shift 2 ;;
+        --succeeds) SUCCEEDS="$2"; shift 2 ;;
+        --succession-opt-out) SUCCESSION_OPT_OUT="$2"; shift 2 ;;
         *) echo "unrecognized argument: $1" >&2; usage ;;
     esac
 done
+if [ -n "$SUCCEEDS" ] && [ -z "$NEW_WORLD" ]; then
+    echo "new-project.sh: --succeeds requires --new-world -- the succession carry is a --new-world" >&2
+    echo "                birth-sequence step (ADR-0012 P1: one birth sequence, not a second" >&2
+    echo "                mechanism for classic/--profile tracker scaffolds, neither of which" >&2
+    echo "                stands up a governed world's own standing-decisions/work-item ledger" >&2
+    echo "                shape a carry would land into). Nothing was touched." >&2
+    exit 2
+fi
+if [ -n "$SUCCESSION_OPT_OUT" ] && [ -z "$SUCCEEDS" ]; then
+    echo "new-project.sh: --succession-opt-out requires --succeeds <predecessor-world> -- an" >&2
+    echo "                opt-out declines a NAMED predecessor's carry; it is not a standalone" >&2
+    echo "                flag (row 22's refusal-to-drop-silently REQUIRES the opt-out to say" >&2
+    echo "                what it is opting out of). Nothing was touched." >&2
+    exit 2
+fi
+if [ -n "$SUCCEEDS" ]; then
+    case "$SUCCEEDS" in
+        *[!a-z0-9]*|"") _succeeds_bad=1 ;;
+        *) _succeeds_bad=0 ;;
+    esac
+    if [ "$_succeeds_bad" -eq 0 ] && [ "${#SUCCEEDS}" -gt 64 ]; then
+        _succeeds_bad=1
+    fi
+    if [ "$_succeeds_bad" -eq 1 ]; then
+        echo "new-project.sh: REFUSED -- --succeeds's predecessor world name ('$SUCCEEDS') must" >&2
+        echo "                match [a-z0-9]{1,64} -- the SAME allowlist --new-world's own world" >&2
+        echo "                name is held to (this script derives the predecessor's schema/kern" >&2
+        echo "                the identical way it derives the newborn's own, world -> world +" >&2
+        echo "                world_kernel). Nothing was touched." >&2
+        exit 1
+    fi
+    unset _succeeds_bad
+fi
 if [ -n "$PIN" ] && [ "$PIN" != "submodule" ]; then
     echo "new-project.sh: --pin '$PIN' is not a recognized value -- only 'submodule' is supported" >&2
     echo "                today (the copy-at-scaffold fallback design/ORCH-DEPLOYMENT-PINNING.md" >&2
@@ -700,6 +756,19 @@ if [ -n "$NEW_WORLD" ]; then
     fi
     unset _new_world_bad
 fi
+if [ -n "$SUCCEEDS" ] && [ "$SUCCEEDS" = "$NEW_WORLD" ]; then
+    echo "new-project.sh: REFUSED -- --succeeds '$SUCCEEDS' names this SAME --new-world birth" >&2
+    echo "                ('$NEW_WORLD') as its own predecessor -- a world cannot succeed itself." >&2
+    echo "                Nothing was touched." >&2
+    exit 1
+fi
+# SUCC_PRED_SCHEMA/SUCC_PRED_KERN -- derived from SUCCEEDS the SAME way SCHEMA/KERN are derived
+# from NEW_WORLD two lines below (ADR-0012 P1: one derivation convention, not a second one for the
+# predecessor side). Validated against the SAME SQL-identifier allowlist as SCHEMA/KERN/ROLE/OWNER
+# further down (the allowlist loop already covers "$SCHEMA" "$KERN" "$ROLE" "$OWNER" -- these two
+# ride along in that same loop, added there rather than duplicating the check here).
+SUCC_PRED_SCHEMA="$SUCCEEDS"
+SUCC_PRED_KERN="${SUCCEEDS}_kernel"
 if [ -n "$NEW_WORLD" ]; then
     # Derive, never require, the three names that must agree (P1: one source -- the world name --
     # not three hand-typed strings the caller must keep in sync). An explicit --schema/--kern/--role
@@ -736,7 +805,9 @@ OWNER="${SCHEMA}_owner"
 # is the SAME allowlist, checked before ANY SQL is built, covering both --new-world's own derivation
 # and a hand-picked --schema/--kern/--role override alike (a caller can pass either, and both reach
 # the identical downstream SQL sites).
-for _name in "$SCHEMA" "$KERN" "$ROLE" "$OWNER"; do
+_ALLOWLIST_NAMES="$SCHEMA $KERN $ROLE $OWNER"
+[ -n "$SUCCEEDS" ] && _ALLOWLIST_NAMES="$_ALLOWLIST_NAMES $SUCC_PRED_SCHEMA $SUCC_PRED_KERN"
+for _name in $_ALLOWLIST_NAMES; do
     case "$_name" in
         ''|*[!A-Za-z0-9_]*)
             echo "new-project.sh: REFUSED -- '$_name' contains characters outside the allowlist" >&2
@@ -1037,7 +1108,7 @@ fi
 
 mkdir -p "$DEST"
 PROJECT_ROOT="$(cd "$DEST" && pwd)"
-[ -n "$NAME" ] || NAME="$(basename "$PROJECT_ROOT")"
+[ -n "$NAME" ] || NAME="${NEW_WORLD:-$(basename "$PROJECT_ROOT")}"
 
 DEPLOYMENT="$PROJECT_ROOT/deployment.json"
 if [ -f "$DEPLOYMENT" ] && [ "$FORCE" -ne 1 ]; then
@@ -1379,14 +1450,44 @@ fi
     echo "-- $WORLD_LABEL: seeding the stamp secret (idempotent, mirrors drive/arm.sh ruling 43) --"
     mkdir -p "$PROJECT_ROOT/.claude/secrets"
     chmod 700 "$PROJECT_ROOT/.claude/secrets"
+    # SECRET_FILE is the SHARED, filesystem-level path the tool-interception hook derives from
+    # THIS DIRECTORY's deployment.json (hooks/stamp_intercept.py's own _resolve_secret_path) --
+    # for --new-world into a checkout that IS an older live world, this is literally the SAME file
+    # the predecessor's own hook-injected stamps are computed against, right up until deployment.json
+    # is repointed further below. row 17 incident (predecessor row 1258): this scaffold used to
+    # overwrite SECRET_FILE immediately, mid-birth -- a failure anywhere between that overwrite and
+    # deployment.json's own repoint left the file holding the NEWBORN's secret while deployment.json
+    # still named the OLD world, bricking the predecessor's write path (every future hook-stamped
+    # write there recomputed an HMAC the OLD world's OWN kernel.stamp_secret could never match).
+    # FIX (scaffold-rebirth-in-place-hardening, row 17 item 1): a fresh secret is staged to
+    # STAGE_SECRET_FILE (a dotfile, so no world ever reads it as ITS OWN secret by convention) and
+    # inserted into THIS birth's own, schema-isolated ${KERN}.stamp_secret table immediately (safe:
+    # that table lives only in the newborn's own kernel schema, invisible to the predecessor
+    # regardless of directory) -- but the SHARED file at SECRET_FILE is not touched until the ENTIRE
+    # birth sequence below (genesis seed, world identity, s40/s43/s60 acts) has succeeded, via one
+    # atomic `mv` at the end of this block (search this file for "ATOMIC SECRET-FILE MOVE"). `set -eu`
+    # means any birth-sequence failure between here and that `mv` exits this script before the `mv`
+    # ever runs -- the predecessor's own SECRET_FILE (if any) is untouched on every failure path.
     SECRET_FILE="$PROJECT_ROOT/.claude/secrets/stamp_secret.hex"
+    STAGE_SECRET_FILE="$PROJECT_ROOT/.claude/secrets/.stamp_secret.hex.staged-birth"
     HAVE=$(_psql_in "SELECT count(*) FROM :\"kern\".stamp_secret;" | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)
     if [ "$HAVE" = "1" ]; then
         echo "   a secret is already provisioned for ${KERN}.stamp_secret (1 row); not rotating"
+        # Already provisioned (a re-run against a KERN that already carries one, e.g. --force) --
+        # the shared SECRET_FILE, if present, was presumably already correct for this KERN and is
+        # left alone (never rewritten here); HEX is still needed below to mint valid birth-sequence
+        # stamps, so it is read back -- from the live file if present, else straight from the DB
+        # (this connection runs as the schema owner, unaffected by stamp_secret's REVOKE ALL FROM
+        # PUBLIC -- the same owner-direct-read posture the world_identity seed below already uses).
+        if [ -f "$SECRET_FILE" ]; then
+            HEX=$(cat "$SECRET_FILE")
+        else
+            HEX=$(_psql_in "SELECT encode(secret,'hex') FROM :\"kern\".stamp_secret;" | psql -h "$HOST" -d "$DB" -v kern="$KERN" -tA)
+        fi
     else
-        ( umask 077; openssl rand -hex 32 > "$SECRET_FILE" )
-        chmod 600 "$SECRET_FILE"
-        HEX=$(cat "$SECRET_FILE")
+        ( umask 077; openssl rand -hex 32 > "$STAGE_SECRET_FILE" )
+        chmod 600 "$STAGE_SECRET_FILE"
+        HEX=$(cat "$STAGE_SECRET_FILE")
         # KERN reaches DROP/TRUNCATE-adjacent DDL text as an identifier bind (:"kern"), HEX as a
         # literal bind (:'hex') -- both bound as psql -v variables via stdin, never spliced into the
         # SQL string (the allowlist above already restricts KERN to [A-Za-z0-9_]+; this is the
@@ -1395,8 +1496,41 @@ fi
             | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN"
         _psql_in "INSERT INTO :\"kern\".stamp_secret (secret) VALUES (decode(:'hex','hex'));" \
             | psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v kern="$KERN" -v hex="$HEX"
-        echo "   one fresh secret provisioned ($SECRET_FILE [chmod 600]; DB ${KERN}.stamp_secret)"
+        echo "   one fresh secret provisioned (staged at $STAGE_SECRET_FILE [chmod 600], not yet"
+        echo "   live at $SECRET_FILE -- moved there only after the birth sequence below succeeds;"
+        echo "   DB ${KERN}.stamp_secret)"
     fi
+
+    # BIRTH-STAMP HONESTY (row 17 item 2): mint the interception stamp IN-SCRIPT from the secret
+    # this run just resolved above (fresh or already-provisioned) -- the tool-interception hook
+    # (hooks/stamp_intercept.py) computes ITS OWN PGOPTIONS export once, BEFORE this whole script's
+    # command text starts running, against whatever secret sat at SECRET_FILE at that moment (the
+    # PREDECESSOR's, when --new-world scaffolds into an already-live checkout, or nothing at all for
+    # a brand-new directory) -- never against the secret this run seeds or reads moments later. Every
+    # birth-sequence write below therefore needs its OWN correct stamp, set directly on the SQL
+    # session via set_config(.... true) (transaction-local -- mirrors the SAME idiom this script
+    # already uses for 'birth.drole'/'birth.pname' etc.), never by fighting the hook's own PGOPTIONS
+    # export at the shell level. HMAC formula matches hooks/stamp_intercept.py's own byte-for-byte
+    # (kernel/lineage/s17-stamp-mechanism.sql's stamp_valid: HMAC-SHA256(secret_bytes,
+    # "session|agent|ts")) -- `openssl dgst -mac HMAC -macopt hexkey:` treats HEX as the raw key
+    # bytes, matching Python's hmac.new(bytes.fromhex(hex), ...) the hook itself uses.
+    BIRTH_STAMP_SESSION="birth-sequence"
+    BIRTH_STAMP_AGENT="new-project.sh"
+    BIRTH_STAMP_TS=$(date +%s)
+    BIRTH_STAMP_HMAC=$(printf '%s' "${BIRTH_STAMP_SESSION}|${BIRTH_STAMP_AGENT}|${BIRTH_STAMP_TS}" \
+        | openssl dgst -sha256 -mac HMAC -macopt hexkey:"$HEX" | awk '{print $NF}')
+    # One shared SQL fragment, prepended to every birth-sequence write's own psql session below
+    # (search this file for "BIRTH_STAMP_SQL") -- a single home for the four GUCs the s17 set_stamp
+    # trigger reads (current_setting('app.vendor_*', true)), so this mint is computed exactly once
+    # and never re-typed per call site.
+    # is_local=false (SESSION-scoped, NOT transaction-local) is deliberate, not a typo: psql runs
+    # each statement in its own implicit transaction under ordinary autocommit (verified live --
+    # a transaction-local `true` here evaporates before the DO block below even starts, since the
+    # SELECT set_config(...) statement is its own complete transaction) -- `false` persists the
+    # GUC for the rest of THIS psql session, exactly the SAME idiom this script's own pre-existing
+    # 'birth.drole'/'birth.pname' set_config calls already use, one line below each call site.
+    BIRTH_STAMP_SQL="SELECT set_config('app.vendor_session', :'birth_stamp_session', false), set_config('app.vendor_agent', :'birth_stamp_agent', false), set_config('app.vendor_ts', :'birth_stamp_ts', false), set_config('app.vendor_hmac', :'birth_stamp_hmac', false);"
+    echo "   birth-sequence writes below will carry an in-script-minted stamp (session=$BIRTH_STAMP_SESSION agent=$BIRTH_STAMP_AGENT) -- stamp_verified should land true, not the env-u-PGOPTIONS fail-open (row 14/17)"
 
     # GENESIS SEED (design/MAINT-GPG-TRUST-LAYER.md Rung 3; kernel/lineage/s26-row-hash-chain.sql):
     # the row_hash chain's zz_set_row_hash trigger REFUSES the first ledger INSERT loudly if no
@@ -1503,9 +1637,12 @@ fi
     if [ "$HAVE_AUTHOR_EVENT" != "0" ]; then
         echo "   'author' already carries a registration event ($HAVE_AUTHOR_EVENT); not re-registering"
     else
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         -- KERN below (write_verdict's type qualifier) is inside a dollar-quoted DO body: psql's
         -- :"var" substitution does not reach dollar-quoted text (verified live), so this one
         -- reference is guarded by the allowlist check earlier in this script, not by a bind.
@@ -1532,9 +1669,12 @@ SQL
             echo "   role '${_drole}' already carries a standing declaration; not re-declaring"
             continue
         fi
-        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v drole="$_drole" <<SQL
+        psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v drole="$_drole" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         SELECT set_config('birth.drole', :'drole', false);
         -- KERN below (write_verdict's type qualifier) is inside a dollar-quoted DO body: guarded
         -- by the allowlist check earlier in this script, not by a bind (see the step-1 comment above).
@@ -1566,9 +1706,12 @@ SQL
         if [ "$HAVE_P" != "0" ]; then
             echo "   '${_pname}' already registered; skipping"
         else
-            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v pname="$_pname" -v pclass="$_pclass" -v ppurpose="$_ppurpose" <<SQL
+            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v pname="$_pname" -v pclass="$_pclass" -v ppurpose="$_ppurpose" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         SELECT set_config('birth.pname', :'pname', false),
                set_config('birth.pclass', :'pclass', false),
                set_config('birth.ppurpose', :'ppurpose', false);
@@ -1609,9 +1752,12 @@ SQL
     else
         case "$HAVE_WORLD_IDENTITY" in
             0|1)
-                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
         BEGIN
@@ -1678,9 +1824,12 @@ SQL
         if [ "$HAVE_ROLE" != "0" ]; then
             echo "   'author' already holds role 'authority'; not re-binding"
         else
-            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" <<SQL
+            psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
         BEGIN
@@ -1704,9 +1853,12 @@ SQL
             if [ "$HAVE_CFG" != "0" ]; then
                 echo "   act class '${_actclass}' already configured; not re-configuring"
             else
-                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v actclass="$_actclass" <<SQL
+                psql -h "$HOST" -d "$DB" -q -v ON_ERROR_STOP=1 -v role="$ROLE" -v schema="$SCHEMA" -v kern="$KERN" -v actclass="$_actclass" \
+            -v birth_stamp_session="$BIRTH_STAMP_SESSION" -v birth_stamp_agent="$BIRTH_STAMP_AGENT" \
+            -v birth_stamp_ts="$BIRTH_STAMP_TS" -v birth_stamp_hmac="$BIRTH_STAMP_HMAC" <<SQL
         SET ROLE :"role";
         SET search_path = :"schema", :"kern";
+        $BIRTH_STAMP_SQL
         SELECT set_config('birth.actclass', :'actclass', false);
         DO \$bw\$
         DECLARE v ${KERN}.write_verdict;
@@ -1725,6 +1877,52 @@ SQL
                 echo "   (6) act class '${_actclass}' configured -> role 'authority' via the write boundary"
             fi
         done
+    fi
+
+    # THE SUCCESSION CARRY (design/BRIEF-SUCCESSION-CARRY-AND-SCAFFOLD-HARDENING-2026-08-06.md,
+    # ledger rows 17/22/50/126-128) -- runs BEFORE the atomic secret-file move immediately below,
+    # deliberately: this is itself a schema-isolated act (it reads the predecessor read-only and
+    # writes only into THIS run's own, not-yet-live newborn schema/kernel) that can still fail
+    # (predecessor unreachable, a carried write refused) -- "wire-first" ordering (row 17's own
+    # framing) means every act that can still fail runs BEFORE the one shared, hard-to-undo step
+    # (the secret file move onto the path the tool-interception hook reads), never after it. A
+    # carry refusal here means the SHARED secret file has not moved yet either -- an already-live
+    # predecessor world in THIS SAME directory (the --new-world-into-a-live-checkout shape row 17
+    # itself was found under) keeps its own working secret file untouched, exactly like every
+    # other refusal path in this birth sequence; the newborn schema/kernel this run just built are
+    # left behind, inert and diagnosable, never silently half-wired as "the" world for this
+    # directory.
+    if [ -n "$SUCCEEDS" ]; then
+        if [ -n "$SUCCESSION_OPT_OUT" ]; then
+            echo "-- $WORLD_LABEL: --succession-opt-out given -- SKIPPING the carry from '$SUCCEEDS', recording the opt-out itself --"
+            "$PY" "$AUTOHARN_ROOT/bootstrap/succession_carry.py" \
+                --host "$HOST" --db "$DB" \
+                --pred-schema "$SUCC_PRED_SCHEMA" --pred-kern "$SUCC_PRED_KERN" --pred-world "$SUCCEEDS" \
+                --schema "$SCHEMA" --kern "$KERN" --role "$ROLE" --world "$WORLD_LABEL" \
+                --secret-hex "$HEX" --opt-out-reason "$SUCCESSION_OPT_OUT"
+        else
+            echo "-- $WORLD_LABEL: succession carry from '$SUCCEEDS' (durable decisions + open work items + in-force edges) --"
+            "$PY" "$AUTOHARN_ROOT/bootstrap/succession_carry.py" \
+                --host "$HOST" --db "$DB" \
+                --pred-schema "$SUCC_PRED_SCHEMA" --pred-kern "$SUCC_PRED_KERN" --pred-world "$SUCCEEDS" \
+                --schema "$SCHEMA" --kern "$KERN" --role "$ROLE" --world "$WORLD_LABEL" \
+                --secret-hex "$HEX"
+        fi
+        echo "   succession carry from '$SUCCEEDS' complete (see the output above for exact counts)"
+    fi
+
+    # ATOMIC SECRET-FILE MOVE (row 17 item 1) -- EVERYTHING above this point that could still fail
+    # (DDL apply, genesis/world-identity seeds, the s40/s43/s60 birth sequence, and -- now -- the
+    # succession carry) has succeeded (every RAISE EXCEPTION/refusal above would already have
+    # aborted this `set -eu` script) -- so it is now safe to make the freshly-seeded secret live
+    # at the SHARED path the tool-interception hook reads. `mv` within the same directory is a
+    # single rename(2), atomic on every POSIX filesystem -- there is no window where SECRET_FILE
+    # is half-written. Only fires when a fresh secret was actually staged this run (the "already
+    # provisioned" branch above never created STAGE_SECRET_FILE, and correctly leaves SECRET_FILE
+    # exactly as it was).
+    if [ -f "$STAGE_SECRET_FILE" ]; then
+        mv -f "$STAGE_SECRET_FILE" "$SECRET_FILE"
+        echo "-- $WORLD_LABEL: secret now live at $SECRET_FILE (atomic move, birth sequence + carry succeeded) --"
     fi
 fi
 
