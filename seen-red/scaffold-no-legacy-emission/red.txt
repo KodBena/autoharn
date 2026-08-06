@@ -1,0 +1,61 @@
+Witnessed RED, captured against the pre-fix tree (bootstrap/new-project.sh's separate legacy/
+emission loop still present, bootstrap/templates/legacy-{pickup,distance-to-clean,asof-export}.tmpl
+still present, bootstrap/templates/pickup.tmpl still naming `./legacy/pickup`) by stashing this
+build's own fix (`git stash push -- bootstrap/new-project.sh 'bootstrap/templates/*.tmpl'`),
+running the fixture, then restoring the fix (`git stash pop`) and re-running for the green witness
+kept in this same directory's own passing state:
+
+$ python3 seen-red/scaffold-no-legacy-emission/run_fixtures.py
+
+=== scaffold-ran-clean ===
+  [ok] exit=0 stderr_tail=''
+
+=== no-legacy-dir ===
+  [FAIL] legacy_dir_exists=True
+
+=== no-legacy-anywhere ===
+  [FAIL] legacy_path_hits=['legacy', 'legacy/distance-to-clean', 'legacy/asof-export', 'legacy/pickup', 'legacy/led']
+
+=== pickup-carries-new-text ===
+  [FAIL] pickup_tmpl_exists=True still_names_legacy_pickup=True world_dispatcher_present=True
+
+=== force-rescaffold-stays-legacy-free ===
+  [FAIL] exit=0 legacy_path_hits=['legacy', 'legacy/distance-to-clean', 'legacy/asof-export', 'legacy/pickup', 'legacy/led']
+
+=== templates-deleted ===
+  [FAIL] still_present=['legacy-pickup.tmpl', 'legacy-distance-to-clean.tmpl', 'legacy-asof-export.tmpl']
+
+FAILURES: ['no-legacy-dir', 'no-legacy-anywhere', 'pickup-carries-new-text', 'force-rescaffold-stays-legacy-free', 'templates-deleted']
+
+--------------------------------------------------------------------------------------------
+
+Root cause (ledger rows 160/161, item omega-hub-join-and-pickup-legacy-text): a maintainer's
+freshly scaffolded world (~/w/omega) had a full legacy/ directory (led/pickup/asof-export/
+distance-to-clean, all four shims) despite the repo side of the earlier legacy-led retirement
+(design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, now archived at vestigial_documentation/design/
+FABLE-LEGACY-LED-RETIREMENT-SPEC.md) already being honored -- the retirement act only replaced
+legacy/led's CONTENT with a teaching-refusal stub, it never stopped bootstrap/new-project.sh's
+separate legacy/ emission loop (a `mkdir "$PROJECT_ROOT/legacy"` plus a `for verb in pickup
+asof-export distance-to-clean` shim-writing loop, sourced from bootstrap/templates/legacy-*.tmpl)
+from running at every birth. The maintainer's verbatim ruling: "I refused to push until legacy
+was *GONE* completely."
+
+Fix: bootstrap/new-project.sh's emission loop removed outright (not merely disabled); the three
+legacy-*.tmpl source templates (legacy-pickup.tmpl, legacy-distance-to-clean.tmpl,
+legacy-asof-export.tmpl) deleted from bootstrap/templates/ (legacy-led.tmpl was already deleted
+by the earlier retirement build); bootstrap/templates/pickup.tmpl's docstring and NOT-REBASED
+tail reworded to name no legacy verb at all -- the unrebased sections are simply not yet rebased
+onto the boundary path, citing design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 and
+stopping there.
+
+Re-run after the fix (this directory's live state): all six cases green, exit 0.
+
+KNOWN, FLAGGED, NOT FIXED BY THIS BUILD: tools/setup_tui/destination.py's classify_destination
+and bootstrap/classify-destination.sh both still treat `legacy/led`'s file presence as one of
+three AUTOHARN_COMPLETE markers (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md). With no
+legacy/ emitted any more, a freshly scaffolded, complete world will misclassify as
+AUTOHARN_PARTIAL there (and tools/setup_tui/steps_signed_genesis.py's "world has
+keys/+verify-commission+legacy/led" completeness check will likewise never see legacy/led again).
+This fixture does not cover that classifier -- it is a spec-governed module (its own design doc)
+out of this item's authorized scope; routed to the maintainer rather than patched here in a
+hurry.

@@ -141,8 +141,7 @@ REGISTRY: dict[str, str] = {
     "umbrella-cli-ensure-running":    "seen-red/umbrella-cli-ensure-running/run_fixtures.py",
     "umbrella-cli-version-handshake": "seen-red/umbrella-cli-version-handshake/run_fixtures.py",
     # the two census gates minted in this build carry their own seen-red (a census gate never seen
-    # red is the joke that writes itself); their fixture is the gate itself, red-specimen mutates its
-    # registry in memory to force the breach.
+    # red is the joke that writes itself); fixture is the gate itself, red-specimen mutates its registry in memory to force the breach.
     "layout-census":                  "gates/layout_census.py",
     "fixture-census":                 "gates/fixture_census.py",
     "link-integrity":                 "seen-red/link-integrity/run_fixtures.py",
@@ -357,6 +356,7 @@ REGISTRY: dict[str, str] = {
     # §1a): read-path identity resolution + read journaling, serving layer.
     "ac-read-identity":               "seen-red/ac-read-identity/run_fixtures.py",
     "ac-boundary-scope-filter":       "seen-red/ac-boundary-scope-filter/run_fixtures.py",  # AC spec sec1b/1c/2/4
+    "scaffold-no-legacy-emission":    "seen-red/scaffold-no-legacy-emission/run_fixtures.py",  # rows 160/161: permanent ban on any legacy/ path in a scaffold
 }
 
 def _red_evidence_name(d: str) -> str | None:

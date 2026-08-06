@@ -2,8 +2,8 @@
 # autoharn-verb-desc: resume-context read: hydrate an orchestrator from the ledger instead of session replay
 """pickup -- REBASED onto the boundary service (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-
 SPEC.md §5, ratified ledger row 1631; design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md, ratified row
-1652). The direct-psql original is `legacy-pickup.tmpl` (`./legacy/pickup`) -- 1200+ lines and a
-dozen sections; see "SCOPE, HONESTLY NAMED" below for exactly what runs through the boundary here.
+1652). The pre-rebase original was 1200+ lines and a dozen sections; see "SCOPE, HONESTLY NAMED"
+below for exactly what runs through the boundary here, and what does not yet.
 
 SCOPE, HONESTLY NAMED:
   COVERED  STANDING-DECISIONS (design/FABLE-GRADED-DECISIONS-SPEC.md, /views/standing_decisions),
@@ -13,8 +13,9 @@ SCOPE, HONESTLY NAMED:
            without the /views/{view} route; now unblocked, rebased first. MAIL (design/
            FABLE-MISSIVES-KERNEL-SPEC.md §5, ledger row 1263: missive_undisposed/missive_stale/
            missive_open_threads counts and rows) -- a FIFTH section, added same build.
-  NOT COVERED (UNEXERCISED by this build, named rather than silently dropped -- run
-           `./legacy/pickup` for these): RESOURCES/ESTIMATES/TAXONOMIES/MAINTAINER-REVIEW-QUEUE
+  NOT COVERED (UNEXERCISED by this build, named rather than silently dropped -- not yet rebased
+           onto the boundary path, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5):
+           RESOURCES/ESTIMATES/TAXONOMIES/MAINTAINER-REVIEW-QUEUE
            (each its own statement-prefix-convention scan over the WHOLE ledger_current, with
            substantial parsing logic this rebase did not have room to port faithfully),
            RECENT-CHANGES (git log), GIT-STATE (git status), IN-FLIGHT (a session-journal join),
@@ -44,8 +45,8 @@ try:
     import ensure_running as er  # noqa: E402  (round-1 review DIRECTED WORK: shared ensure-running policy, design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §2)
     import standing_decisions_config  # noqa: E402  (filing/standing_decisions_config.py, the ONE
                                        # home for the grades/byte_cap defaulting logic -- shared
-                                       # with hooks/sessionstart_durable_decisions.py AND the
-                                       # legacy pickup, ADR-0012 P1, no DB dependency of its own)
+                                       # with hooks/sessionstart_durable_decisions.py, ADR-0012
+                                       # P1, no DB dependency of its own)
 except ImportError as _e:
     print(f"pickup: cannot import autoharn's serving/boundary_cli_client.py or "
           f"filing/standing_decisions_config.py under AUTOHARN={AUTOHARN} "
@@ -303,9 +304,9 @@ def main(argv: list[str] | None = None) -> int:
     print("### SECTION: NOT-REBASED")
     print()
     print("RESOURCES / ESTIMATES / TAXONOMIES / MAINTAINER-REVIEW-QUEUE / RECENT-CHANGES / "
-          "GIT-STATE / IN-FLIGHT / ROLLUP are UNEXERCISED by this rebase -- run ./legacy/pickup "
-          "for the full brief (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5; see "
-          "this file's own module docstring SCOPE section).")
+          "GIT-STATE / IN-FLIGHT / ROLLUP are not yet rebased onto the boundary path "
+          "(design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5; see this file's own "
+          "module docstring SCOPE section).")
     return 0
 
 

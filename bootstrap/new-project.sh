@@ -100,9 +100,10 @@
 #   - writes deployment.json + this deployment's OWN keys/ (its GPG keyring, never autoharn's own
 #     law/keys/), attestations/, roles/, the ./autoharn dispatcher (verb roster derived live from
 #     the bootstrap/templates/*.tmpl glob, see _write_world_dispatcher() near this script's own
-#     top -- bootstrap/shim-verbs.sh's SHIM_VERBS_ALL still governs the separate legacy/ loop and
-#     the pre-migration ten-shim scripts), legacy/, and orchlog -- the SAME unconditional
-#     scaffold-writing code every mode already runs below.
+#     top -- bootstrap/shim-verbs.sh's SHIM_VERBS_ALL still governs the pre-migration ten-shim
+#     scripts), and orchlog -- the SAME unconditional scaffold-writing code every mode already
+#     runs below. No legacy/ directory is written (maintainer ruling: legacy/ is gone from
+#     newborn worlds entirely, ledger rows 160/161).
 #   - configures the boundary to be SERVED VIA ensure-running rather than a standing daemon: picks
 #     a free port, writes boundary-multiplex.toml, and writes boundary_url/boundary_deployment
 #     into deployment.json -- but does NOT start the service now. serving/ensure_running.py's
@@ -151,13 +152,13 @@ CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # EXEC_ROOT, TEMPLATES already set by the caller; writes ONLY $PROJECT_ROOT/autoharn.
 #
 # CLASS FIX, superseding the prior SHIM_VERBS_ALL-driven table (bootstrap/shim-verbs.sh is
-# UNCHANGED and still governs the ./legacy/ recovery-original loop and the pre-migration
-# ten-shim scripts -- convert-to-submodule.sh/upgrade-submodule.sh/freeze-at-stamp.sh -- this
-# fix touches ONLY the world-dispatcher table a fresh --new-world/--profile/--refresh-dispatcher
-# run writes): the old table was a SECOND, hand-maintained home for "which .tmpl file is a
-# verb" -- exactly the drift class lineage-chain-lags-directory (ledger rows 1392/1393) closed
-# for the kernel chain, reopened here for the verb roster (found live: courier.tmpl did not
-# exist and the hardcoded table could not have noticed even if it had).
+# UNCHANGED and still governs the pre-migration ten-shim scripts --
+# convert-to-submodule.sh/upgrade-submodule.sh/freeze-at-stamp.sh -- this fix touches ONLY the
+# world-dispatcher table a fresh --new-world/--profile/--refresh-dispatcher run writes): the old
+# table was a SECOND, hand-maintained home for "which .tmpl file is a verb" -- exactly the drift
+# class lineage-chain-lags-directory (ledger rows 1392/1393) closed for the kernel chain,
+# reopened here for the verb roster (found live: courier.tmpl did not exist and the hardcoded
+# table could not have noticed even if it had).
 #
 # ADR-0000 RULE 2(a) CLOSURE STATEMENT: the quantification universe is EXACTLY the set of
 # basenames matching bootstrap/templates/*.tmpl, MINUS the enumerated NON_VERB_TEMPLATES
@@ -170,20 +171,20 @@ CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # below -- silence is never a valid way to exclude one.
 #
 # NON_VERB_TEMPLATES -- the loud, enumerated, commented exclusion list Rule 2(a) demands. Every
-# member is either a config/doc scaffold-time template (sedsubst'd or copied into a plain file
-# at birth, never exec'd as an operator verb) or a legacy/ recovery original (routed through
-# $PROJECT_ROOT/legacy/<verb> by this script's own separate loop elsewhere, sourced from
-# bootstrap/shim-verbs.sh, never through ./autoharn) -- named here rather than silently dropped:
+# member is a config/doc scaffold-time template (sedsubst'd or copied into a plain file at
+# birth, never exec'd as an operator verb) -- named here rather than silently dropped. There is
+# no legacy/ recovery-original class any more: legacy-pickup.tmpl/legacy-distance-to-clean.tmpl/
+# legacy-asof-export.tmpl are deleted outright (maintainer ruling: legacy/ is gone from newborn
+# worlds entirely, ledger rows 160/161; legacy-led.tmpl was already deleted per
+# design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md, now archived at
+# vestigial_documentation/design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md):
 #   CLAUDE.md.tmpl                 -- sedsubst'd into $PROJECT_ROOT/CLAUDE.md, a doc, not a verb
 #   HOOKS.md.tmpl                  -- sedsubst'd into .claude/HOOKS.md, a doc, not a verb
 #   settings.json.tmpl             -- sedsubst'd into .claude/settings.json, config, not a verb
 #   attestations-README.md.tmpl    -- sedsubst'd into attestations/README.md, a doc, not a verb
 #   keys-README.md.tmpl            -- sedsubst'd into keys/README.md, a doc, not a verb
 #   roles-README.md.tmpl           -- sedsubst'd into roles/README.md, a doc, not a verb
-#   legacy-pickup.tmpl             -- the direct-psql original, reached via ./legacy/pickup only
-#   legacy-distance-to-clean.tmpl  -- the direct-psql original, reached via ./legacy/distance-to-clean only
-#   legacy-asof-export.tmpl        -- the direct-psql original, reached via ./legacy/asof-export only
-NON_VERB_TEMPLATES="CLAUDE.md.tmpl HOOKS.md.tmpl settings.json.tmpl attestations-README.md.tmpl keys-README.md.tmpl roles-README.md.tmpl legacy-pickup.tmpl legacy-distance-to-clean.tmpl legacy-asof-export.tmpl"
+NON_VERB_TEMPLATES="CLAUDE.md.tmpl HOOKS.md.tmpl settings.json.tmpl attestations-README.md.tmpl keys-README.md.tmpl roles-README.md.tmpl"
 
 _is_non_verb_template() {
     _nvt_target="$1"
@@ -1976,12 +1977,18 @@ if not boundary_url or not boundary_deployment:
     print("   (boundary_url/boundary_deployment not supplied -- the rebased led/pickup/"
           "asof-export/distance-to-clean shims will refuse, teaching both names, until this "
           "deployment.json gains them by hand or a future --boundary-url/--boundary-deployment "
-          "re-scaffold; ./legacy/ holds the direct-psql originals in the meantime)")
+          "re-scaffold)")
 PYEOF
 
 # .autoharn-world.json sentinel (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §2), written
 # at the SAME point as deployment.json above -- the DECLARED birth marker; deployment.json +
-# legacy/led remain the BEHAVIORAL evidence. `world` is written as the SAME value as
+# legacy/led USED TO remain the BEHAVIORAL evidence, but this script no longer writes legacy/led
+# (rows 160/161: legacy/ is gone from newborn worlds entirely) -- tools/setup_tui/destination.py's
+# classify_destination and bootstrap/classify-destination.sh both still probe for legacy/led as
+# one of their three AUTOHARN_COMPLETE markers and have NOT been updated for this; a freshly
+# scaffolded, complete world will now misclassify as AUTOHARN_PARTIAL there until that classifier
+# is repointed at a marker every world still writes (flagged, not fixed here -- out of this
+# item's authorized scope; routes to the maintainer). `world` is written as the SAME value as
 # deployment.json's own `name` field just written above (tools/setup_tui/destination.py's module
 # docstring names this resolution explicitly: the two denote the same fact at birth time, and can
 # only drift apart from a LATER hand-edit or a --force re-scaffold under a different --name --
@@ -2510,45 +2517,22 @@ if [ -n "$F_PRINCIPAL_SET_FILE" ] && [ -s "$F_PRINCIPAL_SET_FILE" ]; then
     fi
 fi
 
-# ./legacy/ (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row 1631):
-# the direct-psql originals of the rebased verbs, whole and executable, demoted by placement
-# never deleted -- "operator recovery when the boundary is down" (spec §5's own words). judge/
-# audit/attest-doc/verify-commission/verify-chain do NOT rebase (spec §5's own closed
-# enumeration: judge "drives clingo + differential against the world, not a ledger client in the
-# boundary's sense"; audit is the SAME class -- engine/contemp_audit.py + engine/
-# contemp_differential.py, clingo-driven -- so it stays in the single, unforked family above,
-# never duplicated here) -- so this loop covers ONLY led/pickup/asof-export/distance-to-clean,
-# each pointed at its OWN `legacy-<verb>.tmpl` sibling (bootstrap/templates/, the pre-rebase
-# content, byte-identical save the one-line recovery header each carries at its own top).
-#
-# `led` IS THE ONE EXCEPTION (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md's retirement act,
-# ledger row 1149/1150): `legacy-led.tmpl` is DELETED from this repository outright -- the
-# boundary is mandatory at every birth now (no decline path left that needs a working direct-
-# psql `led`), and `led principal *` closed the one family that was ever missing from the served
-# path. `legacy/led` still gets a FILE here (destination.py's own AUTOHARN_COMPLETE classifier
-# guarantee depends on its existence), but it is a one-line teaching refusal, never a working
-# CLI -- pickup/asof-export/distance-to-clean are UNCHANGED, real shims, same as always.
-echo "-- ./legacy/ (pickup/asof-export/distance-to-clean's direct-psql originals; led is a teaching-refusal stub, retired) --"
-mkdir -p "$PROJECT_ROOT/legacy"
-cat > "$PROJECT_ROOT/legacy/led" <<'STUB'
-#!/bin/sh
-echo "legacy/led: RETIRED 2026-07 (design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md) -- every surface" >&2
-echo "  serves through ./autoharn led now; the boundary is mandatory at every birth, and led" >&2
-echo "  principal * (grant-competence/relate and their 11 siblings) closed the one family the" >&2
-echo "  served path was ever missing. Use ./autoharn led instead." >&2
-exit 1
-STUB
-chmod +x "$PROJECT_ROOT/legacy/led"
-echo "wrote legacy/led (RETIRED teaching-refusal stub, design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)"
-for verb in pickup asof-export distance-to-clean; do
-    cat > "$PROJECT_ROOT/legacy/$verb" <<SHIM
-#!/bin/sh
-HERE="\$(cd "\$(dirname "\$0")" && cd .. && pwd)"
-exec env PICKUP_DEPLOYMENT="\$HERE/deployment.json" $EXEC_ROOT/bootstrap/templates/legacy-$verb.tmpl "\$@"
-SHIM
-    chmod +x "$PROJECT_ROOT/legacy/$verb"
-    echo "wrote legacy/$verb (shim -> $EXEC_ROOT/bootstrap/templates/legacy-$verb.tmpl)"
-done
+# NO ./legacy/ directory is written (maintainer ruling, rows 160/161: "I refused to push until
+# legacy was *GONE* completely" -- his newborn world had all four shims (led/pickup/asof-export/
+# distance-to-clean) despite the repo side of the legacy-led retirement already being honored;
+# this loop -- which used to mkdir "$PROJECT_ROOT/legacy" and write a led teaching-refusal stub
+# plus three direct-psql pickup/asof-export/distance-to-clean shims sourced from this repo's own
+# now-deleted legacy-pickup.tmpl/legacy-asof-export.tmpl/legacy-distance-to-clean.tmpl -- is
+# removed outright, not merely disabled. See rows 1631/1149/1150 in the ledger for the history
+# of what this used to be ("operator recovery when the boundary is down"); design/
+# FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 and design/FABLE-LEGACY-LED-RETIREMENT-
+# SPEC.md (now archived at vestigial_documentation/design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)
+# for the spec text. KNOWN, FLAGGED, NOT FIXED HERE: tools/setup_tui/destination.py's
+# classify_destination and bootstrap/classify-destination.sh both still treat legacy/led's file
+# presence as one of three AUTOHARN_COMPLETE markers; a freshly scaffolded, complete world will
+# misclassify as AUTOHARN_PARTIAL there until that classifier (its own governing spec, design/
+# FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md) is repointed at a marker every world still writes --
+# out of this item's authorized scope, routed to the maintainer rather than patched in a hurry.
 
 # orchlog wrapper (deployment-orchlog-surfacing item, half (b) -- half (a), migrate printing the
 # span, belongs to ./migrate and is untouched here). A DIFFERENT shape from the eight shims just
