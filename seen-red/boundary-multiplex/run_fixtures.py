@@ -23,7 +23,14 @@ WORLDS:
                 the burst).
   (no DB)     -- WM3, three legs: unknown top-level key, missing required key, zero
                 deployments -- each a construction-time startup refusal naming the defect; the
-                socket never binds (no world needed at all).
+                socket never binds (no world needed at all). WM-INFLIGHT-DEFAULT (no DB either --
+                a startup-banner read, design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md
+                item 1/5): the shipped MAX_INFLIGHT_PER_DEPLOYMENT default (32) and its honest
+                starvation-tradeoff NOTE, both named in the startup banner; WM4's own config now
+                explicitly OVERRIDES `max_inflight_per_deployment` to 12 (the value the retired
+                `max(4, 24 // 2)` formula used to produce for two deployments) so its burst can
+                still observe `deployment_saturated` -- the default alone (32 >= the global 24)
+                can never trigger that label, see WM-INFLIGHT-DEFAULT's own leading comment.
 
 Usage: python3 seen-red/boundary-multiplex/run_fixtures.py
 Exit 0 if every case matches; 1 otherwise. Lazy imports banned."""
@@ -51,7 +58,7 @@ PYVENV = Path.home() / "w" / "vdc" / "venvs" / "generic" / "bin" / "python"
 sys.path.insert(0, str(REPO / "filing"))
 sys.path.insert(0, str(REPO / "serving"))
 import deployment_record  # noqa: E402  (unused directly here, but boundary_service's own import chain expects filing/ on sys.path first)
-import boundary_service  # noqa: E402  (MAX_INFLIGHT_KERNEL_CALLS, compute_per_deployment_limit, PSQL_CONNECT_TIMEOUT_S -- reused constants, never a second literal)
+import boundary_service  # noqa: E402  (unused directly here as of design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 retiring compute_per_deployment_limit -- kept imported for its own filing/ sys.path side effect, matching deployment_record's own comment above)
 import boundary_multiplex_config  # noqa: E402
 
 # FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §1: mark this process's own
@@ -74,11 +81,19 @@ CHAIN_B = bs_fixtures.CHAIN_B
 UNROUTABLE_HOST = bs_fixtures.UNROUTABLE_HOST
 
 
-def write_multiplex_toml(tmpdir: Path, entries: dict[str, dict[str, str]]) -> Path:
+def write_multiplex_toml(tmpdir: Path, entries: dict[str, dict[str, str]],
+                          max_inflight_per_deployment: int | None = None) -> Path:
     """`entries`: deployment name -> {pghost, pgdatabase, pguser, pgschema, pgkern}. Hand-writes
     TOML text (no library needed for WRITING -- `tomllib` is read-only stdlib) in the exact
-    shape `serving/boundary_multiplex_config.py` validates."""
+    shape `serving/boundary_multiplex_config.py` validates. `max_inflight_per_deployment`
+    (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1): an optional top-level
+    override for the hub-wide per-deployment inflight sub-bound -- omitted entirely leaves the
+    shipped default (32) in force, matching every other optional-key convention in this file's
+    sibling `boundary_multiplex_config.py`."""
     lines: list[str] = []
+    if max_inflight_per_deployment is not None:
+        lines.append(f"max_inflight_per_deployment = {max_inflight_per_deployment}")
+        lines.append("")
     for name, fields in entries.items():
         lines.append(f"[deployments.{name}]")
         for k in ("pghost", "pgdatabase", "pguser", "pgschema", "pgkern"):
@@ -178,6 +193,43 @@ def main() -> int:
                   f"stderr tail={out_wm3[-400:]!r} (expected to name {needle!r})",
                   failures)
 
+        # ============ WM-INFLIGHT-DEFAULT: default MAX_INFLIGHT_PER_DEPLOYMENT=32, printed ======
+        # design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1/5: the shipped
+        # default's OWN visibility -- no DB needed (startup only validates config SHAPE, never
+        # probes deployment health), so an UNROUTABLE_HOST single-deployment config is enough to
+        # reach the startup banner cheaply. Also witnesses the honest starvation-tradeoff NOTE
+        # (serving/boundary_service.py's `inflight_per_deployment_starvation_note`): the default
+        # (32) is >= the global MAX_INFLIGHT_KERNEL_CALLS (24), so the NOTE must fire.
+        print("== WM-INFLIGHT-DEFAULT: shipped default (32) named in the startup banner ==")
+        world_default_probe = f"muxdefault{RUN_SUFFIX}"
+        tmp_cfg_default = Path(tempfile.mkdtemp(prefix="mux-inflight-default-cfg-"))
+        tmps.append(tmp_cfg_default)
+        config_path_default = write_multiplex_toml(tmp_cfg_default, {
+            world_default_probe: {
+                "pghost": UNROUTABLE_HOST, "pgdatabase": "toy",
+                "pguser": f"{world_default_probe}_rw", "pgschema": world_default_probe,
+                "pgkern": f"{world_default_probe}_kernel",
+            },
+        })
+        proc_default, port_default = start_multiplex_server(config_path_default)
+        asgi_up_default = False
+        deadline_default = time.time() + 10
+        while time.time() < deadline_default:
+            try:
+                with socket.create_connection(("127.0.0.1", port_default), timeout=1):
+                    asgi_up_default = True
+                    break
+            except OSError:
+                time.sleep(0.2)
+        out_default = bs_fixtures.stop_server(proc_default)
+        check("wm-inflight-default-banner-names-32-and-starvation-note",
+              asgi_up_default and "MAX_INFLIGHT_PER_DEPLOYMENT=32" in out_default
+              and "max_inflight_per_deployment" in out_default
+              and "NOTE -- MAX_INFLIGHT_PER_DEPLOYMENT=32 is >= the global "
+                  "MAX_INFLIGHT_KERNEL_CALLS=24" in out_default,
+              f"asgi_up={asgi_up_default}; startup output tail={out_default[-1200:]!r}",
+              failures)
+
         # ==================== WM1/WM2/WM4: the two-deployment world ====================
         print(f"== scaffolding two full s43 worlds: {world_a}, {world_b} ==")
         wa = bs_fixtures.scaffold_classic(world_a, CHAIN_B)
@@ -247,12 +299,20 @@ def main() -> int:
         # seen-red/boundary-service/run_fixtures.py's own W14/W27 use) -- its kernel calls stall
         # for up to PSQL_CONNECT_TIMEOUT_S before ever resolving, so a burst against IT alone
         # drives ITS OWN MAX_INFLIGHT_PER_DEPLOYMENT sub-bound to saturation without the global
-        # MAX_INFLIGHT_KERNEL_CALLS bound ever being touched (2 deployments -> per-deployment
-        # limit = max(4, 24 // 2) = 12; a burst of 24 against the stalled deployment alone is
-        # well beyond its OWN sub-bound of 12 but well under the untouched global bound of 24).
+        # MAX_INFLIGHT_KERNEL_CALLS bound ever being touched. design/
+        # BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 retired the
+        # `max(4, MAX_INFLIGHT_KERNEL_CALLS // len(deployments))` formula this leg used to derive
+        # its expectation from (the shipped DEFAULT, 32, is now >= the global bound, 24 -- see
+        # WM-INFLIGHT-DEFAULT above -- so a burst can never observe `deployment_saturated` at the
+        # default; the per-deployment gate structurally cannot bind before the smaller global one
+        # does). This config explicitly OVERRIDES `max_inflight_per_deployment` to 12 (the SAME
+        # value the old formula produced for n=2, `max(4, 24 // 2)`) so this leg still witnesses
+        # the SECOND polarity item 5 asks for: a configured value, distinct from the default,
+        # visibly enforced by the refusal.
         world_stalled = f"muxstall{RUN_SUFFIX}"
         tmp_cfg4 = Path(tempfile.mkdtemp(prefix="mux-wm4-cfg-"))
         tmps.append(tmp_cfg4)
+        expected_per_dep_limit = 12
         config_path4 = write_multiplex_toml(tmp_cfg4, {
             world_a: entry_for_world(world_a),
             world_stalled: {
@@ -260,9 +320,7 @@ def main() -> int:
                 "pguser": f"{world_stalled}_rw", "pgschema": world_stalled,
                 "pgkern": f"{world_stalled}_kernel",
             },
-        })
-        n_deployments4 = 2
-        expected_per_dep_limit = boundary_service.compute_per_deployment_limit(n_deployments4)
+        }, max_inflight_per_deployment=expected_per_dep_limit)
         proc4, port4 = start_multiplex_server(config_path4)
         procs.append(proc4)
         base4 = f"http://127.0.0.1:{port4}"
@@ -348,6 +406,19 @@ def main() -> int:
               f"GET /d/{world_a}/health DURING the {world_stalled} burst: status={sib_status} "
               f"elapsed={sib_elapsed:.2f}s (bound {SIBLING_MARGIN_S}s) body={sib_body}",
               failures)
+
+        # design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 5, second polarity:
+        # the CONFIGURED value (12, distinct from the shipped default 32 -- WM-INFLIGHT-DEFAULT
+        # above already covers the default) named in the startup banner, and the starvation NOTE
+        # correctly ABSENT (12 < the global MAX_INFLIGHT_KERNEL_CALLS=24, so the sibling-isolation
+        # protection genuinely holds at this configuration -- exactly this burst's own proof).
+        # `stop_server` here ends proc4 early (the burst is already done); the `finally` block's
+        # own `stop_server(proc4)` call below is still safe against an already-exited process.
+        out4 = bs_fixtures.stop_server(proc4)
+        check("wm4-banner-names-configured-12-no-starvation-note",
+              "MAX_INFLIGHT_PER_DEPLOYMENT=12" in out4
+              and "NOTE -- MAX_INFLIGHT_PER_DEPLOYMENT" not in out4,
+              f"startup output tail={out4[-1200:]!r}", failures)
 
     finally:
         for proc in procs:

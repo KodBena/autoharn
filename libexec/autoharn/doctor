@@ -4,6 +4,31 @@
 # FIXTURE SANDBOX FORECLOSURE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §2):
 # checked here too, not only in ./autoharn -- a fixture invoking this file directly, skipping
 # ./autoharn's own dispatch, refuses identically. See filing/fixture_sandbox_preamble.sh's own header.
+#
+# BANKING (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3; missive row
+# 1009 part 1): this file is doctor's own operator verb -- bootstrap/templates/doctor.tmpl
+# itself is out of this build's named surface, so banking is added HERE, at the wrapper, exactly
+# like libexec/autoharn/verify-chain's own sibling addition (see that file's own leading comment
+# for the full rationale, not restated here). The tmpl's stdout is captured to a scratch file
+# (still printed to the operator verbatim, in full, right after the run -- stderr is untouched,
+# passed through live throughout), then, for an ordinary run (any invocation that is not a
+# --help/-h request -- doctor.tmpl's own check, `any(a in ("--help", "-h") for a in argv)`,
+# mirrored here rather than re-derived), handed to a small inline Python snippet that banks it
+# under engine/docs/ledger-marriage/derivations/doctor/<ts>_<hash>/result.json -- SAME storage
+# home judge already banks under, SAME <UTC-ts>_<input-hash[:12]> subdir naming convention,
+# stated deviation: the "target" component is the fixed literal "doctor" (this instrument has no
+# per-run --target the way a differential run does) and the hash is over the CAPTURED STDOUT
+# itself (there is no EDB-text analog here). VERBATIM, not re-interpreted
+# (BankedDoctorSummary's own field docstring, serving/boundary_models.py): this wrapper does not
+# parse or classify the tmpl's output -- `summary` is simply the tmpl's own LAST non-empty
+# printed line (doctor.tmpl's own established convention: every normal-completion run's final
+# line is its "TOTAL: N FAIL, M PASS, K SKIP" line, bootstrap/templates/doctor.tmpl's own
+# main()), `raw_output` is everything printed to stdout, and an empty/whitespace-only capture is
+# skipped -- there is no summary to bank in that case, never a fabricated one. A banking WRITE
+# failure is reported to stderr as a warning and never changes this verb's own exit code --
+# banking is best-effort infrastructure for the attestation route, never a condition that can
+# turn an otherwise-successful (or otherwise-failed) doctor run into a DIFFERENT reported outcome
+# for a caller checking this verb's own exit code.
 LIBHERE="$(cd "$(dirname "$0")" && pwd)"
 FILING="$(cd "$LIBHERE/../../filing" && pwd)"
 if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
@@ -14,4 +39,52 @@ else
 fi
 
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/doctor.tmpl" "$@"
+
+_DR_BANK=1
+for _dr_arg in "$@"; do
+    if [ "$_dr_arg" = "--help" ] || [ "$_dr_arg" = "-h" ]; then
+        _DR_BANK=0
+    fi
+done
+
+_DR_OUT="$(mktemp)"
+env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/doctor.tmpl" "$@" >"$_DR_OUT"
+_DR_RC=$?
+cat "$_DR_OUT"
+
+if [ "$_DR_BANK" -eq 1 ]; then
+    python3 - "$_DR_OUT" "$HERE" <<'PYEOF'
+import datetime
+import hashlib
+import json
+import pathlib
+import sys
+
+out_path = pathlib.Path(sys.argv[1])
+repo_root = pathlib.Path(sys.argv[2])
+try:
+    text = out_path.read_text(encoding="utf-8", errors="replace")
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if lines:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ts = now.strftime("%Y%m%dT%H%M%SZ")
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+        d = (repo_root / "engine" / "docs" / "ledger-marriage" / "derivations"
+             / "doctor" / f"{ts}_{digest}")
+        d.mkdir(parents=True, exist_ok=False)
+        record = {
+            "instrument": "doctor",
+            "summary": lines[-1],
+            "ran_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "raw_output": text,
+        }
+        (d / "result.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+except OSError as e:
+    print(f"libexec/autoharn/doctor: WARNING -- could not bank this run's result "
+          f"({e.__class__.__name__}: {e}); the run itself is unaffected, this only means "
+          f"GET /d/{{deployment}}/attestation will not see it.", file=sys.stderr)
+PYEOF
+fi
+
+rm -f "$_DR_OUT"
+exit "$_DR_RC"

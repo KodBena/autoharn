@@ -241,12 +241,16 @@ class DeploymentSaturated(BaseModel):
     global bound and starve its siblings. This shape is DISTINCT from `ServerSaturated` above
     (spec §4/A6/A8's label-honesty ruling: one condition, one label -- a caller refused because
     ITS OWN deployment's sub-bound is exhausted must never see the same label a caller refused
-    because the WHOLE SERVER's global bound is exhausted would see, and vice versa)."""
+    because the WHOLE SERVER's global bound is exhausted would see, and vice versa). Per design/
+    BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1, `MAX_INFLIGHT_PER_DEPLOYMENT`
+    is deployment-configurable (`boundary-multiplex.toml`'s optional top-level
+    `max_inflight_per_deployment` key, default 32) -- `message` below names the CONFIGURED value
+    and where to change it, per the missive's own request."""
 
     disposition: str = "deployment_saturated"
     deployment: str = Field(description="the deployment name this call was refused against")
-    inflight_limit: int = Field(description="MAX_INFLIGHT_PER_DEPLOYMENT -- this deployment's own sub-bound")
-    message: str = Field(description="teach-text: names the bound, the deployment, the cause, and that retry-with-backoff is the correct caller response")
+    inflight_limit: int = Field(description="MAX_INFLIGHT_PER_DEPLOYMENT -- this deployment's own sub-bound, as configured (boundary-multiplex.toml's optional top-level max_inflight_per_deployment key, default 32) or defaulted")
+    message: str = Field(description="teach-text: names the bound, the deployment, the cause, that retry-with-backoff is the correct caller response, and where to raise the configured bound")
 
 
 class UnknownView(BaseModel):
@@ -482,12 +486,16 @@ class ArtifactWriteIntFields(BaseModel):
 # (`engine/ledger_differential.py`) treats `--retain` as opt-in, but THIS REPO'S OWN operator
 # verb (`bootstrap/templates/judge.tmpl`) hardcodes it and calls that its "ordinary run" (that
 # file's own header, verbatim) -- fix-round MODERATE, corrected from this module's own first-cut
-# text, which had it backwards; verify-chain and doctor bank NOTHING in this codebase as it
-# stands -- confirmed by
-# reading `bootstrap/templates/verify-chain.tmpl`/`doctor.tmpl` in full for any write to disk,
-# finding none. Their own PRESENT shapes are modeled below anyway (forward-compatible if a future
-# build adds banking for either) but are UNEXERCISED in this build's own witness plan, named
-# rather than silently absent -- there is no code path today that could construct one.
+# text, which had it backwards. As of design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md
+# item 3, verify-chain and doctor ALSO genuinely bank -- not inside their own
+# `bootstrap/templates/{verify-chain,doctor}.tmpl` (both stayed untouched; out of that build's
+# own named surface), but one layer up, at their own operator verbs
+# `libexec/autoharn/verify-chain`/`libexec/autoharn/doctor` (see either file's own leading
+# comment for the full mechanism -- a captured-stdout write to the SAME
+# engine/docs/ledger-marriage/derivations/ home judge banks under, a sibling subtree per
+# instrument, read back by `serving/boundary_service.py`'s `_latest_instrument_result`). Their
+# own PRESENT shapes below are exercised in this build's own witness plan (seen-red/
+# boundary-multiplex/'s own multiplex fixture and this build's own attestation-route legs).
 _ATTESTATION_LABEL = "last_known_attestation"
 
 
@@ -535,10 +543,13 @@ class BankedJudgeVerdict(BaseModel):
 
 
 class BankedDoctorSummary(BaseModel):
-    """UNEXERCISED in this build (boundary_models.py's own module-level note above): `doctor`
-    banks nothing today (`bootstrap/templates/doctor.tmpl` read in full, no write to disk found).
-    Modeled so a future build that adds doctor banking has a shape to fill, not a shape to
-    invent under time pressure."""
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3 (boundary_models.py's
+    own module-level note above has the full mechanism): `doctor` now genuinely banks, at its
+    own operator verb `libexec/autoharn/doctor` rather than inside
+    `bootstrap/templates/doctor.tmpl` itself (untouched; out of that build's own named surface).
+    `summary` is doctor's own LAST non-empty printed line, captured VERBATIM (never
+    re-interpreted) -- doctor.tmpl's own established convention is that this line is always its
+    "TOTAL: N FAIL, M PASS, K SKIP" summary."""
 
     banked: bool = True
     label: str = _ATTESTATION_LABEL
@@ -548,13 +559,15 @@ class BankedDoctorSummary(BaseModel):
 
 
 class BankedVerifyChainVerdict(BaseModel):
-    """UNEXERCISED in this build (boundary_models.py's own module-level note above):
-    `verify-chain` banks nothing today (`bootstrap/templates/verify-chain.tmpl` read in full --
-    it prints its JSON result to stdout only; the operator's own signed-genesis ceremony
-    redirects that stdout to a file BY HAND for GPG signing, which is not a location this
-    service can reliably discover or trust as "the latest verdict"). Modeled so a future build
-    that adds verify-chain banking has a shape to fill, not a shape to invent under time
-    pressure."""
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3 (boundary_models.py's
+    own module-level note above has the full mechanism): `verify-chain` now genuinely banks, at
+    its own operator verb `libexec/autoharn/verify-chain` rather than inside
+    `bootstrap/templates/verify-chain.tmpl` itself (untouched; out of that build's own named
+    surface) -- ONLY for an ordinary run, never `--head` (that mode's own JSON-to-stdout output
+    is a different artifact for the operator's own GPG signing ceremony, deliberately not
+    banked here). `verdict` is verify-chain's own FIRST printed line, captured VERBATIM (never
+    re-interpreted) -- verify-chain.tmpl's own established convention is that every non---head
+    branch prints its status word first, e.g. "verify-chain: INTACT -- ..."."""
 
     banked: bool = True
     label: str = _ATTESTATION_LABEL

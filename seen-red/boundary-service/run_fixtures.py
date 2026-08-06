@@ -2744,22 +2744,20 @@ def main() -> int:
     # bounded exactly like W14's own -- the only new behavior under test here is what happens to
     # the calls that never get admitted at all.
     #
-    # ROUTE-SHAPE MIGRATION, LABEL NOTE (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md
-    # §4): this config carries exactly ONE deployment (n=1), the shape W27 always tested --
-    # MAX_INFLIGHT_PER_DEPLOYMENT = max(4, MAX_INFLIGHT_KERNEL_CALLS // 1) =
-    # MAX_INFLIGHT_KERNEL_CALLS EXACTLY (both 24), and `_psql` checks the per-deployment gate
-    # BEFORE the global gate (spec §4: "checked FIRST"). With only one deployment in flight,
-    # "this deployment is saturated" and "the whole server is saturated" are the SAME fact, and
-    # the per-deployment gate -- numerically identical, checked first -- always fires: a
-    # single-deployment server can never actually EMIT `server_saturated` for its own traffic
-    # (the label exists for the genuinely-multi-deployment case, where sibling deployments
-    # jointly exhaust the shared 24 while none alone exceeds its own smaller sub-bound -- see
-    # seen-red/boundary-multiplex/run_fixtures.py's WM4 for that axis, driven with n=2). This
-    # witness therefore now asserts `deployment_saturated` (the label THIS config can actually
-    # produce), not `server_saturated` -- the bounded-admission SHAPE it proves (prompt typed
-    # 503, never queued, sibling /health unstarved, drains after) is otherwise unchanged from
-    # its pre-migration form. A witness for `server_saturated` firing on a genuinely-shared
-    # global gate is a named gap, not claimed here (see this file's build report).
+    # ROUTE-SHAPE MIGRATION, LABEL NOTE, UPDATED (design/
+    # BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1): this config carries exactly
+    # ONE deployment (n=1), the shape W27 always tested. Before that item, `MAX_INFLIGHT_PER_
+    # DEPLOYMENT = max(4, MAX_INFLIGHT_KERNEL_CALLS // 1)` was numerically IDENTICAL to the global
+    # bound (both 24), so the per-deployment gate -- checked FIRST (spec §4) -- always fired,
+    # and a single-deployment server could never actually EMIT `server_saturated` for its own
+    # traffic (that label's own witness lived only in seen-red/boundary-multiplex/run_fixtures.py's
+    # WM4, n=2, a genuinely shared global gate). The item's new shipped default
+    # (MAX_INFLIGHT_PER_DEPLOYMENT=32) is now LARGER than the global bound (24) -- this config
+    # carries NO override, so it runs at that default -- which means the per-deployment gate can
+    # never bind before the smaller global one does: this witness now asserts `server_saturated`
+    # instead, and (a genuine improvement, not a downgrade) this closes the exact gap this
+    # comment used to name -- `server_saturated` firing on a real, single-deployment burst is now
+    # observed here, not merely claimed unreachable.
     tmp27 = Path(tempfile.mkdtemp(prefix="svcfxw27-"))
     try:
         cfg27 = tmp27 / "w27-boundary-multiplex.toml"
@@ -2849,22 +2847,24 @@ def main() -> int:
             t.join(timeout=60)
         health_thread.join(timeout=60)
 
-        # See this block's own setup comment: a single-deployment (n=1) config's per-deployment
-        # sub-bound equals the global bound exactly, and the per-deployment gate is checked
-        # first -- so THIS config genuinely emits deployment_saturated, never server_saturated,
-        # for its own burst (the label this witness can actually observe from a single-
-        # deployment server).
+        # See this block's own setup comment: at the shipped MAX_INFLIGHT_PER_DEPLOYMENT default
+        # (32, this config carries no override), the per-deployment gate can never bind before
+        # the smaller global bound (24) does -- so THIS config genuinely emits server_saturated,
+        # never deployment_saturated, for its own burst.
         saturated = [r for r in results if r[1] == 503 and isinstance(r[2], dict)
-                     and r[2].get("disposition") == "deployment_saturated"]
+                     and r[2].get("disposition") == "server_saturated"]
+        dep_saturated_leaked = [r for r in results if r[1] == 503 and isinstance(r[2], dict)
+                                 and r[2].get("disposition") == "deployment_saturated"]
         prompt_saturated = [r for r in saturated if r[3] < PROMPT_BOUND_S]
         expected_excess = BURST_N - boundary_service.MAX_INFLIGHT_KERNEL_CALLS
         check("w27-saturation-typed-503-prompt",
               asgi_up27 and len(results) == BURST_N and len(saturated) >= expected_excess
-              and len(prompt_saturated) == len(saturated)
+              and len(prompt_saturated) == len(saturated) and len(dep_saturated_leaked) == 0
               and all(r[2].get("inflight_limit") == boundary_service.MAX_INFLIGHT_KERNEL_CALLS for r in saturated)
               and all("retry" in (r[2].get("message") or "").lower() for r in saturated),
               f"asgi_up={asgi_up27}; burst_n={BURST_N}, responses={len(results)}, "
-              f"saturated={len(saturated)} (expected >= {expected_excess}), all prompt"
+              f"saturated={len(saturated)} (expected >= {expected_excess}), "
+              f"deployment_saturated LEAKED={len(dep_saturated_leaked)} (must be 0), all prompt"
               f"(<{PROMPT_BOUND_S}s)={len(prompt_saturated) == len(saturated)}; sample statuses="
               f"{sorted({r[1] for r in results})}; elapsed range="
               f"{min((r[3] for r in results), default=-1):.2f}s..{max((r[3] for r in results), default=-1):.2f}s",

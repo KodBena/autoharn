@@ -160,3 +160,53 @@ No refresh verb, no in-place migration, no dual-mode shims.
    single-deployment service (which nothing external depends on yet, which is why now
    is the cheap moment).
 4. Is `./legacy/` retirement a decision he wants scheduled, or left open?
+
+## Amendment — 2026-08-06: `MAX_INFLIGHT_PER_DEPLOYMENT` is deployment-configurable, default 32
+
+*(Dated append per ADR-0005 Rule 8 / ADR-0020's posture — additive only, the ratified §4 body
+above stands verbatim and is not rewritten. Provenance: missive row 1011 (experience4's
+commissioner, also this project's maintainer) and decision row 1068 (schedule-execution
+ruling, dispatching this item as "A1"); build in design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-
+2026-08-04.md.)*
+
+§4's original text names the per-deployment sub-bound's default as `max(4,
+MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`. In real multi-deployment operation this
+formula produced `MAX_INFLIGHT_PER_DEPLOYMENT=6` (four deployments, 24 // 4) — witnessed
+(ledger row 1994) making one live operator session plus one parallel test/agent consumer
+against a single deployment trip immediate 503 `deployment_saturated` refusals, which
+cascaded into 77 wholesale e2e failures elsewhere. The commissioner's own words: "its
+provenance is unclear to the commissioner ('I don't know how that got there')." Read
+plainly: the formula is not undocumented, but the specific FLOOR/default it was left to
+produce was never a deliberately-chosen concurrency target for real operation — it was a
+mechanical division with no operational sizing behind it, and it bit exactly the "one
+human plus one automated consumer" shape this project's own worlds actually see.
+
+**The fix, as built.** `MAX_INFLIGHT_PER_DEPLOYMENT` is now an OPTIONAL top-level
+`boundary-multiplex.toml` key, `max_inflight_per_deployment` — same whole-file
+validation-before-bind discipline every other tunable in this file already has
+(`serving/boundary_multiplex_config.py`'s `load_multiplex_config_with_inflight_limit`), a
+positive integer bounded `[1, 10_000]` (a sanity ceiling against a typo, not operational
+advice). Its default is **32** (row 1068's own choice, within the commissioner's stated
+24-64 band), superseding the `len(deployments)`-derived formula above entirely — the
+default no longer varies with deployment count. The per-deployment `deployment_saturated`
+refusal's teach-text names the configured value and where to change it
+(`serving/boundary_service.py`'s `DeploymentCallSaturated` message).
+
+**A structural consequence, named honestly, not silently absorbed.** §4's own rationale for
+this sub-bound is "so one deployment's stalled kernel cannot occupy the whole global bound
+and starve its siblings" — that protection depends on the sub-bound being SMALLER than the
+global `MAX_INFLIGHT_KERNEL_CALLS` (24, unchanged by this amendment). The new default, 32,
+is LARGER than 24: at the shipped default, the per-deployment gate can never bind before
+the global one does, so a single deployment's own burst CAN occupy the entire global
+admission pool — the sibling-starvation protection this sub-bound existed for does not
+hold at the default configuration. This is a deliberate tradeoff (headroom for the common
+single-or-few-deployment case over sibling isolation under a stalled deployment), not an
+oversight: `serving/boundary_service.py`'s `inflight_per_deployment_starvation_note` prints
+a loud startup diagnostic whenever the resolved value is `>= MAX_INFLIGHT_KERNEL_CALLS`,
+naming the consequence and that setting `max_inflight_per_deployment` below 24 restores
+sibling isolation. Nothing is silently clamped: an operator's configured value (or the
+shipped default) is honored at face value and the tradeoff is surfaced, not hidden
+(ADR-0002 fail-loud over a silent behavior-altering override). Left for a later, separate
+maintainer call: whether `MAX_INFLIGHT_KERNEL_CALLS` itself should also rise — out of this
+item's scope (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md's own named
+surface is the per-deployment cap only).

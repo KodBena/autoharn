@@ -8,6 +8,37 @@
 # FIXTURE SANDBOX FORECLOSURE (design/FABLE-FIXTURE-SANDBOX-RUNTIME-FORECLOSURE-SPEC.md §2):
 # checked here too, not only in ./autoharn -- a fixture invoking this file directly, skipping
 # ./autoharn's own dispatch, refuses identically. See filing/fixture_sandbox_preamble.sh's own header.
+#
+# BANKING (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3; missive row
+# 1009 part 1): this file is verify-chain's own operator verb -- bootstrap/templates/
+# verify-chain.tmpl itself is out of this build's named surface, so banking is added HERE,
+# at the wrapper, rather than inside the instrument. The tmpl's stdout is no longer `exec`'d
+# straight to the terminal: it is captured to a scratch file (still printed to the operator
+# verbatim, in full, right after the run -- the only observable change is that a fast, ~1-query
+# command's output is dumped once its (already-brief) run completes rather than streamed
+# line-by-line; stderr is untouched, passed through live throughout), then, for an ORDINARY run
+# (never `--head`, never a bare `--help`/`-h`), handed to a small inline Python snippet that
+# banks it under engine/docs/ledger-marriage/derivations/verify-chain/<ts>_<hash>/result.json --
+# SAME storage home `judge` already banks under (engine/ledger_differential.py's own `retain()`,
+# RETENTION = engine/docs/ledger-marriage/derivations/), SAME <UTC-ts>_<input-hash[:12]> subdir
+# naming convention, stated deviation: the "target" component is the fixed literal
+# "verify-chain" (this instrument has no per-run --target argument the way a differential run
+# does) and the hash is over the CAPTURED STDOUT itself (there is no EDB-text analog here; the
+# instrument's own output is the closest available "what makes two runs distinguishable" input).
+# `--head` is deliberately NOT banked here: it produces a different artifact for a different
+# purpose (a signable head for the operator's own GPG ceremony, per this route's own comment in
+# serving/boundary_service.py's attestation() docstring), not the reconciliation-verdict
+# attestation this bank exists to serve. VERBATIM, not re-interpreted (BankedVerifyChainVerdict's
+# own field docstring, serving/boundary_models.py): this wrapper does not parse or classify the
+# tmpl's output -- `verdict` is simply the tmpl's own first printed line (its own established
+# convention: every non---head branch of verify-chain.tmpl's main() prints its status word as the
+# FIRST line, e.g. "verify-chain: INTACT -- ..."), `raw_output` is everything printed to stdout,
+# and an empty/whitespace-only capture (a pre-main environment failure that wrote only to stderr)
+# is skipped -- there is no verdict to bank in that case, never a fabricated one. A banking
+# WRITE failure (e.g. a read-only checkout) is reported to stderr as a warning and never changes
+# this verb's own exit code -- banking is best-effort infrastructure for the attestation route,
+# never a condition that can turn an otherwise-successful (or otherwise-failed) verify-chain run
+# into a DIFFERENT reported outcome for a caller checking this verb's own exit code.
 LIBHERE="$(cd "$(dirname "$0")" && pwd)"
 FILING="$(cd "$LIBHERE/../../filing" && pwd)"
 if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
@@ -18,4 +49,55 @@ else
 fi
 
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
-exec env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/verify-chain.tmpl" "$@"
+
+_VC_BANK=1
+if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    _VC_BANK=0
+fi
+for _vc_arg in "$@"; do
+    if [ "$_vc_arg" = "--head" ]; then
+        _VC_BANK=0
+    fi
+done
+
+_VC_OUT="$(mktemp)"
+env PICKUP_DEPLOYMENT="$HERE/deployment.json" "$HERE/bootstrap/templates/verify-chain.tmpl" "$@" >"$_VC_OUT"
+_VC_RC=$?
+cat "$_VC_OUT"
+
+if [ "$_VC_BANK" -eq 1 ]; then
+    python3 - "$_VC_OUT" "$HERE" <<'PYEOF'
+import datetime
+import hashlib
+import json
+import pathlib
+import sys
+
+out_path = pathlib.Path(sys.argv[1])
+repo_root = pathlib.Path(sys.argv[2])
+try:
+    text = out_path.read_text(encoding="utf-8", errors="replace")
+    stripped = text.strip()
+    if stripped:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ts = now.strftime("%Y%m%dT%H%M%SZ")
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+        d = (repo_root / "engine" / "docs" / "ledger-marriage" / "derivations"
+             / "verify-chain" / f"{ts}_{digest}")
+        d.mkdir(parents=True, exist_ok=False)
+        record = {
+            "instrument": "verify-chain",
+            "verdict": stripped.splitlines()[0],
+            "computed_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "raw_output": text,
+        }
+        (d / "result.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+except OSError as e:
+    print(f"libexec/autoharn/verify-chain: WARNING -- could not bank this run's result "
+          f"({e.__class__.__name__}: {e}); the run itself is unaffected, this only means "
+          f"GET /d/{{deployment}}/attestation will not see it.", file=sys.stderr)
+PYEOF
+fi
+
+rm -f "$_VC_OUT"
+exit "$_VC_RC"

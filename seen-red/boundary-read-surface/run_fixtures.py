@@ -681,12 +681,24 @@ def main() -> int:
               failures)
 
         # ==================== WR5: admission discipline unchanged on a /views/ route =============
+        # design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 retired
+        # compute_per_deployment_limit's `max(4, MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`
+        # formula (shipped default is now a flat 32, deployment-count-independent, and >= the
+        # global MAX_INFLIGHT_KERNEL_CALLS=24 -- see seen-red/boundary-multiplex/run_fixtures.py's
+        # WM-INFLIGHT-DEFAULT for that polarity). This leg needs `deployment_saturated` to
+        # actually fire (its own point, "still fires on a /views/ route"), which the default can
+        # structurally never produce (the per-deployment gate cannot bind before the smaller
+        # global one does) -- so this config now explicitly OVERRIDES `max_inflight_per_deployment`
+        # to 12, the SAME value the retired formula used to produce for two deployments, matching
+        # seen-red/boundary-multiplex/run_fixtures.py's own WM4 fix for the identical reason.
         print("== WR5: per-deployment saturation still fires on a /views/ route (WM4 method) ==")
         world_stalled = f"wrfxstall{RUN_SUFFIX}"
         tmp_cfg5 = Path(tempfile.mkdtemp(prefix="wr5-cfg-"))
         tmps.append(tmp_cfg5)
+        expected_per_dep_limit = 12
         cfg5 = tmp_cfg5 / "boundary-multiplex.toml"
         cfg5.write_text(
+            f'max_inflight_per_deployment = {expected_per_dep_limit}\n\n'
             f'[deployments.{world}]\n'
             f'pghost = "{PGHOST}"\npgdatabase = "{PGDB}"\n'
             f'pguser = "{world}_rw"\npgschema = "{world}"\npgkern = "{world}_kernel"\n\n'
@@ -699,8 +711,6 @@ def main() -> int:
         procs.append(proc5)
         base5 = f"http://127.0.0.1:{port5}"
         up5 = bs_fixtures.wait_health(f"{base5}/d/{world}")
-        n_deployments5 = 2
-        expected_per_dep_limit = boundary_service.compute_per_deployment_limit(n_deployments5)
         BURST_N = 24
         results: list[tuple[int, int | None, dict | None]] = []
         lock = threading.Lock()

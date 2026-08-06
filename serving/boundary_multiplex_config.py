@@ -91,6 +91,20 @@ gate"; a positive integer, the spec names 16 as the default). Both are process-w
 not per-deployment -- the spec's own "per hub" phrasing for `MAX_SSE_CLIENTS`), exactly like
 `log_level`/`identity_enforcement` above.
 
+MAX_INFLIGHT_PER_DEPLOYMENT (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1;
+missive row 1011, decision row 1068 amending multiplex spec §4): one new OPTIONAL top-level key,
+`max_inflight_per_deployment` -- same whole-file validation pass, same before-the-socket-binds
+discipline, same "positive integer, sanity-ceiling-bounded" shape as `max_sse_clients` above.
+Defaults to 32 (row 1068's own choice within the commissioner's stated 24-64 band), SUPERSEDING
+the multiplex spec §4's original `max(4, MAX_INFLIGHT_KERNEL_CALLS // len(deployments))` formula
+-- that formula is what produced the reported `MAX_INFLIGHT_PER_DEPLOYMENT=6` (24 // 4, four
+deployments) the commissioner flagged as having no recorded provenance as a deliberately-chosen
+concurrency floor (the spec's own dated amendment records this). Hub-wide, like `max_sse_clients`
+-- one value applies to every deployment's own sub-bound identically; a per-deployment override is
+NOT introduced here (unlike `identity_enforcement`'s override), since nothing in the missive or
+its adjudication asked for per-deployment tuning, only for the one shared default to stop being
+too low.
+
 Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
@@ -137,7 +151,7 @@ _ALL_ENTRY_KEYS: frozenset[str] = _REQUIRED_ENTRY_KEYS | _OPTIONAL_ENTRY_KEYS
 # `{"deployments"}` set.
 _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
     "deployments", "log_level", "identity_enforcement",
-    "sse_poll_interval_secs", "max_sse_clients",
+    "sse_poll_interval_secs", "max_sse_clients", "max_inflight_per_deployment",
 })
 
 # IDENTITY_ENFORCEMENT (design/FABLE-DISPATCH-MECHANICS-SPEC.md §3, ledger row 1471 sub-item 4c,
@@ -215,6 +229,17 @@ DEFAULT_MAX_SSE_CLIENTS = 16
 MAX_SSE_POLL_INTERVAL_SECS = 3600.0
 MAX_SSE_CLIENTS_CEILING = 100_000
 
+# MAX_INFLIGHT_PER_DEPLOYMENT (see module docstring): default named ONCE (ADR-0012 P1) --
+# serving/boundary_service.py imports this rather than carrying a second literal copy, the same
+# relationship this module already has with the SSE tunables above. The sanity ceiling catches an
+# operator typo (a per-deployment cap in the millions) rather than silently accepting one; it is
+# NOT a claim that any value up to the ceiling is operationally sound against the GLOBAL
+# `MAX_INFLIGHT_KERNEL_CALLS` bound -- `serving/boundary_service.py`'s own startup banner names
+# that tradeoff loudly when the configured/default value reaches or exceeds the global bound (a
+# per-deployment sub-bound structurally cannot bind before a smaller shared global one does).
+DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT = 32
+MAX_INFLIGHT_PER_DEPLOYMENT_CEILING = 10_000
+
 
 class MultiplexConfigError(Exception):
     """The config file is absent, unreadable, unparseable as TOML, not a table, carries an
@@ -236,7 +261,8 @@ def load_multiplex_config(path: str | Path) -> dict[str, deployment_record.Deplo
     that also needs the resolved log level (`serving/boundary_service.py`'s own `main()`) calls
     `load_multiplex_config_with_log_level` instead, rather than this file growing a second,
     diverging validation path."""
-    deployments, _log_level, _identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
+    deployments, _log_level, _identity_enforcement, _poll, _max_clients, _by_dep, _max_inflight = (
+        _load_and_validate(path))
     return deployments
 
 
@@ -252,7 +278,8 @@ def load_multiplex_config_with_log_level(
     dispatch-mechanics spec's `identity_enforcement` half, and the SSE spec's two tunables) for
     every EXISTING caller; a caller that needs more calls `load_multiplex_config_with_diagnostics`
     or `load_multiplex_config_with_sse` instead."""
-    deployments, log_level, _identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
+    deployments, log_level, _identity_enforcement, _poll, _max_clients, _by_dep, _max_inflight = (
+        _load_and_validate(path))
     return deployments, log_level
 
 
@@ -267,7 +294,8 @@ def load_multiplex_config_with_diagnostics(
     SSE spec's two tunables) for every EXISTING caller; `serving/boundary_service.py`'s `main()`
     now calls `load_multiplex_config_with_sse` instead (superseding its prior call to this
     function), which also needs those."""
-    deployments, log_level, identity_enforcement, _poll, _max_clients, _by_dep = _load_and_validate(path)
+    deployments, log_level, identity_enforcement, _poll, _max_clients, _by_dep, _max_inflight = (
+        _load_and_validate(path))
     return deployments, log_level, identity_enforcement
 
 
@@ -280,9 +308,10 @@ def load_multiplex_config_with_sse(
     `DEFAULT_SSE_POLL_INTERVAL_SECS`/`DEFAULT_MAX_SSE_CLIENTS` when the TOML omits either key
     entirely). Kept byte-for-byte backward compatible (discards the per-deployment
     identity_enforcement override dict) for every EXISTING caller; `serving/boundary_service.py`'s
-    `main()` now calls `load_multiplex_config_with_deployment_identity` instead (superseding its
-    prior call to this function), which also needs that."""
-    deployments, log_level, identity_enforcement, poll, max_clients, _by_dep = _load_and_validate(path)
+    `main()` now calls `load_multiplex_config_with_inflight_limit` instead (superseding its prior
+    call to this function), which also needs that."""
+    deployments, log_level, identity_enforcement, poll, max_clients, _by_dep, _max_inflight = (
+        _load_and_validate(path))
     return deployments, log_level, identity_enforcement, poll, max_clients
 
 
@@ -290,32 +319,52 @@ def load_multiplex_config_with_deployment_identity(
     path: str | Path,
 ) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int,
            dict[str, "IdentityEnforcementPosture"]]:
-    """Work item identity-enforcement-split-flip (ledger row 619's adjudication) -- the RICHEST
-    entry point, SAME single validation pass as every loader above (never a second, independent
-    parse of the same file), also returning the fully-RESOLVED per-deployment
-    `identity_enforcement` posture: a `dict[str, IdentityEnforcementPosture]` keyed by every
-    deployment name in `deployments`, with the top-level default already folded in for any
-    deployment that carries no `[deployments.NAME].identity_enforcement` override of its own.
-    `serving/boundary_service.py`'s `main()` calls this one now (superseding its prior call to
-    `load_multiplex_config_with_sse`) so the "override or inherit the default" merge happens in
-    exactly ONE place (ADR-0012 P1), never re-derived at the request-handling layer."""
+    """Work item identity-enforcement-split-flip (ledger row 619's adjudication) -- SAME single
+    validation pass as every loader above (never a second, independent parse of the same file),
+    also returning the fully-RESOLVED per-deployment `identity_enforcement` posture: a
+    `dict[str, IdentityEnforcementPosture]` keyed by every deployment name in `deployments`, with
+    the top-level default already folded in for any deployment that carries no
+    `[deployments.NAME].identity_enforcement` override of its own. Kept byte-for-byte backward
+    compatible (discards the `max_inflight_per_deployment` value) for every EXISTING caller (this
+    project's own setup-TUI fixture bank calls this exact name); `serving/boundary_service.py`'s
+    `main()` now calls `load_multiplex_config_with_inflight_limit` instead (superseding its prior
+    call to this function), which also needs that."""
+    deployments, log_level, identity_enforcement, poll, max_clients, by_dep, _max_inflight = (
+        _load_and_validate(path))
+    return deployments, log_level, identity_enforcement, poll, max_clients, by_dep
+
+
+def load_multiplex_config_with_inflight_limit(
+    path: str | Path,
+) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int,
+           dict[str, "IdentityEnforcementPosture"], int]:
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 -- the RICHEST entry
+    point, SAME single validation pass as every loader above (never a second, independent parse
+    of the same file), also returning the resolved `max_inflight_per_deployment` (already
+    validated, defaulted to `DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT` -- 32 -- when the TOML omits
+    the key entirely). `serving/boundary_service.py`'s `main()` calls this one now (superseding
+    its prior call to `load_multiplex_config_with_deployment_identity`), so the per-deployment
+    inflight sub-bound is resolved in exactly ONE place (ADR-0012 P1), never re-derived at the
+    request-handling layer and never re-derived from `len(deployments)` (the retired formula this
+    item replaces)."""
     return _load_and_validate(path)
 
 
 def _load_and_validate(
     path: str | Path,
 ) -> tuple[dict[str, deployment_record.DeploymentRecord], str, str, float, int,
-           dict[str, "IdentityEnforcementPosture"]]:
+           dict[str, "IdentityEnforcementPosture"], int]:
     """The ONE home (ADR-0012 P1) every public loader above routes through -- every validation
     axis (unknown top-level key, missing/unknown/malformed `deployments` entry, an
-    unrecognized `log_level`/`identity_enforcement`/`sse_poll_interval_secs`/`max_sse_clients`
-    value, at the top level OR inside a `[deployments.NAME]` table) runs in this SAME whole-file
-    pass, before any public function returns anything, matching spec §3's "the WHOLE file
-    validates before the socket binds" applied to each new key exactly as it already applies to
-    every existing one. The sixth return element is the fully-resolved, per-deployment
-    `identity_enforcement` posture -- one `IdentityEnforcementPosture` per deployment name, the
-    top-level default already folded in for any deployment with no override of its own (row 619's
-    adjudication)."""
+    unrecognized `log_level`/`identity_enforcement`/`sse_poll_interval_secs`/`max_sse_clients`/
+    `max_inflight_per_deployment` value, at the top level OR inside a `[deployments.NAME]` table)
+    runs in this SAME whole-file pass, before any public function returns anything, matching spec
+    §3's "the WHOLE file validates before the socket binds" applied to each new key exactly as it
+    already applies to every existing one. The sixth return element is the fully-resolved,
+    per-deployment `identity_enforcement` posture -- one `IdentityEnforcementPosture` per
+    deployment name, the top-level default already folded in for any deployment with no override
+    of its own (row 619's adjudication). The seventh return element is the resolved, hub-wide
+    `max_inflight_per_deployment` (row 1068's item 1)."""
     p = Path(path)
     if not p.is_file():
         raise MultiplexConfigError(
@@ -385,6 +434,23 @@ def _load_and_validate(
             f"refuse loudly, before the socket ever binds; omit the key entirely for the "
             f"default, {DEFAULT_MAX_SSE_CLIENTS!r}).")
 
+    # MAX_INFLIGHT_PER_DEPLOYMENT (module docstring; design/
+    # BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1): same whole-file validation
+    # pass, same before-the-socket-binds discipline, same bool-excluded-from-int shape as
+    # `max_sse_clients` immediately above.
+    max_inflight_per_deployment = raw.get(
+        "max_inflight_per_deployment", DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT)
+    if (isinstance(max_inflight_per_deployment, bool)
+            or not isinstance(max_inflight_per_deployment, int)
+            or not (1 <= max_inflight_per_deployment <= MAX_INFLIGHT_PER_DEPLOYMENT_CEILING)):
+        raise MultiplexConfigError(
+            f"boundary-multiplex config at {p}: 'max_inflight_per_deployment' = "
+            f"{max_inflight_per_deployment!r} is not an integer in "
+            f"[1, {MAX_INFLIGHT_PER_DEPLOYMENT_CEILING}] (design/"
+            f"BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 -- unknown/"
+            f"out-of-domain values refuse loudly, before the socket ever binds; omit the key "
+            f"entirely for the default, {DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT!r}).")
+
     if "deployments" not in raw:
         raise MultiplexConfigError(
             f"boundary-multiplex config at {p} is missing the required top-level key "
@@ -444,4 +510,4 @@ def _load_and_validate(
         else:
             identity_enforcement_by_deployment[name] = default_identity_enforcement
     return (result, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients,
-            identity_enforcement_by_deployment)
+            identity_enforcement_by_deployment, max_inflight_per_deployment)

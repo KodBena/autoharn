@@ -13,10 +13,11 @@ file (`serving/boundary_multiplex_config.py`, the one home for its shape); the W
 validates -- unknown key, missing key, or zero deployments -- before the socket ever binds
 (spec §3). Every A1-A13 closure axis above holds identically per resolved deployment (spec
 §4); `MAX_INFLIGHT_KERNEL_CALLS` stays the GLOBAL admission bound (it protects the shared
-threadpool, process-wide), and gains a per-deployment sub-bound
-(`MAX_INFLIGHT_PER_DEPLOYMENT`, `compute_per_deployment_limit`, computed and printed at
-startup) so one deployment's stalled kernel cannot occupy the whole global bound and starve
-its siblings -- both saturation refusals are typed 503 under DISTINCT labels
+threadpool, process-wide), and gains a per-deployment sub-bound (`MAX_INFLIGHT_PER_DEPLOYMENT`,
+resolved once at startup from `boundary-multiplex.toml`'s optional `max_inflight_per_deployment`
+key -- design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1, default 32 --
+printed at startup) so one deployment's stalled kernel cannot occupy the whole global bound and
+starve its siblings -- both saturation refusals are typed 503 under DISTINCT labels
 (`server_saturated` vs `deployment_saturated`, one condition per label, the A6/A8 label-honesty
 ruling extended to the new axis). An unrecognized `{deployment}` segment is a typed 404
 `unknown_deployment` naming the full known set.
@@ -1145,21 +1146,41 @@ MAX_TIE_GROUP_EXTRA_ROWS = 1000
 #
 # MULTIPLEX SPEC §4: this constant stays the GLOBAL bound -- it protects the shared threadpool,
 # which is process-wide, not per-deployment -- and is UNCHANGED by multiplexing. The
-# per-deployment sub-bound (`MAX_INFLIGHT_PER_DEPLOYMENT`) is a SECOND, independent gate, sized
-# per process at startup by `compute_per_deployment_limit` below and held one-per-deployment on
-# each `BoundaryConfig` (never a second literal here -- ADR-0012 P1).
+# per-deployment sub-bound (`MAX_INFLIGHT_PER_DEPLOYMENT`) is a SECOND, independent gate, resolved
+# once per process at startup from `boundary-multiplex.toml`'s own `max_inflight_per_deployment`
+# key (`boundary_multiplex_config.load_multiplex_config_with_inflight_limit`, default
+# `boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT` -- 32) and held one-per-deployment
+# on each `BoundaryConfig` (never a second literal here -- ADR-0012 P1).
 MAX_INFLIGHT_KERNEL_CALLS = 24
 _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
 
 
-def compute_per_deployment_limit(n_deployments: int) -> int:
-    """Multiplex spec §4: `MAX_INFLIGHT_PER_DEPLOYMENT = max(4, MAX_INFLIGHT_KERNEL_CALLS //
-    len(deployments))`, computed once at startup (never re-derived per request) and PRINTED at
-    startup (spec §4, verbatim) so an operator can see the bound their own deployment count
-    produced. The floor of 4 keeps a many-deployment config from squeezing any single
-    deployment's own sub-bound down to a value so small ordinary concurrent use of THAT
-    deployment alone would trip it."""
-    return max(4, MAX_INFLIGHT_KERNEL_CALLS // n_deployments)
+def inflight_per_deployment_starvation_note(per_dep_limit: int) -> str | None:
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 -- the honest flag for
+    a real structural consequence of raising `MAX_INFLIGHT_PER_DEPLOYMENT`'s default above the
+    GLOBAL `MAX_INFLIGHT_KERNEL_CALLS` bound (32 > 24, today): multiplex spec §4's own rationale
+    for this sub-bound is 'one deployment's stalled kernel cannot occupy the whole global bound
+    and starve its siblings', but a sub-bound cannot structurally bind BEFORE a SMALLER shared
+    global one does -- `_psql` checks the per-deployment gate first, but with more per-deployment
+    slots than the global pool holds, the global gate is always what actually exhausts first for
+    any single deployment's own burst, so that deployment CAN occupy the entire global pool.
+    Returns `None` when `per_dep_limit < MAX_INFLIGHT_KERNEL_CALLS` (the sub-bound still protects
+    siblings), else a stderr-ready line naming the tradeoff and where to change it -- printed
+    loudly at startup (never silently clamped: an operator's explicit choice, or the shipped
+    default, is honored at face value; ADR-0002 fail-loud over a silent behavior-altering
+    override)."""
+    if per_dep_limit < MAX_INFLIGHT_KERNEL_CALLS:
+        return None
+    return (
+        f"boundary_service: NOTE -- MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} is >= the "
+        f"global MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS}, so the per-deployment "
+        f"gate can never bind before the global one does for any single deployment's own "
+        f"traffic -- one deployment's stalled kernel CAN occupy the whole global admission pool "
+        f"and starve its siblings (multiplex spec §4's own sibling-starvation rationale for this "
+        f"sub-bound does not hold at this configuration). Set max_inflight_per_deployment below "
+        f"{MAX_INFLIGHT_KERNEL_CALLS} in boundary-multiplex.toml if sibling isolation under a "
+        f"stalled deployment matters more than headroom for a single deployment's own "
+        f"concurrency.")
 
 # A10: GET /rows/{id}/history's OWN default `limit` -- deliberately 1000, not the 100 every
 # other paginated route defaults to (ADR-0012 P1 note: this is the one place the four A5.4
@@ -1506,11 +1527,13 @@ class BoundaryConfig:
 
     MULTIPLEX SPEC §4: as of the multiplex build, every `BoundaryConfig` also carries its OWN
     `dep_semaphore` -- a `threading.BoundedSemaphore` sized to `dep_limit`
-    (`MAX_INFLIGHT_PER_DEPLOYMENT`, computed once at process startup by
-    `compute_per_deployment_limit`) -- so `_psql` can gate a kernel call on BOTH the global
-    bound (`_KERNEL_CALL_SEMAPHORE`) and this deployment's own sub-bound without a second
-    dict/lookup at the choke point. `record.name` is REQUIRED here (never `None`): every
-    multiplexed deployment is named, by construction (the TOML table key, spec §3)."""
+    (`MAX_INFLIGHT_PER_DEPLOYMENT`, resolved once at process startup from
+    `boundary-multiplex.toml`'s own `max_inflight_per_deployment` key -- design/
+    BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1) -- so `_psql` can gate a kernel
+    call on BOTH the global bound (`_KERNEL_CALL_SEMAPHORE`) and this deployment's own sub-bound
+    without a second dict/lookup at the choke point. `record.name` is REQUIRED here (never
+    `None`): every multiplexed deployment is named, by construction (the TOML table key,
+    spec §3)."""
 
     def __init__(
         self,
@@ -1649,7 +1672,11 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"concurrent kernel calls in flight (multiplex spec §4) -- this call is refused "
             f"immediately rather than queued. The cause is ordinary concurrent load on THIS "
             f"deployment, not a defect in this request nor a whole-server condition; the "
-            f"correct response is to retry after a short backoff."
+            f"correct response is to retry after a short backoff. MAX_INFLIGHT_PER_DEPLOYMENT is "
+            f"configured via boundary-multiplex.toml's optional top-level "
+            f"'max_inflight_per_deployment' key (default "
+            f"{boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT}) -- raise it there "
+            f"if legitimate concurrent load on this deployment regularly exceeds it."
         )
     if not _KERNEL_CALL_SEMAPHORE.acquire(blocking=False):
         cfg.dep_semaphore.release()
@@ -2011,6 +2038,49 @@ def _latest_judge_derivation() -> dict[str, Any] | None:
         "banked_at": datetime.datetime.fromtimestamp(
             mtime, tz=datetime.timezone.utc).isoformat(),
     }
+
+
+def _latest_instrument_result(subtree: str, required_key: str) -> dict[str, Any] | None:
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3 -- the SAME
+    latest-by-mtime scan `_latest_judge_derivation` above already established, reused (ADR-0012
+    P1: one scan shape, not a second hand-rolled copy) for the SIBLING subtrees
+    `libexec/autoharn/verify-chain` and `libexec/autoharn/doctor` now bank under (SAME bank root
+    as judge, `_judge_derivations_root` -- despite its name, that module-global is now the shared
+    bank root every instrument writes under; a stated, minor, non-blocking naming drift, flagged
+    here rather than silently left per ADR-0008 Rule 3, not renamed by this item to keep its own
+    blast radius to the two named verb files plus this route). `subtree` is `"verify-chain"` or
+    `"doctor"` -- a FIXED, single subtree per call (unlike judge's own four-family domain
+    attribution, these two instruments have no differential-family concept), so this scan is
+    simpler: `rglob("result.json")` under `<root>/<subtree>/` only, latest by mtime wins, a
+    malformed/unreadable file is SKIPPED (never raised) exactly like judge's own scan. Returns
+    `None` if the subtree does not exist or carries no readable `result.json` -- the ordinary
+    case for a checkout that has never run this verb yet."""
+    root = _judge_derivations_root / subtree
+    if not root.is_dir():
+        return None
+    best: tuple[float, dict[str, Any]] | None = None  # (mtime, parsed)
+    skipped: list[str] = []
+    for path in root.rglob("result.json"):
+        try:
+            mtime = path.stat().st_mtime
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(parsed, dict) or required_key not in parsed:
+                skipped.append(str(path))
+                continue
+        except (OSError, ValueError):
+            skipped.append(str(path))
+            continue
+        if best is None or mtime > best[0]:
+            best = (mtime, parsed)
+    if skipped:
+        print(f"boundary_service: _latest_instrument_result({subtree!r}) skipped "
+              f"{len(skipped)} unreadable/malformed result.json path(s): {skipped}",
+              file=sys.stderr)
+    if best is None:
+        return None
+    mtime, parsed = best
+    parsed["banked_at"] = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+    return parsed
 
 
 def _kind_vocabulary(cfg: BoundaryConfig) -> list[str]:
@@ -3478,7 +3548,17 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         # caller-actionable load, not a server-side anomaly).
         deployment = request.path_params.get("deployment", "?")
         cfg = configs.get(deployment)
-        limit = cfg.dep_limit if cfg is not None else compute_per_deployment_limit(len(configs))
+        # `DeploymentCallSaturated` is raised only from `_psql`, given an actual `cfg`, so this
+        # `cfg is None` branch is unreachable in practice; kept as a defensive fallback rather
+        # than an `assert` (a malformed/absent path param is a caller-input condition, not an
+        # invariant this process's own logic could violate). `max_inflight_per_deployment` is now
+        # a single hub-wide value (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md
+        # item 1) -- every configured `BoundaryConfig.dep_limit` is identical, so any one of
+        # `configs`' values names it (config load already refuses zero deployments, spec §3, so
+        # `configs` is never empty here); the closed-vocabulary default is the last-resort floor.
+        limit = (cfg.dep_limit if cfg is not None
+                 else next(iter(configs.values())).dep_limit if configs
+                 else boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT)
         return deployment_saturated(deployment, limit, str(exc))
 
     @app.exception_handler(_BodyTooLarge)
@@ -4068,10 +4148,16 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         (`bootstrap/templates/judge.tmpl`, its own header, verbatim: "the ordinary run: retain
         DerivationRecords") hardcodes `--retain` -- for `./autoharn judge`, retention IS the
         ordinary run, not an opportunistic extra (fix-round MODERATE, corrected from this
-        route's own first-cut teach-text, which had it backwards). `verify-chain` and `doctor`
-        bank NOTHING today (both templates read in full, no write-to-disk found in either) -- so
-        those two classes always resolve to `NoBankedArtifact` in THIS build, an honest,
-        disclosed fact, not a bug in this route.
+        route's own first-cut teach-text, which had it backwards). As of design/
+        BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3, `verify-chain` and
+        `doctor` ALSO genuinely bank -- not inside their own `bootstrap/templates/*.tmpl`
+        (those stayed untouched; out of that build's own named surface), but at the operator
+        verb one layer up, `libexec/autoharn/verify-chain`/`libexec/autoharn/doctor`
+        themselves (see either file's own leading comment for the full rationale) -- so for
+        `./autoharn verify-chain`/`./autoharn doctor`, banking IS the ordinary run too, the
+        same posture judge already established. A checkout that has genuinely never run one of
+        the three instruments (via its own operator verb) still resolves that class to
+        `NoBankedArtifact`, honestly, never a fabricated "present" answer.
 
         Deployment validation only (`_resolve_deployment`, the same discriminator gate every
         other route enforces) -- the payload itself does NOT vary by `{deployment}`
@@ -4098,22 +4184,43 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                         "(bootstrap/templates/judge.tmpl hardcodes --retain), so this checkout "
                         "simply has not run judge at all yet, not merely run it without "
                         "retention.")
-        # verify-chain and doctor bank NOTHING in this codebase as it stands (confirmed by
-        # reading both templates in full, module-level note above) -- always the typed absence,
-        # honestly, never a live re-run to manufacture a "present" answer this route does not
-        # have (row 221's own instruction: "NEVER runs the instrument server-side").
-        verify_chain_field: BankedVerifyChainVerdict | NoBankedArtifact = NoBankedArtifact(
-            would_produce="./autoharn verify-chain",
-            message="verify-chain prints its reconciliation result to stdout only -- this "
-                    "codebase's own verify-chain.tmpl has no write-to-disk of its own result "
-                    "(the operator's signed-genesis ceremony redirects stdout to a file BY HAND "
-                    "for GPG signing, a location this service cannot discover or trust as "
-                    "'the latest verdict'); nothing is banked for this route to serve.")
-        doctor_field: BankedDoctorSummary | NoBankedArtifact = NoBankedArtifact(
-            would_produce="./autoharn doctor",
-            message="doctor prints its PASS/FAIL/SKIP report to stdout only -- this codebase's "
-                    "own doctor.tmpl has no write-to-disk of its own report; nothing is banked "
-                    "for this route to serve.")
+        # design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3 (missive row 1009
+        # part 1): `libexec/autoharn/verify-chain` and `libexec/autoharn/doctor` now bank each
+        # ORDINARY run's result under engine/docs/ledger-marriage/derivations/{verify-chain,
+        # doctor}/<ts>_<hash>/result.json (that wrapper's own leading comment has the full
+        # rationale -- bootstrap/templates/{verify-chain,doctor}.tmpl themselves are unchanged).
+        # This route still NEVER runs either instrument itself (row 221's own instruction stays
+        # true) -- it only reads the latest banked result.json, if any, exactly as it already
+        # does for judge's derivation.json.
+        verify_chain_result = _latest_instrument_result("verify-chain", "verdict")
+        verify_chain_field: BankedVerifyChainVerdict | NoBankedArtifact
+        if verify_chain_result is not None:
+            verify_chain_field = BankedVerifyChainVerdict(
+                verdict=verify_chain_result["verdict"],
+                computed_at=verify_chain_result["computed_at"],
+                banked_at=verify_chain_result["banked_at"])
+        else:
+            verify_chain_field = NoBankedArtifact(
+                would_produce="./autoharn verify-chain",
+                message="no result.json found under engine/docs/ledger-marriage/derivations/"
+                        "verify-chain/ -- this repo's own ./autoharn verify-chain banks a "
+                        "result.json on every ordinary run (never on --head, a different "
+                        "artifact for a different purpose -- see that verb's own leading "
+                        "comment), so this checkout simply has not run verify-chain at all yet.")
+        doctor_result = _latest_instrument_result("doctor", "summary")
+        doctor_field: BankedDoctorSummary | NoBankedArtifact
+        if doctor_result is not None:
+            doctor_field = BankedDoctorSummary(
+                summary=doctor_result["summary"],
+                ran_at=doctor_result["ran_at"],
+                banked_at=doctor_result["banked_at"])
+        else:
+            doctor_field = NoBankedArtifact(
+                would_produce="./autoharn doctor",
+                message="no result.json found under engine/docs/ledger-marriage/derivations/"
+                        "doctor/ -- this repo's own ./autoharn doctor banks a result.json on "
+                        "every ordinary run, so this checkout simply has not run doctor at all "
+                        "yet.")
         return AttestationResponse(
             verify_chain=verify_chain_field, judge=judge_field, doctor=doctor_field)
 
@@ -4613,8 +4720,8 @@ def main(argv: list[str] | None = None) -> int:
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
         (records, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients,
-         identity_enforcement_by_deployment) = (
-            boundary_multiplex_config.load_multiplex_config_with_deployment_identity(args.config))
+         identity_enforcement_by_deployment, max_inflight_per_deployment) = (
+            boundary_multiplex_config.load_multiplex_config_with_inflight_limit(args.config))
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
         return 2
@@ -4632,15 +4739,24 @@ def main(argv: list[str] | None = None) -> int:
     # depth pattern -- already validated whole-file by boundary_multiplex_config.py.
     configure_sse_poll_interval(sse_poll_interval_secs)
     configure_max_sse_clients(max_sse_clients)
-    # Multiplex spec §4: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment
-    # sub-bound is computed ONCE here (never re-derived per request) and PRINTED at startup
-    # (spec §4, verbatim) so an operator can see what their own deployment count produced.
-    per_dep_limit = compute_per_deployment_limit(len(records))
+    # Multiplex spec §4, amended by design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md
+    # item 1: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment sub-bound is
+    # RESOLVED ONCE here from `boundary-multiplex.toml`'s own `max_inflight_per_deployment` key
+    # (never re-derived per request, never re-derived from `len(records)` -- the retired formula
+    # this item replaces) and PRINTED at startup so an operator can see the configured value and
+    # where it came from without reading the TOML back.
+    per_dep_limit = max_inflight_per_deployment
     sys.stderr.write(
         f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global) "
         f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
-        f"deployment(s): {sorted(records.keys())}) MAX_SSE_CLIENTS={max_sse_clients} (per hub) "
+        f"deployment(s): {sorted(records.keys())}; configured via boundary-multiplex.toml's "
+        f"optional top-level 'max_inflight_per_deployment' key, default "
+        f"{boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT}) "
+        f"MAX_SSE_CLIENTS={max_sse_clients} (per hub) "
         f"SSE_POLL_INTERVAL_SECS={sse_poll_interval_secs}\n")
+    _starvation_note = inflight_per_deployment_starvation_note(per_dep_limit)
+    if _starvation_note is not None:
+        sys.stderr.write(_starvation_note + "\n")
     # Row 619: per-deployment identity_enforcement is now overridable, so the operator-visible
     # startup banner names each deployment's own EFFECTIVE posture explicitly -- an operator who
     # only reads stderr (never the diagnostic log) can still see a deployment that deviates from

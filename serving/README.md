@@ -99,7 +99,12 @@ work item `boundary-verdict-read-surface` (row 221) serves the latest banked ver
 attestation with freshness visible — never a substitute for running the independent
 instrument, and never conflated with it. Moving any group-two verb INTO the boundary
 is a maintainer decision against the trust-root argument above, not a consistency
-cleanup.
+cleanup. As of design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3, all
+three classes genuinely bank: `judge` inside its own library (`engine/ledger_differential.py`'s
+`retain()`, hardcoded on by `bootstrap/templates/judge.tmpl`), `verify-chain`/`doctor` one
+layer up, at their own operator verbs `libexec/autoharn/verify-chain`/`libexec/autoharn/doctor`
+(their own `bootstrap/templates/*.tmpl` are unchanged) — same storage home
+(`engine/docs/ledger-marriage/derivations/`), a sibling subtree per instrument.
 
 ## Multiplexing (design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md, ratified — ledger
 decision row 1631)
@@ -113,11 +118,17 @@ A single-deployment config is the degenerate, expected common case; the discrimi
 mandatory even then (spec §2 — one route shape, not two dialects). `{deployment}` is valid iff
 it is a key of the loaded TOML config (`[a-z0-9-]{1,64}`); anything else is a typed 404
 `unknown_deployment` naming the known set. `MAX_INFLIGHT_KERNEL_CALLS` stays the GLOBAL
-admission bound; a new per-deployment sub-bound, `MAX_INFLIGHT_PER_DEPLOYMENT = max(4,
-MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`, is computed and printed at startup, and its
-own saturation refuses typed 503 `deployment_saturated` (distinct label from the existing
-`server_saturated`). See the multiplex spec in full, §2-§4, before operating a multiplexed
-deployment; this README's endpoint table below is not yet rewritten route-by-route with the
+admission bound; a per-deployment sub-bound, `MAX_INFLIGHT_PER_DEPLOYMENT`, is resolved and
+printed at startup, and its own saturation refuses typed 503 `deployment_saturated` (distinct
+label from the existing `server_saturated`). Per design/
+BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 (the multiplex spec's own dated
+§4 amendment has the full account), `MAX_INFLIGHT_PER_DEPLOYMENT` is deployment-configurable —
+`boundary-multiplex.toml`'s optional top-level `max_inflight_per_deployment` key, default
+**32** — superseding the original `max(4, MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`
+formula (which had produced a reported value as low as 6 in real multi-deployment operation,
+with no recorded provenance as a deliberate concurrency target). See the multiplex spec in
+full, §2-§4, before operating a multiplexed deployment; this README's endpoint table below is
+not yet rewritten route-by-route with the
 `/d/{deployment}` prefix inline (named seam — see the build report banked alongside this
 change; `seen-red/boundary-multiplex/run_fixtures.py` witnesses the multiplexing axes live).
 
