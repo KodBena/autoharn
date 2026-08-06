@@ -151,7 +151,9 @@ before, never silently split. NAMED RESIDUAL GAP (disclosed, matching this file'
 `_neutralize_pgoptions`'s gaps above): a scratch-touching command in any shape this recognizer does not
 match still relies on the standing consumer-side idiom above; this pass narrows the observed common
 case, it does not eliminate the class.
-"""
+
+PATH CONTAINMENT (row 1219, rows 1225/1226, 2026-08-06): `seen-red/../x.py` starts with
+`seen-red/` too but `..` resolves it OUTSIDE -- fixed below via realpath."""
 from __future__ import annotations
 
 import hashlib
@@ -279,15 +281,11 @@ _SHELL_METACHARS_RE = re.compile(r"[;&|<>`$(){}\n]")
 _SCRATCH_ENV_PREFIXES = ("env -u PGOPTIONS ", "env PGOPTIONS= ")
 
 
-def _looks_like_scratch_fixture_invocation(command: str) -> bool:
-    """True iff `command`, in its ENTIRETY, is a self-contained `python[3] seen-red/.../script.py
-    [args...]` launch -- optionally preceded by the standing `env -u PGOPTIONS `/`env PGOPTIONS= `
-    hygiene prefix -- with no shell metacharacter anywhere (see `_SHELL_METACHARS_RE`). Best-effort
-    and narrow BY DESIGN (module docstring, SCRATCH-WORLD SCOPE NARROWING): a False here always
-    falls through to the unconditional injection below -- identical to this file's behavior before
-    this pass -- so a miss never regresses the stamp a legitimate own-world write needs. A True
-    here only ever suppresses an injection that every seen-red/ fixture already discards or
-    overrides for its own throwaway world (same grep), so it can never withhold a needed stamp."""
+def _looks_like_scratch_fixture_invocation(command: str, cwd: str) -> bool:
+    """True iff `command` is, in its ENTIRETY, a self-contained `python[3] seen-red/.../script.py`
+    launch (no shell metacharacter) whose script genuinely resolves inside `<cwd>/seen-red/` via
+    realpath, not a textual prefix match (PATH CONTAINMENT, module docstring). Narrow BY DESIGN:
+    False falls through to unconditional injection; True only suppresses a write no fixture needs."""
     if _SHELL_METACHARS_RE.search(command):
         return False
     stripped = command.strip()
@@ -303,7 +301,13 @@ def _looks_like_scratch_fixture_invocation(command: str) -> bool:
             or interpreter.endswith("/python") or interpreter.endswith("/python3")):
         return False
     script = parts[1]
-    return script.startswith("seen-red/") or script.startswith("./seen-red/")
+    if not (script.startswith("seen-red/") or script.startswith("./seen-red/")):
+        return False
+    # realpath (never raises) + a trailing separator on `base` -- not bare startswith(base) --
+    # so seen-red-evil/x.py (name prefix only) and seen-red/../x.py (resolves OUTSIDE) both fail.
+    base = os.path.realpath(os.path.join(cwd, "seen-red"))
+    candidate = os.path.realpath(os.path.join(cwd, script))
+    return candidate == base or candidate.startswith(base + os.sep)
 
 
 def _deny(msg: str) -> int:
@@ -466,13 +470,9 @@ def main() -> int:
     if data.get("tool_name") != "Bash":
         return _passthrough()
     command = str((data.get("tool_input") or {}).get("command", ""))
-
-    # SCRATCH-WORLD SCOPE NARROWING (module docstring, ledger rows 1159/1162/1163): this command's
-    # ENTIRE shape is a self-contained seen-red/ fixture launch -- skip injection so it never
-    # inherits THIS session's stamp for a world of its own. Checked before any deployment/secret
-    # resolution: the outcome (passthrough) is identical to this hook being unwired for this one
-    # command, regardless of what mode/secret would otherwise apply.
-    if _looks_like_scratch_fixture_invocation(command):
+    cwd = data.get("cwd") or os.getcwd()  # same convention as _find_deployment_path below
+    # SCRATCH-WORLD SCOPE NARROWING, now with PATH CONTAINMENT (row 1219).
+    if _looks_like_scratch_fixture_invocation(command, cwd):
         return _passthrough()
 
     dep_path = _find_deployment_path(data)

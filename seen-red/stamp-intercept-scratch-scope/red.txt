@@ -93,3 +93,54 @@ already-working `env -u PGOPTIONS <cmd>` consumer-side idiom (left standing, out
 pass). This suite's e/f cases exist specifically to prove that: they show the SAME shell-
 metacharacter / mixed-command shape still gets injected exactly as before, so this fix can never be
 mistaken for a general "skip near seen-red/" rule.
+
+---
+
+PATH CONTAINMENT ADDENDUM (item stamp-intercept-path-containment, rows 1219/1225/1226, 2026-08-06):
+re-review row 1219 (live-reproduced) found that the textual `script.startswith("seen-red/")` check
+above is NOT containment -- `python3 seen-red/../not_a_fixture.py` also starts with that prefix
+textually while its `..` component resolves the actual target OUTSIDE seen-red/, so the recognizer
+suppressed a stamp injection for a write that is not one of the seen-red/ fixtures the module's own
+invariant says can never have its stamp withheld. Case g-traversal-escapes-not-suppressed added to
+this suite to pin the fix: the SAME reproduction, from suppressed (defect) to injected (fixed).
+
+BEFORE the fix (git stash of this pass's own hooks/stamp_intercept.py edit -- run standalone
+against the pre-fix file, real output, 2026-08-06, `python3 seen-red/stamp-intercept-scratch-
+scope/run_fixtures.py` run before the atomic swap into place):
+
+  === g-traversal-escapes-not-suppressed ===
+  exit=0 (expect 0)
+    [FAIL] +"permissionDecision": "allow"
+    [FAIL] +export PGOPTIONS=
+    [FAIL] +app.vendor_hmac=
+    stdout:
+
+  run_fixtures: 1 FAILURE(S): g-traversal-escapes-not-suppressed
+  (all other cases a-f pass unchanged pre-fix; the traversal shape is the sole regression this
+  addendum targets)
+
+AFTER the fix (real output, 2026-08-06, same command against the fixed hooks/stamp_intercept.py
+now in place):
+
+  === g-traversal-escapes-not-suppressed ===
+  exit=0 (expect 0)
+    [ok] +"permissionDecision": "allow"
+    [ok] +export PGOPTIONS=
+    [ok] +app.vendor_hmac=
+    stdout: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+    "updatedInput": {"command": "export PGOPTIONS='-c app.vendor_session=seenred-scope-1 -c
+    app.vendor_agent=main -c app.vendor_ts=1785999719 -c app.vendor_hmac=4b097d1eaea7c8d1c183fd23d
+    aa476952988daa78ad40f2ce6a0dec362f513bc -c app.vendor_invocation=9b9f7266-2c74-4d22-af32-
+    1583db390d50'; python3 seen-red/../not_a_fi...
+
+  run_fixtures: all 7 case(s) passed.
+
+DISCLOSED SCOPE (unchanged by this addendum): the containment check resolves against the SAME cwd
+convention `_find_deployment_path` already uses (hook-input `cwd`, falling back to
+`os.getcwd()`), via `os.path.realpath` on both the candidate script and `seen-red/` itself, then a
+trailing-separator `startswith` (not a bare prefix match, so `seen-red-evil/x.py` cannot
+false-positive on the name) -- a script path that does not resolve genuinely under
+`<cwd>/seen-red/` (traverses out, or a nonexistent/unrelated path) makes the recognizer return
+False, falling through to the SAME unconditional injection every other miss already falls through
+to. No widening: this addendum only NARROWS what the recognizer accepts as containment; it grants
+no new suppression.
