@@ -35,6 +35,41 @@ This exit code (6) is reachable only through `--review-gap`, and only when nothi
 already raised the exit and at least one review is flagged. Witnessed both polarities:
 [seen-red/content-free-review-audit/](../../seen-red/content-free-review-audit).
 
+**Does `led review-gap` (bare) surface every kind of review debt, or just some of it? And can I
+tell a defect that was reviewed-and-refused from one nobody has looked at yet?**
+As of `led-review-gap-false-clean`/`refuse-verdict-legibility` (`design/
+BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06.md` items 2/3, rows 1087/1102 family; delivery record:
+[orchlog.d/led-ergonomics-bundle.md](../../orchlog.d/led-ergonomics-bundle.md)) — yes to both.
+
+Before this delta, bare `led review-gap` read ONLY the actor-keyed `/views/review_gap`, silently
+empty while real work-item review debt sat in `/views/work_review_gap` — a hazard-class
+false-clean read. It now reads BOTH sources and labels every row `gap_kind` (`"actor"` |
+`"work_item"`), so the two debt shapes are never merged into one indistinguishable read.
+Fixture-shape evidence (`seen-red/led-review-gap-false-clean/`, a scratch throwaway world):
+```
+{"_page_tie": "c6e64535...", "close_id": 16, "closer": 1, "gap_kind": "work_item",
+ "review_status": "never-reviewed", "slug": "seen-red-led-review-gap-false-clean-...-slug"}
+```
+
+Every review-gap row (bare `led review-gap`, or `led work review-gap`) also carries
+`review_status` — `"never-reviewed"` (no unsuperseded review row regards this row at all) or
+`"reviewed-not-discharging"` (a review row EXISTS but still fails the discharge test — covering
+every way a review can fail to clear the debt), the latter with `reviewing_verdicts` naming
+who/what/independence. Built entirely from the already-served `/views/review_verdicts` —
+CLI-presentation layer only, no kernel/serving change. Fixture-shape evidence for the contrast
+(`seen-red/refuse-verdict-legibility/`, same scratch world, two close rows — one never reviewed,
+one reviewed and refused):
+```
+{"close_id": 16, "review_status": "never-reviewed", "slug": "...-a"}
+{"close_id": 20, "review_status": "reviewed-not-discharging",
+ "reviewing_verdicts": [{"independence": "self-review", "reviewer": 6, "verdict": "refuse"}],
+ "slug": "...-b"}
+```
+WITNESSED, live against this checkout (`autoharn3`) — both `led review-gap` and `led work
+review-gap` returned empty (no outstanding review debt on this world right now), consistent with
+an honest read rather than an untested one; the populated shape above is cited from the
+delta's own banked fixture rather than fabricated against a debt-free world.
+
 **I countersigned with a concern instead of a clean pass — does that discharge the review
 obligation, or does it leave the gate stuck open?** It discharges (kernel/lineage/
 s56-reservation-residue.sql, design/FABLE-RESERVATION-RESIDUE-SPEC.md, maintainer-ratified
@@ -222,6 +257,16 @@ one. `--type blocks-close` (point 3) is a THIRD, later gate — closing time, no
 is not a substitute for either of the first two, though all three commonly apply to the same item
 (an antecedent that must be finished before X starts is very often also load-bearing for X's own
 strict close).
+
+**A close's review debt is undischarged because the close itself was WRONG, not merely
+un-reviewed — do I review it, or is there a way to annul the debt?**
+That is a different act from anything on this page — reviewing a wrong close would just mint a
+countersign on bad data. The recipe is **supersession-as-annulment** (`led work reclose`,
+[ADR-0012](../../law/adr/0012-compositional-and-structural-hygiene.md)
+one-home rule: full recipe, the `--review-annulled` disposition constructor, and both-polarity
+witnessed transcripts live in
+[THE-RECORD.md's "Correcting the record" section](THE-RECORD.md#correcting-the-record--supersession-and-what-to-do-about-its-fallout),
+not duplicated here).
 
 ## Classifying audit/diagnostic findings
 

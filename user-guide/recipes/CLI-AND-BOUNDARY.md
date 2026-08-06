@@ -546,3 +546,111 @@ transcript in this section cites commit `abba0dd`/row 1562 and specific row coun
 as the dated record they are; the current equivalent invocation is `./autoharn led ...` for
 every command shown above.)
 
+## `led` read-projection flags, `--json` surface parity, and the served deployments/annotate_names surface (2026-08-06)
+
+`design/BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06.md` and
+`design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md` (rows 1087/1102 family); delivery
+records: [orchlog.d/led-ergonomics-bundle.md](../../orchlog.d/led-ergonomics-bundle.md),
+[orchlog.d/deployments-roster-and-name-join.md](../../orchlog.d/deployments-roster-and-name-join.md).
+
+**Can `led` filter or project its read output itself, instead of me piping it through
+`python3 -c` filters?**
+Yes, as of this delta. `led --recent`/`led current` accept `--kind <kind>` (refused against the
+live `GET /kinds` vocabulary) and `--fields f1,f2,...` (JSON-per-line projection, refused on an
+unknown field name); `led show <id>` accepts `--fields`; `led work list` accepts `--state
+open|closed`, `--slug <slug>`, and `--fields`. Every refusal teaches rather than silently
+returning an empty result. WITNESSED, live against this checkout (`autoharn3`):
+```
+$ ./autoharn led current 2 --kind decision --fields kind,statement
+{"kind": "decision", "statement": "stopping: writer leg of the A:B:C docs loop running ..."}
+{"kind": "decision", "statement": "ESTIMATE (row 241) docs-wave-catchup loop: ..."}
+
+$ ./autoharn led current 2 --kind bogus-kind
+led current: REFUSED -- unrecognized --kind 'bogus-kind' (not a live member of
+  ledger_kind_check's vocabulary; valid kinds: assumption, decision, question, ... )
+$ echo $?
+4
+
+$ ./autoharn led show 1 --fields bogus_field
+led show: REFUSED -- unrecognized field name(s) ['bogus_field'] (known fields for this
+  read: ['actor', 'amends', ... ])
+$ echo $?
+4
+
+$ ./autoharn led work list --slug docs-wave-catchup --fields slug,title
+{"slug": "docs-wave-catchup", "title": "Maintainer instruction 2026-08-06 ..."}
+```
+
+**Does `led --json` cover every boundary write surface, or just some of them?**
+As of this delta, all six live surfaces: `ledger`, `review`, `registration`, `obligation`,
+`obligation_revoke`, and `missive_dispose` — the last two already existed as live boundary write
+surfaces for the prose verbs (`led obligate revoke`, `led missive dispose`); only `led --json`'s
+own allowlist was behind. WITNESSED, live against this checkout — a bogus surface still refuses
+at the usage check, while the two newly-recognized surfaces progress past it (into the file-read
+path, where a nonexistent file then raises its own, pre-existing, unrelated error):
+```
+$ ./autoharn led --json bogus_surface /tmp/does-not-exist-xyz.json
+led --json: REFUSED -- unrecognized surface 'bogus_surface' (expected one of ledger, review,
+  registration, obligation, obligation_revoke, missive_dispose)
+$ echo $?
+4
+
+$ ./autoharn led --json obligation_revoke /tmp/does-not-exist-xyz.json
+# ... FileNotFoundError, not the usage refusal above -- the surface name was accepted
+$ ./autoharn led --json missive_dispose /tmp/does-not-exist-xyz.json
+# ... same: FileNotFoundError, surface name accepted
+```
+
+**Is there a route that lists every deployment a boundary process serves, the way the panel used
+to hand-maintain a `KNOWN_DEPLOYMENTS` list?**
+Yes — `GET /deployments`, read-only, live-probed per request: deployment names plus a
+per-deployment summary that is honest under
+[ADR-0008](../../law/adr/0008-classification-discipline.md) (`declared`/`reachable`/`serving`, never an
+umbrella "healthy"). Deliberately the one route on this service carrying no `/d/{deployment}`
+prefix, since it answers the prior question ("which deployments exist") a per-deployment route
+cannot. WITNESSED, live against this checkout's own multiplexed boundary (`autoharn2`,
+`autoharn3`, `experience3`, `experience4`):
+```
+$ curl -s http://127.0.0.1:8433/deployments
+{"deployments":[{"name":"autoharn2","declared":true,"reachable":true,"serving":true},
+ {"name":"autoharn3","declared":true,"reachable":true,"serving":true},
+ {"name":"experience3","declared":true,"reachable":true,"serving":true},
+ {"name":"experience4","declared":true,"reachable":true,"serving":true}],
+ "boundary_version":"1.8.0","protocol_version":"1"}
+```
+
+**Can a served read resolve an actor id to the registered principal's name itself, instead of
+every client re-implementing that join?**
+Yes, opt-in — `?annotate_names=true` on `/rows/current`, `/rows/{id}`, `/rows/{id}/history`,
+`/rows/asof/{ts}`, `/work/items`, and `/views/{review_gap,work_item_current}` adds a
+`{column}_name` sibling field resolved against `kernel.principal.name`. Default response is
+byte-identical on every route unless the flag is passed; an unregistered/unclaimed actor gets
+typed absence (`null`), never an invented or empty-string name. WITNESSED, live against this
+checkout:
+```
+$ curl -s "http://127.0.0.1:8433/d/autoharn3/work/items?annotate_names=true&state=open&limit=1" \
+  | python3 -m json.tool
+[
+    {
+        "slug": "abc-wallclock-dominance-maintainer-callback",
+        ...
+        "claimant": null,
+        "claimant_name": null
+    }
+]
+```
+Any OTHER view given the flag is refused, never silently ignored:
+```
+$ curl -s "http://127.0.0.1:8433/d/autoharn3/views/work_violation_history?annotate_names=true"
+{"detail":"annotate_names is not accepted on GET /views/work_violation_history -- only
+  ['review_gap', 'work_item_current'] carry an actor-shaped column this route knows how to
+  annotate (principal-name-served-join, brief row 1102); got annotate_names='true'"}
+```
+**Honestly disclosed:** this annotation join is the service's first self-authored SQL join — an
+adjudicated, CLOSED exception to the boundary's own no-minted-truth discipline (spec amendment
+A14), not a precedent for a second one. The checkability gap A14 also named is dispatched, not
+waived: `serving/audit_served.py` (see "Is there a way to check the service is actually telling
+the truth about what the kernel holds?" above) gained an opt-in `--annotate-names-column`
+differential — an independent, direct `kernel.principal` read compared against the served
+`_name` fields, never a call back into the server's own annotation function.
+

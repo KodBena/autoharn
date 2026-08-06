@@ -20,7 +20,20 @@
      conjunct/red.txt), cited rather than re-run. Same no-self-attestation posture as the touch
      immediately above -- still owed to the coordinator's batch. Removal condition unchanged:
      strike this marker and run the real A:B:C loop next time this file is touched for
-     content. -->
+     content.
+
+     ADDITIONAL TOUCH (work item docs-wave-catchup, 2026-08-06): this touch IS content -- adds
+     items 49-54 (the deployments roster + annotate_names join, verify-chain/doctor result
+     banking on the attestation route, both inflight caps + the structural threadpool sizing
+     derivation, the setup-schema export verb and its announce-by-missive contract, led work
+     reclose + the pre-s73 annulled-disposition refusal honesty, and the led ergonomics bundle)
+     covering the 2026-08-06 wave, with live witnesses run against this checkout's own served
+     boundary (`autoharn3`) where reachable and fixture-shape/banked-build evidence cited
+     otherwise. Same no-self-attestation posture as the two touches above -- this writer leg does
+     NOT self-attest per its own commissioning brief (design/BRIEF-DOCS-WAVE-CATCHUP-WRITER-
+     2026-08-06.md); the A:B:C loop that follows runs blind, in a round this build's own context
+     must not poison. Removal condition unchanged: strike this marker and run the real A:B:C loop
+     next time this file is touched for content. -->
 
 
 Audience: orchestrator (the opening paragraph below calls this same reader "a maintainer or operator" — the practical reader deciding what the apparatus can be trusted to do)
@@ -1693,6 +1706,181 @@ repository's own committed HEAD at witnessing time) against the same scratch sch
 than touching or waiting on the other builder's dirty files — never a fabricated or
 extrapolated transcript. Source: `kernel/lineage/s39-blocks-start.sql`;
 `design/FABLE-DISPATCH-PRECEDENCE-BINDING-SPEC.md`.
+
+**49. The served `GET /deployments` roster and the opt-in `annotate_names` principal-name join
+(`serving/boundary_service.py`, commit `c47dd507`, rows 1102; adjudicated as ADR-0012's first
+named exception in `design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md`'s A14, 2026-08-06).**
+`GET /deployments` — no `/d/{deployment}` prefix, the one route on this service that answers
+"which deployments exist" rather than a question about one of them — serves the hub's own
+roster, live-probed per request, honest under ADR-0008 (`declared`/`reachable`/`serving`, never
+an umbrella "healthy"). *Witnessed live this pass*, against this checkout's own running
+multiplex:
+```
+$ curl -s http://127.0.0.1:8433/deployments
+{"deployments":[{"name":"autoharn2","declared":true,"reachable":true,"serving":true},
+ {"name":"autoharn3","declared":true,"reachable":true,"serving":true},
+ {"name":"experience3","declared":true,"reachable":true,"serving":true},
+ {"name":"experience4","declared":true,"reachable":true,"serving":true}],
+ "boundary_version":"1.8.0","protocol_version":"1"}
+```
+`annotate_names=true` (opt-in, additive) on `/rows/current`, `/rows/{id}`, `/rows/{id}/history`,
+`/rows/asof/{ts}`, `/work/items`, and `/views/{review_gap,work_item_current}` joins a
+`{column}_name` sibling field against `kernel.principal.name` server-side — the join every
+boundary client (the autoharn-panel's own `ReviewGapTab` named) used to re-implement itself.
+Typed absence (`null`) for an unregistered/unclaimed actor; default response byte-identical when
+the flag is omitted; any other view given the flag is refused rather than silently ignored.
+*Witnessed live this pass*:
+```
+$ curl -s "http://127.0.0.1:8433/d/autoharn3/work/items?annotate_names=true&state=open&limit=1"
+[{"slug": "abc-wallclock-dominance-maintainer-callback", ..., "claimant": null,
+  "claimant_name": null}]
+
+$ curl -s "http://127.0.0.1:8433/d/autoharn3/views/work_violation_history?annotate_names=true"
+{"detail":"annotate_names is not accepted on GET /views/work_violation_history -- only
+ ['review_gap', 'work_item_current'] carry an actor-shaped column this route knows how to
+ annotate (principal-name-served-join, brief row 1102); got annotate_names='true'"}
+```
+**Honestly disclosed, not oversold:** this join is the service's first SELF-AUTHORED SQL join —
+otherwise-unconditional §5 discipline (the boundary mints no truth of its own) is relaxed for
+this one, named, CLOSED case (a future second self-authored join needs its own dated amendment,
+adjudicated the same way — this is not a general license). The checkability gap A14 also named
+is dispatched, not left open: `serving/audit_served.py` — the independent verifier this repo
+ships alongside the boundary service, "Is there a way to check the service is actually telling
+the truth about what the kernel holds?" in
+[user-guide/recipes/CLI-AND-BOUNDARY.md](user-guide/recipes/CLI-AND-BOUNDARY.md) has its general
+shape — gained an opt-in `--annotate-names-column` differential (an independent, direct
+`kernel.principal` read, never a call back into the server's own annotation function).
+
+**50. `verify-chain`/`doctor` result banking and the `GET /d/{deployment}/attestation` route now
+genuinely serving all three instruments (`libexec/autoharn/verify-chain`,
+`libexec/autoharn/doctor`, `serving/boundary_service.py`, commit `f8af7d7e`, missive row 1009,
+design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 3).** Before this delta, the
+`GET /d/{deployment}/attestation` route (row 221's own instrument, `serving/README.md`'s
+two-trust-roots section) answered `NoBankedArtifact` for `verify-chain`/`doctor` on EVERY
+checkout, always — only `./judge` ever banked. Now
+`libexec/autoharn/verify-chain` and `libexec/autoharn/doctor` themselves bank each ORDINARY run's
+result under `engine/docs/ledger-marriage/derivations/{verify-chain,doctor}/<ts>_<hash>/
+result.json` (same storage convention `judge` already used; `--head` deliberately excluded, a
+different artifact) — for THIS repo's own operator verbs, banking IS the ordinary run, exactly
+the posture `judge` already established; a banking write failure never changes the verb's own
+exit code. The route itself is UNCHANGED in what it does (never runs an instrument itself, only
+reads what a prior invocation already wrote — the two-trust-roots posture, `serving/README.md`,
+holds) — only what it now finds to read. *Witnessed live this pass*, this checkout's own
+`autoharn3`, after `./autoharn service restart` picked up the new code:
+```
+$ curl -s http://127.0.0.1:8433/d/autoharn3/attestation | python3 -m json.tool
+{
+    "verify_chain": {"banked": true, "verdict": "verify-chain: INTACT -- 1147 row(s) walked, ...",
+                      "computed_at": "2026-08-06T05:58:13Z", ...},
+    "judge": {"banked": true, "verdict": "AGREE", ...},
+    "doctor": {"banked": true, "summary": "TOTAL: 0 FAIL, 9 PASS, 1 SKIP, 1 INFO  (0 FAIL = healthy)", ...}
+}
+```
+**Named operational hazard, disclosed rather than hidden:** the running boundary process does
+NOT pick up a code change until it is restarted — the route answered stale (404-shaped, from a
+pre-`c47dd507` process) against this exact checkout until `./autoharn service restart` was run as
+part of witnessing this item. A restarting orchestrator that sees a served route behave as if a
+landed commit never happened should suspect a stale running process before suspecting the code.
+
+**51. Both inflight admission caps are now deployment-configurable, with the ASGI threadpool's
+own capacity sized STRUCTURALLY off the resolved global cap (`serving/boundary_multiplex_
+config.py`, `serving/boundary_service.py`, commits `f8af7d7e` + `c65b21bf`, rows 1027/1029/1071/
+1113/1115).** `boundary-multiplex.toml` gains two optional top-level keys, the `max_sse_clients`
+sugar-over-the-loader idiom one axis over: `max_inflight_per_deployment` (default **32**,
+replacing the old `max(4, 24 // len(deployments))` formula that produced an unprovenanced 6 on a
+busy hub) and `max_inflight_kernel_calls` (default **64**, raised from the old hardcoded 24 —
+maintainer ruling row 1113, orchestrator's own stated choice, 2x the new per-deployment default
+with headroom for two busy deployments). **The starvation-note polarity, named:** because the new
+per-deployment default (32) exceeds what the OLD global cap (24) allowed, a startup diagnostic
+(`inflight_per_deployment_starvation_note`) fires whenever the resolved per-deployment value is
+not strictly less than the resolved global value, naming the tradeoff and how to restore sibling
+isolation; at the SHIPPED defaults (32 < 64) it is silent. **The structural threadpool
+derivation, the hazard this pass flags as FIXED rather than merely raised:** the old 24 sat
+safely under anyio's own default ASGI threadpool `CapacityLimiter` (40 tokens) by accident — two
+independent literals happening to land in the right order, not a designed guarantee — and raising
+the global default to 64 would have inverted that relation silently. Rather than re-tuning
+another magic number, `boundary_service.py` now sizes the ASGI threadpool's own `CapacityLimiter`
+STRUCTURALLY at ASGI startup (`_configure_threadpool_capacity`, a `lifespan` handler — required
+because anyio's default limiter is bound to the running event loop, unreachable from `main()`'s
+synchronous pre-loop setup) from the RESOLVED `max_inflight_kernel_calls` plus a fixed, named
+`NON_KERNEL_THREADPOOL_HEADROOM=16` (the exact margin the original 24-under-40 pairing already
+carried) — a derivation that tracks whatever the kernel cap is actually configured to, on any
+world, at any value, rather than a second independent literal that could drift out of relation
+again. *Witnessed both polarities live* (`seen-red/boundary-multiplex/` gains
+`WM-INFLIGHT-DEFAULT` — defaults quiet — and `WM-INFLIGHT-FIRES` — an explicit low override
+fires the note — plus `WM-THREADPOOL-STRUCTURAL`, the actual anyio limiter application
+in-process, not merely the printed/logged value); **not re-witnessed by this pass directly** —
+cited from the landing builds' own banked evidence.
+
+**52. `./autoharn setup-schema` — a sanctioned, layout-independent export of the setup TUI's
+config schema, with a standing announce-by-missive contract (`libexec/autoharn/setup-schema`,
+commit `2d490245`, ledger rows 1031/1063/1068).** Prints `tools/setup_tui/data/
+config_schema.toml` byte-verbatim to stdout; a provenance line (source path, sha256, repo HEAD
+commit, read time) goes to stderr unconditionally, and `--provenance` prints the same triple as
+JSON on stdout for machine consumers. Missing/unreadable schema refuses loudly, nonzero exit,
+never empty stdout with exit 0. *Witnessed live this pass*, this checkout:
+```
+$ ./autoharn setup-schema --provenance
+{"source_path": "tools/setup_tui/data/config_schema.toml",
+ "sha256": "271303072d000dd6f4c7b2952d79fc488ce4d86c3c7472e7dfffa14639e194f3",
+ "repo_commit": "87d1068466080fe7a223f36760b26e86e4c7c096",
+ "read_at": "2026-08-06T07:29:01Z"}
+```
+**The announce-by-missive contract, already exercised for real, not merely stated:** the verb's
+own commissioning note promises format/path changes are announced on the originating thread
+BEFORE they land, so a consumer pinning a hash knows to re-pull rather than silently drifting.
+When commit `4440fb34` (item 51 above's two new keys) changed the exported schema, missive row
+1241 announced the sha256 change (`b0bb1c8a...` → `271303072d0...`) on the same thread that
+originally requested the tunables — the mechanism used, not just documented.
+
+**53. `led work reclose` — supersession-as-annulment, and the pre-s73 `annulled` refusal is
+honest, never faked (`bootstrap/templates/led.tmpl`, `kernel/lineage/s73-typed-annulment-
+disposition.sql`, commits `25677488` + `faddbb1c`, rows 1025/1008/1200/1087).** `led work reclose
+<slug> <resolution> [close-contract flags...]` composes a slug's current close row's supersession
+(s31) with a corrected close in one guided act, reusing `led work close`'s own contract wholesale.
+This is **supersession-as-annulment** (row 1008's own name): a `--review-deferred` close that was
+WRONG, not merely un-reviewed, gets CORRECTED, and the correction discharges the very review debt
+the wrong close minted, because the debt's close row is no longer current. `--review-annulled
+<ref>` is a fourth disposition constructor, passing through to s73's typed `annulled` value (an
+authority distinct from the obligor considered the review debt and declined it, for a recorded
+reason) — **authored, not yet live on any existing world** (runs are linear; s73 rides the next
+`--new-world` birth). Requesting it on a pre-s73 world is ATTEMPTED, never faked client-side: the
+kernel's own `work_review_disposition_check` CHECK constraint refuses the write, surfaced
+byte-verbatim, exactly like any other kernel refusal (ADR-0000: ask the kernel by trying). Full
+recipe with witnessed both-polarity transcripts (the accepted reclose; the pre-s73 refusal
+pass-through, quoted verbatim):
+[user-guide/recipes/THE-RECORD.md](user-guide/recipes/THE-RECORD.md#correcting-the-record--supersession-and-what-to-do-about-its-fallout) —
+not duplicated here per ADR-0012's one-home rule. **Not re-witnessed by this pass directly** —
+cited from the landing build's own report (a scratch throwaway world, torn down after).
+
+**54. `led` read-projection flags, review-gap's actor/work-item merge, refuse-verdict
+legibility, and `--json` write-surface parity (`bootstrap/templates/led.tmpl`, commit
+`33150e9f`, design/BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06.md, rows 1087/1102 family).** Four
+CLI-presentation-layer changes, no kernel/serving change: `--recent`/`current`/`show` gain
+`--fields`, `--recent`/`current` gain `--kind`, `work list` gains `--state`/`--slug`/`--fields`
+(every unrecognized value REFUSED, never a silent empty); bare `review-gap` now reads BOTH the
+actor-keyed and work-item-keyed debt views, every row labeled `gap_kind`; every review-gap row
+carries `review_status` (`"never-reviewed"` | `"reviewed-not-discharging"`, the latter with
+`reviewing_verdicts`); `led --json` widened from four write surfaces to six
+(`obligation_revoke`/`missive_dispose` joined `ledger`/`review`/`registration`/`obligation`).
+*Witnessed live this pass*, this checkout (`autoharn3`):
+```
+$ ./autoharn led current 2 --kind decision --fields kind,statement
+{"kind": "decision", "statement": "stopping: writer leg of the A:B:C docs loop running ..."}
+
+$ ./autoharn led work list --slug docs-wave-catchup --fields slug,title
+{"slug": "docs-wave-catchup", "title": "Maintainer instruction 2026-08-06 ..."}
+
+$ ./autoharn led --json obligation_revoke /tmp/does-not-exist-xyz.json
+# progresses past the surface-recognition check into the file-read path (FileNotFoundError) --
+# a bogus surface name refuses at that check instead: "unrecognized surface 'bogus_surface'"
+```
+Full transcripts including the `--kind`/`--fields` refusal shapes and the review-gap/
+review_status enrichment:
+[user-guide/recipes/CLI-AND-BOUNDARY.md](user-guide/recipes/CLI-AND-BOUNDARY.md#led-read-projection-flags---json-surface-parity-and-the-served-deploymentsannotate_names-surface-2026-08-06)
+and
+[user-guide/recipes/REVIEW-AND-GATING.md](user-guide/recipes/REVIEW-AND-GATING.md) — not
+duplicated here.
 
 ## Built, unexercised (exists; has not yet fired in anger)
 
