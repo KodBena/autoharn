@@ -7,13 +7,24 @@ fixture passphrase, never the operator's own keyring), for headless witnessing."
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from tools.configtree import ConfirmField, SectionResult, SectionSpec, TextField, is_field_touched
 from tools.setup_tui import checklist as ck
-from tools.setup_tui import content, feature_facts, probes, signed_genesis as sg
+from tools.setup_tui import content, destination, feature_facts, probes, signed_genesis as sg
 from tools.setup_tui.plan import PlanEntry
 
 _SLUG = "signed-genesis"
+
+# The scaffolded-world hard-check's ONE item name (ADR-0012 P1) -- every `cl.add` call below for
+# this check uses the SAME string, so a checklist reader never sees two disagreeing labels for one
+# fact. THIRD marker updated by design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md Amendment A1
+# (2026-08-06): `legacy/led` alone used to be the hard requirement; every legacy-free newborn
+# (post commit fd341960, which removed the legacy/ scaffold emission) now satisfies it via the
+# world-local `./autoharn` dispatcher instead -- `legacy/led` stays ACCEPTED as a transitional
+# equivalent (tools.setup_tui.destination.third_marker is the ONE home for "which file satisfied
+# the third slot", never re-derived here).
+_SCAFFOLD_CHECK_ITEM = "world has keys/+verify-commission+(dispatcher-or-legacy-led)"
 
 
 def fields(state: dict) -> tuple:
@@ -63,24 +74,25 @@ def submit(state: dict, answers: dict) -> SectionResult:
     # now. Exactly one of the two branches below ever runs, exactly one row is ever added under
     # THIS item name for this call.
     if state.get("dest_would_exist"):
-        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.DRY_SKIPPED,
+        cl.add("signed-genesis", _SCAFFOLD_CHECK_ITEM, ck.DRY_SKIPPED,
                f"'{dest}' queued earlier this SAME commit (birth act not yet run) -- trusted, "
                "not re-probed against a pre-birth disk state")
     elif not os.path.isdir(dest):
-        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
+        cl.add("signed-genesis", _SCAFFOLD_CHECK_ITEM, ck.REFUSED,
                f"'{dest}' not a directory")
         return SectionResult(ok=False, errors={"": "destination (set in Fork/target) does not "
                                              "exist -- run a birth first"})
     else:
+        third_present, _third_label = destination.third_marker(Path(dest))
         missing = [n for n, ok in (
             ("keys/", os.path.isdir(os.path.join(dest, "keys"))),
             ("verify-commission", os.path.isfile(os.path.join(dest, "verify-commission"))),
-            ("legacy/led", os.path.isfile(os.path.join(dest, "legacy", "led")))) if not ok]
+            ("dispatcher-or-legacy-led", third_present)) if not ok]
         if missing:
-            cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.REFUSED,
+            cl.add("signed-genesis", _SCAFFOLD_CHECK_ITEM, ck.REFUSED,
                    f"missing: {missing} -- not a scaffolded world")
             return SectionResult(ok=False, errors={"": f"missing {missing} -- not a scaffolded world"})
-        cl.add("signed-genesis", "world has keys/+verify-commission+legacy/led", ck.WITNESSED, dest)
+        cl.add("signed-genesis", _SCAFFOLD_CHECK_ITEM, ck.WITNESSED, dest)
 
     gpg_path = probes.which("gpg")
     if not gpg_path:

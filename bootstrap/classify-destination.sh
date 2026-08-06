@@ -13,7 +13,17 @@
 # Prints one of: fresh / autoharn-complete / autoharn-partial / foreign -- the same four
 # DestKind values tools/setup_tui/destination.py's DestKind enum names (its own `.value` strings,
 # so a caller comparing this script's stdout against `DestKind(...).value` never needs a second
-# vocabulary). Known, named weaker-than-Python spots (never silently claimed equivalent):
+# vocabulary).
+#
+# THIRD MARKER (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md Amendment A1, 2026-08-06): the
+# third behavioral marker, beside the sentinel and deployment.json, is the world-local
+# `<dest>/autoharn` dispatcher file (DISPATCHER_NAME in destination.py) -- the one-surface
+# identity every scaffolded world carries by construction since the umbrella-CLI migration.
+# `<dest>/legacy/led` remains ACCEPTED as a transitional EQUIVALENT for worlds born before commit
+# fd341960 (which removed the legacy/ scaffold emission outright) -- either file satisfies the
+# third slot, never required, never emitted anew on this script's account.
+#
+# Known, named weaker-than-Python spots (never silently claimed equivalent):
 #   - an UNPARSEABLE sentinel (spec's AUTOHARN_PARTIAL red flag) is not detected here -- this
 #     script has no JSON validator, so a corrupt-but-present sentinel is treated the same as a
 #     well-formed one for the marker count. The parity fixture's five witnessed shapes do not
@@ -52,17 +62,19 @@ classify_destination() {
 
     _cd_sentinel="$_cd_path/.autoharn-world.json"
     _cd_deployment="$_cd_path/deployment.json"
+    _cd_dispatcher="$_cd_path/autoharn"
     _cd_led="$_cd_path/legacy/led"
 
     _cd_sentinel_present=0
     [ -f "$_cd_sentinel" ] && _cd_sentinel_present=1
     _cd_deployment_present=0
     [ -f "$_cd_deployment" ] && _cd_deployment_present=1
-    _cd_led_present=0
-    [ -f "$_cd_led" ] && _cd_led_present=1
+    # THIRD marker (A1): the dispatcher OR legacy/led -- either satisfies, neither required.
+    _cd_third_present=0
+    { [ -f "$_cd_dispatcher" ] || [ -f "$_cd_led" ]; } && _cd_third_present=1
 
     if [ "$_cd_sentinel_present" -eq 1 ] && [ "$_cd_deployment_present" -eq 1 ] \
-       && [ "$_cd_led_present" -eq 1 ]; then
+       && [ "$_cd_third_present" -eq 1 ]; then
         # world-name grep (spec §3's minimal shell floor), not a JSON parse.
         _cd_sentinel_world="$(grep -o '"world"[[:space:]]*:[[:space:]]*"[^"]*"' "$_cd_sentinel" 2>/dev/null \
             | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/' | head -n1)"
@@ -77,13 +89,13 @@ classify_destination() {
         return 0
     fi
     if [ "$_cd_sentinel_present" -eq 0 ] && [ "$_cd_deployment_present" -eq 1 ] \
-       && [ "$_cd_led_present" -eq 1 ]; then
+       && [ "$_cd_third_present" -eq 1 ]; then
         # Pre-sentinel legacy world (spec §2) -- behavioral evidence alone, no retro-stamping.
         echo "autoharn-complete"
         return 0
     fi
 
-    _cd_count=$((_cd_sentinel_present + _cd_deployment_present + _cd_led_present))
+    _cd_count=$((_cd_sentinel_present + _cd_deployment_present + _cd_third_present))
     if [ "$_cd_count" -gt 0 ]; then
         echo "autoharn-partial"
         return 0

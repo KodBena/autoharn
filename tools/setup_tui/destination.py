@@ -11,7 +11,7 @@ re-implementing (ADR-0000 Rule 2a): `classify_destination(path) -> DestinationSt
 
 THE SENTINEL (spec §2). Birth writes `<dest>/.autoharn-world.json` (new-project.sh, at the same
 point it writes deployment.json) -- content `{"world", "run", "born", "autoharn_commit",
-"schema"}`. It is the DECLARED marker; `deployment.json` + `legacy/led` remain the BEHAVIORAL
+"schema"}`. It is the DECLARED marker; `deployment.json` + the THIRD marker remain the BEHAVIORAL
 evidence a birth actually completed. `SENTINEL_NAME`/`SENTINEL_SCHEMA` below are the one place
 that shape is named (ADR-0012 P1) -- new-project.sh's Python heredoc writer and this module's own
 reader both import nothing from each other (shell can't import Python), so the two are kept in
@@ -20,18 +20,33 @@ the other (§3's cross-language floor, ADR-0012 P7: the Python classifier is the
 shell reproduction says so in its own comment, drift is caught by the parity fixture, not by
 codegen -- codegen would be disproportionate for three JSON keys and a marker check).
 
-CLASSIFICATION RULES (spec §2, restated as code below):
+THIRD MARKER (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md Amendment A1, 2026-08-06): the
+third behavioral marker, beside the sentinel and deployment.json, is the world-local `./autoharn`
+dispatcher file (`DISPATCHER_NAME` below -- the one-surface identity every scaffolded world
+carries by construction since the umbrella-CLI migration, design/
+FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6). `legacy/led` (`_LEGACY_LED_REL`) remains ACCEPTED as a
+transitional EQUIVALENT of the dispatcher marker for worlds born before commit fd341960 (which
+removed the `legacy/` scaffold emission outright) -- either file satisfies the third slot, a world
+carrying both (ordinary for the pre-removal era) is not penalized, and neither is ever REQUIRED
+nor emitted anew on this classifier's account (`third_marker` below is the one function that
+resolves "is the third slot satisfied, and by what" -- PUBLIC, ADR-0012 P1: other consumers that
+need the raw fact without a full `classify_destination` call, e.g.
+tools/setup_tui/steps_signed_genesis.py's scaffolded-world hard-check, import this rather than
+re-deriving the dispatcher-or-legacy-led check a second time).
+
+CLASSIFICATION RULES (spec §2 as amended by A1, restated as code below):
   - absent path, or an EMPTY directory -> FRESH.
-  - sentinel present + parseable + deployment.json + legacy/led all present -> AUTOHARN_COMPLETE,
-    UNLESS the sentinel's own `world` contradicts deployment.json's own `name` (a hand-edited or
-    drifted pair) -- that reads AUTOHARN_PARTIAL instead, never silently coerced to either
-    reading (ADR-0002 rule 2: validate, don't guess which one is "right").
+  - sentinel present + parseable + deployment.json + the third marker (dispatcher or legacy/led)
+    all present -> AUTOHARN_COMPLETE, UNLESS the sentinel's own `world` contradicts
+    deployment.json's own `name` (a hand-edited or drifted pair) -- that reads AUTOHARN_PARTIAL
+    instead, never silently coerced to either reading (ADR-0002 rule 2: validate, don't guess
+    which one is "right").
   - sentinel present but UNPARSEABLE is itself partial-birth evidence (a write that started and
     did not finish cleanly) -- AUTOHARN_PARTIAL, regardless of what else is present.
-  - no sentinel, but deployment.json + legacy/led both present -> AUTOHARN_COMPLETE via
+  - no sentinel, but deployment.json + the third marker both present -> AUTOHARN_COMPLETE via
     BEHAVIORAL evidence alone (a world born before this spec existed; no retro-stamping runs are
     linear, ADR-0011 Rule 4 / CLAUDE.md's "runs are strictly linear" ruling).
-  - any OTHER non-empty combination of {sentinel, deployment.json, legacy/led} -> AUTOHARN_PARTIAL,
+  - any OTHER non-empty combination of {sentinel, deployment.json, third marker} -> AUTOHARN_PARTIAL,
     `evidence` names what is present and what is missing.
   - non-empty, none of the three markers -> FOREIGN, `evidence` samples up to 5 directory entries.
 
@@ -83,6 +98,17 @@ from tools.setup_tui.commit_executor import JOURNAL_FILENAME  # the wizard's OWN
 SENTINEL_NAME = ".autoharn-world.json"
 SENTINEL_SCHEMA = 1
 
+# The third behavioral marker (spec Amendment A1): the world-local ./autoharn dispatcher every
+# scaffolded world writes since the umbrella-CLI migration (bootstrap/new-project.sh's
+# _write_world_dispatcher(), design/FABLE-AUTOHARN-UMBRELLA-CLI-SPEC.md §6). ONE HOME for this
+# filename (ADR-0012 P1); bootstrap/classify-destination.sh names the same literal in its own
+# comment (shell has no import mechanism to share this constant).
+DISPATCHER_NAME = "autoharn"
+
+# `legacy/led` remains ACCEPTED as a transitional EQUIVALENT of the dispatcher marker (A1) --
+# worlds born before commit fd341960 (which removed the legacy/ scaffold emission outright) carry
+# this instead of, or alongside, the dispatcher. Never required, never emitted anew on this
+# classifier's account.
 _LEGACY_LED_REL = ("legacy", "led")
 
 # LIVE HAZARD FOUND AND CLOSED DURING THIS BUILD (seen-red/setup-tui-dry-run-parity's own live
@@ -95,15 +121,25 @@ _LEGACY_LED_REL = ("legacy", "led")
 # journal is neither the sentinel, deployment.json, nor legacy/led), REFUSING every live birth
 # through the pure-core flow. The journal is wizard-owned bookkeeping, not foreign content and
 # not birth evidence -- ignored here for the emptiness/occupancy question only; it plays no part
-# in the sentinel/deployment.json/legacy-led marker checks below, which are unaffected.
+# in the sentinel/deployment.json/third-marker checks below, which are unaffected.
 _IGNORED_ENTRIES = frozenset({JOURNAL_FILENAME})
 
 
 class DestKind(Enum):
     FRESH = "fresh"                         # absent, or an empty directory
-    AUTOHARN_COMPLETE = "autoharn-complete"  # sentinel + deployment.json + legacy/led all present and consistent
+    AUTOHARN_COMPLETE = "autoharn-complete"  # sentinel + deployment.json + (dispatcher or legacy/led) all present and consistent
     AUTOHARN_PARTIAL = "autoharn-partial"    # some birth evidence present, not all -- an interrupted birth
     FOREIGN = "foreign"                      # non-empty, no autoharn birth evidence
+
+
+class ThirdMarkerKind(Enum):
+    """Which file satisfied the THIRD marker slot (spec Amendment A1) -- a closed, two-member
+    vocabulary (maintainer's "no bare types" standing rule, ledger row 25: a bare `str` here would
+    let a typo or a third candidate silently pass where the contract is exactly these two names,
+    nothing else). `third_marker()` below returns `None` (not a member) when neither is present --
+    absence is not itself a marker kind."""
+    DISPATCHER = "dispatcher"    # <dest>/autoharn, the current-era marker
+    LEGACY_LED = "legacy/led"    # <dest>/legacy/led, the transitional equivalent (pre-fd341960)
 
 
 @dataclass(frozen=True)
@@ -134,6 +170,19 @@ def _deployment_name(deployment_path: Path) -> str | None:
         return None
 
 
+def third_marker(p: Path) -> tuple[bool, ThirdMarkerKind | None]:
+    """Resolves the THIRD behavioral marker (spec Amendment A1): present/absent, plus WHICH kind
+    satisfied it (`ThirdMarkerKind.DISPATCHER` for `<dest>/autoharn`, `ThirdMarkerKind.LEGACY_LED`
+    for the transitional equivalent) -- `(False, None)` when neither is present. The dispatcher is
+    checked first (the current-era marker); a world carrying both (ordinary for the pre-removal
+    era) reports `DISPATCHER`. Never writes; see module docstring's PURITY section."""
+    if (p / DISPATCHER_NAME).is_file():
+        return True, ThirdMarkerKind.DISPATCHER
+    if p.joinpath(*_LEGACY_LED_REL).is_file():
+        return True, ThirdMarkerKind.LEGACY_LED
+    return False, None
+
+
 def classify_destination(path: str | os.PathLike) -> DestinationState:
     """The one Port (spec §3): every consumer screen and new-project.sh's own shell reproduction
     calls this instead of re-implementing an isdir/isfile probe. Never writes; see module
@@ -153,11 +202,11 @@ def classify_destination(path: str | os.PathLike) -> DestinationState:
 
     sentinel_path = p / SENTINEL_NAME
     deployment_path = p / "deployment.json"
-    legacy_led_path = p.joinpath(*_LEGACY_LED_REL)
 
     sentinel_present = sentinel_path.is_file()
     deployment_present = deployment_path.is_file()
-    legacy_led_present = legacy_led_path.is_file()
+    third_present, third_label = third_marker(p)
+    third_name = third_label.value if third_label is not None else "dispatcher-or-legacy-led"
 
     if sentinel_present:
         sentinel_ok, sentinel_world, sentinel_err = _read_sentinel(sentinel_path)
@@ -165,34 +214,34 @@ def classify_destination(path: str | os.PathLike) -> DestinationState:
             return DestinationState(DestKind.AUTOHARN_PARTIAL, (
                 f"sentinel present but unparseable: {sentinel_err}",
                 f"deployment.json {'present' if deployment_present else 'missing'}",
-                f"legacy/led {'present' if legacy_led_present else 'missing'}",
+                f"{third_name} {'present' if third_present else 'missing'}",
             ))
-        if deployment_present and legacy_led_present:
+        if deployment_present and third_present:
             deployment_name = _deployment_name(deployment_path)
             if sentinel_world and deployment_name and sentinel_world != deployment_name:
                 return DestinationState(DestKind.AUTOHARN_PARTIAL, (
                     f"sentinel world={sentinel_world!r} contradicts deployment.json "
                     f"name={deployment_name!r}",
-                    "sentinel present", "deployment.json present", "legacy/led present",
+                    "sentinel present", "deployment.json present", f"{third_name} present",
                 ))
             return DestinationState(DestKind.AUTOHARN_COMPLETE, (
-                "sentinel present", "deployment.json present", "legacy/led present",
+                "sentinel present", "deployment.json present", f"{third_name} present",
             ))
-    elif deployment_present and legacy_led_present:
+    elif deployment_present and third_present:
         # Pre-sentinel legacy world (spec §2): born before this spec existed, no retro-stamping.
         return DestinationState(DestKind.AUTOHARN_COMPLETE, (
             "no sentinel (pre-sentinel legacy world)",
-            "deployment.json present", "legacy/led present",
+            "deployment.json present", f"{third_name} present",
         ))
 
-    present_count = sum([sentinel_present, deployment_present, legacy_led_present])
+    present_count = sum([sentinel_present, deployment_present, third_present])
     if present_count > 0:
         present = [n for n, ok in (("sentinel", sentinel_present),
                                     ("deployment.json", deployment_present),
-                                    ("legacy/led", legacy_led_present)) if ok]
+                                    (third_name, third_present)) if ok]
         missing = [n for n, ok in (("sentinel", sentinel_present),
                                     ("deployment.json", deployment_present),
-                                    ("legacy/led", legacy_led_present)) if not ok]
+                                    ("dispatcher-or-legacy-led", third_present)) if not ok]
         return DestinationState(DestKind.AUTOHARN_PARTIAL, (
             f"present: {', '.join(present)}", f"missing: {', '.join(missing)}",
         ))

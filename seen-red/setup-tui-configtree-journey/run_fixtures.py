@@ -1145,7 +1145,8 @@ async def case_12() -> None:
                    "name": "", "email": "", "gnupghome": ""}
         result = steps.steps_signed_genesis.submit(state, answers)
         cl = state["_checklist"]
-        matching = [it for it in cl.items if it.item == "world has keys/+verify-commission+legacy/led"]
+        matching = [it for it in cl.items
+                    if it.item == "world has keys/+verify-commission+(dispatcher-or-legacy-led)"]
         assert len(matching) == 1, \
             f"expected EXACTLY ONE disposition row for this item, got {len(matching)}: {matching}"
         assert matching[0].status == ck.DRY_SKIPPED, \

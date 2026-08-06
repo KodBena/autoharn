@@ -1981,14 +1981,14 @@ if not boundary_url or not boundary_deployment:
 PYEOF
 
 # .autoharn-world.json sentinel (design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md §2), written
-# at the SAME point as deployment.json above -- the DECLARED birth marker; deployment.json +
-# legacy/led USED TO remain the BEHAVIORAL evidence, but this script no longer writes legacy/led
-# (rows 160/161: legacy/ is gone from newborn worlds entirely) -- tools/setup_tui/destination.py's
-# classify_destination and bootstrap/classify-destination.sh both still probe for legacy/led as
-# one of their three AUTOHARN_COMPLETE markers and have NOT been updated for this; a freshly
-# scaffolded, complete world will now misclassify as AUTOHARN_PARTIAL there until that classifier
-# is repointed at a marker every world still writes (flagged, not fixed here -- out of this
-# item's authorized scope; routes to the maintainer). `world` is written as the SAME value as
+# at the SAME point as deployment.json above -- the DECLARED birth marker; deployment.json + the
+# THIRD marker remain the BEHAVIORAL evidence. `legacy/led` USED TO be that third marker, but this
+# script no longer writes it (rows 160/161: legacy/ is gone from newborn worlds entirely) -- FIXED
+# (Amendment A1, rows 168/169): tools/setup_tui/destination.py's classify_destination and
+# bootstrap/classify-destination.sh now treat the world-local ./autoharn dispatcher this script
+# DOES still write (_write_world_dispatcher() above) as the third marker, with legacy/led accepted
+# only as a transitional equivalent for worlds born before this commit -- a freshly scaffolded,
+# complete world classifies AUTOHARN_COMPLETE. `world` is written as the SAME value as
 # deployment.json's own `name` field just written above (tools/setup_tui/destination.py's module
 # docstring names this resolution explicitly: the two denote the same fact at birth time, and can
 # only drift apart from a LATER hand-edit or a --force re-scaffold under a different --name --
@@ -2527,12 +2527,13 @@ fi
 # of what this used to be ("operator recovery when the boundary is down"); design/
 # FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5 and design/FABLE-LEGACY-LED-RETIREMENT-
 # SPEC.md (now archived at vestigial_documentation/design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md)
-# for the spec text. KNOWN, FLAGGED, NOT FIXED HERE: tools/setup_tui/destination.py's
-# classify_destination and bootstrap/classify-destination.sh both still treat legacy/led's file
-# presence as one of three AUTOHARN_COMPLETE markers; a freshly scaffolded, complete world will
-# misclassify as AUTOHARN_PARTIAL there until that classifier (its own governing spec, design/
-# FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md) is repointed at a marker every world still writes --
-# out of this item's authorized scope, routed to the maintainer rather than patched in a hurry.
+# for the spec text. FIXED (Amendment A1 to design/FABLE-SETUP-TUI-DESTINATION-STATE-SPEC.md, rows
+# 168/169): tools/setup_tui/destination.py's classify_destination and
+# bootstrap/classify-destination.sh no longer require legacy/led's file presence as an
+# AUTOHARN_COMPLETE marker -- the third marker slot is now the world-local ./autoharn dispatcher
+# this script writes for every world (_write_world_dispatcher() above), with legacy/led accepted
+# only as a transitional equivalent for worlds born before this commit. A freshly scaffolded,
+# complete world classifies AUTOHARN_COMPLETE.
 
 # orchlog wrapper (deployment-orchlog-surfacing item, half (b) -- half (a), migrate printing the
 # span, belongs to ./migrate and is untouched here). A DIFFERENT shape from the eight shims just

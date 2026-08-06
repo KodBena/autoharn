@@ -12,14 +12,18 @@ if the classifier collapsed two distinct kinds to the same answer, the assertion
 would catch it). Real filesystem directories under a scratch tmpdir, zero mocks, zero residue
 after cleanup (rmtree in a `finally`).
 
-Cases (spec §2, §5):
+Cases (spec §2, §5, as amended by Amendment A1 -- the third marker is now the ./autoharn
+dispatcher, with legacy/led accepted as a transitional equivalent, witnessed on BOTH eras):
   1. FRESH -- absent path.
   2. FRESH -- empty directory (the spec's OWN worked example of "absent, or an empty directory").
-  3. AUTOHARN_COMPLETE -- sentinel + deployment.json + legacy/led, all present and consistent.
+  3. AUTOHARN_COMPLETE -- sentinel + deployment.json + dispatcher (current era, post-fd341960),
+     all present and consistent.
+  3b. AUTOHARN_COMPLETE -- sentinel + deployment.json + legacy/led, NO dispatcher (transitional
+      era, pre-fd341960 -- legacy/led accepted as the third marker's equivalent).
   4. AUTOHARN_COMPLETE -- pre-sentinel legacy world (deployment.json + legacy/led, NO sentinel;
      "no retro-stamping" -- spec §2).
   5. AUTOHARN_PARTIAL -- contradiction (sentinel `world` != deployment.json `name`).
-  6. AUTOHARN_PARTIAL -- strict subset (deployment.json only, missing sentinel + legacy/led).
+  6. AUTOHARN_PARTIAL -- strict subset (deployment.json only, missing sentinel + third marker).
   7. AUTOHARN_PARTIAL -- sentinel present but unparseable (this module's own documented
      partial-birth reading of a corrupt sentinel).
   8. FOREIGN -- non-empty, no autoharn markers at all.
@@ -79,15 +83,30 @@ def main() -> int:
         assert r.kind == d.DestKind.FRESH, f"case 2: expected FRESH, got {r}"
         print("case 2 ok: empty directory -> FRESH")
 
-        # --- case 3: AUTOHARN_COMPLETE, sentinel + deployment.json + legacy/led consistent ---
+        # --- case 3: AUTOHARN_COMPLETE, sentinel + deployment.json + dispatcher (current era) ---
         complete = _mk(tmp, "complete", {
-            "legacy/led": "#!/bin/sh\n",
+            d.DISPATCHER_NAME: "#!/bin/sh\n",
             "deployment.json": _deployment_json("w1"),
             d.SENTINEL_NAME: _sentinel_json("w1"),
         })
         r = d.classify_destination(complete)
         assert r.kind == d.DestKind.AUTOHARN_COMPLETE, f"case 3: expected AUTOHARN_COMPLETE, got {r}"
-        print("case 3 ok: sentinel + deployment.json + legacy/led, consistent -> AUTOHARN_COMPLETE")
+        print("case 3 ok: sentinel + deployment.json + dispatcher, consistent -> AUTOHARN_COMPLETE")
+
+        # --- case 3b: AUTOHARN_COMPLETE, sentinel + deployment.json + legacy/led (transitional
+        # era, A1: legacy/led ACCEPTED as an equivalent of the dispatcher, never required) ---
+        complete_legacy = _mk(tmp, "complete_legacy", {
+            "legacy/led": "#!/bin/sh\n",
+            "deployment.json": _deployment_json("w1b"),
+            d.SENTINEL_NAME: _sentinel_json("w1b"),
+        })
+        assert not os.path.exists(os.path.join(complete_legacy, d.DISPATCHER_NAME))
+        r = d.classify_destination(complete_legacy)
+        assert r.kind == d.DestKind.AUTOHARN_COMPLETE, f"case 3b: expected AUTOHARN_COMPLETE, got {r}"
+        assert any("legacy/led present" in e for e in r.evidence), \
+            f"case 3b: evidence should name legacy/led as the satisfying marker: {r.evidence}"
+        print("case 3b ok: sentinel + deployment.json + legacy/led (NO dispatcher), consistent -> "
+              "AUTOHARN_COMPLETE -- transitional equivalent accepted")
 
         # --- case 4: AUTOHARN_COMPLETE, pre-sentinel legacy world (no retro-stamping) ---
         legacy = _mk(tmp, "legacy_world", {
@@ -119,7 +138,8 @@ def main() -> int:
         subset = _mk(tmp, "subset", {"deployment.json": _deployment_json("w3")})
         r = d.classify_destination(subset)
         assert r.kind == d.DestKind.AUTOHARN_PARTIAL, f"case 6: expected AUTOHARN_PARTIAL, got {r}"
-        assert any("missing" in e and "sentinel" in e and "legacy/led" in e for e in r.evidence), (
+        assert any("missing" in e and "sentinel" in e and "dispatcher-or-legacy-led" in e
+                   for e in r.evidence), (
             f"case 6: evidence should name both missing markers: {r.evidence}")
         print("case 6 ok: deployment.json only -> AUTOHARN_PARTIAL, missing markers named")
 

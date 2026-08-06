@@ -9,10 +9,16 @@ the Python module is the authority, the shell script says so in its own header, 
 is the drift-catcher the spec names instead of a code generator, which P7 permits when codegen
 would be disproportionate). This fixture builds each of the five witnessed shapes as a REAL
 filesystem directory, classifies it with BOTH implementations, and asserts they agree -- plus a
-sixth (contradiction) shape the shell script's own header names as a load-bearing agreement case
-(the `world`/`name` grep it performs). A real subprocess invocation of the shell script, not a
+sixth (contradiction) shape and a seventh (dispatcher-only, current era) shape the shell script's
+own header names as load-bearing agreement cases (the `world`/`name` grep it performs, and
+Amendment A1's third-marker equivalence). A real subprocess invocation of the shell script, not a
 re-implementation of its logic in Python -- drift in the SHIPPED artifact is what this fixture
 must catch.
+
+AMENDMENT A1 (2026-08-06): "complete" below now builds the ./autoharn DISPATCHER as the third
+marker (the current era, post commit fd341960 which removed the legacy/ scaffold emission);
+"legacy-complete" keeps building legacy/led ALONE (no sentinel) as the pre-sentinel transitional
+case; "contradiction" keeps legacy/led (either marker exercises the same contradiction branch).
 
 Zero mocks, zero residue (tmpdir rmtree in `finally`). Lazy imports banned."""
 from __future__ import annotations
@@ -72,9 +78,14 @@ def main() -> int:
         shapes = {
             "fresh": os.path.join(tmp, "does-not-exist"),
             "complete": _mk(tmp, "complete", {
-                "legacy/led": "#!/bin/sh\n",
+                d.DISPATCHER_NAME: "#!/bin/sh\n",
                 "deployment.json": _deployment_json("w1"),
                 d.SENTINEL_NAME: _sentinel_json("w1"),
+            }),
+            "complete-legacy": _mk(tmp, "complete_legacy", {
+                "legacy/led": "#!/bin/sh\n",
+                "deployment.json": _deployment_json("w1b"),
+                d.SENTINEL_NAME: _sentinel_json("w1b"),
             }),
             "partial": _mk(tmp, "partial", {"deployment.json": _deployment_json("w2")}),
             "foreign": _mk(tmp, "foreign", {"README.md": "hi"}),
