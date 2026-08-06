@@ -210,3 +210,83 @@ shipped default) is honored at face value and the tradeoff is surfaced, not hidd
 maintainer call: whether `MAX_INFLIGHT_KERNEL_CALLS` itself should also rise — out of this
 item's scope (design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md's own named
 surface is the per-deployment cap only).
+
+## Amendment — 2026-08-06: `MAX_INFLIGHT_KERNEL_CALLS` raised to 64, deployment-configurable
+
+*(Dated append per ADR-0005 Rule 8 / ADR-0020's posture — additive only, the ratified §4 body
+and the amendment immediately above stand verbatim and are not rewritten. Provenance: the A1
+builder's own flagged finding (commit f8af7d7e, report banked) that the shipped
+`MAX_INFLIGHT_PER_DEPLOYMENT` default (32) exceeds the then-global `MAX_INFLIGHT_KERNEL_CALLS`
+(24), breaking the sibling-starvation sub-bound relation the amendment immediately above names
+honestly; maintainer ruling 2026-08-06, ledger row 1113: "yes, the global rises." Build in
+design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md, ledger rows 1113/1115.)*
+
+**The fix, as built.** `MAX_INFLIGHT_KERNEL_CALLS` — until now a fixed module-level Python
+constant, `24` — is now ALSO an OPTIONAL top-level `boundary-multiplex.toml` key,
+`max_inflight_kernel_calls`, resolved through the SAME `serving/boundary_multiplex_config.py`
+loader family the per-deployment key already uses
+(`load_multiplex_config_with_inflight_limit`, extended rather than duplicated), same
+whole-file validation-before-bind discipline, a positive integer bounded `[1, 10_000]` (a
+sanity ceiling against a typo, matching every other tunable's own ceiling shape in this file
+— not operational advice). Its default is **64** — the orchestrator's stated choice, 2x the
+per-deployment default (32), restoring `MAX_INFLIGHT_PER_DEPLOYMENT < MAX_INFLIGHT_KERNEL_CALLS`
+at shipped defaults (the relation the amendment above disclosed as broken) with headroom for
+two busy deployments to each run near their own per-deployment ceiling concurrently without
+touching the global one. `serving/boundary_service.py`'s module-level `MAX_INFLIGHT_KERNEL_CALLS`
+and its `_KERNEL_CALL_SEMAPHORE` are now resolved and bound ONCE at process startup (via the new
+`configure_max_inflight_kernel_calls`, the same construction-time-defense-in-depth pattern
+`configure_sse_poll_interval`/`configure_max_sse_clients` already establish) rather than fixed
+at import time — every call site downstream (`_psql`'s admission gate, `server_saturated`'s
+typed body, the startup banner, the diagnostic-logging `STARTUP` event) reads the resolved
+value, never a stale import-time literal. The `KernelCallSaturated` refusal's teach-text now
+names the configured value and where to change it (`boundary-multiplex.toml`'s
+`max_inflight_kernel_calls` key, default 64), mirroring `DeploymentCallSaturated`'s own
+established wording.
+
+**The starvation relation, re-checked, not re-derived.** `inflight_per_deployment_starvation_
+note` (unchanged in shape) already compared `per_dep_limit` against `MAX_INFLIGHT_KERNEL_CALLS`
+as a module-global read at call time, never a captured literal — so with BOTH keys now
+independently configurable, the check is, by construction, always against the RESOLVED values
+of both, not a hardcoded relation. Witnessed both polarities (`seen-red/boundary-multiplex/
+run_fixtures.py`, WM-INFLIGHT-DEFAULT and WM-INFLIGHT-FIRES): at shipped defaults (32 < 64) the
+note is correctly ABSENT — the sibling-starvation protection genuinely holds again, closing the
+gap the amendment above disclosed; an explicit config with the per-deployment bound at or above
+the global one (either axis moved) still correctly FIRES the note.
+
+**A structural consequence, named honestly, then RETIRED not re-tuned (CLAUDE.md's
+hazard-in-reach obligation; ledger row 1141, orchestrator ruling ledgered rows 1147/1148).**
+`MAX_INFLIGHT_KERNEL_CALLS`'s original value, 24, was chosen deliberately UNDER the ASGI
+threadpool's own default concurrency (anyio's `CapacityLimiter`, 40 tokens on the review host —
+see this file's own §4 "Concurrency admission" and `serving/boundary_service.py`'s ADMISSION
+AXIS docstring) precisely so kernel-call occupancy alone could never starve non-kernel work or
+`/health`'s own thread dispatch. That relation was, on inspection, a MAGIC-NUMBER RACE — two
+independently-literal constants (this service's own 24, anyio's own default-40 limiter) that
+happened to satisfy the invariant only because neither had yet been raised past the other; the
+new shipped default, 64, broke it numerically (64 > 40), reintroducing the unbounded-queueing
+pathology A9's own iteration-7 measurements were built to close (this file's §4, "80 -> 5.3s,
+200 -> 27.7s, 600 -> no answer in 180s") the moment sustained load approached the new default.
+
+**The fix, as built (still this item, brought into scope by orchestrator ruling on the row-1141
+flag).** The relation is now STRUCTURAL, not numeric: `serving/boundary_service.py`'s ASGI
+threadpool — anyio's own default thread `CapacityLimiter` — is sized at ASGI startup from the
+RESOLVED `MAX_INFLIGHT_KERNEL_CALLS` plus a fixed, named headroom,
+`NON_KERNEL_THREADPOOL_HEADROOM = 16` (the orchestrator's stated judgment: the EXACT margin the
+original 24-under-40 pairing already carried, preserved as a deliberate constant rather than an
+emergent fact of two independent literals — sized for the same purpose the original margin
+served, comfortably covering this service's own small, enumerable non-kernel-call surface:
+`/health` and any future non-`_psql`-gated route). `resolve_threadpool_capacity(n) = n +
+NON_KERNEL_THREADPOOL_HEADROOM` is the ONE derivation (ADR-0012 P1) both the synchronous startup
+banner/diagnostic (`main()`, which runs before any ASGI event loop exists) and the actual
+APPLICATION read — the latter via `create_app`'s own `lifespan` context manager
+(`_configure_threadpool_capacity`), the one place FastAPI guarantees code runs INSIDE the
+running event loop before the app ever accepts a request, which is required because
+`anyio.to_thread.current_default_thread_limiter()` is bound to whichever loop is currently
+running and cannot be configured from synchronous pre-loop setup. The relation now holds by
+CONSTRUCTION for every value `MAX_INFLIGHT_KERNEL_CALLS` can ever resolve to — never again by
+two constants staying coincidentally in the right order. Witnessed both polarities: the resolved
+`threadpool_capacity` is named in both the stderr banner and the diagnostic `startup` event at
+the shipped default (64 -> 80) and at an explicit override (16 -> 32); and, since the limiter has
+no HTTP-visible surface, a direct in-process leg (`seen-red/boundary-multiplex/run_fixtures.py`,
+WM-THREADPOOL-STRUCTURAL) drives `create_app`'s own `lifespan` context manager directly and
+reads `anyio.to_thread.current_default_thread_limiter().total_tokens` back, confirming the value
+is genuinely APPLIED (64 -> 80, 10 -> 26), not merely computed and printed.

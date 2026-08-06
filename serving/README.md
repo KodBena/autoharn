@@ -126,9 +126,18 @@ BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 (the multiplex spec
 `boundary-multiplex.toml`'s optional top-level `max_inflight_per_deployment` key, default
 **32** — superseding the original `max(4, MAX_INFLIGHT_KERNEL_CALLS // len(deployments))`
 formula (which had produced a reported value as low as 6 in real multi-deployment operation,
-with no recorded provenance as a deliberate concurrency target). See the multiplex spec in
-full, §2-§4, before operating a multiplexed deployment; this README's endpoint table below is
-not yet rewritten route-by-route with the
+with no recorded provenance as a deliberate concurrency target). Per design/
+BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 (ledger rows 1113/1115; the multiplex spec's own
+second dated amendment has the full account), `MAX_INFLIGHT_KERNEL_CALLS` is now ALSO
+configurable — the same `boundary-multiplex.toml`, optional top-level `max_inflight_kernel_calls`
+key, default RAISED from 24 to **64** (2x the per-deployment default, restoring
+`MAX_INFLIGHT_PER_DEPLOYMENT < MAX_INFLIGHT_KERNEL_CALLS` at shipped defaults — the A1 builder's
+own flagged provenance disclosed that relation as broken at the shipped 32/24 pairing). The ASGI
+threadpool's own concurrency is now sized STRUCTURALLY off this resolved value (ledger rows
+1141/1147/1148 — see "The admission axis" below and the spec's own dated amendment) rather than
+depending on it staying under a fixed default. See the
+multiplex spec in full, §2-§4, before operating a multiplexed deployment; this README's endpoint
+table below is not yet rewritten route-by-route with the
 `/d/{deployment}` prefix inline (named seam — see the build report banked alongside this
 change; `seen-red/boundary-multiplex/run_fixtures.py` witnesses the multiplexing axes live).
 
@@ -328,7 +337,8 @@ discipline intact. Mechanics:
   config-overridable) so intermediaries do not reap an idle connection.
 - **Its own admission bound, `max_sse_clients`** (default 16, config-overridable, HUB-WIDE —
   summed across every deployment's subscribers, never per-deployment): SSE connections are
-  long-lived and must NOT occupy the 24-slot `MAX_INFLIGHT_KERNEL_CALLS` gate (a handful of
+  long-lived and must NOT occupy the `MAX_INFLIGHT_KERNEL_CALLS` gate (64-slot by shipped
+  default, configurable — see the Multiplexing section above; a handful of
   long-lived panel connections would otherwise starve the ordinary API) — checked once, at
   connect time, never mid-stream. Beyond the bound: HTTP 503, typed `sse_saturated`
   (`{"disposition": "sse_saturated", "max_clients": <n>, "message": ...}`). `/meta` advertises
@@ -466,15 +476,25 @@ Not built here, named honestly: LISTEN/NOTIFY push (a future lineage delta); pro
   was not — witnessed with measurements, N concurrent stalled requests exhaust the shared ASGI
   threadpool (anyio's default 40 tokens on the review host) and wall-clock on EVERY route,
   `/health` included, grew unboundedly with N (80 → 5.3 s, 200 → 27.7 s, 600 → no answer in
-  180 s). Fix: `MAX_INFLIGHT_KERNEL_CALLS = 24` (deliberately under the threadpool's 40 tokens)
-  — every kernel call (reads, writes, and `/health`'s own kernel probes alike) acquires a
-  non-blocking slot from one shared semaphore immediately before the `psql` subprocess runs, and
-  releases it the instant that call returns. On saturation the caller is refused IMMEDIATELY,
-  never queued: HTTP 503,
-  `{"disposition": "server_saturated", "inflight_limit": 24, "message": "<teach-text naming the
+  180 s). Fix, as originally shipped: `MAX_INFLIGHT_KERNEL_CALLS = 24` (deliberately under the
+  threadpool's 40 tokens) — every kernel call (reads, writes, and `/health`'s own kernel probes
+  alike) acquires a non-blocking slot from one shared semaphore immediately before the `psql`
+  subprocess runs, and releases it the instant that call returns. On saturation the caller is
+  refused IMMEDIATELY, never queued: HTTP 503,
+  `{"disposition": "server_saturated", "inflight_limit": <n>, "message": "<teach-text naming the
   bound, the cause, and that retry-after-backoff is the correct response>"}`. `/health` shares
   this same gate — bounded admission is what guarantees it never waits behind other requests'
-  occupancy, even under a burst that would otherwise starve it.
+  occupancy, even under a burst that would otherwise starve it. **Since design/
+  BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 (ledger rows 1113/1115), `MAX_INFLIGHT_KERNEL_
+  CALLS` is configurable and its shipped default is 64, not 24** (see the Multiplexing section
+  above) — a value now ABOVE the original 40-token threadpool figure this fix was deliberately
+  kept under, which would have reopened the same class of hazard (ledger row 1141) had the
+  40-token figure stayed a fixed anyio default. It no longer is: the ASGI threadpool's own anyio
+  `CapacityLimiter` is now sized STRUCTURALLY, at ASGI startup, to `MAX_INFLIGHT_KERNEL_CALLS +
+  NON_KERNEL_THREADPOOL_HEADROOM` (16, the orchestrator's stated judgment, preserving the
+  original 24-under-40 margin exactly) — never a fixed literal that a later config change could
+  again outrun (ledger rows 1147/1148; see the Multiplexing section above and this spec's own
+  dated amendment for the full account).
 - **Framework-owned parameter coercion (A5.5, ACCEPTED AS-IS, named — the A3.3 precedent):** a
   non-integer value for an int-typed path/query parameter (e.g. a non-numeric `after_id`)
   returns FastAPI's/pydantic's own untyped coercion-failure 422 shape, not one of this service's

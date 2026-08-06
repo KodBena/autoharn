@@ -22,6 +22,19 @@ starve its siblings -- both saturation refusals are typed 503 under DISTINCT lab
 ruling extended to the new axis). An unrecognized `{deployment}` segment is a typed 404
 `unknown_deployment` naming the full known set.
 
+GLOBAL CAP RAISED, MADE CONFIGURABLE (design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1;
+ledger rows 1113/1115): `MAX_INFLIGHT_KERNEL_CALLS` itself is now also resolved once at startup
+from `boundary-multiplex.toml`'s own optional `max_inflight_per_deployment`-sibling key,
+`max_inflight_kernel_calls` -- default RAISED from 24 to 64 (the A1 builder's own flagged
+provenance: 24 < the per-deployment default 32 broke the sub-bound-under-global relation the
+sibling-starvation protection depends on; 64 is 2x the per-deployment default, restoring
+sub-bound < global at shipped defaults with headroom for two busy deployments). Same
+whole-file-validates-before-the-socket-binds discipline as every other multiplex key; the
+resolved value is bound via `configure_max_inflight_kernel_calls` below, which rebuilds
+`_KERNEL_CALL_SEMAPHORE` to match -- called once in `main()`, before uvicorn ever starts serving
+a request, the SAME construction-time-defense-in-depth pattern `configure_sse_poll_interval`/
+`configure_max_sse_clients` already establish.
+
 WHAT THIS SERVICE IS (spec §0). The kernel's OWN inner boundary -- s43's four SECURITY
 DEFINER write functions plus the derived views -- remains the sole authority. This service is
 the OUTER declared boundary: it translates and validates, refuses what it cannot honor, and
@@ -214,21 +227,26 @@ individually -- acquires a slot from `_KERNEL_CALL_SEMAPHORE` (`threading.Bounde
 thread-safe, matching the plain-`def`/threadpool handler shape) via a NON-BLOCKING `acquire`,
 as late as honesty allows (immediately before `subprocess.run`, never around this module's own
 cheap Python setup) and releases it in a `finally` on every exit path (success, timeout, OS
-error alike). `MAX_INFLIGHT_KERNEL_CALLS = 24` -- deliberately under the threadpool's 40 tokens,
-so non-kernel work and `/health`'s own thread dispatch are never starved by kernel-call
-occupancy alone. On saturation, `_psql` raises `KernelCallSaturated` WITHOUT ever calling
-`subprocess.run` -- the caller is refused before it would have waited on anything, never
-queued -- and the app's ONE dedicated exception handler for that class returns typed 503
-`{"disposition": "server_saturated", "inflight_limit": 24, "message": ...}` (ADR-0012 P1: one
-handler, not a try/except duplicated per route). Because gating lives in `_psql` rather than in
-each handler, EVERY kernel-call site shares the same bound automatically -- reads, writes
-(including a write's own two sequential kernel calls, the s43 capability probe and the boundary-
-function call itself, each independently gated), and `/health`'s own several kernel probes
-(`capability_manifest`, `service_principal_name`) alike -- with no second, handler-level
-literal to keep in sync (the implementation-detail threadpool size stops being load-bearing:
-this service's own named constant is the bound now). Preserved: the A1 transport, the A3.1
-plain-`def` handler shape, every existing typed shape -- this axis adds one new one beside them,
-never replacing or loosening any.
+error alike). `MAX_INFLIGHT_KERNEL_CALLS = 24` (as originally shipped) -- deliberately under
+the threadpool's 40 tokens, so non-kernel work and `/health`'s own thread dispatch are never
+starved by kernel-call occupancy alone. On saturation, `_psql` raises `KernelCallSaturated`
+WITHOUT ever calling `subprocess.run` -- the caller is refused before it would have waited on
+anything, never queued -- and the app's ONE dedicated exception handler for that class returns
+typed 503 `{"disposition": "server_saturated", "inflight_limit": <n>, "message": ...}`
+(ADR-0012 P1: one handler, not a try/except duplicated per route). Because gating lives in
+`_psql` rather than in each handler, EVERY kernel-call site shares the same bound automatically
+-- reads, writes (including a write's own two sequential kernel calls, the s43 capability probe
+and the boundary-function call itself, each independently gated), and `/health`'s own several
+kernel probes (`capability_manifest`, `service_principal_name`) alike -- with no second,
+handler-level literal to keep in sync (the implementation-detail threadpool size stops being
+load-bearing: this service's own named constant is the bound now). Preserved: the A1 transport,
+the A3.1 plain-`def` handler shape, every existing typed shape -- this axis adds one new one
+beside them, never replacing or loosening any. GLOBAL CAP RAISED, MADE CONFIGURABLE (design/
+BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1, ledger rows 1113/1115): `MAX_INFLIGHT_KERNEL_
+CALLS`'s shipped default is now **64**, not 24 -- see this module's own docstring header and
+`configure_max_inflight_kernel_calls` below for the full account, including the disclosed
+tension with the 40-token threadpool figure this paragraph's own original fix was deliberately
+sized under (ledger row 1141).
 
 PAGINATION ON THE HISTORY ROUTE (spec A10, iteration-8 confirmation pass): `GET
 /rows/{id}/history` was the one read route the A5.4 pagination pass never enumerated -- it
@@ -366,9 +384,11 @@ Lazy imports are banned (CLAUDE.md, 2026-07-02): every import is top-of-file.
 """
 from __future__ import annotations
 
+import anyio
 import argparse
 import asyncio
 import base64
+import contextlib
 import copy
 import datetime
 import hashlib
@@ -1162,24 +1182,126 @@ MAX_TIE_GROUP_EXTRA_ROWS = 1000
 # key (`boundary_multiplex_config.load_multiplex_config_with_inflight_limit`, default
 # `boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT` -- 32) and held one-per-deployment
 # on each `BoundaryConfig` (never a second literal here -- ADR-0012 P1).
-MAX_INFLIGHT_KERNEL_CALLS = 24
+#
+# GLOBAL CAP CONFIGURABLE (design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1, ledger rows
+# 1113/1115): this module-level default is now ALSO resolved once per process at startup, from
+# `boundary-multiplex.toml`'s own `max_inflight_kernel_calls` key (same loader,
+# `load_multiplex_config_with_inflight_limit`; default
+# `boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_KERNEL_CALLS` -- 64, raised from the 24 shipped
+# before this item -- the A1 builder's own flagged provenance: 24 was smaller than the new
+# per-deployment default 32, breaking the sub-bound-under-global relation the sibling-starvation
+# protection depends on). `main()` calls `configure_max_inflight_kernel_calls` below EXACTLY
+# ONCE, before uvicorn ever starts serving a request -- construction-time-defense-in-depth, the
+# SAME pattern `configure_sse_poll_interval`/`configure_max_sse_clients` already establish (the
+# TOML value is already validated whole-file by `boundary_multiplex_config.py` before this
+# function ever runs). These two module globals are declared `global`-reassigned there, never
+# elsewhere -- both start at the DEFAULT so every unit-shaped caller that never calls `main()`
+# (this project's own fixture bank's direct `_psql`/`BoundaryConfig` construction) still gets a
+# sane, working semaphore rather than an unconfigured one.
+MAX_INFLIGHT_KERNEL_CALLS = boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_KERNEL_CALLS
 _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(MAX_INFLIGHT_KERNEL_CALLS)
 
 
+def configure_max_inflight_kernel_calls(v: int) -> None:
+    """design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 -- the ONE place
+    `MAX_INFLIGHT_KERNEL_CALLS` and its `_KERNEL_CALL_SEMAPHORE` are ever reassigned after import
+    (the SAME `configure_*`-at-startup pattern `configure_sse_poll_interval`/
+    `configure_max_sse_clients` already establish). Rebuilds the semaphore rather than mutating
+    the existing one's capacity -- `threading.BoundedSemaphore` carries no public resize
+    operation, and a resize mid-request would risk a call that acquired against the OLD bound
+    releasing against a semaphore whose accounting no longer matches; called exactly once in
+    `main()`, before uvicorn ever starts serving a request, so no call can be in flight against
+    the semaphore this replaces."""
+    global MAX_INFLIGHT_KERNEL_CALLS, _KERNEL_CALL_SEMAPHORE
+    if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+        raise ValueError(
+            f"boundary_service: REFUSED -- configure_max_inflight_kernel_calls({v!r}) must be a "
+            f"positive integer.")
+    MAX_INFLIGHT_KERNEL_CALLS = v
+    _KERNEL_CALL_SEMAPHORE = threading.BoundedSemaphore(v)
+
+
+# THREADPOOL CAPACITY, STRUCTURAL (orchestrator ruling on ledger row 1141's flag, ledgered row
+# 1147, ledger row 1148): the 24-under-40 relation `MAX_INFLIGHT_KERNEL_CALLS`'s ORIGINAL value
+# depended on was a MAGIC-NUMBER RACE -- two independently-literal constants (this service's own
+# 24, anyio's own default-40 `CapacityLimiter`) that happened to satisfy "kernel-call occupancy
+# alone can never starve non-kernel work" only because nobody had yet raised either one. Making
+# `MAX_INFLIGHT_KERNEL_CALLS` configurable (this item) turns that race live: an operator (or a
+# future default change) can push it past 40 with no structural check in place -- exactly the
+# tension ledger row 1141 flagged. RETIRED, not re-tuned: the ASGI threadpool's own `anyio`
+# `CapacityLimiter` is now DERIVED from the resolved `MAX_INFLIGHT_KERNEL_CALLS` plus a fixed
+# headroom, at ASGI startup (`_configure_threadpool_capacity` below, wired as `create_app`'s own
+# `lifespan`) -- so the relation holds by CONSTRUCTION for every value `MAX_INFLIGHT_KERNEL_CALLS`
+# can ever resolve to, never by two constants staying coincidentally in the right order.
+#
+# HEADROOM, ORCHESTRATOR'S JUDGMENT, STATED: 16 -- the exact margin the ORIGINAL shipped pair
+# (24 under 40) already carried, preserved as a NAMED, deliberate constant rather than an
+# emergent fact of two independent literals. Sized for the SAME purpose the original margin
+# served (this file's own ADMISSION AXIS docstring, iteration-7 confirmation pass): enough
+# non-kernel threadpool tokens that `/health` and every other non-`_psql`-gated route can still
+# get a thread promptly even while every `MAX_INFLIGHT_KERNEL_CALLS` slot is occupied by a
+# stalled kernel call -- 16 concurrent non-kernel dispatches (health probes, any future
+# non-kernel plain-`def` route) comfortably covers this service's own actual non-kernel surface,
+# which is small and enumerable (this is not a claim that 16 is the ONLY sound value; it is the
+# smallest honest choice that reproduces the original design's own margin exactly, flagged here
+# per ADR-0000 2(a) rather than picked silently).
+NON_KERNEL_THREADPOOL_HEADROOM = 16
+
+
+def resolve_threadpool_capacity(max_inflight_kernel_calls: int) -> int:
+    """The ONE place (ADR-0012 P1) the ASGI threadpool's target `CapacityLimiter.total_tokens`
+    is computed from `MAX_INFLIGHT_KERNEL_CALLS` -- pure arithmetic, no I/O, so both the
+    synchronous startup banner/diagnostic (`main()`, which runs before the ASGI event loop
+    exists) and the async lifespan handler that actually APPLIES the value (which can only run
+    inside that loop, since `anyio.to_thread.current_default_thread_limiter()` is bound to the
+    currently-running one) read the SAME derivation, never two literals that could drift."""
+    return max_inflight_kernel_calls + NON_KERNEL_THREADPOOL_HEADROOM
+
+
+@contextlib.asynccontextmanager
+async def _configure_threadpool_capacity(app: FastAPI):
+    """`create_app`'s own `lifespan` -- the ONE place this service ever touches anyio's default
+    thread `CapacityLimiter` (spec: design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md's orchestrator
+    ruling on ledger row 1141, ledgered row 1147/1148). `anyio.to_thread.current_default_thread_
+    limiter()` returns a limiter bound to the CURRENTLY RUNNING event loop -- it cannot be
+    configured from `main()`'s own synchronous setup (before uvicorn/anyio ever start a loop);
+    this ASGI `lifespan` context is the one place FastAPI guarantees runs INSIDE that loop, before
+    the app ever accepts a request (Starlette begins serving only after an `async with` lifespan
+    context's own code before its `yield` completes) -- so the resize is guaranteed to land
+    before any request could observe the stock 40-token default. Reads `MAX_INFLIGHT_KERNEL_
+    CALLS` as a live module global (never a value captured at `create_app`-call time), so a
+    fixture-style caller that constructs a `BoundaryConfig`/`create_app` directly without going
+    through `main()`'s own `configure_max_inflight_kernel_calls` still gets a limiter consistent
+    with whatever the module's current default/configured value is, exactly like every other
+    `_psql`-adjacent gate in this file. `yield` with no `finally` cleanup: unlike a semaphore, a
+    `CapacityLimiter`'s `total_tokens` needs no teardown -- the loop itself is torn down with the
+    process on shutdown, taking the limiter with it."""
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        resolve_threadpool_capacity(MAX_INFLIGHT_KERNEL_CALLS))
+    yield
+
+
 def inflight_per_deployment_starvation_note(per_dep_limit: int) -> str | None:
-    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 -- the honest flag for
-    a real structural consequence of raising `MAX_INFLIGHT_PER_DEPLOYMENT`'s default above the
-    GLOBAL `MAX_INFLIGHT_KERNEL_CALLS` bound (32 > 24, today): multiplex spec §4's own rationale
-    for this sub-bound is 'one deployment's stalled kernel cannot occupy the whole global bound
-    and starve its siblings', but a sub-bound cannot structurally bind BEFORE a SMALLER shared
-    global one does -- `_psql` checks the per-deployment gate first, but with more per-deployment
-    slots than the global pool holds, the global gate is always what actually exhausts first for
-    any single deployment's own burst, so that deployment CAN occupy the entire global pool.
-    Returns `None` when `per_dep_limit < MAX_INFLIGHT_KERNEL_CALLS` (the sub-bound still protects
-    siblings), else a stderr-ready line naming the tradeoff and where to change it -- printed
-    loudly at startup (never silently clamped: an operator's explicit choice, or the shipped
-    default, is honored at face value; ADR-0002 fail-loud over a silent behavior-altering
-    override)."""
+    """design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1, RE-CHECKED by design/
+    BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 3 (ledger rows 1113/1115) -- the honest flag for
+    a real structural consequence of `MAX_INFLIGHT_PER_DEPLOYMENT` reaching or exceeding the
+    GLOBAL `MAX_INFLIGHT_KERNEL_CALLS` bound: multiplex spec §4's own rationale for the
+    per-deployment sub-bound is 'one deployment's stalled kernel cannot occupy the whole global
+    bound and starve its siblings', but a sub-bound cannot structurally bind BEFORE a SMALLER
+    shared global one does -- `_psql` checks the per-deployment gate first, but with more
+    per-deployment slots than the global pool holds, the global gate is always what actually
+    exhausts first for any single deployment's own burst, so that deployment CAN occupy the
+    entire global pool. BOTH bounds are now independently configurable (`max_inflight_per_
+    deployment` and `max_inflight_kernel_calls`, respectively) -- this check therefore compares
+    `per_dep_limit` against `MAX_INFLIGHT_KERNEL_CALLS` at their RESOLVED, post-config values,
+    read as a module global at call time, never a literal captured at definition time -- so an
+    operator who raises one, lowers the other, or leaves both at their shipped defaults (32 < 64,
+    quiet) always sees the relation checked against what is ACTUALLY configured, not a stale
+    number. Returns `None` when `per_dep_limit < MAX_INFLIGHT_KERNEL_CALLS` (the sub-bound still
+    protects siblings), else a stderr-ready line naming the tradeoff and where to change it --
+    printed loudly at startup (never silently clamped: an operator's explicit choice, or the
+    shipped default, is honored at face value; ADR-0002 fail-loud over a silent
+    behavior-altering override)."""
     if per_dep_limit < MAX_INFLIGHT_KERNEL_CALLS:
         return None
     return (
@@ -1188,10 +1310,11 @@ def inflight_per_deployment_starvation_note(per_dep_limit: int) -> str | None:
         f"gate can never bind before the global one does for any single deployment's own "
         f"traffic -- one deployment's stalled kernel CAN occupy the whole global admission pool "
         f"and starve its siblings (multiplex spec §4's own sibling-starvation rationale for this "
-        f"sub-bound does not hold at this configuration). Set max_inflight_per_deployment below "
-        f"{MAX_INFLIGHT_KERNEL_CALLS} in boundary-multiplex.toml if sibling isolation under a "
-        f"stalled deployment matters more than headroom for a single deployment's own "
-        f"concurrency.")
+        f"sub-bound does not hold at this configuration). Two change paths in "
+        f"boundary-multiplex.toml restore it: lower 'max_inflight_per_deployment' below "
+        f"{MAX_INFLIGHT_KERNEL_CALLS}, or raise 'max_inflight_kernel_calls' above {per_dep_limit} "
+        f"-- pick whichever matters more here: sibling isolation under a stalled deployment, or "
+        f"headroom for a single deployment's own concurrency.")
 
 # A10: GET /rows/{id}/history's OWN default `limit` -- deliberately 1000, not the 100 every
 # other paginated route defaults to (ADR-0012 P1 note: this is the one place the four A5.4
@@ -1695,7 +1818,11 @@ def _psql(cfg: BoundaryConfig, script: str, extra_v: dict[str, str] | None = Non
             f"the service already has MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} "
             f"concurrent kernel calls in flight (spec A9) -- this call is refused immediately "
             f"rather than queued. The cause is ordinary concurrent load, not a defect in this "
-            f"request; the correct response is to retry after a short backoff."
+            f"request; the correct response is to retry after a short backoff. "
+            f"MAX_INFLIGHT_KERNEL_CALLS is configured via boundary-multiplex.toml's optional "
+            f"top-level 'max_inflight_kernel_calls' key (default "
+            f"{boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_KERNEL_CALLS}) -- raise it there "
+            f"if legitimate concurrent load across all deployments regularly exceeds it."
         )
     # Diagnostic-logging spec §5 emission site (b), `_psql`'s single chokepoint: `kernel_call`
     # is emitted exactly once per subprocess.run outcome below (success or one of the three
@@ -3291,11 +3418,14 @@ is what an operator watching a stuck restart actually sees first, not this backs
 (b) THIS BACKSTOP is last-resort, reached only if an operator's own verb window has ALREADY
 closed and they chose to keep waiting anyway (or set `--drain-timeout` past `PSQL_EXEC_TIMEOUT_S
 + 5.0`) rather than force-kill. It is not a true worst-case bound under saturation: `_psql`'s own
-`_KERNEL_CALL_SEMAPHORE` (`MAX_INFLIGHT_KERNEL_CALLS = 24`) gates kernel calls, but a plain-`def`
-handler is dispatched to Starlette's shared ASGI threadpool BEFORE it ever reaches that gate --
-and anyio's `to_thread.run_sync` queues on its own `CapacityLimiter` (default 40 tokens) at THAT
-point, ahead of and independent of the 24-slot kernel-call admission bound this file otherwise
-relies on. A request queued in the threadpool dispatch when this backstop fires has not yet
+`_KERNEL_CALL_SEMAPHORE` (`MAX_INFLIGHT_KERNEL_CALLS`, configurable, shipped default 64 as of
+design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 -- see the module docstring header and
+ledger row 1141 for the disclosed tension this raise creates with the figure two lines below)
+gates kernel calls, but a plain-`def` handler is dispatched to Starlette's shared ASGI threadpool
+BEFORE it ever reaches that gate -- and anyio's `to_thread.run_sync` queues on its own
+`CapacityLimiter` (default 40 tokens) at THAT point, ahead of and independent of the kernel-call
+admission bound this file otherwise relies on. A request queued in the threadpool dispatch when
+this backstop fires has not yet
 started its own `PSQL_EXEC_TIMEOUT_S`-bounded work at all; this constant's derivation assumes the
 task is already running its bounded psql phase, which is not guaranteed under threadpool
 saturation. The accepted trade, stated plainly: this backstop can force-cancel a queued-but-
@@ -3494,6 +3624,12 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        # design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md's orchestrator ruling on ledger row
+        # 1141 (ledgered row 1147/1148): sizes the ASGI threadpool's own anyio CapacityLimiter
+        # from the resolved MAX_INFLIGHT_KERNEL_CALLS before this app ever accepts a request --
+        # see `_configure_threadpool_capacity`'s own docstring for why this MUST be a lifespan
+        # handler rather than synchronous setup in `main()`.
+        lifespan=_configure_threadpool_capacity,
     )
 
     # design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md §1 item 1: one `_SseHub` PER DEPLOYMENT, built
@@ -4950,7 +5086,8 @@ def main(argv: list[str] | None = None) -> int:
     # construction-time (ADR-0002 rung 1), never reaching uvicorn.run at all.
     try:
         (records, log_level, identity_enforcement, sse_poll_interval_secs, max_sse_clients,
-         identity_enforcement_by_deployment, max_inflight_per_deployment) = (
+         identity_enforcement_by_deployment, max_inflight_per_deployment,
+         max_inflight_kernel_calls) = (
             boundary_multiplex_config.load_multiplex_config_with_inflight_limit(args.config))
     except boundary_multiplex_config.MultiplexConfigError as e:
         sys.stderr.write(f"boundary_service: REFUSED at start-up (config) -- {e}\n")
@@ -4969,21 +5106,46 @@ def main(argv: list[str] | None = None) -> int:
     # depth pattern -- already validated whole-file by boundary_multiplex_config.py.
     configure_sse_poll_interval(sse_poll_interval_secs)
     configure_max_sse_clients(max_sse_clients)
+    # design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 (ledger rows 1113/1115): the GLOBAL
+    # bound is now ALSO resolved once here, from `boundary-multiplex.toml`'s own
+    # `max_inflight_kernel_calls` key, and bound via `configure_max_inflight_kernel_calls` --
+    # BEFORE the startup banner below reads `MAX_INFLIGHT_KERNEL_CALLS` (so the banner and the
+    # starvation-note check both see the RESOLVED, post-config value, never the module's
+    # import-time default) and BEFORE uvicorn ever starts serving a request (construction-time-
+    # defense-in-depth, same as `configure_sse_poll_interval`/`configure_max_sse_clients` above).
+    configure_max_inflight_kernel_calls(max_inflight_kernel_calls)
     # Multiplex spec §4, amended by design/BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md
-    # item 1: MAX_INFLIGHT_KERNEL_CALLS stays the GLOBAL bound; the per-deployment sub-bound is
-    # RESOLVED ONCE here from `boundary-multiplex.toml`'s own `max_inflight_per_deployment` key
-    # (never re-derived per request, never re-derived from `len(records)` -- the retired formula
-    # this item replaces) and PRINTED at startup so an operator can see the configured value and
-    # where it came from without reading the TOML back.
+    # item 1: the per-deployment sub-bound is RESOLVED ONCE here from `boundary-multiplex.toml`'s
+    # own `max_inflight_per_deployment` key (never re-derived per request, never re-derived from
+    # `len(records)` -- the retired formula this item replaces) and PRINTED at startup, alongside
+    # the now-also-configurable global bound (design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item
+    # 2), so an operator can see BOTH configured values and where each came from without reading
+    # the TOML back.
     per_dep_limit = max_inflight_per_deployment
+    # Orchestrator ruling on ledger row 1141's flag (ledgered row 1147/1148): the ASGI
+    # threadpool's own anyio CapacityLimiter is now derived STRUCTURALLY from the resolved
+    # global bound (`resolve_threadpool_capacity`, applied at ASGI startup by
+    # `_configure_threadpool_capacity` -- see its own docstring for why the actual APPLICATION
+    # cannot happen here, synchronously, before any event loop exists). The value printed here is
+    # the exact value that lifespan handler will apply -- same derivation function, so the two
+    # can never drift (ADR-0012 P1).
+    threadpool_capacity = resolve_threadpool_capacity(MAX_INFLIGHT_KERNEL_CALLS)
     sys.stderr.write(
-        f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global) "
+        f"boundary_service: MAX_INFLIGHT_KERNEL_CALLS={MAX_INFLIGHT_KERNEL_CALLS} (global; "
+        f"configured via boundary-multiplex.toml's optional top-level "
+        f"'max_inflight_kernel_calls' key, default "
+        f"{boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_KERNEL_CALLS}) "
         f"MAX_INFLIGHT_PER_DEPLOYMENT={per_dep_limit} (per each of {len(records)} "
         f"deployment(s): {sorted(records.keys())}; configured via boundary-multiplex.toml's "
         f"optional top-level 'max_inflight_per_deployment' key, default "
         f"{boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT}) "
         f"MAX_SSE_CLIENTS={max_sse_clients} (per hub) "
-        f"SSE_POLL_INTERVAL_SECS={sse_poll_interval_secs}\n")
+        f"SSE_POLL_INTERVAL_SECS={sse_poll_interval_secs} "
+        f"THREADPOOL_CAPACITY={threadpool_capacity} (ASGI anyio CapacityLimiter, set at ASGI "
+        f"startup = MAX_INFLIGHT_KERNEL_CALLS + NON_KERNEL_THREADPOOL_HEADROOM="
+        f"{NON_KERNEL_THREADPOOL_HEADROOM}, structurally never smaller than the kernel-call "
+        f"admission bound -- design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md, ledger row "
+        f"1141/1147/1148)\n")
     _starvation_note = inflight_per_deployment_starvation_note(per_dep_limit)
     if _starvation_note is not None:
         sys.stderr.write(_starvation_note + "\n")
@@ -5011,6 +5173,12 @@ def main(argv: list[str] | None = None) -> int:
             name: posture.value for name, posture in identity_enforcement_by_deployment.items()},
         max_sse_clients=max_sse_clients,
         sse_poll_interval_secs=sse_poll_interval_secs,
+        # Orchestrator ruling on ledger row 1141 (ledgered row 1147/1148): the resolved ASGI
+        # threadpool capacity the lifespan handler below is about to apply -- named here so a
+        # diagnostic-log consumer sees it beside every other resolved startup tunable, additive
+        # per this event's own presence-only contract (see the comment above).
+        threadpool_capacity=threadpool_capacity,
+        non_kernel_threadpool_headroom=NON_KERNEL_THREADPOOL_HEADROOM,
     )
     configs: dict[str, BoundaryConfig] = {}
     for name, record in records.items():
