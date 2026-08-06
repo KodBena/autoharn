@@ -3,14 +3,23 @@
 """led -- read from and write to this project's decision ledger.
 
 usage: led <kind> <statement...> [flags]        write an entry (decision, finding, assumption, ...)
-       led --recent [N] | led current [N] | led show <id>
+       led --recent [N] | led current [N]        [--kind <kind>] [--fields f1,f2,...]
+       led show <id>                             [--fields f1,f2,...]
        led question-status | review-gap | stamp-distinctness | standing
+           review-gap (bare, led-review-gap-false-clean, rows 1087/1102): reads BOTH the
+           actor-keyed /views/review_gap AND item-keyed /views/work_review_gap, each row labeled
+           gap_kind ("actor" | "work_item") -- never silently empty while work-item debt exists.
+           Every review-gap row (bare or `led work review-gap`) also carries review_status
+           ("never-reviewed" | "reviewed-not-discharging", the latter with reviewing_verdicts
+           naming who/what/independence) -- refuse-verdict-legibility (this brief item 3), built
+           from the already-served /views/review_verdicts, CLI-presentation layer only.
        led register-principal <name> <class> [--purpose "<why>"]
        led obligate <scope> <assigned-by> <obliged-actor>
        led obligate revoke <scope> --reason "<text>"
        led review <entry-id> <verdict> <independence> <statement...>
        led work open|claim|depends|close|list|violations|asof|review-gap|startable|
            resolve-violation|supersede-cascade ...   (see `led work <sub-verb>` with no args)
+           led work list [--all] [--state open|closed] [--slug <slug>] [--fields f1,f2,...]
        led artifact put <path> | get <hash> | stat <hash>
        led principal <sub-verb> ...                  (see `led principal` with no args)
        led missive list
@@ -24,11 +33,19 @@ usage: led <kind> <statement...> [flags]        write an entry (decision, findin
            disposition (kernel/lineage/s58-missive-substrate.sql's own closed vocabulary):
            consumed | declined | superseded-unread | escalated
        led decomposition-review-status | led briefing
-       led --json <ledger|review|registration|obligation> <file|->
+       led --json <ledger|review|registration|obligation|obligation_revoke|missive_dispose>
+           <file|->
 
 Run any subcommand with no arguments, or a malformed one, for its own one-line usage. Every
 entry is attributed to the actual connection identity, never a name you type; `led --recent`
 and `led show <id>` read entries back.
+
+led-read-projection-flags (this brief, item 1): `--recent`/`current`/`show`/`work list` accept
+`--fields f1,f2,...` (JSON-per-line projection, unknown field name REFUSED, never a silent
+empty), `--recent`/`current` accept `--kind <kind>` (REFUSED against the live `GET /kinds`
+vocabulary), and `work list` accepts `--state open|closed` / `--slug <slug>` -- replacing the
+ad-hoc `python3 -c` filters piping this CLI's own output that orchestrator sessions kept
+reaching for.
 
 This CLI talks HTTP to this project's boundary service rather than psql directly (the served
 rebase, design/FABLE-BOUNDARY-MULTIPLEX-AND-CLI-REBASE-SPEC.md §5, ratified ledger row 1631).
@@ -203,6 +220,53 @@ def _health_capabilities(cfg: bcc.ServedConfig) -> dict:
     read off the SAME route `led`'s own boundary-unreachable teach-text already touches at
     startup -- no new route."""
     return bcc.get_json(cfg.base, "/health").get("capabilities", {})
+
+
+def _live_kind_vocab(cfg: bcc.ServedConfig) -> list[str] | None:
+    """led-read-projection-flags (this brief, item 1): the SAME `GET /kinds` re-query
+    `boundary_cli_client._kind_refusal_teach` already uses AFTER a kernel refusal, reused here
+    BEFORE issuing a read so `--kind` gets a typed refusal against the live vocabulary rather
+    than silently matching zero rows (ADR-0012 P1 -- one home for "what is a live kind",
+    consulted from both call sites, never a second hardcoded list). Returns None (never raises)
+    on any boundary failure reaching /kinds -- callers degrade to "cannot validate, proceed
+    unvalidated" exactly like `_kind_refusal_teach`'s own disclosed degrade, never a hang."""
+    try:
+        body = bcc.get_json(cfg.base, "/kinds")
+    except (bcc.BoundaryRefusal, bcc.BoundaryUnreachable):
+        return None
+    kinds = body.get("kinds") if isinstance(body, dict) else None
+    return kinds if isinstance(kinds, list) and kinds else None
+
+
+def _project_fields(rows: list[dict], fields_arg: str, verb_label: str) -> tuple[list[dict] | None, int | None]:
+    """led-read-projection-flags (this brief, item 1): the ONE home `--fields` projection goes
+    through for every read verb below (`--recent`/`current`/`show`/`work list`) -- comma-split,
+    each name checked against the UNION of keys actually present across `rows` (the live row
+    shape this exact read just served, never a second hand-maintained column list that could
+    drift from a kernel view's real columns). An unrecognized field name is a typed REFUSED
+    (teaching the known field set), never a silently field-less/empty row -- the same "refusals
+    that teach, never silent empties" discipline item 1's own commissioning text names. DISCLOSED
+    EDGE CASE: when `rows` is itself empty (nothing came back from the live read at all,
+    independent of any --fields request), there is no live shape to check names against -- field
+    names are accepted unvalidated in that case (there is nothing to violate; the caller's own
+    empty-rows read is already the honest signal, not a --fields bug).
+
+    Returns `(projected_rows, None)` on success, or `(None, exit_code)` with the refusal already
+    printed to stderr -- callers `return` that exit_code unchanged, the same shape
+    `_build_or_refuse`/`cmd_show`'s own 404 branch already use for "caller returns whatever this
+    helper decided"."""
+    requested = [f.strip() for f in fields_arg.split(",") if f.strip()]
+    if not requested:
+        print(f"{verb_label}: REFUSED -- --fields requires at least one (comma-separated) field "
+              f"name.", file=sys.stderr)
+        return None, 4
+    known = sorted({k for r in rows for k in r.keys()})
+    unknown = [f for f in requested if known and f not in known]
+    if unknown:
+        print(f"{verb_label}: REFUSED -- unrecognized field name(s) {unknown} (known fields for "
+              f"this read: {known}).", file=sys.stderr)
+        return None, 4
+    return [{k: r.get(k) for k in requested} for r in rows], None
 
 
 def _current_rows(cfg: bcc.ServedConfig, kind: str, **filters) -> list[dict]:
@@ -1759,10 +1823,21 @@ def _warn_content_free_review_statement(statement: str) -> None:
           "proceeds either way)", file=sys.stderr)
 
 
+_JSON_SURFACES = ("ledger", "review", "registration", "obligation", "obligation_revoke",
+                   "missive_dispose")
+# json-write-surface-parity (this brief, item 4): `led --json` used to reach only the FIRST four
+# of these -- `cmd_obligate_revoke`/`cmd_missive_dispose` above already POST /write/obligation_
+# revoke and /write/missive_dispose (both live in serving/boundary_service.py's own WRITE_SURFACES
+# dict and WRITE_SURFACE_INT_FIELDS, unchanged by this item), so the ONLY gap was this CLI's own
+# `cmd_json` allowlist never naming them -- closed here by WIDENING the allowlist, not by adding
+# any new route/kernel behavior (P2: no second validator, `bcc.write_and_report` still hands the
+# payload to the SAME boundary function these two prose verbs already call).
+
+
 def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
-    if surface not in ("ledger", "review", "registration", "obligation"):
+    if surface not in _JSON_SURFACES:
         print(f"led --json: REFUSED -- unrecognized surface {surface!r} (expected one of "
-              f"ledger, review, registration, obligation)", file=sys.stderr)
+              f"{', '.join(_JSON_SURFACES)})", file=sys.stderr)
         return 4
     text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
     try:
@@ -1777,7 +1852,8 @@ def cmd_json(cfg: bcc.ServedConfig, surface: str, source: str) -> int:
     return bcc.write_and_report(cfg.base, surface, payload)
 
 
-def cmd_recent(cfg: bcc.ServedConfig, n: int, current_only: bool) -> int:
+def cmd_recent(cfg: bcc.ServedConfig, n: int, current_only: bool, kind: str | None = None,
+               fields: str | None = None) -> int:
     """`led current [N]`: the legacy tool's own `ledger_current` reading, exactly. `led --recent
     [N]`: the legacy tool additionally walked the RAW ledger (superseded rows included, visibly
     marked) -- no boundary route serves the raw table (every route reads a KERNEL VIEW, spec §5's
@@ -1786,19 +1862,50 @@ def cmd_recent(cfg: bcc.ServedConfig, n: int, current_only: bool) -> int:
     loudly on stderr and serves the SAME `/rows/current` reading. DISCLOSED NARROWING, permanent
     as of legacy-led-retirement (ledger row 1149/1150, legacy-led.tmpl deleted outright): the
     superseded-inclusive raw read this NOTE used to point at `./legacy/led --recent` for has no
-    surviving recovery path at all -- named, not silently dropped."""
+    surviving recovery path at all -- named, not silently dropped.
+
+    led-read-projection-flags (this brief, item 1): `kind`, when given, narrows to that ledger
+    kind BEFORE the top-N selection (a caller asking for "the 5 most recent findings" wants five
+    findings, not the findings within the 5 most recent rows of any kind) -- REFUSED against the
+    live `GET /kinds` vocabulary (`_live_kind_vocab`) rather than silently matching nothing on a
+    typo. `fields`, when given, switches the output from the plain `[id] kind: statement` line
+    (unprojectable -- it is not JSON) to one JSON object per line, restricted to the requested
+    fields (`_project_fields`)."""
+    verb_label = "led current" if current_only else "led --recent"
     if not current_only:
         print("led --recent: NOTE -- this rebase's --recent reads /rows/current (in-force rows "
               "only, no raw-ledger route exists on the boundary, and no legacy recovery path "
               "survives legacy-led.tmpl's own retirement) -- the superseded-inclusive raw read "
               "is not available from any CLI in this repository anymore.", file=sys.stderr)
     rows = bcc.get_all_rows(cfg.base, "/rows/current", cursor="after_id")
-    for r in sorted(rows, key=lambda r: -r["id"])[:n]:
+    if kind is not None:
+        live = _live_kind_vocab(cfg)
+        if live is not None and kind not in live:
+            print(f"{verb_label}: REFUSED -- unrecognized --kind {kind!r} (not a live member of "
+                  f"ledger_kind_check's vocabulary; valid kinds: {', '.join(live)}).",
+                  file=sys.stderr)
+            return 4
+        rows = [r for r in rows if r.get("kind") == kind]
+    selected = sorted(rows, key=lambda r: -r["id"])[:n]
+    if fields is not None:
+        projected, err = _project_fields(selected, fields, verb_label)
+        if err is not None:
+            return err
+        for r in projected:
+            print(json.dumps(r, sort_keys=True))
+        return 0
+    for r in selected:
         print(f"[{r['id']}] {r['kind']}: {r.get('statement', '')}")
     return 0
 
 
-def cmd_show(cfg: bcc.ServedConfig, row_id: int) -> int:
+def cmd_show(cfg: bcc.ServedConfig, row_id: int, fields: str | None = None) -> int:
+    """led-read-projection-flags (this brief, item 1): `fields`, when given, restricts the
+    printed key: value lines to the requested field names (REFUSED against this row's OWN key
+    set on an unrecognized name -- `_project_fields`'s own discipline, applied here to a single
+    row instead of a list) -- and, unlike the default all-fields listing, prints a REQUESTED
+    field even when its value is None (the caller named it explicitly; silently omitting it would
+    be indistinguishable from "not a column on this row", the exact false-empty this item bans)."""
     try:
         row = bcc.get_json(cfg.base, f"/rows/{row_id}")
     except bcc.BoundaryRefusal as e:
@@ -1807,6 +1914,13 @@ def cmd_show(cfg: bcc.ServedConfig, row_id: int) -> int:
             print("  See 'led --recent [N]' or 'led current [N]' for ids that actually exist.", file=sys.stderr)
             return 1
         raise
+    if fields is not None:
+        projected, err = _project_fields([row], fields, "led show")
+        if err is not None:
+            return err
+        for k in [f.strip() for f in fields.split(",") if f.strip()]:
+            print(f"{k:28s}: {row.get(k)}")
+        return 0
     for k, v in row.items():
         if v is not None:
             print(f"{k:28s}: {v}")
@@ -1817,6 +1931,93 @@ def cmd_view(cfg: bcc.ServedConfig, view: str, cursor: str) -> int:
     rows = bcc.get_all_rows(cfg.base, f"/views/{view}", cursor=cursor)
     for r in rows:
         print(json.dumps(r, sort_keys=True))
+    return 0
+
+
+def _review_verdicts_by_regards(cfg: bcc.ServedConfig) -> dict[int, list[dict]] | None:
+    """refuse-verdict-legibility (this brief, item 3): every un/superseded row of
+    `/views/review_verdicts` (kernel/lineage/s56-reservation-residue.sql's own general
+    review-legibility surface -- review_id, regards, reviewer, verdict, independence, basis,
+    antecedent, superseded -- ALREADY SERVED, no kernel/serving change), keyed by `regards` (the
+    ledger row id a review targets -- review_gap's own `id` for the actor-keyed arm,
+    work_review_gap's own `close_id` for the item-keyed arm, both compared against this SAME
+    column). Returns None (never raises) on a pre-s56 kernel (404) -- callers degrade to
+    "legibility unavailable" rather than fabricating a verdict client-side (item 3's own
+    STOP-and-report-the-gap instruction; this repo's OWN world is s56+, so the degrade path is
+    named for portability, not expected to fire here)."""
+    try:
+        rows = bcc.get_all_rows(cfg.base, "/views/review_verdicts", cursor="after_id")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 404:
+            return None
+        raise
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["regards"], []).append(r)
+    return out
+
+
+def _review_legibility_for(verdicts_by_regards: dict[int, list[dict]] | None, regards_id: int) -> dict:
+    """refuse-verdict-legibility (this brief, item 3): CLI-PRESENTATION-LAYER-ONLY distinction
+    between "reviewed and refused/not-discharging" and "never reviewed" -- ADR-0008 names
+    conflating these as fuzzy-matching, and a bare review-gap/work-review-gap row alone cannot
+    tell them apart (both simply fail the SAME discharge test). A row absent from
+    `verdicts_by_regards` has NO un-superseded review row regarding it at all (`review_status`:
+    "never-reviewed"). A row present but still failing the discharge test WAS reviewed -- verdict
+    named, `review_status`: "reviewed-not-discharging" -- covering every way a review can fail to
+    discharge review_gap's own anti-join: verdict <> 'attest' (a genuine refuse or
+    attest_with_reservations), OR verdict = 'attest' by the SAME actor (review_gap's own
+    `reviewer <> actor`/`reviewer <> closer` predicate excludes self-review from counting as
+    discharge, but the review row itself still exists and is shown here). Returns `{}`
+    (no enrichment) when `verdicts_by_regards` is None -- the caller's own degrade, not faked."""
+    if verdicts_by_regards is None:
+        return {}
+    live = [v for v in verdicts_by_regards.get(regards_id, []) if not v.get("superseded")]
+    if not live:
+        return {"review_status": "never-reviewed"}
+    return {"review_status": "reviewed-not-discharging",
+            "reviewing_verdicts": [{"reviewer": v.get("reviewer"), "verdict": v.get("verdict"),
+                                     "independence": v.get("independence")} for v in live]}
+
+
+def cmd_review_gap(cfg: bcc.ServedConfig) -> int:
+    """led-review-gap-false-clean (this brief, item 2): bare `led review-gap` used to read ONLY
+    `/views/review_gap` (actor-keyed, non-work-item debt) -- silently empty whenever every
+    outstanding gap was WORK-ITEM debt (`/views/work_review_gap`), a false-clean read (hazard
+    class: an operator/agent trusting the empty output concludes "no review debt" when
+    `led work review-gap` alone would have shown otherwise).
+
+    Fix: both sources are read here and EVERY row is labeled `gap_kind` ("actor" | "work_item")
+    rather than merged into one indistinguishable shape -- the two views carry genuinely
+    different columns (id/actor/scope/assigned_by vs. slug/close_id/closer) and silently
+    flattening them into one row shape would itself be the ADR-0008 fuzzy-match item 3 (this same
+    brief) exists to refuse. Chosen over the brief's OTHER offered option (refuse-and-point-at-
+    'led work review-gap') because `review-gap`'s own EXISTING NAME already promises "my review
+    debt", full stop -- narrowing its own bare form to "my non-work-item review debt only" is the
+    surprising reading, not the honest one; a caller who wants exactly one source unmixed still
+    has `led work review-gap` (unchanged) or the raw `/views/review_gap` route directly. Also
+    carries item 3's `review_status`/`reviewing_verdicts` enrichment (`_review_legibility_for`)."""
+    verdicts = _review_verdicts_by_regards(cfg)
+    rows = bcc.get_all_rows(cfg.base, "/views/review_gap", cursor="after_id")
+    for r in rows:
+        out = dict(r)
+        out["gap_kind"] = "actor"
+        out.update(_review_legibility_for(verdicts, r["id"]))
+        print(json.dumps(out, sort_keys=True))
+    try:
+        work_rows = bcc.get_all_rows(cfg.base, "/views/work_review_gap", cursor="after_slug")
+    except bcc.BoundaryRefusal as e:
+        if e.status == 404:
+            print("led review-gap: NOTE -- this world's kernel predates kernel/lineage/"
+                  "s29-work-item-ledger.sql; work-item review-gap debt cannot be checked from "
+                  "here (nothing further to add to the actor-keyed rows above).", file=sys.stderr)
+            return 0
+        raise
+    for r in work_rows:
+        out = dict(r)
+        out["gap_kind"] = "work_item"
+        out.update(_review_legibility_for(verdicts, r["close_id"]))
+        print(json.dumps(out, sort_keys=True))
     return 0
 
 
@@ -2700,11 +2901,42 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     return bcc.write_and_report(cfg.base, "ledger", payload)
 
 
-def cmd_work_list(cfg: bcc.ServedConfig, show_all: bool) -> int:
+_WORK_ITEM_STATES = ("open", "closed")  # work_item_current.state's own closed vocabulary (s33
+# Element 4's CASE, kernel/lineage/s33-composite-discharge.sql) -- "claimed" is NOT a member: a
+# claimed-but-not-closed item's `state` stays 'open', `claimant` non-null names the claim
+# separately. Named at module scope (ADR-0012 P1) rather than inline, the SAME "one home" posture
+# `_ARTIFACT_HASH_RE`/`_COMMIT_WITNESS_RE` above already use for a kernel-mirrored shape.
+
+
+def cmd_work_list(cfg: bcc.ServedConfig, show_all: bool, state: str | None = None,
+                   slug: str | None = None, fields: str | None = None) -> int:
+    """led-read-projection-flags (this brief, item 1): `state`, when given, REFUSES an
+    unrecognized value against `_WORK_ITEM_STATES` and otherwise narrows to EXACTLY that state --
+    strictly more than `--all` (both states) or the pre-existing default (state<>'closed') can
+    express; `--state closed` alone ("show me only what finished") had no prior spelling.
+    `slug`, when given, narrows to that one work item's current row (the ad-hoc single-item
+    lookup orchestrator sessions kept reaching for `python3 -c` filters to do). `fields` projects
+    via `_project_fields`, same as every other read verb this item touches. Mutual exclusion with
+    `--all`/`--state` is enforced by `main`'s own dispatch (REFUSED there, before this function is
+    even called) -- kept there rather than here so the refusal fires before any read is issued."""
+    if state is not None and state not in _WORK_ITEM_STATES:
+        print(f"led work list: REFUSED -- unrecognized --state {state!r} (work_item_current's "
+              f"own state column is closed to: {', '.join(_WORK_ITEM_STATES)}).", file=sys.stderr)
+        return 4
     rows = bcc.get_all_rows(cfg.base, "/views/work_item_current", cursor="after_slug")
-    for r in rows:
-        if show_all or r.get("state") != "closed":
-            print(json.dumps(r, sort_keys=True))
+    if slug is not None:
+        rows = [r for r in rows if r.get("slug") == slug]
+    if state is not None:
+        selected = [r for r in rows if r.get("state") == state]
+    else:
+        selected = rows if show_all else [r for r in rows if r.get("state") != "closed"]
+    if fields is not None:
+        projected, err = _project_fields(selected, fields, "led work list")
+        if err is not None:
+            return err
+        selected = projected
+    for r in selected:
+        print(json.dumps(r, sort_keys=True))
     return 0
 
 
@@ -2768,10 +3000,16 @@ def cmd_work_asof(cfg: bcc.ServedConfig, ts: str) -> int:
 def cmd_work_review_gap(cfg: bcc.ServedConfig) -> int:
     """Ported off legacy-led.tmpl's `work review-gap` -- work_review_gap, item-keyed (s29's own
     sibling of the ACTOR-keyed top-level `led review-gap`), read via GET /views/work_review_gap
-    (already in VIEW_REGISTRY, keyed on slug)."""
+    (already in VIEW_REGISTRY, keyed on slug). refuse-verdict-legibility (this brief, item 3):
+    also carries `review_status`/`reviewing_verdicts` per row (`_review_legibility_for`), the SAME
+    enrichment `cmd_review_gap`'s own work_item arm applies -- this sub-verb reads the identical
+    view directly, so it gets the identical legibility, not a second, divergent presentation."""
+    verdicts = _review_verdicts_by_regards(cfg)
     rows = bcc.get_all_rows(cfg.base, "/views/work_review_gap", cursor="after_slug")
     for r in rows:
-        print(json.dumps(r, sort_keys=True))
+        out = dict(r)
+        out.update(_review_legibility_for(verdicts, r["close_id"]))
+        print(json.dumps(out, sort_keys=True))
     return 0
 
 
@@ -3342,25 +3580,73 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] == "--json":
         if len(argv) != 3:
-            print("usage: led --json <ledger|review|registration|obligation> <file|->", file=sys.stderr)
+            print(f"usage: led --json <{'|'.join(_JSON_SURFACES)}> <file|->", file=sys.stderr)
             return 4
         return cmd_json(cfg, argv[1], argv[2])
 
-    if argv and argv[0] == "--recent":
-        n = int(argv[1]) if len(argv) > 1 else 10
-        return cmd_recent(cfg, n, current_only=False)
-    if argv and argv[0] == "current":
-        n = int(argv[1]) if len(argv) > 1 else 10
-        return cmd_recent(cfg, n, current_only=True)
-    if argv and argv[0] == "show":
-        if len(argv) != 2 or not argv[1].isdigit():
-            print("usage: led show <id>", file=sys.stderr)
+    if argv and argv[0] in ("--recent", "current"):
+        verb_label = "led current" if argv[0] == "current" else "led --recent"
+        current_only = argv[0] == "current"
+        rest = argv[1:]
+        n = 10
+        kind_filter: str | None = None
+        fields_arg: str | None = None
+        n_given = False
+        i = 0
+        usage = f"usage: {verb_label} [N] [--kind <kind>] [--fields f1,f2,...]"
+        while i < len(rest):
+            tok = rest[i]
+            if tok == "--kind":
+                if i + 1 >= len(rest):
+                    print(f"{verb_label}: REFUSED -- --kind requires a value.", file=sys.stderr)
+                    return 4
+                kind_filter = rest[i + 1]
+                i += 2
+                continue
+            if tok == "--fields":
+                if i + 1 >= len(rest):
+                    print(f"{verb_label}: REFUSED -- --fields requires a value.", file=sys.stderr)
+                    return 4
+                fields_arg = rest[i + 1]
+                i += 2
+                continue
+            if not n_given and tok.isdigit():
+                n = int(tok)
+                n_given = True
+                i += 1
+                continue
+            print(usage, file=sys.stderr)
             return 4
-        return cmd_show(cfg, int(argv[1]))
+        return cmd_recent(cfg, n, current_only, kind_filter, fields_arg)
+    if argv and argv[0] == "show":
+        rest = argv[1:]
+        id_arg: str | None = None
+        fields_arg = None
+        i = 0
+        usage = "usage: led show <id> [--fields f1,f2,...]"
+        while i < len(rest):
+            tok = rest[i]
+            if tok == "--fields":
+                if i + 1 >= len(rest):
+                    print("led show: REFUSED -- --fields requires a value.", file=sys.stderr)
+                    return 4
+                fields_arg = rest[i + 1]
+                i += 2
+                continue
+            if id_arg is None and tok.isdigit():
+                id_arg = tok
+                i += 1
+                continue
+            print(usage, file=sys.stderr)
+            return 4
+        if id_arg is None:
+            print(usage, file=sys.stderr)
+            return 4
+        return cmd_show(cfg, int(id_arg), fields_arg)
     if argv and argv[0] == "question-status":
         return cmd_view(cfg, "question_status", "after_id")
     if argv and argv[0] == "review-gap":
-        return cmd_view(cfg, "review_gap", "after_id")
+        return cmd_review_gap(cfg)
     if argv and argv[0] == "stamp-distinctness":
         return cmd_view(cfg, "review_stamp_distinctness", "after_id")
     if argv and argv[0] == "standing":
@@ -3460,10 +3746,49 @@ def main(argv: list[str]) -> int:
         if sub == "close":
             return cmd_work_close(cfg, rest)
         if sub == "list":
-            if rest and rest != ["--all"]:
-                print("usage: led work list [--all]", file=sys.stderr)
+            usage = "usage: led work list [--all] [--state open|closed] [--slug <slug>] " \
+                     "[--fields f1,f2,...]"
+            show_all = False
+            state_filter: str | None = None
+            slug_filter: str | None = None
+            fields_arg: str | None = None
+            i = 0
+            while i < len(rest):
+                tok = rest[i]
+                if tok == "--all":
+                    show_all = True
+                    i += 1
+                    continue
+                if tok == "--state":
+                    if i + 1 >= len(rest):
+                        print("led work list: REFUSED -- --state requires a value.", file=sys.stderr)
+                        return 4
+                    state_filter = rest[i + 1]
+                    i += 2
+                    continue
+                if tok == "--slug":
+                    if i + 1 >= len(rest):
+                        print("led work list: REFUSED -- --slug requires a value.", file=sys.stderr)
+                        return 4
+                    slug_filter = rest[i + 1]
+                    i += 2
+                    continue
+                if tok == "--fields":
+                    if i + 1 >= len(rest):
+                        print("led work list: REFUSED -- --fields requires a value.", file=sys.stderr)
+                        return 4
+                    fields_arg = rest[i + 1]
+                    i += 2
+                    continue
+                print(usage, file=sys.stderr)
                 return 4
-            return cmd_work_list(cfg, show_all=(rest == ["--all"]))
+            if show_all and state_filter is not None:
+                print("led work list: REFUSED -- --all and --state are mutually exclusive "
+                      "(--all already includes every state; --state narrows to exactly one).",
+                      file=sys.stderr)
+                return 4
+            return cmd_work_list(cfg, show_all=show_all, state=state_filter, slug=slug_filter,
+                                  fields=fields_arg)
         if sub == "violations":
             return cmd_work_violations(cfg)
         if sub == "asof":

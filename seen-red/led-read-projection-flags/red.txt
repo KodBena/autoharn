@@ -1,0 +1,22 @@
+Banked RED evidence for ledger item `led-read-projection-flags` (BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06 item 1, rows 1087/1102 family).
+
+This item is new CLI surface (projection/filter flags), not a regression fix -- there is
+no pre-fix code to revert. RED here means the REFUSAL polarity of the new flags (unknown
+--kind/--fields/--state values, and the --all/--state mutual-exclusion refusal), each
+exercised live in the SAME run as the GREEN (accepting) cases below, against one real
+scratch --profile tracker deployment.
+
+ADOPT: new-project.sh --profile tracker exit=0 deployment.json=True -- PASS
+SEED: ledger writes ok=True work-item writes ok=True -- PASS
+GREEN-RECENT-FIELDS: exit=0 n_rows=3 exact_keys=True -- PASS
+GREEN-RECENT-KIND: exit=0 n_lines=2 kinds_seen={'finding'} -- PASS
+RED-RECENT-BAD-KIND: exit=4 refused=True teaches=True -- PASS
+RED-RECENT-BAD-FIELDS: exit=4 refused=True teaches=True -- PASS
+GREEN-SHOW-FIELDS: show_id=15 exit=0 has_id=True has_statement=True exactly_two=True -- PASS
+RED-SHOW-BAD-FIELDS: exit=4 refused=True teaches=True -- PASS
+GREEN-WORK-LIST-STATE: closed_ok=True open_ok=True -- PASS
+GREEN-WORK-LIST-SLUG: exit=0 n_rows=1 -- PASS
+RED-WORK-LIST-BAD-STATE: exit=4 refused=True teaches=True -- PASS
+RED-WORK-LIST-ALL-STATE: exit=4 refused=True teaches=True -- PASS
+
+led-read-projection-flags fixture: all cases PASS, scratch substrate torn down to zero residue.

@@ -591,7 +591,10 @@ BASELINE: dict[str, int] = {
     # the union in the resolved hunk, work item ac-s3-stamp-binding).
     # bumped 459 -> 460 (s73, kernel/lineage/s73-typed-annulment-disposition.sql, ledger row
     # 1087): one new REGISTRY row (s73-typed-annulment-disposition).
-    "gates/fixture_census.py":                     460,
+    # bumped 460 -> 464 (design/BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06.md, rows 1087/1102 family):
+    # four new REGISTRY rows (led-read-projection-flags, led-review-gap-false-clean,
+    # refuse-verdict-legibility, json-write-surface-parity).
+    "gates/fixture_census.py":                     464,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -769,7 +772,11 @@ BASELINE: dict[str, int] = {
     # kind_shape_manifest_gate.py 1807 -> 1828, ledger_reader_allowlist.py 680 -> 708, and this
     # row itself) -- the same self-referential fixpoint as every prior bump, re-measured after
     # writing.
-    "gates/max_lines.py":                          906,
+    # bumped 906 -> 913 (design/BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06.md, rows 1087/1102 family):
+    # two bump-comment blocks added to this same file (fixture_census.py 460 -> 464, and this
+    # row itself) -- the same self-referential fixpoint as every prior bump, re-measured after
+    # writing.
+    "gates/max_lines.py":                          913,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

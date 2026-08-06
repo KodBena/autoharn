@@ -1,0 +1,18 @@
+Banked RED evidence for ledger item `json-write-surface-parity` (BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06 item 4, rows 1087/1102 family).
+
+This item is a CLI allowlist widening, not a regression fix -- there is no pre-fix code
+to revert. RED here means the REFUSAL polarity (an unrecognized surface, malformed JSON
+on the newly-reachable obligation_revoke surface, and the kernel-level -- not CLI-level
+-- refusal for a payload missing the mandatory 'reason' key), each exercised live in the
+SAME run as the GREEN (accepting/parity) cases below, against one real scratch
+--profile tracker deployment.
+
+ADOPT: new-project.sh --profile tracker exit=0 deployment.json=True -- PASS
+SEED: register x2 + obligate ok=True -- PASS
+GREEN-OBLIGATION-REVOKE-JSON: exit=0 accepted=True row_id=16 stored_ok=True -- PASS
+GREEN-MISSIVE-DISPOSE-JSON-PARITY: both_refused=True same_kernel_text=True -- PASS
+RED-BAD-SURFACE: exit=4 refused=True names_all_six=True -- PASS
+RED-MALFORMED-JSON-NEW-SURFACE: exit=4 refused=True teaches=True -- PASS
+RED-KERNEL-CATCHES-MISSING-REASON: exit=1 refused=True kernel_level=True no_cli_precheck_text=True -- PASS
+
+json-write-surface-parity fixture: all cases PASS, scratch substrate torn down to zero residue.

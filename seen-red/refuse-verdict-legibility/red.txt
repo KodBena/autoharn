@@ -1,0 +1,19 @@
+Banked RED evidence for ledger item `refuse-verdict-legibility` (BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06 item 3, rows 1087/1102 family).
+
+RED-WAS-CONFLATED reproduces the reported conflation against a TARGETED-REVERTED
+standalone copy of led.tmpl (cmd_work_review_gap's own body reverted to its pre-item-3
+unenriched print) run against the SAME live scratch world the GREEN cases use -- PASS
+below means a never-reviewed row and a reviewed-and-refused row print BYTE-IDENTICAL
+shapes through the reverted code (no review_status key on either), even though the
+unreverted code (GREEN-* cases above it) proves a real review row exists for one and not
+the other.
+
+ADOPT: new-project.sh --profile tracker exit=0 deployment.json=True -- PASS
+SEED-NEVER-REVIEWED: open/claim/close ok=True -- PASS
+SEED-REVIEWED-REFUSED: register-principal ok=True open/claim/close ok=True close_id_b=20 review-refuse (as rvlfixture-reviewer) ok=True -- PASS
+GREEN-NEVER-REVIEWED: exit=0 row_a={'_page_tie': '8d75642e9c5867631075aee3e83f862e', 'close_id': 16, 'closer': 1, 'review_status': 'never-reviewed', 'slug': 'seen-red-refuse-verdict-legibility-1785994017-a'} -- PASS
+GREEN-REVIEWED-NOT-DISCHARGING: row_b={'_page_tie': 'd1cf42913f30e591704c05f23ee94960', 'close_id': 20, 'closer': 1, 'review_status': 'reviewed-not-discharging', 'reviewing_verdicts': [{'independence': 'self-review', 'reviewer': 6, 'verdict': 'refuse'}], 'slug': 'seen-red-refuse-verdict-legibility-1785994017-b'} -- PASS
+GREEN-BARE-SAME-ENRICHMENT: exit=0 bare_b={'_page_tie': 'd1cf42913f30e591704c05f23ee94960', 'close_id': 20, 'closer': 1, 'gap_kind': 'work_item', 'review_status': 'reviewed-not-discharging', 'reviewing_verdicts': [{'independence': 'self-review', 'reviewer': 6, 'verdict': 'refuse'}], 'slug': 'seen-red-refuse-verdict-legibility-1785994017-b'} -- PASS
+RED-WAS-CONFLATED: exit=0 rev_a={'_page_tie': '8d75642e9c5867631075aee3e83f862e', 'close_id': 16, 'closer': 1, 'slug': 'seen-red-refuse-verdict-legibility-1785994017-a'} rev_b={'_page_tie': 'd1cf42913f30e591704c05f23ee94960', 'close_id': 20, 'closer': 1, 'slug': 'seen-red-refuse-verdict-legibility-1785994017-b'} indistinguishable=True -- PASS
+
+refuse-verdict-legibility fixture: all cases PASS, scratch substrate torn down to zero residue.

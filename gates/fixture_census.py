@@ -153,6 +153,10 @@ REGISTRY: dict[str, str] = {
     "led-help-token-closure":         "seen-red/led-help-token-closure/run_fixtures.py",
     "led-json-payload-mode":          "seen-red/led-json-payload-mode/run_fixtures.py",  # RETIRED-SCAFFOLD
     "led-work-list-state-filter":     "seen-red/led-work-list-state-filter/run_fixtures.py",
+    "led-read-projection-flags":      "seen-red/led-read-projection-flags/run_fixtures.py",
+    "led-review-gap-false-clean":     "seen-red/led-review-gap-false-clean/run_fixtures.py",
+    "refuse-verdict-legibility":      "seen-red/refuse-verdict-legibility/run_fixtures.py",
+    "json-write-surface-parity":      "seen-red/json-write-surface-parity/run_fixtures.py",
     "resolve-violation-class-ambiguity": "seen-red/resolve-violation-class-ambiguity/run_fixtures.py",
     "review-witness-row-existence-check": "seen-red/review-witness-row-existence-check/run_fixtures.py",
     "preamble-ordering":              "seen-red/preamble-ordering/run_fixtures.py",

@@ -1,0 +1,16 @@
+Banked RED evidence for ledger item `led-review-gap-false-clean` (BRIEF-LED-ERGONOMICS-BUNDLE-2026-08-06 item 2, rows 1087/1102 family).
+
+RED-BARE-WAS-FALSE-CLEAN reproduces the reported defect against a TARGETED-REVERTED
+standalone copy of led.tmpl (the 'review-gap' dispatch line reverted to its pre-fix
+cmd_view(cfg, "review_gap", "after_id") shape) run against the SAME live scratch world
+the GREEN cases use -- PASS below means the false-clean defect (bare review-gap silent
+while real work-item review debt exists, confirmed still present via the unreverted
+'led work review-gap') was reproduced exactly.
+
+ADOPT: new-project.sh --profile tracker exit=0 deployment.json=True -- PASS
+SEED: open/claim/close(--review-deferred) ok=True -- PASS
+GREEN-BARE-SURFACES-WORK-DEBT: exit=0 n_matching=1 row={'_page_tie': 'c6e64535451ea515909d6c88aededc69', 'close_id': 16, 'closer': 1, 'gap_kind': 'work_item', 'review_status': 'never-reviewed', 'slug': 'seen-red-led-review-gap-false-clean-1785993997-slug'} -- PASS
+GREEN-WORK-SUBVERB-UNCHANGED: exit=0 n_matching=1 -- PASS
+RED-BARE-WAS-FALSE-CLEAN: reverted-bare-exit=0 reverted-bare-n_matching=0 false_clean=True work-subverb-still-shows-debt=True -- PASS
+
+led-review-gap-false-clean fixture: all cases PASS, scratch substrate torn down to zero residue.
