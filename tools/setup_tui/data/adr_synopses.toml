@@ -125,3 +125,8 @@ source_sha256 = "935f1dd9bcf2d397c1aa03afd7dd427e1ea041170d61c28f67467c1667fd3b5
 number = "0020"
 text = "Any operation that migrates, schematizes, summarizes, or re-renders authored content carries a cold-read meaning-preservation witness alongside its mechanical invariants: a fresh-context reader who did not perform the transformation reads the output against the source and attests the output asserts no more and no less than the source asserted (qualifiers, hedges, aspiration markers, honest ceilings, named exclusions, and recommendation polarity all intact), serving its declared reader. Mechanical invariants -- token, element, line, or format counts -- cannot discharge this witness, since passing every one is compatible with a strengthened claim or a dropped hedge; and a pass finding a severe meaning change (truth value, coverage, referent, binding commitment, or recommendation direction) proves the class is present, not that the last instance was caught, so a fresh, blind reader reads again after repair until a pass finds none."
 source_sha256 = "4c836b1c6a1cae238283bc66bdae6b23760a37a42574958019c139d8552446a4"
+
+[[synopsis]]
+number = "0021"
+text = "The witness observes the claimed property directly, at the site of the claim. If the claim is about where a value dies, the witness watches the boundary, not the eventual stack trace. If the claim is about what a function derives, the witness reads the derivation's output, not a neighboring artifact that tends to agree with it. A witness whose observation point is downstream of the claim inherits every confounder between the two, and each confounder is a way for red and green to lie."
+source_sha256 = "06bdc5d4474383e30f0b7e074fb781be839f77f535cbcaf8995b591759a83eec"
