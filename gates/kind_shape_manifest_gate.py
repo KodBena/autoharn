@@ -185,7 +185,18 @@ CHAIN = [
     "s70-scope-binding.sql",
     "s71-row-level-scope-policies.sql",
     "s72-stamp-binding-conjunct.sql",
+    "s73-typed-annulment-disposition.sql",
 ]
+# s73 (kernel/lineage/s73-typed-annulment-disposition.sql, design/FABLE-TYPED-ANNULMENT-
+# DISPOSITION-SPEC.md, ledger row 1087) extends this SAME gate's scratch CHAIN. It widens the
+# EXISTING work_review_disposition_check value CHECK to admit a fourth value, 'annulled' -- no
+# change to the (kind, column, arity) MANIFEST row above (mechanism=trigger, kinds=(work_closed,
+# work_violation_disposition), unchanged) -- and adds exactly ONE new VALUE_PARTITION_MANIFEST row
+# (the 'annulled' entry immediately below the s38 'bookkeeping' one) scoping the new value to
+# kind='work_closed' alone, the SAME PARTIAL-VALUE idiom. It also adds work_review_annulled_
+# requires_ref -- a plain, kind-free value CHECK mirroring work_review_witnessed_requires_ref
+# (s29), which carries no MANIFEST row of its own either (out of this gate's scope by its own
+# classifier's first test: it carries no `kind = ` test at all). No new column, no new kind.
 # s72 (kernel/lineage/s72-stamp-binding-conjunct.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
 # FLOW-SPEC.md sec5 item 5, ledger rows 601/639) extends this SAME gate's scratch CHAIN and ships
 # ONE new kind-scoped column (stamp_binding_agent, an IDENTITY field mandatory on BOTH a fresh
@@ -934,6 +945,16 @@ VALUE_PARTITION_MANIFEST = [
                 "delta's own closure statement ('the bookkeeping fact rides the EXISTING "
                 "work_closed kind's own columns'). Mirrors work_review_ref_kind_shape (s37) one "
                 "column over: one-way, licenses 'bookkeeping' on kind = 'work_closed' alone."),
+    dict(column="work_review_disposition", value="annulled", kinds=("work_closed",),
+         mechanism="CHECK", constraint="work_review_annulled_kind_shape",
+         defining_delta="s73-typed-annulment-disposition.sql",
+         reason="the same PARTIAL-VALUE idiom as 'bookkeeping' immediately above, one value over "
+                "(design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md, ledger row 1087): 'annulled' "
+                "-- a review obligation considered and declined by a distinct-actor authority -- "
+                "is deliberately scoped to kind = 'work_closed' ALONE, never "
+                "work_violation_disposition; the spec's own substrate and every worked example is "
+                "exclusively about work-item close review debt (ADR-0008 negative register: no "
+                "vocabulary is fabricated where the spec names none)."),
 ]
 VALUE_PARTITION_BY_KEY = {(row["column"], row["value"]): row for row in VALUE_PARTITION_MANIFEST}
 assert len(VALUE_PARTITION_BY_KEY) == len(VALUE_PARTITION_MANIFEST), \

@@ -239,7 +239,11 @@ BASELINE: dict[str, int] = {
     # widened MANIFEST rows' own reason text (principal_subject, principal_binding_active,
     # entitlement_act_class) plus the CHAIN append comment -- witnessed growth from one new
     # manifest entry and three widened entries, not unnoticed growth.
-    "gates/kind_shape_manifest_gate.py":           1807,
+    # ratchet bump (kernel/lineage/s73-typed-annulment-disposition.sql build, design/FABLE-TYPED-
+    # ANNULMENT-DISPOSITION-SPEC.md, ledger row 1087): one new VALUE_PARTITION_MANIFEST row
+    # ('annulled', mirroring 'bookkeeping') plus its own CHAIN append comment -- witnessed growth
+    # from one new manifest entry, not unnoticed growth. 1807 -> 1828.
+    "gates/kind_shape_manifest_gate.py":           1828,
     "hooks/pretooluse_change_gate.py":                1138,
     "hooks/stop_clean_exit.py":                        992,
     "engine/contemp_edb.py":                            978,
@@ -392,7 +396,12 @@ BASELINE: dict[str, int] = {
     # ac-s3-stamp-binding): CHAIN += s72, two new declared-clean view entries (principal_stamp_
     # bindings, stamp_binding_classes) plus a comment noting the re-issued act-class functions
     # register no NEW allowlist entry -- witnessed growth, not unnoticed.
-    "gates/ledger_reader_allowlist.py":            680,
+    # bumped 680 -> 708 (s73, kernel/lineage/s73-typed-annulment-disposition.sql, design/FABLE-
+    # TYPED-ANNULMENT-DISPOSITION-SPEC.md, ledger row 1087): CHAIN += s73, one new declared
+    # raw/history-reader view entry (work_review_annulled) plus the existing
+    # validate_review_witness_existence entry widened with its own new raw-ledger read -- witnessed
+    # growth, not unnoticed.
+    "gates/ledger_reader_allowlist.py":            708,
     # Reconciled +22 to 525 (GENESIS-GATE HARD-STOP, ledger row 1918): `verify_commission_act`
     # gained the `accept_unverified` parameter and its own `_verify_commission_ok` verdict_check
     # function (the real halt-vs-continue decision, previously nowhere -- exit code was silently
@@ -580,7 +589,9 @@ BASELINE: dict[str, int] = {
     # row, rows 822/838/839, joins the union in the resolved hunk).
     # merge reconciliation 458 -> 459 (x s72: its s72-stamp-binding-conjunct REGISTRY row joins
     # the union in the resolved hunk, work item ac-s3-stamp-binding).
-    "gates/fixture_census.py":                     459,
+    # bumped 459 -> 460 (s73, kernel/lineage/s73-typed-annulment-disposition.sql, ledger row
+    # 1087): one new REGISTRY row (s73-typed-annulment-disposition).
+    "gates/fixture_census.py":                     460,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -753,7 +764,12 @@ BASELINE: dict[str, int] = {
     # fixpoint as every prior bump, re-measured after writing.
     # merge reconciliation (main-post-twin 872 x s72 866, all comment provenance kept):
     # re-measured after resolving this file's three hunks.
-    "gates/max_lines.py":                          890,
+    # bumped 890 -> 906 (s73, kernel/lineage/s73-typed-annulment-disposition.sql, ledger row
+    # 1087): four bump-comment blocks added to this same file (fixture_census.py 459 -> 460,
+    # kind_shape_manifest_gate.py 1807 -> 1828, ledger_reader_allowlist.py 680 -> 708, and this
+    # row itself) -- the same self-referential fixpoint as every prior bump, re-measured after
+    # writing.
+    "gates/max_lines.py":                          906,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

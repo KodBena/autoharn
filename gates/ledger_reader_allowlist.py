@@ -88,7 +88,24 @@ CHAIN = [
     "s70-scope-binding.sql",
     "s71-row-level-scope-policies.sql",
     "s72-stamp-binding-conjunct.sql",
+    "s73-typed-annulment-disposition.sql",
 ]
+# s73 (kernel/lineage/s73-typed-annulment-disposition.sql, design/FABLE-TYPED-ANNULMENT-
+# DISPOSITION-SPEC.md, ledger row 1087) extends this SAME gate's scratch CHAIN. It ships ONE new
+# view, work_review_annulled -- a DECLARED raw/history reader by design (the s37 work_violation_
+# history / s38 work_bookkeeping_closes precedent): its close side reads ledger_current (only an
+# IN-FORCE annulled close is live audit-worthy debt-discharge), its authority side is a LEFT JOIN
+# to raw `ledger` (so a since-retracted authority row's content still renders, with
+# authority_in_force naming the fact explicitly rather than going silently blank) -- entry below.
+# It widens validate_review_witness_existence with a genuinely new raw `ledger` read (the obligor
+# lookup) -- existing entry above updated in place, the s45/s53/s58/s69 precedent (re-issue an
+# already-allowlisted function, name the NEW read at the SAME entry, never a fresh key for the
+# same function). work_item_violations/work_violation_history (both re-issued) gain one new
+# member (annulled_authority_retracted) that reads work_review_annulled -- a VIEW read, never a
+# raw `ledger` FROM/JOIN/INTO of their own, so neither needs a fresh/updated entry (their standing
+# posture, current-truth-typed throughout for work_item_violations, declared-history for
+# work_violation_history, is unchanged in KIND by this delta -- only a new arm composed from
+# already-classified building blocks).
 # s72 (kernel/lineage/s72-stamp-binding-conjunct.sql, design/FABLE-ACCESS-CONTROL-AND-INFORMATION-
 # FLOW-SPEC.md sec5 item 5) extends this SAME gate's scratch CHAIN. It ships TWO new views
 # (principal_stamp_bindings, stamp_binding_classes), both factored through ledger_current
@@ -466,7 +483,8 @@ ALLOWLIST: dict[str, str] = {
                                          "work_closed/work_violation_disposition row -- "
                                          "row-addressed forensics (does this id exist at all), "
                                          "same history-typed reasoning as validate_review. "
-                                         "Widened s69 (role-coherence §2): a GENUINELY NEW raw `ledger` read (`SELECT l.kind INTO v_cited_kind FROM ledger l WHERE l.id = v_id`, s69-role-coherence-refusals.sql ~line 294) fetches the cited row's own kind, row-addressed by id -- distinct from s48's existence-only check above, and legitimate for the SAME reason every other row-addressed target read on this allowlist is: the citation must be checked against the row's kind AS CITED, not filtered by current-truth status (a witness row can itself be superseded later without invalidating what it was cited as). Then a target-KIND check (kind IN 'review'/'finding', OR an in-force child work_opened row via an additional `ledger_current lc` join -- the planning-close carve-in) decides accept/refuse.",
+                                         "Widened s69 (role-coherence §2): a GENUINELY NEW raw `ledger` read (`SELECT l.kind INTO v_cited_kind FROM ledger l WHERE l.id = v_id`, s69-role-coherence-refusals.sql ~line 294) fetches the cited row's own kind, row-addressed by id -- distinct from s48's existence-only check above, and legitimate for the SAME reason every other row-addressed target read on this allowlist is: the citation must be checked against the row's kind AS CITED, not filtered by current-truth status (a witness row can itself be superseded later without invalidating what it was cited as). Then a target-KIND check (kind IN 'review'/'finding', OR an in-force child work_opened row via an additional `ledger_current lc` join -- the planning-close carve-in) decides accept/refuse. "
+                                         "Widened AGAIN s73 (design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2, ledger row 1087): s69's kind/actor/stamp SELECT above is widened to ALSO fetch actor/stamp_session/stamp_agent (the SAME row, one SELECT, no second lookup, ADR-0012 P1) so the annulment-authority distinctness check can read them without a fresh raw read of its own; and ONE genuinely NEW raw `ledger` read is added -- `SELECT l.actor, l.stamp_session, l.stamp_agent FROM ledger l WHERE l.id = NEW.supersedes` (the obligor's identity, when this close's own disposition is 'annulled' and NEW.supersedes names the deferred close being discharged) -- row-addressed forensics by id, the SAME reasoning as validate_review's own regards-target read one function over. The authority row's IN-FORCE status is checked separately, against `ledger_current` (not raw ledger), which needs no allowlist entry of its own (a current-truth read).",
     "validate_belief_evidence": "write-boundary BEFORE INSERT trigger (s53 §3.2): existence "
                                 "check per row:<id> token in belief_universe/belief_witness -- "
                                 "the s48 idiom, reused verbatim one field over.",
@@ -543,6 +561,16 @@ ALLOWLIST: dict[str, str] = {
                                "over (s37): reads raw ledger directly, never ledger_current, so a "
                                "later-superseded bookkeeping close row remains enumerable here "
                                "forever, never silently dropped by a current-truth projection.",
+    # -- s73 (kernel/lineage/s73-typed-annulment-disposition.sql) --
+    "work_review_annulled": "DECLARED raw/history reader by design (design/FABLE-TYPED-ANNULMENT-"
+                            "DISPOSITION-SPEC.md, ledger row 1087): the close side reads "
+                            "ledger_current (only an IN-FORCE annulled close is live audit-worthy "
+                            "debt-discharge), but the authority side is a LEFT JOIN to raw "
+                            "`ledger` -- a since-retracted authority row's content still renders, "
+                            "authority_in_force naming that fact explicitly rather than going "
+                            "silently blank on a current-truth projection. Mirrors work_"
+                            "bookkeeping_closes/work_violation_history's own mixed-by-design "
+                            "posture, one audit view over.",
     # -- s56 (kernel/lineage/s56-reservation-residue.sql) --
     "review_verdicts": "DECLARED raw/history reader by design (design/FABLE-RESERVATION-RESIDUE-"
                        "SPEC.md section 3: the general review-legibility surface must show a "

@@ -1,0 +1,84 @@
+== scaffolding WORLD PRE (chain ends s72-stamp-binding-conjunct.sql) ==
+=== detect-negative-pre-s73 ===
+  [ok] s73 .detect.sql reads f on the pre-s73 (s72-head) chain
+
+=== pre-s73-ordinary-write-unaffected ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+== scaffolding WORLD MAIN (chain ends s73-typed-annulment-disposition.sql) ==
+=== detect-positive-s73 ===
+  [ok] s73 .detect.sql reads t on the s73-applied chain
+
+=== authority-row-accepted ===
+  [ok] {'row_id': 5, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== annul-accepted ===
+  [ok] {'row_id': 8, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== annul-excluded-from-gap ===
+  [ok] work_review_gap rows for the annulled close: '0'
+
+=== annul-audit-view-renders ===
+  [ok] work_review_annulled row: '5|true'
+
+=== annul-missing-ref-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: annulled close of work item 'annul-missing-ref' refused — work_review_ref carries no row:<id> citation — annulment requires a citation to an IN-FORCE LEDGER ROW as its authority (s73, design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2); a commit hash or free-text/artifact-path reference does not satisfy this. Cite the authority ruling in work_review_ref using the row:<id> form (e.g. row:1087).", 'sqlstate': 'P0001', 'refusal_id': 12, 'disposition': 'refused'}
+
+=== stale-authority-row-accepted ===
+  [ok] {'row_id': 13, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== stale-authority-retracted ===
+  [ok] {'row_id': 14, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== annul-retracted-ref-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: annulment authority citation 'row:13' in work_review_ref is refused — row 13 exists but is NOT IN FORCE (superseded/retracted) — an annulment must cite an authority row that is CURRENTLY STANDING, never a lapsed one (s73, design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2). Cite a currently in-force row, or record a fresh annulment once a standing authority is on record.", 'sqlstate': 'P0001', 'refusal_id': 18, 'disposition': 'refused'}
+
+=== annul-retracted-ref-message-names-in-force ===
+  [ok] message: "Ledger policy: annulment authority citation 'row:13' in work_review_ref is refused — row 13 exists but is NOT IN FORCE (superseded/retracted) — an annulment must cite an authority row that is CURRENTLY STANDING, never a lapsed one (s73, design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2). Cite a currently in-force row, or record a fresh annulment once a standing authority is on record."
+
+=== self-authority-row-accepted ===
+  [ok] {'row_id': 19, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== annul-self-same-actor-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: annulment refused — the authority row (row:19, actor 2) is not distinct from the annulled obligation's obligor (actor 2: the superseded deferred close's own actor, or this close's own actor where no predecessor exists) — no self-annulment (s73 §2). Distinctness requires BOTH a distinct actor AND a distinct (session, agent) invocation pair (a NULL half on either side reads as NOT distinct, fail-safe) — composing with s21 session-aware distinctness exactly as an independence-claiming review countersign already does: the same invocation cannot manufacture the distinction by resolving to a different principal id. Cite a genuinely distinct actor's ruling, written through a genuinely distinct invocation.", 'sqlstate': 'P0001', 'refusal_id': 23, 'disposition': 'refused'}
+
+=== annul-self-same-actor-message-names-no-self-annulment ===
+  [ok] message: "Ledger policy: annulment refused — the authority row (row:19, actor 2) is not distinct from the annulled obligation's obligor (actor 2: the superseded deferred close's own actor, or this close's own actor where no predecessor exists) — no self-annulment (s73 §2). Distinctness requires BOTH a distinct actor AND a distinct (session, agent) invocation pair (a NULL half on either side reads as NOT distinct, fail-safe) — composing with s21 session-aware distinctness exactly as an independence-claiming review countersign already does: the same invocation cannot manufacture the distinction by resolving to a different principal id. Cite a genuinely distinct actor's ruling, written through a genuinely distinct invocation."
+
+=== same-stamp-authority-row-accepted ===
+  [ok] {'row_id': 24, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== annul-self-same-stamp-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: annulment refused — the authority row (row:24, actor 4) is not distinct from the annulled obligation's obligor (actor 2: the superseded deferred close's own actor, or this close's own actor where no predecessor exists) — no self-annulment (s73 §2). Distinctness requires BOTH a distinct actor AND a distinct (session, agent) invocation pair (a NULL half on either side reads as NOT distinct, fail-safe) — composing with s21 session-aware distinctness exactly as an independence-claiming review countersign already does: the same invocation cannot manufacture the distinction by resolving to a different principal id. Cite a genuinely distinct actor's ruling, written through a genuinely distinct invocation.", 'sqlstate': 'P0001', 'refusal_id': 28, 'disposition': 'refused'}
+
+=== annul-self-same-stamp-message-names-no-self-annulment ===
+  [ok] message: "Ledger policy: annulment refused — the authority row (row:24, actor 4) is not distinct from the annulled obligation's obligor (actor 2: the superseded deferred close's own actor, or this close's own actor where no predecessor exists) — no self-annulment (s73 §2). Distinctness requires BOTH a distinct actor AND a distinct (session, agent) invocation pair (a NULL half on either side reads as NOT distinct, fail-safe) — composing with s21 session-aware distinctness exactly as an independence-claiming review countersign already does: the same invocation cannot manufacture the distinction by resolving to a different principal id. Cite a genuinely distinct actor's ruling, written through a genuinely distinct invocation."
+
+=== annul-strict-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: strict close of work item 'annul-strict' requires --review-witness (a review already on record) — an annulled disposition is a typed consider-and-decline of REVIEW DEBT, never a substitute for strict mode's obligation-tree requirement (a distinct-actor authority declined the review; it did not perform one, so there is no verdict to check the tree against; s73, design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2, same footing as --review-deferred/--review-bookkeeping --strict). Record the review first (./led review ...), then close with --review-witness <ref>.", 'sqlstate': 'P0001', 'refusal_id': 33, 'disposition': 'refused'}
+
+=== annul-strict-message-names-strict ===
+  [ok] message: "Ledger policy: strict close of work item 'annul-strict' requires --review-witness (a review already on record) — an annulled disposition is a typed consider-and-decline of REVIEW DEBT, never a substitute for strict mode's obligation-tree requirement (a distinct-actor authority declined the review; it did not perform one, so there is no verdict to check the tree against; s73, design/FABLE-TYPED-ANNULMENT-DISPOSITION-SPEC.md §2, same footing as --review-deferred/--review-bookkeeping --strict). Record the review first (./led review ...), then close with --review-witness <ref>."
+
+=== annul-violation-disposition-kind-refused ===
+  [ok] {'row_id': None, 'message': "Ledger policy: work_violation_disposition (class 'duplicate_open', target 5) refused — that is not currently an in-force work_item_violations member (re-derived against the view itself, never parsed from display text). Either the defect was never real, has already lapsed on its own, or is already answered by an in-force disposition (see work_violation_history for the trail). Run ./led work violations to see what is currently answerable.", 'sqlstate': 'P0001', 'refusal_id': 35, 'disposition': 'refused'}
+
+=== defense-in-depth-annul-accepted ===
+  [ok] {'row_id': 39, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== defense-in-depth-authority-retracted ===
+  [ok] {'row_id': 40, 'message': None, 'sqlstate': None, 'refusal_id': None, 'disposition': 'accepted'}
+
+=== defense-in-depth-surfaced-in-violations ===
+  [ok] work_item_violations.violation for annul-defense-in-depth: 'annulled_authority_retracted'
+
+=== defense-in-depth-surfaced-in-history ===
+  [ok] work_violation_history rows for annul-defense-in-depth: '1'
+
+=== judge-work-AGREE-world-pre ===
+  [ok] judge output (s73fx_pre): ['AGREE', 'asp []', 'sql []']
+
+=== judge-work-AGREE-world-main ===
+  [ok] judge output (s73fx_main): ['AGREE', 'asp [\'w_tree_member("annul-accept","annul-accept")\', \'w_tree_member("annul-defense-in-depth","annul-defense-in-depth")\', \'w_tree_member("annul-missing-ref","annul-missing-ref")\', \'w_tree_member("annul-retracted-ref","annul-retracted-ref")\', \'w_tree_member("annul-self-same-actor","annul-self-same-actor")\', \'w_tree_member("annul-self-same-stamp","annul-self-same-stamp")\', \'w_tree_member("annul-strict","annul-strict")\']', 'sql [\'w_tree_member("annul-accept","annul-accept")\', \'w_tree_member("annul-defense-in-depth","annul-defense-in-depth")\', \'w_tree_member("annul-missing-ref","annul-missing-ref")\', \'w_tree_member("annul-retracted-ref","annul-retracted-ref")\', \'w_tree_member("annul-self-same-actor","annul-self-same-actor")\', \'w_tree_member("annul-self-same-stamp","annul-self-same-stamp")\', \'w_tree_member("annul-strict","annul-strict")\']']
+
+all s73-typed-annulment-disposition cases WITNESSED clean.

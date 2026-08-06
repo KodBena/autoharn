@@ -205,6 +205,7 @@ REGISTRY: dict[str, str] = {
     "s71-row-level-scope-policies":    "seen-red/s71-row-level-scope-policies/run_fixtures.py",
     "engine-asp-twin-entitlement-scope": "seen-red/engine-asp-twin-entitlement-scope/run_fixtures.py",
     "s72-stamp-binding-conjunct":      "seen-red/s72-stamp-binding-conjunct/run_fixtures.py",
+    "s73-typed-annulment-disposition": "seen-red/s73-typed-annulment-disposition/run_fixtures.py",
     "legacy-led-retirement-part-ab-boundary": "seen-red/legacy-led-retirement-part-ab-boundary/run_fixtures.py",
     "legacy-led-retirement-round1-fixes": "seen-red/legacy-led-retirement-round1-fixes/run_fixtures.py",
     "workflow-drive-dead-legacy-led-default": "seen-red/workflow-drive-dead-legacy-led-default/run_fixtures.py",
