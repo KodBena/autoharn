@@ -5,7 +5,7 @@ design/BRIEF-B1-SETUP-SCHEMA-VERB-2026-08-04.md, rows 1063/1068).
 
 WHAT THIS DOES: `tools/setup_tui/data/config_schema.toml` stays the single authority for the
 setup TUI's `--from-config`/`--initial-config` closed schema (that file's own header, ADR-0012
-P1 -- one home, not re-derived per caller). External consumers of the schema (a sibling
+P10 -- one home, not re-derived per caller). External consumers of the schema (a sibling
 checkout doing local dev; a CI/build pipeline against a pinned autoharn commit) must never
 depend on THIS repo's tree layout to find that file -- this verb is the one sanctioned,
 layout-independent access point, per the orchestrator's ratified channel decision (ledger row
@@ -91,6 +91,17 @@ class SchemaProvenance:
                               "sha256 digest")
         if not self.repo_commit:
             raise ValueError("SchemaProvenance: repo_commit must not be empty")
+        # row 1169 minor finding: read_at was a bare str claimed ISO-8601-UTC by construction
+        # discipline only (`.read()`'s own `now.strftime("%Y-%m-%dT%H:%M:%SZ")`), unvalidated
+        # here unlike its sibling fields above and unlike this class's own cited precedent
+        # (IdentityEnforcementPosture, serving/boundary_multiplex_config.py) -- closed now,
+        # same shape every construction path already produces, so no existing caller changes.
+        try:
+            datetime.datetime.strptime(self.read_at, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as e:
+            raise ValueError(
+                f"SchemaProvenance: {self.read_at!r} is not UTC ISO-8601 second precision "
+                f"('%Y-%m-%dT%H:%M:%SZ')") from e
 
     def as_json_dict(self) -> dict:
         return {

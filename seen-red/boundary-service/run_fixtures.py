@@ -4,7 +4,9 @@
 W20-W23, A5's amendment; W21's float legs, A6's amendment; W24, A7's amendment; W25-W26,
 A8's amendment; W27, A9's amendment; W28, A10's amendment; W29-W30, A11's amendment; W31,
 A12's amendment; W32, A13's amendment; W34-W35, design/FABLE-SERVING-DIAGNOSTIC-LOGGING-SPEC.md,
-ledger row 1500). Real infra, no mocks:
+ledger row 1500; W38, A14's amendment -- the annotate_names path's checkability gap, review row
+1176, assigned the next sequential W-number in THIS file's own local convention since A14 itself
+names the gap without pre-numbering a witness leg). Real infra, no mocks:
 CLASSIC scaffolds + manual chain applies in the TOY db (the exact pattern seen-red/
 s43-typed-verdict-write-boundary/run_fixtures.py already banks, and this fixture imports
 nothing new for scaffolding -- same helpers, re-derived here because the two fixtures scaffold
@@ -89,7 +91,12 @@ WORLDS:
                 §9/A2.1/W12 in-process route-table closure assertion, and FINALLY (destructive,
                 run last) W18b
                 (ledger_current dropped on world_b -- genuine psql exit 3 -> 500
-                unclassified_failure).
+                unclassified_failure), and W38 (A14 clause 3: the annotate_names path's
+                committed coverage -- registered actor -> name over /work/items AND
+                /views/work_item_current, a NULL claimant -> typed null absence never a
+                spurious lookup, audit_served.py's own new --annotate-names-column differential
+                AGREE, and the unsupported-view refusal on /views/credited_current -> typed 422
+                naming review_gap/work_item_current, fired ahead of the capability gate).
   WORLD NOCAP -- chain truncated BEFORE s22/s40/s41/s42/s43 (ends at s21): W10 (/health on a
                 pre-s40 chain -> 200, null service_principal, no 500) and the s22/s41 gate
                 ABSENT legs (W11) -- this world carries neither view, so both capability gates
@@ -981,6 +988,104 @@ def main() -> int:
               f"stdout={(audit_cp.stdout.strip() if audit_cp else '?')!r}; tampered-vs-real "
               f"negative control diffs={neg_diffs} (nonzero expected -- the comparator catches "
               f"the deliberate perturbation)", failures)
+
+        # -- W38 (A14 clause 3, review row 1176, design/FABLE-LEDGER-BOUNDARY-SERVICE-SPEC.md's
+        # own A14 amendment): the annotate_names path's committed coverage -- audit_served.py's
+        # new --annotate-names-column differential (registered actor -> name), NULL claimant ->
+        # typed null absence, and the unsupported-view refusal (422 naming the supported views).
+        w38_open_slug = f"w38-open-{RUN_SUFFIX}"
+        w38_claimed_slug = f"w38-claimed-{RUN_SUFFIX}"
+        w38_open_v = http_post(base + "/write/ledger", {
+            "kind": "work_opened", "statement": "W38 fixture unclaimed item",
+            "actor": author_id, "work_slug": w38_open_slug, "work_title": "W38 unclaimed"},
+        )[1] if up_b else {}
+        w38_claim_open_v = http_post(base + "/write/ledger", {
+            "kind": "work_opened", "statement": "W38 fixture claimed item",
+            "actor": author_id, "work_slug": w38_claimed_slug, "work_title": "W38 claimed"},
+        )[1] if up_b else {}
+        w38_claim_v = http_post(base + "/write/ledger", {
+            "kind": "work_claimed", "statement": "W38 fixture claim",
+            "actor": author_id, "work_slug": w38_claimed_slug},
+        )[1] if up_b else {}
+        w38_writes_ok = (up_b and w38_open_v.get("disposition") == "accepted"
+                          and w38_claim_open_v.get("disposition") == "accepted"
+                          and w38_claim_v.get("disposition") == "accepted")
+
+        # Leg (i): registered actor -> name, over BOTH the /work/items fixed endpoint (claimant)
+        # and the generic /views/{view} route (also claimant, work_item_current is one of
+        # _VIEW_ACTOR_ANNOTATION_COLUMNS' two members) -- same mechanism, two call sites.
+        st38a_items, body38a_items = http_get(
+            f"{base}/work/items?annotate_names=true") if w38_writes_ok else (0, [])
+        row38a_items = next((r for r in body38a_items if r.get("slug") == w38_claimed_slug), None) \
+            if isinstance(body38a_items, list) else None
+        st38a_view, body38a_view = http_get(
+            f"{base}/views/work_item_current?annotate_names=true") if w38_writes_ok else (0, [])
+        row38a_view = next((r for r in body38a_view if r.get("slug") == w38_claimed_slug), None) \
+            if isinstance(body38a_view, list) else None
+        check("w38a-annotate-names-registered-actor-to-name",
+              w38_writes_ok and st38a_items == 200 and row38a_items is not None
+              and row38a_items.get("claimant") == author_id
+              and row38a_items.get("claimant_name") == "author"
+              and st38a_view == 200 and row38a_view is not None
+              and row38a_view.get("claimant_name") == "author",
+              f"/work/items?annotate_names=true claimed row: {row38a_items}; "
+              f"/views/work_item_current?annotate_names=true claimed row: {row38a_view} -- "
+              f"both must carry claimant_name='author' (author_id={author_id})", failures)
+
+        # Leg (ii): the actor-shaped column itself NULL (no work_claimed act yet) -> typed null
+        # absence, never a spurious lookup or a fabricated name (_annotate_actor_names' own
+        # docstring: "a row whose actor-shaped column is itself NULL ... serve[s] null for the
+        # name -- never invented or empty-string").
+        row38b = next((r for r in body38a_items if r.get("slug") == w38_open_slug), None) \
+            if isinstance(body38a_items, list) else None
+        check("w38b-annotate-names-null-claimant-typed-absence",
+              w38_writes_ok and row38b is not None
+              and row38b.get("claimant") is None and row38b.get("claimant_name") is None,
+              f"/work/items?annotate_names=true unclaimed row: {row38b} -- claimant AND "
+              f"claimant_name must both be null, never a spurious lookup on the None id",
+              failures)
+
+        # Leg (iii): audit_served.py's OWN new differential (A14 clause 3's actual dispatch --
+        # "audit_served.py gains named coverage of the annotate_names path"), independent of
+        # the boundary_service in-process checks above: an AGREE verdict differentials the
+        # served actor_name field against fetch_kernel_names' own direct kernel.principal read,
+        # never against boundary_service's own annotation function. --endpoint/--view is
+        # ledger_current/rows_current (actor), NOT work_item_current/claimant -- fetch_kernel's
+        # OWN direct-read leg splices a hardcoded `WHERE id > {after_id}`, so it can only ever
+        # query an id-keyed view (a pre-existing limitation this flag inherits, not fixes; see
+        # this flag's own --help text). Every ledger row in this world carries actor=author_id,
+        # so this leg doubles as a registered-actor-to-name witness over the tool's own code path
+        # (distinct from leg (i)'s in-process boundary_service witness above).
+        audit38_cp = sh([str(PYVENV), str(SERVING / "audit_served.py"),
+                        "--base-url", base_b_raw, "--deployment", str(dep_b),
+                        "--deployment-name", world_b, "--endpoint", "/rows/current",
+                        "--view", "ledger_current",
+                        "--annotate-names-column", "actor"]) if up_b else None
+        check("w38c-audit-served-annotate-names-agree",
+              up_b and audit38_cp is not None and audit38_cp.returncode == 0
+              and "AGREE" in audit38_cp.stdout,
+              f"audit_served.py --annotate-names-column actor exit="
+              f"{audit38_cp.returncode if audit38_cp else '?'} "
+              f"stdout={(audit38_cp.stdout.strip() if audit38_cp else '?')!r} "
+              f"stderr={(audit38_cp.stderr.strip() if audit38_cp else '?')!r}", failures)
+
+        # Leg (iv): the refusal -- annotate_names=true on a VIEW_REGISTRY member OUTSIDE
+        # _VIEW_ACTOR_ANNOTATION_COLUMNS (credited_current is not one of its two members) ->
+        # typed 422 naming the views that DO support it, never silently ignored (A10's own
+        # lesson). credited_current chosen deliberately: this world carries NO s44 credited
+        # view (W4 above), proving the annotate_names refusal fires BEFORE any per-view
+        # capability check -- views_view()'s own code order (annotate_names validated
+        # immediately after VIEW_REGISTRY membership, ahead of every capability gate below it).
+        st38d, body38d = http_get(
+            f"{base}/views/credited_current?annotate_names=true") if up_b else (0, {})
+        detail38d = body38d.get("detail", "") if isinstance(body38d, dict) else ""
+        check("w38d-annotate-names-unsupported-view-refused",
+              up_b and st38d == 422 and "credited_current" in detail38d
+              and "review_gap" in detail38d and "work_item_current" in detail38d,
+              f"GET /views/credited_current?annotate_names=true: status={st38d} body={body38d} "
+              f"-- must 422 (not 409 capability_absent -- proves annotate_names is checked "
+              f"before capability), naming both supported views (review_gap, work_item_current)",
+              failures)
 
         # -- W11 PRESENT legs: this world carries both s22 and s41 views -- both gates serve.
         st_sp, standing = http_get(base + "/standing/principals") if up_b else (0, None)
@@ -2920,7 +3025,7 @@ def main() -> int:
     if failures:
         print("FAILURES:", failures)
         return 1
-    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W36m live; "
+    print("ALL CASES OK -- boundary-service both-polarity proof (W1-W7, W9-W36m, W38 live; "
           "W8 and the W9 streaming-abort leg UNEXERCISED, named).")
     return 0
 

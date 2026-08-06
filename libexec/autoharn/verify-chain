@@ -51,11 +51,8 @@ fi
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 
 _VC_BANK=1
-if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
-    _VC_BANK=0
-fi
 for _vc_arg in "$@"; do
-    if [ "$_vc_arg" = "--head" ]; then
+    if [ "$_vc_arg" = "--help" ] || [ "$_vc_arg" = "-h" ] || [ "$_vc_arg" = "--head" ]; then
         _VC_BANK=0
     fi
 done

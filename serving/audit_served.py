@@ -68,6 +68,7 @@ from boundary_service import (  # noqa: E402  (the ONE query helper, reused -- n
     PsqlInfraFailure,
     PsqlUnclassifiedFailure,
     _query_json,
+    _regclass_exists,
 )
 
 # The closed set of view names this tool may ever splice into fetch_kernel's SQL (ADR-0012's
@@ -147,6 +148,30 @@ def fetch_kernel(cfg: BoundaryConfig, view: str, after_id: int, limit: int) -> l
     return rows
 
 
+def fetch_kernel_names(cfg: BoundaryConfig, ids: set[int]) -> dict[int, str | None]:
+    """The annotate_names differential's own direct-read leg (design/FABLE-LEDGER-BOUNDARY-
+    SERVICE-SPEC.md A14 clause 3, review row 1176's checkability-gap finding): performs the
+    SAME `kernel.principal` join `boundary_service._annotate_actor_names` performs server-side
+    -- but INDEPENDENTLY, straight SQL against `cfg.kern`, never a call into the function under
+    audit (an audit that invoked the code it audits would prove nothing, the same reasoning
+    `fetch_kernel` above already applies to the row-set leg). Degrades to an empty mapping
+    (never a fabricated name) when `kernel.principal` itself does not exist on this world --
+    the SAME precedent `_annotate_actor_names`'s own docstring documents for itself; a caller
+    then correctly sees every id resolve to `None` via ordinary dict lookup, exactly like the
+    served side degrades to an all-null annotation in that case."""
+    if not ids or not _regclass_exists(cfg, f"{cfg.kern}.principal"):
+        return {}
+    id_list = ",".join(str(i) for i in sorted(ids))
+    looked_up = _query_json(
+        cfg,
+        f"SELECT coalesce(jsonb_object_agg(id, name), '{{}}'::jsonb) FROM "
+        f"{cfg.kern}.principal WHERE id = ANY(ARRAY[{id_list}]::bigint[]);",
+    )
+    if isinstance(looked_up, dict):
+        return {int(k): v for k, v in looked_up.items()}
+    return {}
+
+
 def compare_row_sets(served: list[dict[str, Any]], kernel: list[dict[str, Any]]) -> list[str]:
     """Structural row-set comparison, denominated in row id (ADR-0000 §9's denomination
     discipline: compare by the immutable id, never by list position). Returns a list of
@@ -172,12 +197,33 @@ def compare_row_sets(served: list[dict[str, Any]], kernel: list[dict[str, Any]])
 
 
 def run_audit(base_url: str, cfg: BoundaryConfig, deployment_name: str, endpoint: str, view: str,
-              after_id: int = 0, limit: int = 1000) -> list[str]:
+              after_id: int = 0, limit: int = 1000,
+              annotate_names_column: str | None = None) -> list[str]:
     # Multiplex spec §2: the served side answers only under /d/{deployment_name}/... -- no
     # unprefixed route survives, so this tool must prepend it exactly like every other client.
     served_endpoint = f"/d/{deployment_name}{endpoint}"
-    served = fetch_served(base_url, f"{served_endpoint}?after_id={after_id}&limit={limit}")
+    query = f"?after_id={after_id}&limit={limit}"
+    # A14 clause 3 / --annotate-names-column: opt-in, default None -- omitted, this function's
+    # query string and comparison are BYTE-IDENTICAL to pre-A14 behavior (same discipline every
+    # other opt-in flag in this project keeps, `annotate_names` on the served side included).
+    if annotate_names_column is not None:
+        query += "&annotate_names=true"
+    served = fetch_served(base_url, f"{served_endpoint}{query}")
     kernel = fetch_kernel(cfg, view, after_id, limit)
+    if annotate_names_column is not None:
+        # The differential's direct-read leg: the SAME join, performed independently
+        # (fetch_kernel_names), never by calling the server's own annotation function.
+        ids: set[int] = set()
+        for row in kernel:
+            v = row.get(annotate_names_column)
+            if isinstance(v, int) and not isinstance(v, bool):
+                ids.add(v)
+        names = fetch_kernel_names(cfg, ids)
+        name_field = f"{annotate_names_column}_name"
+        for row in kernel:
+            v = row.get(annotate_names_column)
+            row[name_field] = (
+                names.get(v) if isinstance(v, int) and not isinstance(v, bool) else None)
     return compare_row_sets(served, kernel)
 
 
@@ -193,13 +239,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--view", default="ledger_current")
     p.add_argument("--after-id", type=int, default=0)
     p.add_argument("--limit", type=int, default=1000)
+    p.add_argument("--annotate-names-column", default=None,
+                    help="opt-in (A14 clause 3, review row 1176): differential the served "
+                         "{column}_name sibling field this tool's --endpoint serves under "
+                         "?annotate_names=true against a direct, independent read of the same "
+                         "kernel.principal join (fetch_kernel_names, never a call into the "
+                         "server's own annotation function). Omitted (default): behavior is "
+                         "byte-identical to pre-A14. Only meaningful paired with a --view/"
+                         "--endpoint combination that BOTH serves this column annotated AND is "
+                         "id-keyed (fetch_kernel's own direct-read leg splices a hardcoded "
+                         "`WHERE id > {after_id}` -- a pre-existing, unrelated limitation this "
+                         "flag inherits rather than fixes: a slug-keyed view/endpoint, e.g. "
+                         "work_item_current/--work/items, is not queryable by THIS tool at all, "
+                         "annotate-names or not). The one combination that works today: --view "
+                         "ledger_current --endpoint /rows/current --annotate-names-column actor "
+                         "-- an unsupported combination surfaces as the served side's own typed "
+                         "refusal or this tool's own exit-2 transport failure, never a silent "
+                         "pass.")
     args = p.parse_args(sys.argv[1:] if argv is None else argv)
 
     record = deployment_record.load_deployment(args.deployment)
     cfg = BoundaryConfig(record)
     try:
         diffs = run_audit(args.base_url, cfg, args.deployment_name, args.endpoint, args.view,
-                           args.after_id, args.limit)
+                           args.after_id, args.limit, args.annotate_names_column)
     except AuditViewRefused as e:
         sys.stderr.write(f"audit_served: REFUSED -- {e}\n")
         return 2
