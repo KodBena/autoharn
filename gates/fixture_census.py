@@ -283,6 +283,7 @@ REGISTRY: dict[str, str] = {
     "setup-tui-destination-foreign-refusal": "seen-red/setup-tui-destination-foreign-refusal/run_fixtures.py",
     "setup-tui-config-file":            "seen-red/setup-tui-config-file/run_fixtures.py",
     "setup-tui-configtree-journey":     "seen-red/setup-tui-configtree-journey/run_fixtures.py",
+    "setup-tui-courier-boundary-deadlock": "seen-red/setup-tui-courier-boundary-deadlock/run_fixtures.py",  # rows 149/150
     "setup-tui-commit-off-ui-thread":   "seen-red/setup-tui-commit-off-ui-thread/run_fixtures.py",
     "setup-tui-multichoice-filter":     "seen-red/setup-tui-multichoice-filter/run_fixtures.py",
     "setup-tui-seeded-value-visibility": "seen-red/setup-tui-seeded-value-visibility/run_fixtures.py",

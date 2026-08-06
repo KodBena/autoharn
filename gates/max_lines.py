@@ -608,7 +608,9 @@ BASELINE: dict[str, int] = {
     # refuse-verdict-legibility, json-write-surface-parity).
     # bumped 464 -> 465 (stamp-intercept-scratch-world-leakage fix, ledger rows 1159/1162/1163):
     # one new REGISTRY row (stamp-intercept-scratch-scope).
-    "gates/fixture_census.py":                     465,
+    # bumped 465 -> 466 (courier's blocked()-deadlock fix, ledger rows 149/150): one new
+    # REGISTRY row (setup-tui-courier-boundary-deadlock).
+    "gates/fixture_census.py":                     466,
     "tools/regrade_decisions.py":                       415,
     "tools/markdown_tables.py":                         412,
     # NEW to BASELINE (gates-staged-vs-tree-blindness, ledger row 1234, this commission): this
@@ -797,7 +799,10 @@ BASELINE: dict[str, int] = {
     # bumped 925 -> 934 (B2, ledger rows 1025/1008/1200): one bump-comment block added for the
     # hooks/stop_clean_exit.py 992 -> 994 ratchet, then this row's own bump-comment (a second
     # self-referential fixpoint pass, re-measured after writing both).
-    "gates/max_lines.py":                          934,
+    # bumped 934 -> 939 (courier's blocked()-deadlock fix, ledger rows 149/150): one bump-comment
+    # block added for the fixture_census.py 465 -> 466 ratchet, then this row's own bump-comment
+    # (a second self-referential fixpoint pass, re-measured after writing both).
+    "gates/max_lines.py":                          939,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

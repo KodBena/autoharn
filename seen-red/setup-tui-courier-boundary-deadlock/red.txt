@@ -1,0 +1,66 @@
+seen-red/setup-tui-courier-boundary-deadlock -- banked RED evidence (both-polarity proof, fixture-census)
+
+Ledger rows 149/150: the maintainer's own reported dead end, `python3 -m tools.setup_tui`, the
+Courier section reading "BLOCKED -- requires: Boundary (a picked boundary URL) to be set first"
+-- "which is NOT even possible to do." Root cause: courier's own `blocked()`
+(`tools/setup_tui/steps_courier.py`, pre-fix `_blocked_needs_boundary`) required
+`state["boundary_url"]`, a value ONLY ever produced inside Boundary's own `submit()`
+(`steps_boundary.py`), which is itself only ever called from the commit sweep
+(`tools.configtree.commit_pane.CommitPane._run_submit_sweep`) -- never from merely visiting or
+filling the Boundary screen. `tools.configtree.spec.ready_for_commit` (the commit BUTTON's own
+enablement predicate) refuses while ANY section reads BLOCKED, so courier's own gate deadlocked
+the entire wizard: no sequence of interactive edits could ever satisfy it, because the one screen
+that could produce the missing value only runs after the button courier itself blocks.
+
+Fix (`tools/setup_tui/steps_courier.py`, `_blocked_needs_boundary` -> `_blocked_needs_dest_and_
+world`): gate on "dest"/"world" only -- the two live-settable shared facts (Fork/target's and
+Birth's own owned fields, both flip the instant their OWNING section is typed into) courier's own
+`submit` actually reads directly. `submit`'s own `self_base = state.get("boundary_url", "")`
+already tolerated "not yet known"; registry order (`boundary` immediately before `courier` in
+`steps.SECTIONS`) means by the time the commit sweep reaches courier's `submit`, `boundary_url`
+is already the real picked port -- the queued `courier.toml`'s own `self_base` is correct at the
+only time it is ever actually written.
+
+Real captured stdout, 2026-08-06, a live run against this commit's working tree
+(system python3, textual 8.2.8):
+
+$ PYTHONPATH=. python3 seen-red/setup-tui-courier-boundary-deadlock/run_fixtures.py
+case 1 ok (RED, pinned pre-fix courier gate): every OTHER section filled (including courier's own genuinely satisfiable dest/world prerequisites), courier STILL reads BLOCKED: 'BLOCKED -- requires: Boundary (a picked boundary URL) to be set first' -- ready_for_commit()=False, commit button disabled=True -- the maintainer's exact dead end, reproduced against the real app
+case 2a ok: courier selected FIRST reads BLOCKED on ONLY its true, live-settable prerequisites: 'BLOCKED -- requires: Fork/target (a destination directory) and Birth (a world name) to be set first' -- 'Boundary' never named
+case 2b ok: courier reads COMPLETE with an empty counterparts list -- the skip affordance IS 'leave the list empty', per the section's own documented contract
+case 2c ok: status line -- '12/12 sections complete -- ready to commit.'
+$ /home/bork/w/vdc/1/autoharn/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworld1786010537 --new-world probeworld1786010537 --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ /home/bork/w/vdc/1/autoharn/bootstrap/teardown-world.sh probeworld1786010537 --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworld1786010537
+  [dry-run: not executed]
+case 2d ok (GREEN, skip polarity): commit succeeded, _commit_ok=True, and the queued plan carries NO courier.toml write act -- 14 other plan item(s) present
+case 2e ok: zero residue -- /tmp/courier-deadlock-dest was never created
+case 3a ok: one counterpart row added via the REAL Add button + AddItemModal -- courier reads COMPLETE
+$ /home/bork/w/vdc/1/autoharn/bootstrap/new-project.sh /tmp/setup_tui_rehearsal_probeworld1786010545 --new-world probeworld1786010545 --db toy --host 192.168.122.1 --force
+  [dry-run: not executed]
+$ /home/bork/w/vdc/1/autoharn/bootstrap/teardown-world.sh probeworld1786010545 --db toy --host 192.168.122.1 --dir /tmp/setup_tui_rehearsal_probeworld1786010545
+  [dry-run: not executed]
+case 3b ok (GREEN, non-skip polarity): commit succeeded, courier.toml WAS queued, and its own self_base line equals the REAL boundary_url picked this run ('http://127.0.0.1:8421') -- the precondition this whole defect was about is now genuinely satisfiable end-to-end:
+[courier]
+authn = "single-operator"
+self = "courierdeadlk"
+self_base = "http://127.0.0.1:8421"
+
+[courier.counterparts]
+courierdeadlkpeer = "http://127.0.0.1:9999"
+
+case 3c ok: zero residue -- /tmp/courier-deadlock-dest was never created
+ALL CASES OK -- courier's blocked() gate no longer depends on a value only ever produced inside the commit sweep it is itself gating; both the skip and non-skip polarities reach a complete, committed config; the retired 'Boundary (a picked boundary URL)' reason never reappears
+
+exit 0. Zero residue verified in cases 2e/3c (`/tmp/courier-deadlock-dest` never created --
+`--dry-run` decision-phase only); the `bootstrap/new-project.sh`/`teardown-world.sh` argv lines
+above are Rehearsal's own dry-run echo, never actually executed (`[dry-run: not executed]`).
+
+BEFORE this fix (`tools/setup_tui/steps_courier.py` at the parent commit, courier's `blocked()`
+still `_blocked_needs_boundary`), the SAME full journey used by
+seen-red/setup-tui-configtree-journey/run_fixtures.py's own case 3 read:
+
+  '11/12 sections complete -- remaining: courier'
+
+with the commit button permanently disabled -- verified live via `git stash` against this build's
+own working tree before writing this fixture.

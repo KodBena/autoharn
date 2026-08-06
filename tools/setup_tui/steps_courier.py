@@ -86,16 +86,34 @@ def fields(state: dict) -> tuple:
     return (_counterparts_field(),)
 
 
-def _blocked_needs_boundary(state: dict) -> "str | None":
-    """courier.toml's self/self_base come from Birth's world name and Boundary's picked port --
-    nothing to derive until both have run."""
+def _blocked_needs_dest_and_world(state: dict) -> "str | None":
+    """Gates on the TWO live-settable shared facts this screen's own `submit` reads directly:
+    "dest" (Fork/target's own owned field, needed for `courier.toml`'s write path) and "world"
+    (Birth's own owned field, needed for the "a counterpart must be a DIFFERENT world" check and
+    the `self` line below). Both are set the instant their OWNING section's field is typed into
+    (ADR-0019 single-editable-home, `tools.configtree.spec.section_status`'s live-model
+    contract) -- so this gate is satisfiable purely by interactive editing, no commit required.
+
+    Deliberately NOT gated on "boundary_url" (fix round, ledger rows 149/150: the maintainer hit
+    a genuine dead end here). `boundary_url` is not a shared/live field at all -- it is a value
+    Boundary's own `submit()` COMPUTES and returns via `state_updates` (`steps_boundary.py`,
+    `port = probes.free_port()` then `updates["boundary_url"] = boundary_url`), and `submit()` is
+    called ONLY from the commit sweep (`commit_pane.CommitPane._run_submit_sweep`) -- never from
+    merely visiting/filling the Boundary screen pre-commit. Gating on it here meant `courier`
+    could never leave BLOCKED before a commit even started, and `tools.configtree.spec.
+    ready_for_commit` refuses the commit BUTTON itself while ANY section reads BLOCKED --
+    a genuine catch-22, witnessed live (probe: `ready_for_commit` reads False with dest+world set
+    and courier still BLOCKED on "Boundary (a picked boundary URL)"). The fix relies on registry
+    order instead: `steps.SECTIONS` runs `boundary` immediately before `courier`
+    (`steps.py`'s own module docstring: "the sidebar order AND the real commit-time execution
+    order"), so by the time the sweep reaches courier's `submit`, `state["boundary_url"]` is
+    already the real picked port -- `submit` below already reads it via `state.get("boundary_url",
+    "")`, tolerating "not yet known" (pre-commit) as cleanly as "known" (commit time)."""
     missing = []
     if not state.get("dest"):
         missing.append("Fork/target (a destination directory)")
     if not state.get("world"):
         missing.append("Birth (a world name)")
-    if not state.get("boundary_url"):
-        missing.append("Boundary (a picked boundary URL)")
     if not missing:
         return None
     return f"requires: {' and '.join(missing)} to be set first"
@@ -107,7 +125,10 @@ def submit(state: dict, answers: dict) -> SectionResult:
     self_base = state.get("boundary_url", "")
     lines = [
         f"self (derived from Birth's own world name): {self_name}",
-        f"self_base (derived from Boundary's own picked port): {self_base}",
+        (f"self_base (derived from Boundary's own picked port): {self_base}" if self_base else
+         "self_base (derived from Boundary's own picked port): not yet known -- Boundary "
+         "resolves its port at commit time (registry order: boundary runs immediately before "
+         "courier), so this fills in when the commit sweep actually runs, not before"),
         f"authn: {_AUTHN} (fixed -- row 1162's named empty slot, not a choice)",
     ]
 
@@ -166,7 +187,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
 
 STEP = SectionSpec(
     slug=_SLUG, title="Courier", group="Runtime", fields=fields, submit=submit,
-    blocked=_blocked_needs_boundary,
+    blocked=_blocked_needs_dest_and_world,
     description=("courier.toml -- this world's own missive-courier config. self/self_base are "
                   "derived from Birth's world name and Boundary's picked URL (never editable "
                   "here); authn is fixed at single-operator; add zero or more counterpart "
