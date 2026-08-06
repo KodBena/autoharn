@@ -42,7 +42,16 @@
      dispatched-agent fork reported not resolved) and updates this section's own intro to name
      s72 alongside s70/s71. Same no-self-attestation posture as the touch immediately above --
      still owed to the coordinator's batch. Removal condition unchanged: strike all markers and
-     run the real loop next time this file is touched for content. -->
+     run the real loop next time this file is touched for content.
+
+     ADDITIONAL TOUCH (work item dispatch-time-precedence-refusal, rows 1066/1085/1087,
+     2026-08-06): adds the "Dispatch-order edge vocabulary" section (`blocks-start` /
+     `blocks-close` / `informs`) implementing design/FABLE-DISPATCH-PRECEDENCE-BINDING-SPEC.md
+     §2 R4 -- the docs half of the row-1066 correction (the kernel already had a start-time
+     precondition primitive, s39, since 2026-07-17; this leg is the orchestrator-facing binding
+     layer, not a kernel delta). No A:B:C loop claimed for this touch either (single-leg
+     commission, no fresh-context B dispatched). Removal condition unchanged: strike all markers
+     and run the real loop next time this file is touched for content. -->
 
 # Glossary — autoharn's coined vocabulary
 
@@ -1097,6 +1106,64 @@ named for **trust-protocol-v2**, not built here. No ASP twin exists for this con
 [`kernel/lineage/s72-stamp-binding-conjunct.sql`](kernel/lineage/s72-stamp-binding-conjunct.sql);
 [design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md](design/FABLE-ACCESS-CONTROL-AND-INFORMATION-FLOW-SPEC.md)
 §5 item 5.
+
+## Dispatch-order edge vocabulary (added 2026-08-06)
+
+<a id="blocks-start"></a>
+### `blocks-start`
+One of three legal `edge_type` values on a `work_depends_on` row (`kernel/lineage/
+s30-typed-dependency-edges.sql`'s original two, widened by `kernel/lineage/
+s39-blocks-start.sql`). **Gates CLAIMING only.** When item B carries a `blocks-start` edge
+naming antecedent A, the kernel refuses `work_claimed` for B — at INSERT time, by name, citing
+every unresolved antecedent — until A reaches `CLOSED`. This is the precondition-foreclosure
+primitive [dispatch-order precedence binding](#dispatch-order-precedence-binding) below is
+built on: write a `blocks-start` edge for every pair whose START order matters, because s39's
+claim-time refusal is its one and only consumer (an edge nobody would ever claim against is not
+worth writing). Direct antecedents only — `work_item_blocks_start_blockers` (the view backing
+the refusal message) does not walk a transitive chain; A blocks-start B blocks-start C gates
+each direct edge, not the transitive closure. Construction-time refusals apply too: a
+self-edge, a dangling antecedent, or a cycle over the `blocks-start` subgraph (tracked
+independently of the `blocks-close` subgraph — the two edge kinds are deliberately disjoint
+graphs over the same table) are all refused at write time. Verbatim refusal text and a
+witnessed both-polarity round trip: [ORCH-CAPABILITIES.md item 48](ORCH-CAPABILITIES.md).
+Source: [`kernel/lineage/s39-blocks-start.sql`](kernel/lineage/s39-blocks-start.sql).
+
+<a id="blocks-close"></a>
+### `blocks-close`
+The pre-existing (`s30`) sibling of [`blocks-start`](#blocks-start), and the one most often
+reached for by reflex. **Gates CLOSING only.** When item B carries a `blocks-close` edge naming
+antecedent A, the kernel refuses closing B until A is resolved — it says nothing whatsoever
+about when B may be CLAIMED or started, and by design LICENSES concurrent starts: B and A can
+be claimed and worked in parallel, only B's own close is held. Writing `blocks-close` (or no
+edge at all) where the real requirement is start-order — A must finish before B may even
+BEGIN — is exactly the defect family three witnessed panel precedence violations fell into: the
+kernel had no complaint because nothing had asked it to check START order, only close order.
+See [`blocks-start`](#blocks-start) for the edge that actually gates the moment that matters.
+Source: [`kernel/lineage/s30-typed-dependency-edges.sql`](kernel/lineage/
+s30-typed-dependency-edges.sql).
+
+<a id="informs"></a>
+### `informs`
+The third `edge_type` value (`s30`). **Gates nothing, either direction, deliberately.** A
+purely informational cross-reference between two work items — worth recording (e.g. "B's design
+was shaped by A's outcome") without asserting any ordering obligation on either close or claim.
+Never confuse an `informs` edge for a soft or advisory ordering hint that "should" be respected
+in practice; if an ordering must actually hold, it belongs on a [`blocks-start`](#blocks-start)
+or [`blocks-close`](#blocks-close) edge instead, not on `informs` with a comment.
+
+<a id="dispatch-order-precedence-binding"></a>
+### dispatch-order precedence binding (R1–R3)
+The orchestrator-facing recipe (`design/FABLE-DISPATCH-PRECEDENCE-BINDING-SPEC.md`, row 1087)
+binding the kernel's [`blocks-start`](#blocks-start) primitive to actual dispatch practice,
+after three witnessed precedence violations happened WITH the primitive already present in the
+schema (row 1066: it was never used). Three rules: **R1** — declare start-order as
+`blocks-start` at commission time, never `blocks-close` or nothing; **R2** — claim a work item
+(`./autoharn led work claim <slug>`) before dispatching an agent for it, never the reverse —
+the claim is the mechanical, dispatch-time gate, s39's own claim-time refusal firing exactly
+when it matters; **R3** — choose what to dispatch next from `./autoharn led work startable`
+(open, unclaimed, every `blocks-start` antecedent closed), never a hand-held mental order.
+Full recipe, rationale, and a witnessed both-polarity transcript:
+[ORCH-CAPABILITIES.md item 48](ORCH-CAPABILITIES.md).
 
 <!-- Prior doc-attest-exempt waiver (doc-tree relocation mechanical edit, work item
      doc-tree-reorg-user-guide, ledger row 1620, 2026-07-18) STRUCK here per its own stated

@@ -1605,6 +1605,95 @@ ASP twin exists for this conjunct at all — `judge`'s entitlement floor (item 4
 stamp-binding facts, disclosed in the delta's own header as UNEXERCISED, never claimed AGREE
 for that family.
 
+**48. Dispatch-time precedence binding — declare the order, claim before dispatch, always
+dispatch from `startable` (`design/FABLE-DISPATCH-PRECEDENCE-BINDING-SPEC.md`, maintainer-
+ratified 2026-08-06, row 1087).** The kernel has carried a start-time precondition primitive
+since 2026-07-17 (`kernel/lineage/s39-blocks-start.sql`); this item is the ORCHESTRATOR-FACING
+binding that closes the gap between the primitive existing and an orchestrator actually using
+it — three witnessed panel precedence violations happened WITH s39 already in the schema,
+because the orderings were never declared as `blocks-start` edges and agents were spawned
+without a prior claim. Three rules, all mechanical, no new kernel delta:
+
+- **R1 — declare start-order as `blocks-start` at commission time.** When you open work items
+  whose START order matters (not merely their close order), write the ordering as a
+  `blocks-start` edge at open time: `./autoharn led work depends <dependent-slug>
+  <antecedent-slug> --type blocks-start`. `blocks-close` states a close obligation and
+  deliberately LICENSES concurrent starts — writing it (or nothing) where start order matters is
+  the defect family that hit the panel. `informs` never gates anything, either direction. Named
+  consumer of every `blocks-start` edge you write: s39's own claim-time refusal below — an edge
+  nobody would ever claim against fails the named-consumer test and should not be written.
+- **R2 — claim before dispatch.** Do not spawn an implementer/builder agent for a work item you
+  have not first claimed (`./autoharn led work claim <slug>`). The claim IS the dispatch-time
+  gate: the kernel refuses it, by name, while any `blocks-start` antecedent is still open —
+  firing at the moment that matters, before work begins, with no new mechanism to build or
+  maintain. Dispatches that carry no work item (consult legs, spies, read-only reviews) are the
+  disclosed exception — they cannot violate item precedence by construction, and should stay
+  item-free honestly rather than claim a decorative item.
+- **R3 — dispatch from the startable read.** When choosing what to open next, read
+  `./autoharn led work startable` (open, unclaimed items whose `blocks-start` antecedents, if
+  any, are all closed) rather than a hand-held mental order. Hand-scheduling over a mandated
+  scheduler is the violation family the panel hit twice.
+
+*Witnessed live this pass*, on a throwaway scaffold (`bootstrap/new-project.sh --new-world
+precprobe --db toy --host 192.168.122.1`, s39 present in the birth chain, torn down after —
+zero residue verified the same way item 13 above describes). Two items, a `blocks-start` edge,
+both polarities:
+
+```
+$ ./autoharn led work open precbind-antecedent "precedence-docs probe: antecedent item"
+led: row 14 written.
+$ ./autoharn led work open precbind-dependent "precedence-docs probe: dependent item"
+led: row 15 written.
+$ ./autoharn led work depends precbind-dependent precbind-antecedent --type blocks-start
+led: row 16 written.
+
+$ ./autoharn led work startable
+{"slug": "precbind-antecedent", "title": "precedence-docs probe: antecedent item"}
+# -- precbind-dependent correctly absent: its blocks-start antecedent is still open
+
+$ ./autoharn led work claim precbind-dependent
+led: REFUSED by the kernel write boundary (SQLSTATE P0001; journaled as write_refused row 18 --
+the refusal itself is now a committed, hash-chained ledger record, s43):
+  Ledger policy: claim of work item 'precbind-dependent' refused — its blocks-start
+  antecedent(s) are not yet resolved: precbind-antecedent (item is not yet closed). Claim and
+  finish each named antecedent first (./led work claim <antecedent>, then ./led work close
+  <antecedent> <resolution> ...), or -- if the dependency itself is wrong -- correct the record
+  (see design/USER-RECIPES-FAQ.md's "Correcting the record" section for the supersession
+  recipe...) (s39: claim-time precondition foreclosure, direct antecedents only -- see
+  work_item_blocks_start_blockers's own LIMITS).
+
+# claim + close the antecedent --
+$ ./autoharn led work claim precbind-antecedent
+led: row 19 written.
+$ ./autoharn led work close precbind-antecedent shipped --witness "..." --review-deferred
+led: row 22 written.
+
+$ ./autoharn led work startable
+{"slug": "precbind-dependent", "title": "precedence-docs probe: dependent item"}
+# -- now correctly present: its only blocks-start antecedent is closed
+
+$ ./autoharn led work claim precbind-dependent
+led: row 23 written.
+# -- ACCEPTED: identical claim, second polarity, antecedent now closed
+```
+
+**Named limit, disclosed by the refusal text itself:** s39 checks DIRECT antecedents only
+(`work_item_blocks_start_blockers`'s own documented scope) — a transitive chain (A blocks-start
+B blocks-start C) is not walked by this one refusal; each direct edge gates its own direct
+dependent. **Out of scope, named in the spec:** a PreToolUse hook mechanically refusing an
+agent spawn for an unclaimed item — the natural third enforcement layer, not built (touches
+`hooks/`, live-session merge hold; re-openable per ADR-0011 if R1–R3 practice fails again).
+**Flag in reach, not fixed here (out of this leg's surface):** `serving/boundary_service.py`
+and `serving/boundary_multiplex_config.py` carry uncommitted, in-flight changes from a
+concurrent builder as of this witnessing pass; running the served boundary directly against
+this checkout's working tree crashed (`ValueError: too many values to unpack`) before any
+kernel call was reached. The witnessed transcript above was produced by running
+`serving.boundary_service` from an isolated `git worktree` pinned at commit `c902e4f1` (this
+repository's own committed HEAD at witnessing time) against the same scratch schema, rather
+than touching or waiting on the other builder's dirty files — never a fabricated or
+extrapolated transcript. Source: `kernel/lineage/s39-blocks-start.sql`;
+`design/FABLE-DISPATCH-PRECEDENCE-BINDING-SPEC.md`.
+
 ## Built, unexercised (exists; has not yet fired in anger)
 
 - **Assumption validity bounds** — an assumption can carry "valid until / valid within" and an
