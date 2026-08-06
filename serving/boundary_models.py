@@ -576,6 +576,43 @@ class BankedVerifyChainVerdict(BaseModel):
     banked_at: str = Field(description="the banked report's own file mtime, ISO-8601 -- staleness visible against this")
 
 
+# ================================================================================================
+# deployment-listing-route (FRESH2 B2, brief row 1102): "no route lists the hub's deployments --
+# the panel hand-maintains KNOWN_DEPLOYMENTS and disowns the TOML as ground truth." `GET
+# /deployments` (deliberately UNPREFIXED -- see `serving/boundary_service.py`'s own route
+# docstring for why this is not a "second dialect" of the mandatory `/d/{deployment}`
+# discriminator, ADR-0012 P1's "one shape, not two" read honestly: the discriminator exists
+# because every OTHER route answers about ONE already-known deployment; this route answers the
+# prior question, "which deployments exist at all", which cannot itself be deployment-scoped).
+# ================================================================================================
+class DeploymentSummary(BaseModel):
+    """One deployment's health summary, HONEST under ADR-0008 (classification discipline: no
+    umbrella "healthy" -- three separately named, separately true-or-false facts, never
+    collapsed into one). `declared` is TRIVIALLY true for every entry this route ever emits (the
+    caller iterates the loaded multiplex config's own key set -- an undeclared name is not a
+    member of that set and never reaches this shape at all) but is still a named field, not
+    silently inferred from the entry's mere presence -- the vocabulary the commission's own words
+    name ("declared, reachable, serving") is served in full, not truncated to the two facts that
+    happen to vary."""
+
+    name: str = Field(description="the deployment's own name -- a key of the loaded multiplex config (spec §2, [a-z0-9-]{1,64})")
+    declared: bool = Field(default=True, description="this deployment is a member of the loaded boundary-multiplex.toml config -- trivially true for every entry this route serves (see this model's own docstring)")
+    reachable: bool = Field(description="a bare live probe against this deployment's own postgres connection completed (`SELECT 1`) -- LIVE per request, no caching (spec §5's discipline, extended to this route); false on any connection-level failure (unreachable host, refused connection, a stall) or on this deployment's own MAX_INFLIGHT_PER_DEPLOYMENT/the global MAX_INFLIGHT_KERNEL_CALLS admission bound being saturated at probe time")
+    serving: bool = Field(description="reachable AND this deployment's own {schema}.ledger_current object exists (the SAME object-existence capability discipline this service uses everywhere else) -- a deployment can be reachable (the postgres server answers) yet not actually serving a ledger this service recognizes (wrong schema/kern, or a world mid-birth with no lineage applied yet); collapsing this into `reachable` alone is exactly the umbrella-vocabulary failure ADR-0008 forbids")
+
+
+class DeploymentsResponse(BaseModel):
+    """`GET /deployments`'s own response shape -- the roster the multiplex TOML already defines,
+    served read-only (item deployment-listing-route, FRESH2 B2). The panel's own
+    `KNOWN_DEPLOYMENTS` hardcode (the named consumer this route exists to fix, per the same
+    commission) reads this instead of carrying a second, hand-maintained copy of the operator's
+    own config."""
+
+    deployments: list[DeploymentSummary] = Field(description="every deployment this hub is configured to serve, sorted by name")
+    boundary_version: str = Field(description="see MetaResponse.boundary_version -- the same service-owned fact, repeated here so a caller that only calls /deployments still gets it")
+    protocol_version: str = Field(default=WIRE_PROTOCOL_VERSION, description="see HealthResponse.protocol_version")
+
+
 class AttestationResponse(BaseModel):
     """`GET /d/{deployment}/attestation`'s own response shape (row 221) -- three independent
     sub-objects, each EITHER its class's `Banked*` shape or the shared `NoBankedArtifact` typed

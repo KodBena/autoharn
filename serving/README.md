@@ -174,7 +174,7 @@ once (pydantic already ships in that venv for other consumers).
 Parts A+B of the legacy-led-retirement spec, the missives spec, and ledger row 1480 — fixed; the
 route table itself IS the enumeration, spec §9/A2.1)
 
-This service carries **exactly twenty-one routes** — the fourteen GETs and seven POSTs below —
+This service carries **exactly twenty-two routes** — the fifteen GETs and seven POSTs below —
 and **nothing else**. (This count corrects a stale "fourteen routes" claim this section carried:
 that number named the read-surface amendment's own closure and was never bumped for the three
 routes design/FABLE-LEGACY-LED-RETIREMENT-SPEC.md Part A+B added — `/write/obligation_revoke`,
@@ -185,7 +185,10 @@ twentieth row, `/kinds`, ledger row 1480; `seen-red/boundary-service/run_fixture
 `EXPECTED_ROUTES` set carried the identical drift and is fixed alongside this table. Bumped again
 to twenty-one for this table's twenty-first row, `/events` — design/
 FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, work item boundary-sse-events, ledger row 169 — see the
-dedicated "SSE push signal" section below the table.)
+dedicated "SSE push signal" section below the table. Bumped again to twenty-two for `GET
+/deployments` (design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md, brief row 1102, item
+deployment-listing-route) — the ONE route on this service with no leading `/d/{deployment}`
+segment; see its own table row and the "Deployment roster" section below for why.)
 FastAPI's own self-documentation surface is **disabled, not merely
 unenumerated**: `docs_url=None, redoc_url=None, openapi_url=None` (A2.1), so `/docs`, `/redoc`,
 `/openapi.json`, and `/docs/oauth2-redirect` do not exist on this service at all — there is no
@@ -194,15 +197,16 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 
 | Method | Path | Serves | Capability gate |
 | --- | --- | --- | --- |
+| GET | `/deployments` | the hub's own deployment roster — names plus a per-deployment `declared`/`reachable`/`serving` summary (ADR-0008 honesty: no umbrella "healthy"), live-probed per request; the ONE route with no `/d/{deployment}` prefix (design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md, brief row 1102) | none |
 | GET | `/health` | world name, capability manifest, this service's registered principal name | none |
-| GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, bounds below) | none |
-| GET | `/rows/{id}` | one row, any status | none |
-| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by`, id-paginated (`?after_id=&limit=`, bounds below, default `limit=1000`, A10); a nonexistent `id` typed-404s identically to `GET /rows/{id}` (A11) | none |
+| GET | `/rows/current` | `ledger_current`, id-paginated (`?after_id=&limit=`, bounds below); `?annotate_names=true` adds `actor_name` per row (see "Principal-name annotation" below) | none |
+| GET | `/rows/{id}` | one row, any status; `?annotate_names=true` adds `actor_name` | none |
+| GET | `/rows/{id}/history` | the row's full supersession chain (both directions), each hop carrying its own `superseded_by`, id-paginated (`?after_id=&limit=`, bounds below, default `limit=1000`, A10); a nonexistent `id` typed-404s identically to `GET /rows/{id}` (A11); `?annotate_names=true` adds `actor_name` per hop | none |
 | GET | `/credited` | the credited view, when the world carries one | `s44-credited-view` — no world in this repository's kernel lineage carries this view yet (spec §7); always `capability_absent` today |
 | GET | `/standing/principals` | `principal_standing_current`, id-paginated (`?after_id=&limit=`, bounds below, A5.4) | `s40-identity` (gated on `principal_standing_current` itself, kernel/lineage/s40-principal-identity-events.sql — legacy-led-retirement inventory pass, ledger row 1149: the prior s41-only gate over-narrowed a route that needs only s40) |
-| GET | `/work/items` | `work_item_current`, SLUG-KEYSET-paginated (`?after_slug=&limit=`, bounds below; `after_id` is refused typed 422 on this route, A11) | `s22-work` |
-| GET | `/views/{view}` | one of `VIEW_REGISTRY`'s allowlisted views/tables (`serving/boundary_service.py`'s own registry comment names each and their history), id- or slug-paginated per the view's own natural key; an unknown `{view}` is a typed 404 `unknown_view` naming the known set | `view:{view}` (object existence) + `view:{view}:{key_col}` (column-shape existence, for a view whose key column arrived at a LATER lineage delta than the view's own name — see `_column_exists`'s own docstring) |
-| GET | `/rows/asof/{ts}` | the whole-ledger AS-OF reconstruction (asof-export.tmpl's own "THE QUERY", `l.*` only — no `actor_name` join), id-paginated; `{ts}` is a typed ISO-8601 timestamp, refused typed 422 before any kernel call on malformed input | none |
+| GET | `/work/items` | `work_item_current`, SLUG-KEYSET-paginated (`?after_slug=&limit=`, bounds below; `after_id` is refused typed 422 on this route, A11); `?annotate_names=true` adds `claimant_name` per item (null for an unclaimed item — never a spurious lookup) | `s22-work` |
+| GET | `/views/{view}` | one of `VIEW_REGISTRY`'s allowlisted views/tables (`serving/boundary_service.py`'s own registry comment names each and their history), id- or slug-paginated per the view's own natural key; an unknown `{view}` is a typed 404 `unknown_view` naming the known set; `?annotate_names=true` is accepted on `review_gap` (`actor_name`) and `work_item_current` (`claimant_name`) only — a typed 422 on any other view names the two that support it | `view:{view}` (object existence) + `view:{view}:{key_col}` (column-shape existence, for a view whose key column arrived at a LATER lineage delta than the view's own name — see `_column_exists`'s own docstring) |
+| GET | `/rows/asof/{ts}` | the whole-ledger AS-OF reconstruction (asof-export.tmpl's own "THE QUERY", `l.*` only by default — no `actor_name` join unless `?annotate_names=true` is supplied), id-paginated; `{ts}` is a typed ISO-8601 timestamp, refused typed 422 before any kernel call on malformed input | none |
 | GET | `/meta` | the served view allowlist, this deployment's kernel lineage head (walked via `bootstrap/migrate_core.py`'s own manifest, through THIS service's own admission-gated `_psql`, never migrate_core's bare unbounded runner — see `_lineage_head`'s own docstring), and this service's own version string | none |
 | GET | `/kinds` | `ledger_kind_check`'s live vocabulary (ledger row 1480: restores, on this served transport, the legacy direct-psql `led`'s dropped valid-kinds TEACHING on a kind refusal — see `KindsResponse`'s own docstring in `boundary_models.py` and `_kind_vocabulary`'s own in `boundary_service.py` for the exact query, SSOT'd off the live constraint, never a hardcoded copy) | none (this constraint has carried its exact name since s15 — this repo's first lineage delta with a `ledger` table at all — so every deployment this service could serve carries it) |
 | GET | `/artifacts/{hash}` | one stored artifact's raw bytes, by content-addressed SHA-256 hash | `s51-artifact-store` |
@@ -219,6 +223,78 @@ table against `app.routes` **directly, in-process** (never a schema endpoint).
 **Capability detection is object existence** (`to_regclass`/`pg_proc`), never a version
 literal — the same migrate-detect-drift discipline `bootstrap/templates/led.tmpl`'s own s43/s45
 probes use, so a world need not match this service's authoring commit exactly.
+
+## Deployment roster (design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md, brief row
+1102, item deployment-listing-route)
+
+`GET /deployments` lists every deployment this hub is configured to serve — the FRESH2 finding
+that motivated it: no route listed the hub's deployments at all, so a panel-class client
+hand-maintained a `KNOWN_DEPLOYMENTS` constant and disowned the TOML as ground truth. This is the
+**one route on this service with no leading `/d/{deployment}` segment**: every other route
+answers a question about ONE already-known deployment; this route answers the prior question
+("which deployments exist at all"), which cannot itself be deployment-scoped without defeating
+its own purpose.
+
+Response shape (`DeploymentsResponse`/`DeploymentSummary`, `boundary_models.py`):
+
+```json
+{
+  "deployments": [
+    {"name": "autoharn3", "declared": true, "reachable": true, "serving": true},
+    {"name": "ghost", "declared": true, "reachable": false, "serving": false}
+  ],
+  "boundary_version": "1.8.0",
+  "protocol_version": "1"
+}
+```
+
+Three separately-named facts, HONEST under ADR-0008 (classification discipline: never an
+umbrella "healthy"): `declared` (this name is a key of the loaded multiplex config — trivially
+true for every entry this route ever emits), `reachable` (a bare live `SELECT 1` completed
+against this deployment's own postgres connection — false on any connection-level failure or
+admission saturation), and `serving` (reachable AND this deployment's own `ledger_current`
+object exists — a deployment can answer TCP/auth yet not actually carry a ledger this service
+recognizes, e.g. a wrong schema/kern pair or a world mid-birth with no lineage applied yet). Live
+per request, no caching — the same §5 discipline every other fact in this service already
+follows. A roster can never be empty: the multiplex config loader itself refuses a
+zero-deployment TOML before the socket ever binds (spec §3), so there is no empty-array shape to
+witness here — an unreachable/not-yet-serving deployment (`reachable`/`serving: false`) is this
+route's own honest-refusal-adjacent polarity instead.
+
+## Principal-name annotation (design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md, brief
+row 1102, item principal-name-served-join)
+
+Every boundary client has re-implemented the actor-id → principal-name join client-side (the
+FRESH2 finding: the panel's own ReviewGapTab discloses this gap in its own UI copy). `?
+annotate_names=true` — the SAME strictly-parsed `"true"`/`"false"`/omitted vocabulary
+`?include_superseded=` already established (`_strict_bool_flag`) — is now accepted, additively
+and opt-in only, on the six read routes that serve an actor-shaped id to a human: `/rows/current`,
+`/rows/{id}`, `/rows/{id}/history`, `/rows/asof/{ts}` (all four annotate the raw ledger row's own
+`actor` column), `/work/items`, and `/views/work_item_current` (both annotate the SAME view's
+`claimant` column), and `/views/review_gap` (annotates `actor`). Any other `/views/{view}` member
+refuses `annotate_names=true` typed 422, naming the two views that do support it — never silently
+ignored (the same discipline every other unsupported-parameter-combination on this route already
+holds to).
+
+Each annotated row gains ONE additive sibling field, `{column}_name` — never a narrowed or
+renamed existing field. Absence stays typed absence (ADR-0008/CLAUDE.md no-bare-types): an actor
+id with no registration row, a row whose actor-shaped column is itself NULL (an unclaimed work
+item), or a world with no `kernel.principal` object at all, all serve `null` — never an invented
+or empty-string name. The default (flag omitted) response is byte-identical to the pre-this-build
+shape on every one of the six routes (the regression bar every opt-in flag in this service holds
+to).
+
+**A judgment call, named rather than silently made:** this route's own `rows_asof` handler
+previously carried a comment arguing the OPPOSITE of this feature — that joining `actor_name` in
+would be spec §5's forbidden "truth of its own", and that enrichment belonged to
+`asof-export.tmpl`'s own CLI-side presentation layer alone. That comment is corrected, not
+silently overridden: `kernel.principal.name` is an EXISTING kernel-owned fact this service
+already reads elsewhere (`service_principal_name`); joining it in beside an actor id already
+served discloses a fact the kernel already asserts — the same shape every `VIEW_REGISTRY` member's
+own JOIN already is — it invents nothing. "No truth of its own" forbids fabrication, not
+disclosure of an existing column via a join, and the FRESH2-adjudicated commission asking for
+exactly this join settles the call for this build's six named surfaces (the door is left exactly
+as it was everywhere else this service reads an actor id and does not annotate it).
 
 **The router-level 404/405 boundary (A3.3, named-not-mechanized).** A request to an unmapped
 `(method, path)` pair — a typo'd path, a `PUT` on a `GET`-only route, anything outside the

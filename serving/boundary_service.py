@@ -459,6 +459,8 @@ from boundary_models import (  # noqa: E402
     CapabilityAbsent,
     CapabilityManifest,
     DeploymentSaturated,
+    DeploymentSummary,
+    DeploymentsResponse,
     HealthResponse,
     IdentityHeaderInvalid,
     InfraFailure,
@@ -516,7 +518,16 @@ from boundary_models import (  # noqa: E402
 # row) -- silently leaving the version literal at 1.3.0 while the served contract grew would be
 # the version-drift bug this file's own history (the 1.3.0 note, item (a)) was already once
 # caught missing.
-BOUNDARY_SERVICE_VERSION = "1.7.0"
+# Bumped to 1.8.0 (brief row 1102, items deployment-listing-route + principal-name-served-join):
+# ONE new route SHAPE, `GET /deployments` (the first and only route on this service with no
+# `/d/{deployment}` prefix -- see that route's own docstring), PLUS a genuine, documented new
+# capability on six EXISTING routes' response contracts (`annotate_names=true` adds a `{col}_name`
+# sibling field per row) -- the SAME `include_superseded`-precedent reasoning the 1.4.0(b) note
+# above already established earns a bump for a documented opt-in response-contract growth, and
+# the new route alone would already earn it regardless. protocol_version/WIRE_PROTOCOL_VERSION
+# stays UNCHANGED -- every change here is additive/opt-in; an existing client that never supplies
+# `annotate_names` or calls `/deployments` sees a byte-identical response to 1.7.0.
+BOUNDARY_SERVICE_VERSION = "1.8.0"
 # Bumped to 1.5.0 (design/FABLE-BOUNDARY-SSE-EVENTS-SPEC.md, maintainer pre-ratified, work item
 # boundary-sse-events, ledger row 169): ONE new route SHAPE, `GET /d/{deployment}/events`
 # (text/event-stream, head-advancement-only) -- a genuinely new route shape, the same (a)/(b)/
@@ -2215,6 +2226,128 @@ def service_principal_name(cfg: BoundaryConfig) -> str | None:
     return out
 
 
+def _deployment_reachability(cfg: BoundaryConfig) -> tuple[bool, bool]:
+    """`GET /deployments`'s own per-deployment live probe (item deployment-listing-route, brief
+    row 1102): ADR-0008 honesty -- never an umbrella "healthy", three separately-named facts
+    (declared/reachable/serving, `DeploymentSummary`'s own docstring). `declared` is trivial at
+    the caller (every entry iterated there IS declared, by construction of iterating `configs`);
+    this function answers the other two, LIVE, per request (no caching -- spec §5's own
+    discipline, extended to this new route). A failed probe for ONE deployment must never
+    prevent the roster from reporting on every OTHER deployment -- so every psql-touching
+    exception this service's own choke points can raise (`PsqlInfraFailure`/
+    `PsqlUnclassifiedFailure`/`KernelCallSaturated`/`DeploymentCallSaturated`) is caught HERE,
+    locally, rather than left to propagate to the app-level exception handlers (which would
+    503/500 the WHOLE roster on one bad deployment -- exactly the umbrella-failure shape this
+    route exists to avoid).
+
+    `reachable`: a bare `SELECT 1` completes -- the TCP connection, auth, and this deployment's
+    own `SET ROLE`/`search_path` preamble all succeeded. `serving`: reachable AND this
+    deployment's own `ledger_current` view exists (`_regclass_exists`, the SAME object-existence
+    discipline `capability_manifest` already uses) -- a deployment can be reachable (the
+    postgres server answers) yet not actually serving THIS ledger (wrong schema/kern, or a world
+    mid-birth with no lineage applied yet); collapsing the two into one boolean is exactly the
+    ADR-0008 violation the commission's own words name."""
+    try:
+        _query_json(cfg, "SELECT to_jsonb(1);")
+    except (PsqlInfraFailure, PsqlUnclassifiedFailure, KernelCallSaturated, DeploymentCallSaturated):
+        return False, False
+    try:
+        serving = _regclass_exists(cfg, f"{cfg.schema}.ledger_current")
+    except (PsqlInfraFailure, PsqlUnclassifiedFailure, KernelCallSaturated, DeploymentCallSaturated):
+        return True, False
+    return True, serving
+
+
+# ================================================================================================
+# principal-name-served-join (FRESH2 C8, brief row 1102): "every boundary client re-implements
+# the actor-id -> principal-name join client-side (the panel's ReviewGapTab discloses the gap in
+# its own UI copy)." This build makes the SAME join available server-side, ADDITIVE and opt-in
+# (never a default-response-shape change -- the same `_strict_bool_flag` opt-in idiom
+# `include_superseded` already established one route over).
+#
+# A JUDGMENT CALL, NAMED (the brief's own "defended in one line" instruction): `rows_asof`'s own
+# pre-existing comment argued the OPPOSITE of this feature, citing spec §5's "no truth of its
+# own" as the reason `actor_name` was left to asof-export.tmpl's own CLI-side enrichment. That
+# comment is corrected here, not silently overridden: `kernel.principal.name` is an EXISTING
+# kernel-owned fact this service already reads elsewhere (`service_principal_name` above) --
+# joining it in beside an actor id this service already serves discloses a fact the kernel
+# already asserts, the same shape every VIEW_REGISTRY member's own JOIN already is (`review_gap`
+# itself already joins `ledger`+`countersign_obligation`); it invents nothing. "No truth of its
+# own" forbids FABRICATION, not disclosure of an existing kernel column via a join -- and the
+# FRESH2-adjudicated commission asking for this exact join settles the judgment call for this
+# build's surface, even though the door was left open the other way one route over.
+#
+# ANNOTATION SHAPE: an additive `{column}_name` sibling field per row, never a narrowed or
+# renamed existing field (VIEW_REGISTRY's own discipline, applied here rather than a second
+# response shape per annotated route -- ADR-0012 P1: one mechanism, six call sites, not six
+# bespoke ones). Absence stays typed absence (ADR-0008/CLAUDE.md no-bare-types): an actor id
+# with no registration row, a row whose actor-shaped column is itself NULL, or a world with no
+# `kernel.principal` object at all, all serve `null` for the name -- never invented or
+# empty-string.
+#
+# ENUMERATED, NOT EXHAUSTIVE (the brief's own instruction: "enumerate what you actually annotate
+# and why"). Three surfaces, matching the commission's own named examples exactly -- NOT every
+# VIEW_REGISTRY member that happens to carry an actor-shaped column (countersign_obligation's
+# assigned_by/obliges_actor, standing_decisions' own actor, etc.) -- because those are not the
+# named consumer's own gap (the panel's ReviewGapTab, plus the sibling work-items surface the
+# commission names beside it):
+#   - ledger reads (`/rows/current`, `/rows/{id}`, `/rows/{id}/history`, `/rows/asof/{ts}`) --
+#     every one of these already serves the raw ledger row's own `actor` column verbatim.
+#   - `/work/items` and the `work_item_current` VIEW_REGISTRY entry -- both serve the SAME
+#     view's `claimant` column (nullable: an item with no `work_claimed` event has no claimant
+#     to name, and correctly annotates `claimant_name: null`, never a spurious lookup).
+#   - the `review_gap` VIEW_REGISTRY entry -- serves `actor`, the exact column the panel's
+#     ReviewGapTab's own disclosed gap names.
+# ================================================================================================
+_VIEW_ACTOR_ANNOTATION_COLUMNS: dict[str, str] = {
+    "review_gap": "actor",
+    "work_item_current": "claimant",
+}
+
+
+def _annotate_actor_names(rows: Any, cfg: BoundaryConfig, column: str) -> Any:
+    """The ONE mechanism (ADR-0012 P1) every `annotate_names=true` call site below routes
+    through. `rows` is the SAME three shapes `_query_json` ever returns (a list of dicts, a
+    single dict, or None) -- adds a sibling `{column}_name` field to every dict encountered,
+    resolved via ONE bulk lookup query (never N+1: the distinct, non-null ids actually present
+    are collected first, looked up in a single `id = ANY(...)` query). Those ids are
+    SERVER-DERIVED -- already round-tripped through a prior, trusted `_query_json` call earlier
+    in this same request, never raw caller input -- so formatting them directly into the array
+    literal carries none of the injection risk this module's own house convention otherwise
+    guards against for caller-supplied strings (the same reasoning `_out_of_range_id`-bounded
+    int path/query parameters already rely on one level up).
+
+    Degrades to an all-null annotation (never a refusal) when `kernel.principal` itself does not
+    exist on this world -- the SAME precedent `service_principal_name` above already sets for a
+    world missing that table, not a NEW discipline invented here."""
+    if isinstance(rows, list):
+        row_list = [r for r in rows if isinstance(r, dict)]
+    elif isinstance(rows, dict):
+        row_list = [rows]
+    else:
+        return rows
+    ids: set[int] = set()
+    for row in row_list:
+        v = row.get(column)
+        if isinstance(v, int) and not isinstance(v, bool):
+            ids.add(v)
+    names: dict[int, str | None] = {}
+    if ids and _regclass_exists(cfg, f"{cfg.kern}.principal"):
+        id_list = ",".join(str(i) for i in sorted(ids))
+        looked_up = _query_json(
+            cfg,
+            f"SELECT coalesce(jsonb_object_agg(id, name), '{{}}'::jsonb) FROM "
+            f"{cfg.kern}.principal WHERE id = ANY(ARRAY[{id_list}]::bigint[]);",
+        )
+        if isinstance(looked_up, dict):
+            names = {int(k): v for k, v in looked_up.items()}
+    for row in row_list:
+        v = row.get(column)
+        row[f"{column}_name"] = (
+            names.get(v) if isinstance(v, int) and not isinstance(v, bool) else None)
+    return rows
+
+
 def capability_absent(capability: str, message: str) -> JSONResponse:
     body = CapabilityAbsent(capability=capability, message=message)
     boundary_diagnostic_log.log_event(
@@ -3582,6 +3715,37 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         boundary_diagnostic_log.log_event(boundary_diagnostic_log.Event.REFUSAL, disposition=body.disposition)
         return JSONResponse(status_code=408, content=body.model_dump())
 
+    @app.get("/deployments", response_model=DeploymentsResponse)
+    def deployments_roster() -> Response:
+        """item deployment-listing-route (FRESH2 B2, brief row 1102): "no route lists the hub's
+        deployments -- the panel hand-maintains KNOWN_DEPLOYMENTS and disowns the TOML as ground
+        truth. A /deployments route (names + per-deployment health summary) is boundary-general."
+
+        DELIBERATELY UNPREFIXED -- the one route on this service that does NOT carry a leading
+        `/d/{deployment}` segment, and named here rather than silently: every OTHER route
+        answers a question ABOUT one already-known deployment; this route answers the PRIOR
+        question ("which deployments does this hub serve at all"), which cannot itself be
+        deployment-scoped without defeating its own purpose (a panel that already knew every
+        deployment name would not need this route). The multiplex spec's own "no unprefixed
+        routes survive" (§2) reads honestly as "no SECOND DIALECT of an existing per-deployment
+        route shape survives unprefixed" -- this is not a second dialect of anything; it is the
+        one genuinely hub-level fact this service has. `_resolve_deployment`'s own closed
+        404 is what enforces the discriminator on every route that DOES answer about one
+        deployment; this route has no `{deployment}` segment to enforce it against.
+
+        HONEST under ADR-0008 (classification discipline, CLAUDE.md's engineering-responsibility
+        reading): never an umbrella "healthy" -- `DeploymentSummary`'s own docstring has the
+        three-fact vocabulary and why collapsing them would be exactly the failure mode that ADR
+        forbids. Live per request, no caching (spec §5's discipline, extended here) -- a
+        deployment's reachability is exactly the kind of fact that goes stale the instant it is
+        cached."""
+        summaries = [
+            DeploymentSummary(name=name, reachable=reachable, serving=serving)
+            for name, reachable, serving in (
+                (n, *_deployment_reachability(configs[n])) for n in sorted(configs))
+        ]
+        return DeploymentsResponse(deployments=summaries, boundary_version=BOUNDARY_SERVICE_VERSION)
+
     @app.get("/d/{deployment}/health", response_model=HealthResponse)
     def health(deployment: str) -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
@@ -3602,7 +3766,7 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
 
     @app.get("/d/{deployment}/rows/current")
     def rows_current(deployment: str, after_id: int = 0, limit: int = 100,
-                      include_superseded: str = "") -> Response:
+                      include_superseded: str = "", annotate_names: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
@@ -3622,6 +3786,11 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         want_superseded, bad_flag = _strict_bool_flag("include_superseded", include_superseded)
         if bad_flag is not None:
             return bad_flag
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom, one flag over --
+        # `_annotate_actor_names`'s own leading comment has the full accounting.
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
         if not want_superseded:
             rows = _query_json(
                 cfg,
@@ -3629,6 +3798,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                 f"(SELECT * FROM {cfg.schema}.ledger_current WHERE id > {after_id} "
                 f"ORDER BY id LIMIT {limit}) t;",
             )
+            if want_names:
+                rows = _annotate_actor_names(rows, cfg, "actor")
             return _json_read_response(rows, cfg=cfg, view="ledger_current", id_field="id")
         # `include_superseded=true`: reads the RAW `ledger` table (record semantics, every row
         # ever written, current or superseded -- the same raw-table read `rows_asof` below
@@ -3649,10 +3820,12 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"FROM {cfg.schema}.ledger l WHERE l.id > {after_id} "
             f"ORDER BY l.id LIMIT {limit}) t;",
         )
+        if want_names:
+            rows = _annotate_actor_names(rows, cfg, "actor")
         return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/rows/{row_id}")
-    def row_by_id(deployment: str, row_id: int) -> Response:
+    def row_by_id(deployment: str, row_id: int, annotate_names: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
@@ -3662,15 +3835,22 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         oor = _out_of_range_id("row_id", row_id)
         if oor is not None:
             return oor
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom as rows_current above.
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
         row = _query_json(
             cfg, f"SELECT to_jsonb(t) FROM (SELECT * FROM {cfg.schema}.ledger WHERE id = {row_id}) t;")
         if row is None:
             return JSONResponse(status_code=404, content={"detail": f"no row {row_id}"})
+        if want_names:
+            row = _annotate_actor_names(row, cfg, "actor")
         return _json_read_response(row, cfg=cfg, view="ledger", id_field="id",
                                     absent_detail=f"no row {row_id}")
 
     @app.get("/d/{deployment}/rows/{row_id}/history")
-    def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT) -> Response:
+    def row_history(deployment: str, row_id: int, after_id: int = 0, limit: int = HISTORY_DEFAULT_LIMIT,
+                     annotate_names: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
@@ -3678,6 +3858,10 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         oor = _out_of_range_id("row_id", row_id)
         if oor is not None:
             return oor
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom as rows_current above.
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
         # A11 item 2: the LEADING existence check -- before pagination is even validated, and
         # before the recursive CTE below ever runs. Pre-A11 this route answered `200 []` for a
         # nonexistent id, where the sibling GET /rows/{id} typed-404s the identical input class;
@@ -3742,6 +3926,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"  ORDER BY l.id LIMIT {limit}"
             f") t;",
         )
+        if want_names:
+            rows = _annotate_actor_names(rows, cfg, "actor")
         return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/credited")
@@ -3808,10 +3994,17 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         return _json_read_response(rows, cfg=cfg, view="principal_standing_current", id_field="id")
 
     @app.get("/d/{deployment}/work/items")
-    def work_items(deployment: str, after_slug: str = "", limit: int = 100, after_id: int | None = None) -> Response:
+    def work_items(deployment: str, after_slug: str = "", limit: int = 100, after_id: int | None = None,
+                    annotate_names: str = "") -> Response:
         cfg, err = _resolve_deployment(configs, deployment)
         if err is not None:
             return err
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom as rows_current above --
+        # annotates `claimant_name` (work_item_current's own actor-shaped column, nullable: an
+        # unclaimed item correctly annotates null, never a spurious lookup).
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
         if not _regclass_exists(cfg, f"{cfg.schema}.work_item_current"):
             return capability_absent(
                 "s22-work",
@@ -3872,11 +4065,13 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"ORDER BY slug LIMIT {limit}) t;",
             extra_v={"after_slug": after_slug},
         )
+        if want_names:
+            rows = _annotate_actor_names(rows, cfg, "claimant")
         return _json_read_response(rows, cfg=cfg, view="work_item_current", id_field="slug")
 
     @app.get("/d/{deployment}/views/{view}")
     def views_view(deployment: str, view: str, after_id: int = 0, after_slug: str = "",
-                    after_tie: str = "", limit: int = 100) -> Response:
+                    after_tie: str = "", limit: int = 100, annotate_names: str = "") -> Response:
         # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 1: the derived-read carrier.
         # `{view}` is checked against the CLOSED, spec-enumerated VIEW_REGISTRY before this
         # deployment's own kernel is ever touched -- an unknown view name is refused (404)
@@ -3888,6 +4083,20 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         if entry is None:
             return unknown_view(view)
         key_col, key_kind, key_unique = entry
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom as rows_current above,
+        # restricted to the two VIEW_REGISTRY members `_VIEW_ACTOR_ANNOTATION_COLUMNS` names
+        # (that dict's own leading comment has the enumeration and its rationale). A supplied
+        # `annotate_names=true` on any OTHER view is never silently ignored (A10's own lesson,
+        # extended to this new flag) -- it refuses, typed, naming the views that DO support it.
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
+        if want_names and view not in _VIEW_ACTOR_ANNOTATION_COLUMNS:
+            return JSONResponse(status_code=422, content={
+                "detail": f"annotate_names is not accepted on GET /views/{view} -- only "
+                          f"{sorted(_VIEW_ACTOR_ANNOTATION_COLUMNS)} carry an actor-shaped "
+                          f"column this route knows how to annotate (principal-name-served-"
+                          f"join, brief row 1102); got annotate_names={annotate_names!r}"})
         if view in _ROLE_CENSUS_DERIVED_VIEWS:
             # `work_role_census` names no stored relation (`_view_from_clause`'s own docstring) --
             # object/column existence checks against `{schema}.{view}` would themselves 404 on a
@@ -3960,6 +4169,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                     f"(SELECT * FROM {cfg.schema}.{view} WHERE {key_col} > {after_id} "
                     f"ORDER BY {key_col} LIMIT {limit}) t;",
                 )
+                if want_names:
+                    rows = _annotate_actor_names(rows, cfg, _VIEW_ACTOR_ANNOTATION_COLUMNS[view])
                 return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
             # key_kind == "slug": the A11 keyset shape /work/items already uses, applied to this
             # view's own text key column. A supplied after_id on a slug-keyed view is never
@@ -3985,6 +4196,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
                 f"ORDER BY {key_col} LIMIT {limit}) t;",
                 extra_v={"after_slug": after_slug},
             )
+            if want_names:
+                rows = _annotate_actor_names(rows, cfg, _VIEW_ACTOR_ANNOTATION_COLUMNS[view])
             return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
 
         # NON-UNIQUE key: the round-2 atomic-tie-group keyset (ledger rows 153/154 -- round 1's
@@ -4042,10 +4255,17 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             extra = len(rows) - limit
             if extra > MAX_TIE_GROUP_EXTRA_ROWS:
                 return _tie_group_too_large(view, extra)
+        if want_names:
+            # Annotated strictly AFTER the tie-group SQL above -- `_page_tie` (md5 of the
+            # ORIGINAL row content) is already computed server-side by that query; adding
+            # `{column}_name` here, in Python, after the fact, cannot retroactively change a
+            # digest that query already returned.
+            rows = _annotate_actor_names(rows, cfg, _VIEW_ACTOR_ANNOTATION_COLUMNS[view])
         return _json_read_response(rows, cfg=cfg, view=view, id_field=key_col)
 
     @app.get("/d/{deployment}/rows/asof/{ts}")
-    def rows_asof(deployment: str, ts: str, after_id: int = 0, limit: int = 100) -> Response:
+    def rows_asof(deployment: str, ts: str, after_id: int = 0, limit: int = 100,
+                   annotate_names: str = "") -> Response:
         # design/FABLE-BOUNDARY-READ-SURFACE-SPEC.md mechanism item 2: the as-of reconstruction,
         # serving asof-export.tmpl's own "THE QUERY" (that file's module docstring) over HTTP.
         # `{ts}` is a typed ISO-8601 timestamp, refused typed 422 BEFORE any kernel call on
@@ -4075,11 +4295,19 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
         oor = _out_of_range_id("after_id", after_id)
         if oor is not None:
             return oor
+        # principal-name-served-join (brief row 1102): SAME opt-in idiom as rows_current above --
+        # ONE CORRECTION to the paragraph this comment used to carry, now folded into
+        # `_annotate_actor_names`'s own leading module comment: leaving `actor_name` to
+        # asof-export.tmpl's own CLI-side enrichment was this route's PRIOR posture, not a
+        # standing bar -- the FRESH2-adjudicated commission asks for the same join server-side,
+        # opt-in, additive, never the default shape below.
+        want_names, bad_names_flag = _strict_bool_flag("annotate_names", annotate_names)
+        if bad_names_flag is not None:
+            return bad_names_flag
         # THE QUERY: asof-export.tmpl's own reconstruction, byte-identical in shape (one conjunct
-        # on each side of ledger_current's own NOT EXISTS), served over `l.*` ONLY -- matching
-        # every OTHER row-level route in this service (none of them join in `actor_name`; that
-        # enrichment is asof-export.tmpl's OWN CLI-side presentation concern, not a kernel-view
-        # fact this boundary adds truth of its own to serve -- spec §5, "no truth of its own").
+        # on each side of ledger_current's own NOT EXISTS), served over `l.*` ONLY by DEFAULT --
+        # matching every other row-level route's default shape (no route joins in `actor_name`
+        # unless `annotate_names=true` is supplied, see above).
         # `ts` crosses as a BOUND -v argument (:'asof'::timestamptz), never spliced -- the same
         # injection-safe substitution every other string-typed value in this service already uses.
         rows = _query_json(
@@ -4092,6 +4320,8 @@ def create_app(configs: dict[str, BoundaryConfig], world_dir: Path | None = None
             f"ORDER BY l.id LIMIT {limit}) t;",
             extra_v={"asof": parsed.isoformat()},
         )
+        if want_names:
+            rows = _annotate_actor_names(rows, cfg, "actor")
         return _json_read_response(rows, cfg=cfg, view="ledger", id_field="id")
 
     @app.get("/d/{deployment}/meta", response_model=MetaResponse)

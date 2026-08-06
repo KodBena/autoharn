@@ -227,6 +227,10 @@ EXPECTED_ROUTES = {
     # Work item boundary-verdict-read-surface (ledger row 221): the banked verify-chain/judge/
     # doctor attestation read's own new route.
     ("GET", "/d/{deployment}/attestation"),
+    # design/BRIEF-DEPLOYMENTS-ROUTE-AND-NAME-JOIN-2026-08-06.md (brief row 1102, item
+    # deployment-listing-route): the roster route -- the ONE route on this service with no
+    # leading /d/{deployment} segment (see its own docstring in boundary_service.py for why).
+    ("GET", "/deployments"),
 }
 
 
