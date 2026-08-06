@@ -115,7 +115,7 @@ def answers_for_from_config(doc: config_file.ConfigDoc, *, world: str, dest: str
             "identity_enforcement": str(g("boundary.identity_enforcement", bcv.IdentityEnforcementPosture.default().value)),
             "identity_enforcement_override": str(g("boundary.identity_enforcement_override", bcv.IDENTITY_ENFORCEMENT_OVERRIDE_INHERIT)),
             "sse_poll_interval_secs": str(g("boundary.sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value)),
-            "max_sse_clients": str(g("boundary.max_sse_clients", bcv.MaxSseClients.default().value)),
+            "max_sse_clients": str(g("boundary.max_sse_clients", bcv.MaxSseClients.default().value)), **{_n: str(g(f"boundary.{_n}", _cls.default().value)) for _n, _cls in bcv.INFLIGHT_FIELDS},  # rows 1087/1088/1228
         },
         # setup-tui-config-extension (gap 6): unconditional (no "run" gate); an empty
         # counterparts list is a legal answer (steps_courier.py's own submit() docstring).
@@ -227,7 +227,7 @@ _SCOPED_OVERRIDE_KEYS: dict[str, tuple[str, str]] = {
     "hydration.fork_provenance_statement": ("hydration", "fork_provenance_statement"),
     "hydration.role_charters": ("hydration", "role_charters"),
     "hydration.durable_decisions": ("hydration", "durable_decisions"),
-    "hydration.adopt_adrs": ("hydration", "adopt_adrs"),
+    "hydration.adopt_adrs": ("hydration", "adopt_adrs"), **{f"boundary.{_n}": ("boundary", _n) for _n, _ in bcv.INFLIGHT_FIELDS},  # rows 1087/1088/1228
 }
 
 # Repeatable-row keys: dotted key -> (owning section, field name) -- master-detail rows + plain lists.
@@ -243,7 +243,7 @@ _REPEATABLE_KEYS: dict[str, tuple[str, str]] = {
 # setup-tui-config-extension (gaps 4/5): these two are TextFields (no numeric field kind
 # exists) -- a config file's native TOML number must be stringified before entering the
 # TextField's own live-value slot (a Textual Input, str-typed).
-_NUMERIC_STRINGIFIED_KEYS = frozenset({"boundary.sse_poll_interval_secs", "boundary.max_sse_clients"})
+_NUMERIC_STRINGIFIED_KEYS = frozenset({"boundary.sse_poll_interval_secs", "boundary.max_sse_clients"} | {f"boundary.{_n}" for _n, _ in bcv.INFLIGHT_FIELDS})  # rows 1087/1088/1228
 
 _PRINCIPALS_ENGAGED_KEYS = (
     "principals_authority.run", "principals_authority.register",
@@ -418,6 +418,7 @@ def capture_resolved_config(state: dict) -> dict[str, object]:
         "boundary_sse_poll_interval_secs", bcv.SsePollIntervalSecs.default().value))
     out["boundary.max_sse_clients"] = int(state.get(
         "boundary_max_sse_clients", bcv.MaxSseClients.default().value))
+    out.update({f"boundary.{_n}": int(state.get(f"boundary_{_n}", _cls.default().value)) for _n, _cls in bcv.INFLIGHT_FIELDS})  # rows 1087/1088/1228
 
     # setup-tui-config-extension (gap 6): an empty list is honest when courier was never
     # reached, or reached with zero counterparts.

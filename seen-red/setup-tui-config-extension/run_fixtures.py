@@ -6,13 +6,24 @@ override, sse_poll_interval_secs, max_sse_clients), the new `tools/setup_tui/ste
 section (self/self_base derived, counterparts a ListField), the `birth_stamp_secret` feature
 fact, and `config_schema.toml`'s closed --from-config keys for all of the above.
 
+CURRENCY SWEEP ADDENDUM (setup-tui-session-currency, rows 1087/1088/1228, 2026-08-06): two more
+`boundary-multiplex.toml` top-level keys folded into this same fixture bank rather than a new,
+parallel one (ADR-0012 P1: one witness plan per section, extended, not duplicated) --
+`max_inflight_per_deployment` and `max_inflight_kernel_calls` (design/
+BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 / design/
+BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1), same idiom as the five fields already covered
+here. Case (b) below now loads through `load_multiplex_config_with_inflight_limit` instead of
+`load_multiplex_config_with_deployment_identity` -- the latter stays byte-for-byte backward
+compatible and deliberately DISCARDS the two inflight values (its own docstring), so it cannot
+prove they round-trip.
+
 Cases:
   (a) DEFAULTS-UNCHANGED REGRESSION -- driving `steps_boundary.submit`/`steps_courier.submit`
       with every new field left at its own default emits BYTE-IDENTICAL output to before this
       build (boundary-multiplex.toml unchanged; courier.toml not written at all).
-  (b) BOUNDARY NEW FIELDS THROUGH THE REAL LOADER -- non-default answers for all five fields,
+  (b) BOUNDARY NEW FIELDS THROUGH THE REAL LOADER -- non-default answers for all seven fields,
       the emitted boundary-multiplex.toml parses through
-      `serving.boundary_multiplex_config.load_multiplex_config_with_deployment_identity` (the
+      `serving.boundary_multiplex_config.load_multiplex_config_with_inflight_limit` (the
       REAL loader, no synthetic parser) with every value intact, including the per-deployment
       identity_enforcement override differing from the hub-wide default.
   (c) COURIER THROUGH THE REAL LOADER -- a non-empty counterparts list emits a courier.toml that
@@ -22,8 +33,8 @@ Cases:
       trips every new key (green control), and a typo'd key is refused, naming it (red control).
   (e) PILOT-DRIVEN END-TO-END -- the REAL Tree+Form app (`tools.setup_tui.tui_app`, Textual
       `Pilot`/`run_test()`, the current post-rebuild surface, no synthetic screen): navigates to
-      the real "boundary" section, sets the five new fields via real widget interactions (RadioSet
-      clicks for the three ChoiceFields, typed Input text for the two numeric TextFields -- the
+      the real "boundary" section, sets the seven new fields via real widget interactions (RadioSet
+      clicks for the three ChoiceFields, typed Input text for the four numeric TextFields -- the
       SAME `.value =`/click mechanism seen-red/setup-tui-configtree-journey's own module docstring
       documents as posting the identical `Changed` message a live keystroke/click does), reads the
       persisted live-field slot back via `fields.get_field_value`, and confirms `steps_boundary.
@@ -160,13 +171,19 @@ def case_boundary_new_fields_real_loader(scratch: str) -> None:
         "log_level": "DEBUG", "identity_enforcement": "enforce",
         "identity_enforcement_override": "grace",
         "sse_poll_interval_secs": "5.5", "max_sse_clients": "42",
+        # setup-tui-session-currency sweep (rows 1087/1088/1228).
+        "max_inflight_per_deployment": "17", "max_inflight_kernel_calls": "77",
     })
     _, content = _boundary_toml_from(state, answers)
     toml_path = os.path.join(dest, "boundary-multiplex.toml")
     with open(toml_path, "w") as f:
         f.write(content)
-    deployments, log_level, identity_enforcement, poll, clients, by_dep = (
-        bmc.load_multiplex_config_with_deployment_identity(toml_path))
+    # load_multiplex_config_with_inflight_limit, not load_multiplex_config_with_deployment_identity
+    # -- the latter is kept byte-for-byte backward compatible and DISCARDS the inflight values
+    # (its own docstring), so it cannot prove these two fields round-trip.
+    loaded = bmc.load_multiplex_config_with_inflight_limit(toml_path)
+    (deployments, log_level, identity_enforcement, poll, clients, by_dep,
+     max_inflight_per_deployment, max_inflight_kernel_calls) = loaded
     assert "cfgextb" in deployments, deployments
     assert log_level == "DEBUG", log_level
     assert identity_enforcement == "enforce", identity_enforcement
@@ -174,10 +191,12 @@ def case_boundary_new_fields_real_loader(scratch: str) -> None:
     assert clients == 42, clients
     assert by_dep["cfgextb"].value == "grace", (
         f"per-deployment override did not win over the hub-wide default: {by_dep}")
-    print("case b ok: boundary-multiplex.toml with all five new fields set to non-default "
+    assert max_inflight_per_deployment == 17, max_inflight_per_deployment
+    assert max_inflight_kernel_calls == 77, max_inflight_kernel_calls
+    print("case b ok: boundary-multiplex.toml with all seven new fields set to non-default "
           "values parses through the REAL serving.boundary_multiplex_config loader with every "
           "value intact -- including the per-deployment override ('grace') differing from the "
-          "hub-wide default ('enforce')")
+          "hub-wide default ('enforce'), and the two inflight-cap tunables (17/77)")
 
     # RED control: an invalid sse_poll_interval_secs is refused by submit() itself, before ever
     # reaching the real loader.
@@ -245,6 +264,8 @@ def case_config_schema_round_trip(scratch: str) -> None:
               "boundary.log_level": "DEBUG", "boundary.identity_enforcement": "enforce",
               "boundary.identity_enforcement_override": "grace",
               "boundary.sse_poll_interval_secs": 5.5, "boundary.max_sse_clients": 42,
+              # setup-tui-session-currency sweep (rows 1087/1088/1228).
+              "boundary.max_inflight_per_deployment": 17, "boundary.max_inflight_kernel_calls": 77,
               "courier.counterparts": [{"world": "cfgextcpeer", "base_url": "http://127.0.0.1:8500"}]}
     doc = config_file.ConfigDoc(path="<synthetic>", header=VALID_HEADER, values=values)
     config_file.validate(doc, require_complete=True)  # GREEN control: no refusal.
@@ -258,7 +279,8 @@ def case_config_schema_round_trip(scratch: str) -> None:
     assert doc2.values == values, (
         f"case d RED: round-trip is not a fixed point:\n  a={values}\n  b={doc2.values}")
     print("case d ok: every new key (boundary.log_level/identity_enforcement/"
-          "identity_enforcement_override/sse_poll_interval_secs/max_sse_clients, "
+          "identity_enforcement_override/sse_poll_interval_secs/max_sse_clients/"
+          "max_inflight_per_deployment/max_inflight_kernel_calls, "
           "courier.counterparts) round-trips through render_toml -> load_config_file -> "
           "validate as a fixed point")
 
@@ -353,6 +375,21 @@ async def _case_pilot_driven_async(scratch: str) -> None:
             await pilot.press(ch)
         await pilot.pause()
 
+        # setup-tui-session-currency sweep (rows 1087/1088/1228): the two inflight-cap TextFields.
+        inflight_dep_input = app.query_one("#pane-boundary #ct-field-max_inflight_per_deployment", Input)
+        inflight_dep_input.value = ""
+        await pilot.click(inflight_dep_input)
+        for ch in "17":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        inflight_kernel_input = app.query_one("#pane-boundary #ct-field-max_inflight_kernel_calls", Input)
+        inflight_kernel_input.value = ""
+        await pilot.click(inflight_kernel_input)
+        for ch in "77":
+            await pilot.press(ch)
+        await pilot.pause()
+
         b_fields = {str(f.name): f for f in steps_boundary.fields(state)}
         b_answers = {name: get_field_value(state, NodeId("boundary"), f)
                      for name, f in b_fields.items()}
@@ -361,6 +398,8 @@ async def _case_pilot_driven_async(scratch: str) -> None:
         assert b_answers["identity_enforcement_override"] == "grace", b_answers
         assert b_answers["sse_poll_interval_secs"] == "5.5", b_answers
         assert b_answers["max_sse_clients"] == "42", b_answers
+        assert b_answers["max_inflight_per_deployment"] == "17", b_answers
+        assert b_answers["max_inflight_kernel_calls"] == "77", b_answers
 
         b_result = steps_boundary.submit(dict(state), b_answers)
         assert b_result.ok, f"steps_boundary.submit refused: {b_result.errors}"
@@ -369,7 +408,9 @@ async def _case_pilot_driven_async(scratch: str) -> None:
         assert state["boundary_identity_enforcement_override"] == "grace"
         assert state["boundary_sse_poll_interval_secs"] == 5.5
         assert state["boundary_max_sse_clients"] == 42
-        print("case e ok (boundary): three real RadioSet clicks + two real typed Inputs thread "
+        assert state["boundary_max_inflight_per_deployment"] == 17
+        assert state["boundary_max_inflight_kernel_calls"] == 77
+        print("case e ok (boundary): three real RadioSet clicks + four real typed Inputs thread "
               "through get_field_value into the exact answers dict steps_boundary.submit "
               "resolves, matching the widget state end to end")
 
@@ -478,10 +519,32 @@ def case_typed_construction() -> None:
     assert bcv.MaxSseClients.parse("42").value == 42
     assert bcv.MaxSseClients.default().value == bcv.boundary_multiplex_config.DEFAULT_MAX_SSE_CLIENTS
 
-    print("case f ok: each of the five typed homes in boundary_config_values.py refuses an "
+    # MaxInflightPerDeployment (setup-tui-session-currency sweep, rows 1087/1088/1228): RED (zero,
+    # out of [1, CEILING]; message names the bound) + GREEN.
+    try:
+        bcv.MaxInflightPerDeployment.parse("0")
+        raise AssertionError("case f RED failed: MaxInflightPerDeployment accepted 0")
+    except ValueError as exc:
+        assert "0" in str(exc) and str(bcv.boundary_multiplex_config.MAX_INFLIGHT_PER_DEPLOYMENT_CEILING) in str(exc), exc
+    assert bcv.MaxInflightPerDeployment.parse("17").value == 17
+    assert (bcv.MaxInflightPerDeployment.default().value
+            == bcv.boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_PER_DEPLOYMENT == 32)
+
+    # MaxInflightKernelCalls (setup-tui-session-currency sweep, rows 1087/1088/1228): RED (zero,
+    # out of [1, CEILING]; message names the bound) + GREEN.
+    try:
+        bcv.MaxInflightKernelCalls.parse("0")
+        raise AssertionError("case f RED failed: MaxInflightKernelCalls accepted 0")
+    except ValueError as exc:
+        assert "0" in str(exc) and str(bcv.boundary_multiplex_config.MAX_INFLIGHT_KERNEL_CALLS_CEILING) in str(exc), exc
+    assert bcv.MaxInflightKernelCalls.parse("77").value == 77
+    assert (bcv.MaxInflightKernelCalls.default().value
+            == bcv.boundary_multiplex_config.DEFAULT_MAX_INFLIGHT_KERNEL_CALLS == 64)
+
+    print("case f ok: each of the seven typed homes in boundary_config_values.py refuses an "
           "out-of-contract value at construction (naming the contract) and round-trips a valid "
           "one -- LogLevel, IdentityEnforcementPosture, IdentityEnforcementOverride, "
-          "SsePollIntervalSecs, MaxSseClients")
+          "SsePollIntervalSecs, MaxSseClients, MaxInflightPerDeployment, MaxInflightKernelCalls")
 
 
 def case_typed_construction_retrofit() -> None:

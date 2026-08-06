@@ -129,6 +129,21 @@ type = "float"
 path = "boundary.max_sse_clients"
 type = "int"
 
+# setup-tui-session-currency sweep (rows 1087/1088/1228, 2026-08-06): two more
+# boundary-multiplex.toml OPTIONAL top-level keys landed the same session, same
+# "gaps 1-5"/absent-means-default idiom as the block above -- design/
+# BRIEF-A1-INFLIGHT-CAP-AND-WOULD-PRODUCE-2026-08-04.md item 1 (max_inflight_per_deployment,
+# default 32) and design/BRIEF-GLOBAL-INFLIGHT-CAP-2026-08-06.md item 1 (max_inflight_kernel_calls,
+# default 64); both bounded [1, 10_000] (serving/boundary_multiplex_config.py's own
+# MAX_INFLIGHT_PER_DEPLOYMENT_CEILING / MAX_INFLIGHT_KERNEL_CALLS_CEILING).
+[[key]]
+path = "boundary.max_inflight_per_deployment"
+type = "int"
+
+[[key]]
+path = "boundary.max_inflight_kernel_calls"
+type = "int"
+
 # setup-tui-config-extension (gap 6): courier.toml's own counterpart list. No "courier.run" gate
 # -- like "boundary"/"fork_target"/"features", the section is unconditional (an empty list is a
 # legal, meaningful answer: "this world couriers with no one yet", steps_courier.py's own

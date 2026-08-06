@@ -2,18 +2,15 @@
 """tools/setup_tui/steps_boundary.py -- the Boundary step's UI-free core, ported from
 `screen_boundary`.
 
-CONFIG-EXTENSION ADDENDUM (work item setup-tui-config-extension, ledger row 685's audit / row 693):
-`log_level`, `identity_enforcement` (hub-wide default and its per-deployment override), and the two
-SSE tunables (`sse_poll_interval_secs`/`max_sse_clients`) are `boundary-multiplex.toml`'s own
-OPTIONAL top-level/per-deployment keys (`serving/boundary_multiplex_config.py`'s own module
-docstring names each) -- this step's fields are sugar over the SAME closed vocabulary/bounds that
-module already enforces at load time, imported here rather than copied (ADR-0012 P1): the
-vocabulary for `log_level` comes from `serving/boundary_diagnostic_log.LEVELS` (ADR-0012 P1,
-ledger row 685's audit names this explicitly), the vocabulary/bounds for the rest from
-`serving/boundary_multiplex_config.py` itself. Every one of these five fields is written to
-`boundary-multiplex.toml` ONLY when the operator's resolved value differs from that module's own
-default (`submit`'s own logic below) -- the parser's own absent-means-default contract, preserved
-byte-for-byte when every field is left at default (a regression leg checks this)."""
+CONFIG-EXTENSION ADDENDUM (work item setup-tui-config-extension, ledger row 685's audit / row 693;
+extended by setup-tui-session-currency, rows 1087/1088/1228): `log_level`, `identity_enforcement`
+(hub-wide + per-deployment override), the two SSE tunables, and the two inflight-cap tunables
+(`max_inflight_per_deployment`/`max_inflight_kernel_calls`, factored into
+`boundary_config_values.py`'s own `inflight_*` helpers to stay under gates/max_lines.py's ceiling)
+are `boundary-multiplex.toml`'s own OPTIONAL top-level/per-deployment keys, sugar over the SAME
+closed vocabulary/bounds `serving/boundary_diagnostic_log.py`/`serving/boundary_multiplex_config.py`
+enforce at load time. Every field is written ONLY when it differs from that module's own default
+(absent-means-default; a regression leg checks byte-identical output at all-defaults)."""
 from __future__ import annotations
 
 import json
@@ -150,6 +147,7 @@ def fields(state: dict) -> tuple:
                        f"/d/{{deployment}}/events connections -- NEVER the 24-slot inflight gate; "
                        f"[1, {boundary_multiplex_config.MAX_SSE_CLIENTS_CEILING}]. Omitted from "
                        f"boundary-multiplex.toml entirely when left at the default."),
+        *bcv.inflight_text_fields(),  # setup-tui-session-currency sweep, rows 1087/1088/1228.
     )
 
 
@@ -249,6 +247,8 @@ def submit(state: dict, answers: dict) -> SectionResult:
     clients_raw = answers["max_sse_clients"].strip() or str(bcv.MaxSseClients.default().value)
     max_sse_clients_t, refusal = _typed("max_sse_clients", lambda: bcv.MaxSseClients.parse(clients_raw))
     if refusal: return refusal  # noqa: E701
+    inflight_t, refusal = bcv.resolve_inflight(answers, _typed)  # rows 1087/1088/1228
+    if refusal: return refusal  # noqa: E701
 
     log_level = log_level_t.value
     identity_enforcement = identity_enforcement_t.value
@@ -270,6 +270,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
         top_level_lines.append(f"sse_poll_interval_secs = {sse_poll_interval_secs}")
     if max_sse_clients_t != bcv.MaxSseClients.default():
         top_level_lines.append(f"max_sse_clients = {max_sse_clients}")
+    top_level_lines += bcv.inflight_top_level_lines(inflight_t)
 
     deployment_lines = [f'pghost = "{host}"', f'pgdatabase = "{db}"', f'pguser = "{role}"',
                          f'pgschema = "{schema}"', f'pgkern = "{kern}"']
@@ -311,6 +312,7 @@ def submit(state: dict, answers: dict) -> SectionResult:
         "boundary_identity_enforcement_override": identity_enforcement_override,
         "boundary_sse_poll_interval_secs": sse_poll_interval_secs,
         "boundary_max_sse_clients": max_sse_clients,
+        **bcv.inflight_state_updates(inflight_t),
     }
     if answers["start_now"] and venv_python:
         argv2 = [venv_python, "-m", "serving.boundary_service", "--config", toml_path, "--port", str(port)]
