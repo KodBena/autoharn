@@ -245,7 +245,13 @@ BASELINE: dict[str, int] = {
     # from one new manifest entry, not unnoticed growth. 1807 -> 1828.
     "gates/kind_shape_manifest_gate.py":           1828,
     "hooks/pretooluse_change_gate.py":                1138,
-    "hooks/stop_clean_exit.py":                        992,
+    # ratchet bump (BRIEF-B2-SUPERSEDE-RECLOSE-2026-08-06.md, ledger rows 1025/1008/1200): the
+    # DEFERRED REVIEW OBLIGATIONS teach-text gains one second discharge path (led work reclose,
+    # beside the pre-existing distinct-actor review path) -- witnessed growth from one disclosed
+    # feature line, not unnoticed growth. Built as a staged copy outside hooks/, tested against a
+    # real scratch debt row, then a single atomic same-filesystem rename into place (rows
+    # 1162/1200's own special discipline for this file). 992 -> 994.
+    "hooks/stop_clean_exit.py":                        994,
     "engine/contemp_edb.py":                            978,
     "engine/judgment_registry.py":                      889,
     "tools/experiments/compound_nominal_scan2.py":      869,
@@ -788,7 +794,10 @@ BASELINE: dict[str, int] = {
     # three bump-comment blocks added to this same file (stamp_intercept.py 482 -> 568,
     # fixture_census.py 464 -> 465, and this row itself) -- the same self-referential fixpoint as
     # every prior bump, re-measured after writing.
-    "gates/max_lines.py":                          925,
+    # bumped 925 -> 934 (B2, ledger rows 1025/1008/1200): one bump-comment block added for the
+    # hooks/stop_clean_exit.py 992 -> 994 ratchet, then this row's own bump-comment (a second
+    # self-referential fixpoint pass, re-measured after writing both).
+    "gates/max_lines.py":                          934,
     # NEW to BASELINE, 406 (cluster-1 fixture-repairs, ledger row 1459's textual-package
     # addendum): declares_missing_package() + its two helpers (_local_module_basenames,
     # _module_level_import_names) -- a pre-flight, AST-based scan so a fixture whose only

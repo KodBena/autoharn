@@ -18,8 +18,14 @@ usage: led <kind> <statement...> [flags]        write an entry (decision, findin
        led obligate revoke <scope> --reason "<text>"
        led review <entry-id> <verdict> <independence> <statement...>
        led work open|claim|depends|close|list|violations|asof|review-gap|startable|
-           resolve-violation|supersede-cascade ...   (see `led work <sub-verb>` with no args)
+           resolve-violation|supersede-cascade|reclose ...   (see `led work <sub-verb>` with no
+           args)
            led work list [--all] [--state open|closed] [--slug <slug>] [--fields f1,f2,...]
+           led work reclose <slug> <resolution> [close-contract flags...] (B2, rows 1025/1008/
+           1200): supersedes <slug>'s current close row (s31) and issues the corrected close in
+           one act -- the SAME flags `led work close` accepts, including `--review-annulled
+           <ref>` (s73's typed annulment disposition; authored, not yet live on every world --
+           the kernel's own refusal, where it applies, is definitive).
        led artifact put <path> | get <hash> | stat <hash>
        led principal <sub-verb> ...                  (see `led principal` with no args)
        led missive list
@@ -2773,38 +2779,51 @@ def _commit_witness_reachability_violation(world_root: Path, sha: str) -> list[s
     return None
 
 
+# led-work-close-contract-flags (B2, row 1200/1025/1008): the ONE recognized flag vocabulary
+# for `led work close` (and, unchanged, forwarded through to it by `led work reclose` below --
+# ADR-0012 P1, one home for "what does a close-contract argv look like" rather than a second
+# hand-copy of this same list drifting in the sub-verb that composes with it).
+_WORK_CLOSE_VALUE_FLAGS = ("--witness", "--review-witness", "--review-annulled", "--supersedes")
+_WORK_CLOSE_BOOL_FLAGS = ("--review-deferred", "--review-bookkeeping", "--strict")
+
+
 def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
-    witness = review_witness = None
+    witness = review_witness = review_annulled = None
     review_deferred = review_bookkeeping = strict = False
     supersedes = None
     args: list[str] = []
     it = iter(argv)
     for tok in it:
-        if tok == "--witness":
-            witness = next(it, None)
-        elif tok == "--review-witness":
-            review_witness = next(it, None)
-        elif tok == "--review-deferred":
-            review_deferred = True
-        elif tok == "--review-bookkeeping":
-            review_bookkeeping = True
-        elif tok == "--strict":
-            strict = True
-        elif tok == "--supersedes":
-            supersedes = next(it, None)
+        if tok in _WORK_CLOSE_VALUE_FLAGS:
+            val = next(it, None)
+            if tok == "--witness":
+                witness = val
+            elif tok == "--review-witness":
+                review_witness = val
+            elif tok == "--review-annulled":
+                review_annulled = val
+            else:  # --supersedes
+                supersedes = val
+        elif tok in _WORK_CLOSE_BOOL_FLAGS:
+            if tok == "--review-deferred":
+                review_deferred = True
+            elif tok == "--review-bookkeeping":
+                review_bookkeeping = True
+            else:  # --strict
+                strict = True
         elif tok.startswith("--"):
             print(f"led work close: REFUSED -- unrecognized flag '{tok}'.", file=sys.stderr)
             print("  led work close <slug> <resolution> accepts only: --witness <ref>,", file=sys.stderr)
-            print("  --review-witness <ref>, --review-deferred, --review-bookkeeping, --strict,", file=sys.stderr)
-            print("  --supersedes <id>.", file=sys.stderr)
+            print("  --review-witness <ref>, --review-deferred, --review-bookkeeping,", file=sys.stderr)
+            print("  --review-annulled <ref>, --strict, --supersedes <id>.", file=sys.stderr)
             print("  NOTHING was written.", file=sys.stderr)
             return 1
         else:
             args.append(tok)
     if len(args) < 2:
         print("usage: led work close <slug> <resolution> (--review-witness <ref> | "
-              "--review-deferred | --review-bookkeeping --witness commit:<sha>) "
-              "[--witness <ref>] [--strict]", file=sys.stderr)
+              "--review-deferred | --review-bookkeeping --witness commit:<sha> | "
+              "--review-annulled <ref>) [--witness <ref>] [--strict]", file=sys.stderr)
         return 4
     slug, resolution = args[0], args[1]
     if resolution not in ("shipped", "superseded", "dropped", "deferred"):
@@ -2836,11 +2855,11 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         print(f"led work close: REFUSED -- slug '{slug}' has no work_claimed row (claim it "
               f"first): ./autoharn led work claim {slug}", file=sys.stderr)
         return 1
-    rc_count = sum([bool(review_witness), review_deferred, review_bookkeeping])
+    rc_count = sum([bool(review_witness), review_deferred, review_bookkeeping, bool(review_annulled)])
     if rc_count > 1:
-        print("led work close: REFUSED -- --review-witness, --review-deferred, and", file=sys.stderr)
-        print("  --review-bookkeeping are the THREE CONSTRUCTORS of a review disposition;", file=sys.stderr)
-        print("  exactly ONE, never more than one, in one close act.", file=sys.stderr)
+        print("led work close: REFUSED -- --review-witness, --review-deferred,", file=sys.stderr)
+        print("  --review-bookkeeping, and --review-annulled are the FOUR CONSTRUCTORS of a", file=sys.stderr)
+        print("  review disposition; exactly ONE, never more than one, in one close act.", file=sys.stderr)
         return 1
     if rc_count == 0:
         print("led work close: REFUSED -- a review-silent close is unrepresentable.", file=sys.stderr)
@@ -2849,6 +2868,11 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         print("    --review-deferred            this close act itself becomes the review obligation", file=sys.stderr)
         print("    --review-bookkeeping         a judgment-free close whose entire content is a git", file=sys.stderr)
         print("                                 commit landing -- requires --witness commit:<sha>.", file=sys.stderr)
+        print("    --review-annulled <ref>      an authority distinct from the obligor considered", file=sys.stderr)
+        print("                                 and declined the review debt, for a recorded reason", file=sys.stderr)
+        print("                                 (kernel/lineage/s73-typed-annulment-disposition.sql --", file=sys.stderr)
+        print("                                 authored, not yet live on every world; the kernel's", file=sys.stderr)
+        print("                                 own refusal, if this world predates it, is definitive).", file=sys.stderr)
         return 1
     if review_deferred and strict:
         print("led work close: REFUSED -- --review-deferred + --strict is a contradiction in "
@@ -2857,6 +2881,11 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     if review_bookkeeping and strict:
         print("led work close: REFUSED -- --review-bookkeeping + --strict is a contradiction "
               "in terms.", file=sys.stderr)
+        return 1
+    if review_annulled and strict:
+        print("led work close: REFUSED -- --review-annulled + --strict is a contradiction in "
+              "terms (s73's own refusal 3: annulled is legal only where deferred would have "
+              "been legal).", file=sys.stderr)
         return 1
     if review_bookkeeping:
         if not witness:
@@ -2880,6 +2909,15 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
         disposition, review_ref = "witnessed", review_witness
     elif review_bookkeeping:
         disposition, review_ref = "bookkeeping", witness
+    elif review_annulled:
+        # NOT a client-side fake of s73's own construction-time checks (the authority-in-force
+        # test, the actor/stamp-pair distinctness tests, the mandatory-ref CHECK) -- this shim
+        # builds the payload and hands it to the kernel; a pre-s73 world's own
+        # work_review_disposition_check CHECK constraint refuses 'annulled' outright (it is not
+        # yet a legal value there), and that refusal is reported byte-verbatim by
+        # `bcc.write_and_report` below, exactly like any other kernel refusal (ADR-0000's own
+        # "ask the kernel by trying, never a hardcoded world-version check").
+        disposition, review_ref = "annulled", review_annulled
     else:
         disposition, review_ref = "deferred", None
     if supersedes:
@@ -2899,6 +2937,80 @@ def cmd_work_close(cfg: bcc.ServedConfig, argv: list[str]) -> int:
     if actor is not None:
         payload["actor"] = actor
     return bcc.write_and_report(cfg.base, "ledger", payload)
+
+
+def _work_close_positionals(argv: list[str]) -> list[str]:
+    """The positional tokens (slug, resolution, ...) of a `led work close`-shaped argv, skipping
+    every recognized close flag and its value where it takes one -- the SAME
+    `_WORK_CLOSE_VALUE_FLAGS`/`_WORK_CLOSE_BOOL_FLAGS` vocabulary `cmd_work_close`'s own loop
+    recognizes (ADR-0012 P1: one home for that vocabulary, not a second hand-copy here). Used by
+    `cmd_work_reclose` below to read the slug it needs to look up BEFORE delegating the actual
+    close act, unchanged, to `cmd_work_close` -- an unrecognized token is left alone (neither
+    consumed as a flag's value nor specially flagged); `cmd_work_close`'s own loop remains the
+    one authoritative place a bad flag is refused, once, when the delegated call is made."""
+    positionals: list[str] = []
+    it = iter(argv)
+    for tok in it:
+        if tok in _WORK_CLOSE_VALUE_FLAGS:
+            next(it, None)
+        elif tok in _WORK_CLOSE_BOOL_FLAGS or tok.startswith("--"):
+            continue
+        else:
+            positionals.append(tok)
+    return positionals
+
+
+def cmd_work_reclose(cfg: bcc.ServedConfig, argv: list[str]) -> int:
+    """led work reclose <slug> <resolution> [close-contract flags...] (B2, rows 1025/1008/1200):
+    supersede-and-reclose in one guided act -- row 1008's own narrowed request, item (a). A CLI
+    COMPOSITION over two ordinary acts (find the slug's current work_closed row, then `led work
+    close ... --supersedes <that row's id>`), the SAME shape `cmd_work_supersede_cascade` already
+    uses for its own two-step compositions (ADR-0012 P2: no new kernel involvement, no second
+    close-payload-construction path -- `cmd_work_close` remains the ONE place a work_closed
+    payload is built, ADR-0012 P1). This verb never accepts `--supersedes` itself -- it computes
+    the ONE correct value (the slug's own current close row) and refuses a hand-supplied one
+    rather than silently overriding it (an operator-supplied id here could name the wrong row,
+    unrepresentable-error over silent-mismatch, ADR-0002).
+
+    Resolution/disposition/witness vocabulary is NOT re-validated here -- it is `cmd_work_close`'s
+    own contract, reused whole (including `--review-annulled <ref>`, s73's own vocabulary): this
+    verb's entire job is composing the supersession, not re-deciding what a valid close looks
+    like. Requesting `--review-annulled` against a pre-s73 kernel is attempted, not refused
+    client-side -- the kernel's own `work_review_disposition_check` CHECK constraint is the
+    authority (ADR-0000: ask it by trying), and its refusal surfaces byte-verbatim via
+    `bcc.write_and_report`, exactly as any other kernel refusal does."""
+    if "--supersedes" in argv:
+        print("led work reclose: REFUSED -- --supersedes is not accepted here; this verb", file=sys.stderr)
+        print("  computes it itself (the slug's own current close row) so the two can never", file=sys.stderr)
+        print("  drift apart. Use 'led work close <slug> ... --supersedes <id>' directly if", file=sys.stderr)
+        print("  you need to supersede a DIFFERENT row by hand.", file=sys.stderr)
+        return 1
+    positionals = _work_close_positionals(argv)
+    if len(positionals) < 2:
+        print("usage: led work reclose <slug> <resolution> (--review-witness <ref> | "
+              "--review-deferred | --review-bookkeeping --witness commit:<sha> | "
+              "--review-annulled <ref>) [--witness <ref>] [--strict]", file=sys.stderr)
+        print("  Supersedes <slug>'s current work_closed row and issues the corrected close in", file=sys.stderr)
+        print("  one act (kernel/lineage/s31-supersession-uniform-retraction.sql).", file=sys.stderr)
+        return 4
+    slug = positionals[0]
+    if _current_row(cfg, "work_opened", slug) is None:
+        print(f"led work reclose: REFUSED -- '{slug}' is not currently an in-force work_opened "
+              f"item (already superseded, or never opened) -- refusing on this dirty starting "
+              f"state rather than guessing what was meant.", file=sys.stderr)
+        return 1
+    old_close = _current_row(cfg, "work_closed", slug)
+    if old_close is None:
+        print(f"led work reclose: REFUSED -- '{slug}' has no in-force close row to supersede "
+              f"(it currently reads OPEN -- either never closed, or its prior close was already "
+              f"superseded and nothing has re-closed it since). Use 'led work close {slug} ...' "
+              f"for a fresh close instead; this verb exists to CORRECT an existing close, not to "
+              f"mint the first one.", file=sys.stderr)
+        return 1
+    old_close_id = old_close["id"]
+    print(f"led work reclose: superseding '{slug}'s current close (row {old_close_id}) with a "
+          f"corrected close...", file=sys.stderr)
+    return cmd_work_close(cfg, [*argv, "--supersedes", str(old_close_id)])
 
 
 _WORK_ITEM_STATES = ("open", "closed")  # work_item_current.state's own closed vocabulary (s33
@@ -3804,10 +3916,13 @@ def main(argv: list[str]) -> int:
             return cmd_work_resolve_violation(cfg, rest)
         if sub == "supersede-cascade":
             return cmd_work_supersede_cascade(cfg, rest)
+        if sub == "reclose":
+            return cmd_work_reclose(cfg, rest)
         print(f"led work {sub}: REFUSED -- not a recognized `led work` sub-verb (open|claim|"
               f"depends|close|list|violations|asof|review-gap|startable|resolve-violation|"
-              f"supersede-cascade -- all eleven `led work *` sub-verbs are covered by this "
-              f"served path, legacy-led-retirement, ledger row 1149/1150).",
+              f"supersede-cascade|reclose -- the eleven `led work *` sub-verbs legacy-led-"
+              f"retirement (ledger row 1149/1150) covered, plus `reclose` (B2, rows 1025/1008/"
+              f"1200)).",
               file=sys.stderr)
         return 4
     if argv and argv[0] == "artifact":

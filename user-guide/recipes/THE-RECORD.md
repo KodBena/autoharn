@@ -13,6 +13,60 @@ a row is believable (see EVIDENCE-AND-TRUST.md in this directory).
 
 ## Correcting the record — supersession, and what to do about its fallout
 
+**My close is wrong, or a deferred review debt shouldn't exist — how do I annul it, not just
+review it?** `led work reclose <slug> <resolution> [close-contract flags...]` (B2, ledger rows
+1025/1008/1200): supersedes the slug's CURRENT close row (s31 — the same uniform-retraction
+mechanism every other correction on this page rests on) and issues the corrected close in one
+guided act, with the ordinary close contract's full flag vocabulary (`--witness`,
+`--review-witness`, `--review-deferred`, `--review-bookkeeping`, `--strict`). This is
+**supersession-as-annulment** — the ledger's defining affordance (row 1008's own words): a
+`--review-deferred` close that was WRONG (not merely un-reviewed) gets corrected, not reviewed,
+and the correction discharges the very review debt the wrong close minted, because the debt's
+close row is no longer current. WITNESSED, real infra (a scratch throwaway world, torn down
+after), both polarities:
+
+```
+$ led work reclose recl-demo superseded --review-deferred
+led work reclose: superseding 'recl-demo's current close (row 6) with a corrected close...
+led work close: --supersedes 6 -- this close retracts ledger row 6 from current truth. If row 6
+was itself a work_closed row for 'recl-demo', the item now READS OPEN AGAIN.
+led: row 9 written.
+```
+
+`--review-annulled <ref>` is a FOURTH disposition constructor, alongside the three above —
+`work_review_disposition`'s typed `annulled` value (kernel/lineage/s73-typed-annulment-
+disposition.sql: an authority distinct from the obligor considered the review debt and declined
+it, for a recorded reason). **Authored, not yet live on every world**: `annulled` rides the NEXT
+world's birth (runs-are-linear — a kernel delta never patches an existing world), so a
+pre-s73 world's own `work_review_disposition_check` CHECK constraint refuses it outright. This
+verb never fakes that check client-side — it attempts the write and passes the kernel's own
+refusal through byte-verbatim, WITNESSED against a pre-s73 kernel:
+
+```
+$ led work reclose recl-demo dropped --review-annulled row:21
+led work reclose: superseding 'recl-demo's current close (row 9) with a corrected close...
+led work close: --supersedes 9 -- this close retracts ledger row 9 from current truth. If row 9
+was itself a work_closed row for 'recl-demo', the item now READS OPEN AGAIN.
+led: REFUSED by the kernel write boundary (SQLSTATE 23514; journaled as write_refused row 23 --
+the refusal itself is now a committed, hash-chained ledger record, s43):
+  new row for relation "ledger" violates check constraint "work_review_disposition_check"
+```
+Current truth was untouched by the refused attempt (the whole INSERT rolled back — row 9 stayed
+in force). On a world born after s73 ships, the same command is legal and discharges the debt
+with no `work_review_gap` entry at all. Refusals that teach, both witnessed: `led work reclose
+no-such-slug ...` (slug never opened, or its own opening act was itself superseded) and `led work
+reclose <open-item> ...` (nothing to supersede — the item has no in-force close row yet; use `led
+work close` for the first one). `--supersedes` itself is refused if you pass it by hand — this
+verb computes the one correct target itself so the two can never drift apart. Grammar: `led work
+reclose` usage (no args); `hooks/stop_clean_exit.py`'s own deferred-review remediation text now
+names this path beside the distinct-actor review path.
+
+<!-- doc-attest-exempt: this entry is new prose, Sonnet-authored 2026-08-06 alongside the led.tmpl
+`work reclose` verb and the hooks/stop_clean_exit.py teach-text line it documents (BRIEF-B2-
+SUPERSEDE-RECLOSE-2026-08-06.md, ledger rows 1025/1008/1200); no live A:B:C loop has run on it yet
+and this marker does not claim one did. Removal condition: strike this marker and run the real
+A:B:C loop next time this section is touched for its own prose content. -->
+
 **I encoded a row wrong (wrong flag, missing refs, bad wording) — how do I fix it?**
 Supersede it: write the corrected row with `--supersedes <old-row-id>` (for work items,
 `led work open <new-slug> ... --supersedes <old-open-row-id>`). The ledger is append-only,

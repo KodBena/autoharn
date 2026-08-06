@@ -141,7 +141,14 @@ The one grammar whose single documented home is this suite. Full recipe: [recipe
 
 ## Correcting the record — supersession, and what to do about its fallout
 
-Supersession, cascade, and orphan disposition. Full recipe: [recipes/THE-RECORD.md](recipes/THE-RECORD.md#correcting-the-record--supersession-and-what-to-do-about-its-fallout).
+Supersession-as-annulment (`led work reclose`, the ledger's defining affordance — row 1008),
+cascade, and orphan disposition. Full recipe: [recipes/THE-RECORD.md](recipes/THE-RECORD.md#correcting-the-record--supersession-and-what-to-do-about-its-fallout).
+
+<!-- doc-attest-exempt: this line's prose is new, Sonnet-authored 2026-08-06 alongside the full
+recipe entry it points to (BRIEF-B2-SUPERSEDE-RECLOSE-2026-08-06.md, ledger rows 1025/1008/1200);
+no live A:B:C loop has run on it yet and this marker does not claim one did. Removal condition:
+strike this marker and run the real A:B:C loop next time this line is touched for its own prose
+content. -->
 
 ## The ledger boundary service (`serving/`)
 

@@ -700,9 +700,17 @@ def _collect_debt(session_id: str) -> tuple[list[str], list[str], list[str]]:
             for slug, close_id in rows:
                 debt_lines.append(
                     f"  - work item '{slug}' closed with --review-deferred (close row {close_id}) "
-                    f"and has no distinct-actor attest yet ->\n"
-                    f"      ./led review {close_id} <attest|attest_with_reservations|refuse> "
-                    f"<technical|managerial|financial> \"<basis>\"   (written by a DIFFERENT actor)")
+                    f"and has no distinct-actor attest yet -- TWO discharge paths, choose the one "
+                    f"that fits:\n"
+                    f"      (a) the close itself was RIGHT, it just needs the review it deferred: "
+                    f"./led review {close_id} <attest|attest_with_reservations|refuse> "
+                    f"<technical|managerial|financial> \"<basis>\"   (written by a DIFFERENT actor)\n"
+                    f"      (b) the close itself was WRONG (bad resolution/witness/wording, not "
+                    f"merely unreviewed) -- correct it instead of reviewing a mistake: "
+                    f"./led work reclose {slug} <resolution> ...   (supersedes close row {close_id} "
+                    f"and issues the corrected close in one act, s31/row 1008 -- the ledger's "
+                    f"defeasible-record affordance, not a review of a close that should not have "
+                    f"been written as it was)")
                 entries.append(f"work_review_deferred:{slug}")
 
     return debt_lines, entries, info_lines
