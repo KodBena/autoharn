@@ -1,0 +1,95 @@
+seen-red/stamp-intercept-scratch-scope — banked RED evidence (both-polarity proof, fixture-census)
+
+BACKLOG "stamp-intercept-scratch-world-leakage" (ledger rows 1159/1162/1163, 2026-08-06): the
+interceptor's `export PGOPTIONS=...` rewrite is inherited by the ENTIRE subprocess tree of every
+Bash-tool command whenever the hook is wired (module docstring, "export, not a prefix" -- needed
+so a psql call hidden inside a generated script or wrapper still gets stamped). A fixture/scaffold
+that births/talks to a SCRATCH world from inside that same command inherits THIS session's stamp
+too, computed against THIS session's own secret -- and kernel/lineage/s17-stamp-mechanism.sql's
+set_stamp trigger REFUSES outright when all four GUCs are present but the HMAC does not match
+(it degrades quietly to "recorded unstamped" only when the GUCs are ABSENT). Three builders hit
+exactly this shape this session (row 1159), each invoking a seen-red/ fixture that talks to its
+own throwaway world.
+
+BEFORE the fix (git stash of this pass's own hooks/stamp_intercept.py edit -- run standalone
+against the pre-fix HEAD file, real output, 2026-08-06, `python3 seen-red/stamp-intercept-scratch-
+scope/run_fixtures.py` run before the atomic swap into place):
+
+  === a-scratch-fixture-bare ===
+  exit=0 (expect 0)
+    [FAIL] -permissionDecision
+    [FAIL] -export PGOPTIONS=
+    [FAIL] -app.vendor_hmac=
+    stdout: {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+    "updatedInput": {"command": "export PGOPTIONS='-c app.vendor_session=seenred-scope-1 -c
+    app.vendor_agent=main -c app.vendor_ts=1785995...
+
+  (cases b/c/d — scratch-fixture-dotslash, scratch-fixture-with-args, scratch-fixture-env-u-prefix
+  — FAIL identically: the pre-fix hook injects the stamp into every one of them, exactly the
+  leakage the ledger row describes)
+
+  run_fixtures: 4 FAILURE(S): a-scratch-fixture-bare, b-scratch-fixture-dotslash,
+  c-scratch-fixture-with-args, d-scratch-fixture-env-u-prefix
+
+  (cases e-mixed-chained-not-suppressed and f-ordinary-command-not-suppressed already passed
+  pre-fix — they are the negative-control baseline this suite also carries, proving the fix does
+  not change behavior it should not)
+
+AFTER the fix (real output, 2026-08-06, same command against the fixed hooks/stamp_intercept.py
+now in place):
+
+  === a-scratch-fixture-bare ===
+  exit=0 (expect 0)
+    [ok] -permissionDecision
+    [ok] -export PGOPTIONS=
+    [ok] -app.vendor_hmac=
+    stdout:
+
+  (b/c/d identical: [ok] on all three assertions, empty stdout — true passthrough, no injection)
+
+  === e-mixed-chained-not-suppressed ===
+  exit=0 (expect 0)
+    [ok] +"permissionDecision": "allow"
+    [ok] +export PGOPTIONS=
+    [ok] +app.vendor_hmac=
+
+  === f-ordinary-command-not-suppressed ===
+  exit=0 (expect 0)
+    [ok] +"permissionDecision": "allow"
+    [ok] +export PGOPTIONS=
+    [ok] +app.vendor_hmac=
+
+  run_fixtures: all 6 case(s) passed.
+
+LIVE-PATH WITNESS (real output, 2026-08-06, driven against the actual on-disk, post-swap
+hooks/stamp_intercept.py, using this repo's OWN real deployment.json + real armed secret, not a
+throwaway world):
+
+  $ echo '{"tool_name":"Bash","tool_input":{"command":"python3 seen-red/dummy-fixture/run_fixtures.py"},"cwd":"/home/bork/w/vdc/1/autoharn","session_id":"live-witness-post-edit"}' \
+      | python3 hooks/stamp_intercept.py
+  exit=0
+  (no stdout -- true passthrough, no stamp injected for the scratch-shaped command)
+
+  $ echo '{"tool_name":"Bash","tool_input":{"command":"./autoharn led show 1"},"cwd":"/home/bork/w/vdc/1/autoharn","session_id":"live-witness-post-edit"}' \
+      | python3 hooks/stamp_intercept.py
+  exit=0
+  {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+  "updatedInput": {"command": "export PGOPTIONS='-c app.vendor_session=live-witness-post-edit -c
+  app.vendor_agent=main -c app.vendor_ts=1785996027 -c
+  app.vendor_hmac=7370a79ea000f38e67399fd00e8e07f1918e6fd4f6c5438ba4441f12410d2521 -c
+  app.vendor_invocation=7da0cb75-f9bc-48ec-b643-6b1447e1a2da'; ./autoharn led show 1"}}}
+
+  Own-session write path (the SAME dispatching session's own Bash-tool writes, running through
+  this same post-edit live hook continuously): ledger row 1192, `stamp_verified: True`,
+  `stamp_agent: a6dcdf8369f549c4a`, `stamp_session: 26b845ec-a94d-4990-bfe1-946f2ecccb7b` --
+  `./autoharn led show 1192`.
+
+DISCLOSED SCOPE (module docstring, SCRATCH-WORLD SCOPE NARROWING): this is a narrow, best-effort
+recognizer for the ONE self-contained shape actually witnessed causing the leakage this session --
+a Bash command that, in its ENTIRETY, launches a seen-red/ fixture script. A scratch-touching
+command in any OTHER shape (a raw psql call against a scratch host, a fixture invoked some other
+way, one leg of a chained command) is NOT suppressed here and still relies on the standing,
+already-working `env -u PGOPTIONS <cmd>` consumer-side idiom (left standing, out of scope for this
+pass). This suite's e/f cases exist specifically to prove that: they show the SAME shell-
+metacharacter / mixed-command shape still gets injected exactly as before, so this fix can never be
+mistaken for a general "skip near seen-red/" rule.

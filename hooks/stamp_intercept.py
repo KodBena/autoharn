@@ -107,6 +107,50 @@ severity escalation, not an accident: the one path this fix denies more broadly 
 precisely the one already-identified misconfiguration (an operator explicitly pointed STAMP_SECRET
 somewhere broken), never an ordinary unconfigured or not-yet-armed project (both of those stay fail-
 open below, byte-held). An unset STAMP_SECRET or a healthy secret file are unaffected.
+
+SCRATCH-WORLD SCOPE NARROWING (BACKLOG "stamp-intercept-scratch-world-leakage", ledger rows
+1159/1162/1163, 2026-08-06): EXPORT (see "export, not a prefix" above) means the injected stamp is
+inherited by the WHOLE subprocess tree, on purpose -- that is what lets a hidden/generated psql call
+anywhere in the command still get stamped without a shape test. The same mechanism has a cost: a
+fixture or scaffold that BIRTHS/TALKS TO a completely different (scratch) world from inside that same
+command tree inherits THIS session's stamp too, computed against THIS session's own secret -- and the
+kernel's set_stamp trigger (kernel/lineage/s17-stamp-mechanism.sql) refuses outright when all four GUCs
+are present but the HMAC does not match (it only degrades quietly to "recorded unstamped" when the GUCs
+are ABSENT, never when they are present-but-wrong). Three builders hit exactly this shape this session
+(row 1159), each invoking a seen-red/ fixture that talks to its own throwaway world.
+
+THIS IS STRUCTURALLY UNFIXABLE IN FULL from the injection site alone, and this file says so rather than
+pretend otherwise: an exported env var carries no notion of "these descendants, not those" once it is
+set, and the injection site has no visibility into what a not-yet-run command will actually connect to.
+Full elimination needs EITHER kernel cooperation (out of scope here -- no kernel/ edits without a
+Fable-authored, maintainer-ratified spec, per CLAUDE.md ORCHESTRATION) OR consumer cooperation (the
+existing, already-working `env -u PGOPTIONS <cmd>` / env-stripping idiom every seen-red/ fixture in this
+repo already carries -- see their own run_fixtures.py preambles, `grep -rn PGOPTIONS seen-red/`). That
+consumer-side idiom is LEFT STANDING, not made redundant -- "harmless belt-and-braces", exactly as the
+dispatching brief frames it, and the one thing this pass does NOT do (least preferred per that brief;
+ADR-0012 P1 -- the fix belongs at the one producer, not re-taught to every consumer) is edit any of
+those other fixture files.
+
+What CAN live at the injection site, in scope, without reintroducing the killed general-purpose matcher
+(module docstring, MATCHERLESS STAMPING -- that lesson is about ENUMERATING command SHAPES to decide
+whether to stamp AT ALL, an unbounded space that fails open on a stamp a real write needed): a narrow,
+disclosed, best-effort recognizer for the ONE self-contained shape actually witnessed causing the
+leakage -- a Bash command that, in its ENTIRETY, does nothing but launch a seen-red/ fixture script
+(`_looks_like_scratch_fixture_invocation`, below). Unlike the killed matcher, a MISS here (a
+scratch-touching command in any other shape -- a raw psql call against a scratch host, a fixture
+invoked by some other convention, one leg of a chained command) is NOT a regression: it falls through to
+the SAME unconditional injection this file already does today, no worse than before this pass. A HIT
+only ever SUPPRESSES an injection that would have been wrong for that command anyway (every seen-red/
+fixture manages its own PGOPTIONS explicitly once it starts talking to its own world -- the same grep
+above confirms every non-hook match strips/overrides it), so this can never withhold a stamp a
+legitimate own-world write needed. Recognition is INTENTIONALLY narrow (whole-command-only -- see
+`_SHELL_METACHARS_RE`): any shell metacharacter anywhere in the command (`;&|<>` backtick `$(){}` or a
+newline) disqualifies the WHOLE command from suppression, so a command that mixes a real write with a
+fixture launch (e.g. `psql ...; python3 seen-red/x/run_fixtures.py`) is untouched -- injected exactly as
+before, never silently split. NAMED RESIDUAL GAP (disclosed, matching this file's own posture toward
+`_neutralize_pgoptions`'s gaps above): a scratch-touching command in any shape this recognizer does not
+match still relies on the standing consumer-side idiom above; this pass narrows the observed common
+case, it does not eliminate the class.
 """
 from __future__ import annotations
 
@@ -220,6 +264,46 @@ def _neutralize_pgoptions(command: str) -> str:
     just lists exported vars), and `PGOPTIONS= psql ...` runs psql with an empty PGOPTIONS,
     immediately superseded by this hook's own export prefix."""
     return _PGOPTIONS_STRIP_RE.sub("", command)
+
+
+# SCRATCH-WORLD SCOPE NARROWING (module docstring, ledger rows 1159/1162/1163). Any shell
+# metacharacter ANYWHERE in the command disqualifies the whole command from suppression -- this
+# is the whole-command-only guard: a command that mixes a real write with a fixture launch keeps
+# getting injected, exactly as before this pass, never silently split.
+_SHELL_METACHARS_RE = re.compile(r"[;&|<>`$(){}\n]")
+
+# The one already-established, already-working consumer-side hygiene prefix (seen-red/ fixtures'
+# own convention, `grep -rn PGOPTIONS seen-red/`) -- recognizing it here is a pure ergonomic
+# shortcut (it already neutralizes injection on its own via env(1)'s per-invocation semantics),
+# never load-bearing for correctness.
+_SCRATCH_ENV_PREFIXES = ("env -u PGOPTIONS ", "env PGOPTIONS= ")
+
+
+def _looks_like_scratch_fixture_invocation(command: str) -> bool:
+    """True iff `command`, in its ENTIRETY, is a self-contained `python[3] seen-red/.../script.py
+    [args...]` launch -- optionally preceded by the standing `env -u PGOPTIONS `/`env PGOPTIONS= `
+    hygiene prefix -- with no shell metacharacter anywhere (see `_SHELL_METACHARS_RE`). Best-effort
+    and narrow BY DESIGN (module docstring, SCRATCH-WORLD SCOPE NARROWING): a False here always
+    falls through to the unconditional injection below -- identical to this file's behavior before
+    this pass -- so a miss never regresses the stamp a legitimate own-world write needs. A True
+    here only ever suppresses an injection that every seen-red/ fixture already discards or
+    overrides for its own throwaway world (same grep), so it can never withhold a needed stamp."""
+    if _SHELL_METACHARS_RE.search(command):
+        return False
+    stripped = command.strip()
+    for prefix in _SCRATCH_ENV_PREFIXES:
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):].lstrip()
+            break
+    parts = stripped.split()
+    if len(parts) < 2:
+        return False
+    interpreter = parts[0]
+    if not (interpreter in ("python", "python3")
+            or interpreter.endswith("/python") or interpreter.endswith("/python3")):
+        return False
+    script = parts[1]
+    return script.startswith("seen-red/") or script.startswith("./seen-red/")
 
 
 def _deny(msg: str) -> int:
@@ -382,6 +466,14 @@ def main() -> int:
     if data.get("tool_name") != "Bash":
         return _passthrough()
     command = str((data.get("tool_input") or {}).get("command", ""))
+
+    # SCRATCH-WORLD SCOPE NARROWING (module docstring, ledger rows 1159/1162/1163): this command's
+    # ENTIRE shape is a self-contained seen-red/ fixture launch -- skip injection so it never
+    # inherits THIS session's stamp for a world of its own. Checked before any deployment/secret
+    # resolution: the outcome (passthrough) is identical to this hook being unwired for this one
+    # command, regardless of what mode/secret would otherwise apply.
+    if _looks_like_scratch_fixture_invocation(command):
+        return _passthrough()
 
     dep_path = _find_deployment_path(data)
 

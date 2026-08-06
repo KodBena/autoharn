@@ -64,6 +64,7 @@ REGISTRY: dict[str, str] = {
     "change-gate-subject-root":       "seen-red/change-gate-subject-root/run_fixtures.py",
     "stamp-intercept-secret":         "seen-red/stamp-intercept-secret/run_fixtures.py",
     "stamp-intercept-invocation-token": "seen-red/stamp-intercept-invocation-token/run_fixtures.py",
+    "stamp-intercept-scratch-scope":   "seen-red/stamp-intercept-scratch-scope/run_fixtures.py",
     "contemporaneity-audit":           "seen-red/contemporaneity-audit/run_fixtures.py",
     "04-consumer-no-vacuous-pass":    "instruments/verify_consumer_no_vacuous.py",
     "05-verify-adapter":              "instruments/act_stream/verify_adapter.py",
